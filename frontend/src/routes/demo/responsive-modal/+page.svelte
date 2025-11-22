@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { ResponsiveModal } from '$lib/components/ui/responsive-modal';
-	import { Button } from '$lib/components/ui/button';
+    import ResponsiveModal from "$lib/components/ui/responsive-modal/responsive-modal.svelte"
+        import Button from '$lib/components/ui/button/button.svelte'
+    import {Calendar} from "$lib/components/ui/calendar";
 
 	let basicModalOpen = $state(false);
 	let formModalOpen = $state(false);
@@ -27,20 +28,7 @@
 </svelte:head>
 
 <div class="container mx-auto p-8 max-w-4xl">
-	<div class="mb-8">
-		<h1 class="text-4xl font-bold mb-4">Responsive Modal Component</h1>
-		<p class="text-lg text-muted-foreground mb-4">
-			This modal automatically adapts to your screen size. On mobile devices (&lt; 768px), it appears
-			as a drawer that slides up from the bottom. On desktop screens (≥ 768px), it appears as a
-			centered dialog modal.
-		</p>
-		<div class="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-			<p class="text-sm text-blue-900 dark:text-blue-100">
-				<strong>Try it:</strong> Resize your browser window or open this on different devices to see
-				the responsive behavior in action!
-			</p>
-		</div>
-	</div>
+
 
 	<div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
 		<!-- Basic Modal Example -->
@@ -54,7 +42,7 @@
 			<Button onclick={() => (basicModalOpen = true)} class="w-full">Open Basic Modal</Button>
 		</div>
 
-		<!-- Form Modal Example -->
+<Calendar />		<!-- Form Modal Example -->
 		<div class="border rounded-lg p-6 space-y-4">
 			<div>
 				<h2 class="text-xl font-semibold mb-2">Form Modal</h2>
@@ -103,49 +91,8 @@
 			</ul>
 		</div>
 
-		<div class="space-y-4">
-			<h2 class="text-2xl font-semibold">Breakpoints</h2>
-			<div class="space-y-3">
-				<div class="border rounded-lg p-4">
-					<h3 class="font-semibold mb-1">Mobile (&lt; 768px)</h3>
-					<p class="text-sm text-muted-foreground">
-						Displays as a drawer component that slides from the bottom
-					</p>
-				</div>
-				<div class="border rounded-lg p-4">
-					<h3 class="font-semibold mb-1">Desktop (≥ 768px)</h3>
-					<p class="text-sm text-muted-foreground">
-						Displays as a centered dialog modal with overlay
-					</p>
-				</div>
-			</div>
-		</div>
 	</div>
-
-	<!-- Code Example -->
-	<div class="mt-12">
-		<h2 class="text-2xl font-semibold mb-4">Usage Example</h2>
-		<pre
-			class="bg-slate-950 text-slate-50 rounded-lg p-4 overflow-x-auto text-sm"><code>{`<script lang="ts">
-  import { ResponsiveModal } from '$lib/components/ui/responsive-modal';
-  import { Button } from '$lib/components/ui/button';
-
-  let open = $state(false);
-</script>
-
-<Button onclick={() => (open = true)}>
-  Open Modal
-</Button>
-
-<ResponsiveModal
-  bind:open
-  title="Modal Title"
-  description="Modal description"
->
-  <p>Your content here</p>
-</ResponsiveModal>`}</code></pre>
 	</div>
-</div>
 
 <!-- Basic Modal -->
 <ResponsiveModal
