@@ -5,6 +5,17 @@ import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	server: {
+		host: '0.0.0.0',
+        headers: {
+            'Access-Control-Allow-Origin': '*', // this is only for the local dev server so it can allow all
+        },
+		allowedHosts: [
+			'.vrtx.local',
+			'crm.startup.com',
+			'localhost'
+		]
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
@@ -31,5 +42,6 @@ export default defineConfig({
 				}
 			}
 		]
-	}
+	},
+
 });

@@ -1,25 +1,33 @@
-import { env } from '$env/dynamic/public';
-
-const API_URL = env.PUBLIC_API_URL || 'https://api.vrtx.local';
+import { browser } from '$app/environment';
 
 interface FetchOptions extends RequestInit {
 	params?: Record<string, string>;
 }
 
 export class ApiClient {
-	private baseUrl: string;
 	private defaultHeaders: HeadersInit;
 
-	constructor(baseUrl: string = API_URL) {
-		this.baseUrl = baseUrl;
+	constructor() {
 		this.defaultHeaders = {
 			'Content-Type': 'application/json',
 			Accept: 'application/json'
 		};
 	}
 
+	// Get API URL dynamically at request time to ensure correct tenant domain
+	private getBaseUrl(): string {
+		if (!browser) {
+			return 'http://localhost:8000/api/v1';
+		}
+		// Use current browser origin for tenant-aware API calls
+		return `${window.location.origin}/api/v1`;
+	}
+
 	private buildUrl(endpoint: string, params?: Record<string, string>): string {
-		const url = new URL(endpoint, this.baseUrl);
+		const baseUrl = this.getBaseUrl();
+		// Remove leading slash from endpoint if present
+		const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+		const url = new URL(cleanEndpoint, baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
 		if (params) {
 			Object.entries(params).forEach(([key, value]) => {
 				url.searchParams.append(key, value);
@@ -32,12 +40,22 @@ export class ApiClient {
 		const { params, ...fetchOptions } = options;
 		const url = this.buildUrl(endpoint, params);
 
+		// Get auth token from localStorage if available
+		const headers: HeadersInit = {
+			...this.defaultHeaders,
+			...fetchOptions.headers
+		};
+
+		if (browser) {
+			const token = localStorage.getItem('auth_token');
+			if (token) {
+				headers['Authorization'] = `Bearer ${token}`;
+			}
+		}
+
 		const response = await fetch(url, {
 			...fetchOptions,
-			headers: {
-				...this.defaultHeaders,
-				...fetchOptions.headers
-			}
+			headers
 		});
 
 		if (!response.ok) {

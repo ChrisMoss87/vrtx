@@ -4,12 +4,15 @@ use App\Http\Controllers\Api\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Public authentication routes
-Route::post('/auth/register', [AuthController::class, 'register']);
-Route::post('/auth/login', [AuthController::class, 'login']);
+/*
+|--------------------------------------------------------------------------
+| Central API Routes
+|--------------------------------------------------------------------------
+|
+| These routes are for the central application (platform management).
+| Tenant-specific auth routes are now in routes/tenant-api.php
+|
+*/
 
-// Protected routes
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::get('/auth/me', [AuthController::class, 'me']);
-});
+// Central/platform routes would go here
+// For example: platform admin dashboard, tenant management, etc.

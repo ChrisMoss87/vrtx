@@ -26,4 +26,13 @@ Route::middleware([
     Route::get('/', function () {
         return 'This is your multi-tenant application. The id of the current tenant is ' . tenant('id');
     });
+
+    Route::get('/test-isolation', function () {
+        $users = \App\Models\User::all(['name', 'email']);
+        return response()->json([
+            'tenant_id' => tenant('id'),
+            'database' => DB::connection()->getDatabaseName(),
+            'users' => $users
+        ]);
+    });
 });
