@@ -1,6 +1,6 @@
 <script lang="ts">
-	import FieldBase from './FieldBase.svelte';
-	import { Input } from '$lib/components/ui/input';
+	import FieldBase from '$lib/components/form/FieldBase.svelte';
+	import Input from '$lib/components/ui/input/input.svelte';
 
 	interface Props {
 		label?: string;

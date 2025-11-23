@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
     import { Field, Label, Error } from '../ui/field';
 	interface Props {
 		label?: string;
@@ -23,7 +23,7 @@
 		label,
 		name,
 		description,
-		error='This is an error message',
+		error,
 		required = false,
 		disabled = false,
 		class: className,
@@ -42,7 +42,7 @@
 	});
 </script>
 
-<Field >
+<Field id={name}>
 	{#if label}
 		<Label for={name} >
 			{label}

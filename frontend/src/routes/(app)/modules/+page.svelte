@@ -6,6 +6,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.ts';
 	import { goto } from '$app/navigation';
 	import { Plus, Database, Edit, Trash2, Power } from 'lucide-svelte';
+    import Page from "$lib/components/layout/Page.svelte";
 
 	let modules = $state<Module[]>([]);
 	let loading = $state(true);
@@ -52,7 +53,10 @@
 	}
 </script>
 
-<div class="container mx-auto py-8">
+<Page>
+
+
+
 	<div class="flex items-center justify-between mb-8">
 		<div>
 			<h1 class="text-3xl font-bold">Modules</h1>
@@ -162,4 +166,4 @@
 			{/each}
 		</div>
 	{/if}
-</div>
+</Page>

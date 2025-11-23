@@ -42,7 +42,7 @@
 			<Button onclick={() => (basicModalOpen = true)} class="w-full">Open Basic Modal</Button>
 		</div>
 
-<Calendar />		<!-- Form Modal Example -->
+		<!-- Form Modal Example -->
 		<div class="border rounded-lg p-6 space-y-4">
 			<div>
 				<h2 class="text-xl font-semibold mb-2">Form Modal</h2>
