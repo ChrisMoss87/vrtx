@@ -22,7 +22,7 @@
 
 	let selectedPageSize = $state(String(table.state.pagination.perPage));
 
-	function handlePageSizeChange(value: string | undefined) {
+	function handlePageSizeChange(value: string) {
 		if (value) {
 			selectedPageSize = value;
 			table.setPageSize(Number(value));
@@ -30,19 +30,36 @@
 	}
 </script>
 
-<div class="flex items-center justify-between px-2">
+<div
+	class="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-between"
+	role="navigation"
+	aria-label="Pagination"
+>
 	<!-- Row info and page size selector -->
-	<div class="flex items-center gap-4 text-sm text-muted-foreground">
-		<div>
+	<div
+		class="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground sm:justify-start sm:gap-4"
+	>
+		<!-- Mobile: compact info -->
+		<div class="sm:hidden" aria-live="polite">
+			<span class="font-medium">{pageInfo.from}-{pageInfo.to}</span> of
+			<span class="font-medium">{pageInfo.total}</span>
+		</div>
+		<!-- Desktop: full info -->
+		<div class="hidden sm:block" aria-live="polite">
 			Showing <span class="font-medium">{pageInfo.from}</span> to
 			<span class="font-medium">{pageInfo.to}</span> of
 			<span class="font-medium">{pageInfo.total}</span> results
 		</div>
 
 		<div class="flex items-center gap-2">
-			<span>Rows per page</span>
-			<Select.Root value={selectedPageSize} onValueChange={handlePageSizeChange}>
-				<Select.Trigger class="h-8 w-[70px]">
+			<span class="hidden sm:inline">Rows per page</span>
+			<span class="sm:hidden">Per page</span>
+			<Select.Root
+				type="single"
+				value={selectedPageSize}
+				onValueChange={(v) => v && handlePageSizeChange(v)}
+			>
+				<Select.Trigger class="h-8 w-[70px]" aria-label="Select rows per page">
 					<span>{selectedPageSize}</span>
 				</Select.Trigger>
 				<Select.Content>
@@ -55,53 +72,59 @@
 	</div>
 
 	<!-- Page navigation -->
-	<div class="flex items-center gap-1">
-		<div class="text-sm text-muted-foreground mr-2">
-			Page {pageInfo.currentPage} of {pageInfo.lastPage}
+	<div class="flex items-center justify-between gap-1 sm:justify-end">
+		<!-- Mobile: simple page indicator -->
+		<div class="text-sm text-muted-foreground sm:mr-2" aria-current="page">
+			<span class="sm:hidden">{pageInfo.currentPage}/{pageInfo.lastPage}</span>
+			<span class="hidden sm:inline">Page {pageInfo.currentPage} of {pageInfo.lastPage}</span>
 		</div>
 
-		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => table.goToPage(1)}
-			disabled={!pageInfo.hasPrevPage}
-			class="h-8 w-8 p-0"
-		>
-			<ChevronsLeft class="h-4 w-4" />
-			<span class="sr-only">First page</span>
-		</Button>
+		<div class="flex items-center gap-1">
+			<!-- First page - hidden on mobile to save space -->
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => table.goToPage(1)}
+				disabled={!pageInfo.hasPrevPage}
+				class="hidden h-8 w-8 p-0 sm:flex"
+				aria-label="Go to first page"
+			>
+				<ChevronsLeft class="h-4 w-4" />
+			</Button>
 
-		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => table.goToPage(pageInfo.currentPage - 1)}
-			disabled={!pageInfo.hasPrevPage}
-			class="h-8 w-8 p-0"
-		>
-			<ChevronLeft class="h-4 w-4" />
-			<span class="sr-only">Previous page</span>
-		</Button>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => table.goToPage(pageInfo.currentPage - 1)}
+				disabled={!pageInfo.hasPrevPage}
+				class="h-8 w-8 p-0"
+				aria-label="Go to previous page"
+			>
+				<ChevronLeft class="h-4 w-4" />
+			</Button>
 
-		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => table.goToPage(pageInfo.currentPage + 1)}
-			disabled={!pageInfo.hasNextPage}
-			class="h-8 w-8 p-0"
-		>
-			<ChevronRight class="h-4 w-4" />
-			<span class="sr-only">Next page</span>
-		</Button>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => table.goToPage(pageInfo.currentPage + 1)}
+				disabled={!pageInfo.hasNextPage}
+				class="h-8 w-8 p-0"
+				aria-label="Go to next page"
+			>
+				<ChevronRight class="h-4 w-4" />
+			</Button>
 
-		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => table.goToPage(pageInfo.lastPage)}
-			disabled={!pageInfo.hasNextPage}
-			class="h-8 w-8 p-0"
-		>
-			<ChevronsRight class="h-4 w-4" />
-			<span class="sr-only">Last page</span>
-		</Button>
+			<!-- Last page - hidden on mobile to save space -->
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => table.goToPage(pageInfo.lastPage)}
+				disabled={!pageInfo.hasNextPage}
+				class="hidden h-8 w-8 p-0 sm:flex"
+				aria-label="Go to last page"
+			>
+				<ChevronsRight class="h-4 w-4" />
+			</Button>
+		</div>
 	</div>
 </div>

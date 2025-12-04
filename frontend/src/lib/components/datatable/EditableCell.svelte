@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { Input } from '$lib/components/ui/input';
-	import { Check, X, Loader2 } from 'lucide-svelte';
+	import { Check, X, Loader2, Pencil } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import type { ColumnDef } from './types';
+	import { recordsApi } from '$lib/api/records';
 
 	interface Props {
 		value: any;
@@ -26,7 +27,9 @@
 	let editValue = $state(value);
 	let isSaving = $state(false);
 	let error = $state<string | null>(null);
-	let inputElement: HTMLInputElement | undefined;
+	let isHovered = $state(false);
+	let cellRef: HTMLDivElement | undefined;
+	let inputRef: HTMLInputElement | undefined;
 
 	// Format value for display
 	const displayValue = $derived.by(() => {
@@ -75,13 +78,26 @@
 		return editableTypes.includes(column.type || 'text');
 	});
 
-	function handleDoubleClick() {
+	function startEditing() {
 		if (!editable || !isEditableType) return;
 		isEditing = true;
 		editValue = value;
 		error = null;
 		// Focus input after DOM update
-		setTimeout(() => inputElement?.focus(), 0);
+		setTimeout(() => inputRef?.focus(), 0);
+	}
+
+	function handleDoubleClick() {
+		startEditing();
+	}
+
+	function handleKeydownOnCell(e: KeyboardEvent) {
+		if (!editable || !isEditableType) return;
+		// Enter or F2 to start editing (common spreadsheet pattern)
+		if (e.key === 'Enter' || e.key === 'F2') {
+			e.preventDefault();
+			startEditing();
+		}
 	}
 
 	function cancel() {
@@ -111,22 +127,13 @@
 			if (onUpdate) {
 				await onUpdate(row.id, column.accessorKey, convertedValue);
 			} else {
-				// Default API call
-				const response = await fetch(`/api/${moduleApiName}/records/${row.id}`, {
-					method: 'PATCH',
-					headers: {
-						'Content-Type': 'application/json',
-						'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-					},
-					body: JSON.stringify({
-						[column.accessorKey]: convertedValue
-					})
-				});
+				// Extract field name from accessorKey (e.g., "data.first_name" -> "first_name")
+				const fieldName = column.accessorKey.startsWith('data.')
+					? column.accessorKey.slice(5)
+					: column.accessorKey;
 
-				if (!response.ok) {
-					const data = await response.json();
-					throw new Error(data.message || 'Failed to update record');
-				}
+				// Use the records API for inline editing
+				await recordsApi.updateField(moduleApiName, row.id, fieldName, convertedValue);
 			}
 
 			value = convertedValue;
@@ -162,36 +169,49 @@
 
 {#if isEditing}
 	<!-- Edit mode -->
-	<div class="flex items-center gap-1" onclick={(e) => e.stopPropagation()}>
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<div
+		class="flex items-center gap-1"
+		role="group"
+		aria-label="Edit {column.header}"
+		onclick={(e) => e.stopPropagation()}
+		onkeydown={(e) => e.stopPropagation()}
+	>
 		<Input
-			bind:this={inputElement}
+			bind:ref={inputRef}
 			bind:value={editValue}
 			type={inputType}
 			onkeydown={handleKeydown}
 			onblur={handleBlur}
 			disabled={isSaving}
-			class="h-8 w-full min-w-[120px] {error ? 'border-destructive' : ''}"
-			aria-invalid={error ? 'true' : 'false'}
+			class="h-8 w-full min-w-[120px] {error
+				? 'border-destructive focus-visible:ring-destructive'
+				: ''}"
+			aria-invalid={error ? 'true' : undefined}
+			aria-describedby={error ? `error-${row.id}-${column.id}` : undefined}
+			aria-label="Edit {column.header}"
 		/>
 		<div class="flex items-center gap-0.5">
 			{#if isSaving}
-				<Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+				<div class="p-1" aria-label="Saving...">
+					<Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+				</div>
 			{:else}
 				<button
 					type="button"
 					onclick={save}
-					class="rounded p-1 hover:bg-accent"
+					class="rounded p-1 transition-colors hover:bg-green-100 focus:ring-2 focus:ring-green-500 focus:ring-offset-1 focus:outline-none dark:hover:bg-green-900/30"
 					title="Save (Enter)"
-					aria-label="Save"
+					aria-label="Save changes"
 				>
 					<Check class="h-4 w-4 text-green-600" />
 				</button>
 				<button
 					type="button"
 					onclick={cancel}
-					class="rounded p-1 hover:bg-accent"
+					class="rounded p-1 transition-colors hover:bg-red-100 focus:ring-2 focus:ring-red-500 focus:ring-offset-1 focus:outline-none dark:hover:bg-red-900/30"
 					title="Cancel (Esc)"
-					aria-label="Cancel"
+					aria-label="Cancel editing"
 				>
 					<X class="h-4 w-4 text-destructive" />
 				</button>
@@ -199,15 +219,42 @@
 		</div>
 	</div>
 	{#if error}
-		<p class="mt-1 text-xs text-destructive">{error}</p>
+		<p id="error-{row.id}-{column.id}" class="mt-1 text-xs text-destructive" role="alert">
+			{error}
+		</p>
 	{/if}
 {:else}
 	<!-- Display mode -->
 	<div
+		bind:this={cellRef}
 		ondblclick={handleDoubleClick}
-		class="truncate {editable && isEditableType ? 'cursor-text hover:bg-accent/50 rounded px-1 -mx-1' : ''}"
-		title={editable && isEditableType ? 'Double-click to edit' : undefined}
+		onkeydown={handleKeydownOnCell}
+		onmouseenter={() => (isHovered = true)}
+		onmouseleave={() => (isHovered = false)}
+		role={editable && isEditableType ? 'button' : undefined}
+		tabindex={editable && isEditableType ? 0 : undefined}
+		aria-label={editable && isEditableType
+			? `${column.header}: ${displayValue || 'empty'}. Press Enter or double-click to edit.`
+			: undefined}
+		class="group relative flex items-center gap-2 truncate transition-colors {editable &&
+		isEditableType
+			? '-mx-1.5 -my-0.5 cursor-pointer rounded px-1.5 py-0.5 hover:bg-accent/50 focus:bg-accent/50 focus:ring-2 focus:ring-primary focus:ring-offset-1 focus:outline-none'
+			: ''}"
 	>
-		{displayValue}
+		<span class="truncate">
+			{#if displayValue}
+				{displayValue}
+			{:else}
+				<span class="text-muted-foreground/50 italic">Empty</span>
+			{/if}
+		</span>
+		{#if editable && isEditableType}
+			<span
+				class="flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100"
+				aria-hidden="true"
+			>
+				<Pencil class="h-3 w-3 text-muted-foreground" />
+			</span>
+		{/if}
 	</div>
 {/if}

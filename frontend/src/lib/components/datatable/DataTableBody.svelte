@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { Loader2 } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { Loader2, FileX2, SearchX, Plus, FilterX, RefreshCw, AlertCircle } from 'lucide-svelte';
 	import { getNestedValue, formatCellValue } from './utils';
 	import EditableCell from './EditableCell.svelte';
 	import type { ColumnDef, TableContext } from './types';
+	import * as Table from '$lib/components/ui/table';
 
 	interface Props {
 		columns: ColumnDef[];
@@ -16,6 +18,7 @@
 		moduleApiName: string;
 		onRowClick?: (row: any) => void;
 		onCellUpdate?: (recordId: string, field: string, value: any) => Promise<void>;
+		onCreateNew?: () => void;
 	}
 
 	let {
@@ -27,15 +30,32 @@
 		enableInlineEdit = true,
 		moduleApiName,
 		onRowClick,
-		onCellUpdate
+		onCellUpdate,
+		onCreateNew
 	}: Props = $props();
 
 	const table = getContext<TableContext>('table');
+
+	// Determine empty state type
+	let hasFilters = $derived(table.state.filters.length > 0);
+	let hasSearch = $derived(table.state.globalFilter?.length > 0);
+	let hasFiltersOrSearch = $derived(hasFilters || hasSearch);
 
 	function handleRowClick(row: any) {
 		if (onRowClick) {
 			onRowClick(row);
 		}
+	}
+
+	function handleClearFilters() {
+		table.clearFilters();
+		if (hasSearch) {
+			table.updateGlobalFilter('');
+		}
+	}
+
+	function handleRetry() {
+		table.refresh();
 	}
 
 	// Check if column is editable
@@ -44,53 +64,119 @@
 		if (column.cell) return false;
 
 		// Allow editing for these types
-		const editableTypes = ['text', 'email', 'phone', 'url', 'number', 'decimal', 'date', 'datetime'];
+		const editableTypes = [
+			'text',
+			'email',
+			'phone',
+			'url',
+			'number',
+			'decimal',
+			'date',
+			'datetime'
+		];
 		return editableTypes.includes(column.type || 'text');
 	}
 </script>
 
-<tbody class="[&_tr:last-child]:border-0">
+<Table.Body>
 	{#if loading}
 		<!-- Loading state -->
-		<tr>
-			<td colspan={enableSelection ? columns.length + 1 : columns.length} class="h-24 text-center">
-				<div class="flex items-center justify-center gap-2 text-muted-foreground">
-					<Loader2 class="h-4 w-4 animate-spin" />
-					<span>Loading...</span>
+		<Table.Row>
+			<Table.Cell
+				colspan={enableSelection ? columns.length + 1 : columns.length}
+				class="h-32 text-center"
+			>
+				<div class="flex flex-col items-center justify-center gap-3 text-muted-foreground">
+					<Loader2 class="h-8 w-8 animate-spin text-primary/60" />
+					<span class="text-sm">Loading records...</span>
 				</div>
-			</td>
-		</tr>
+			</Table.Cell>
+		</Table.Row>
 	{:else if error}
 		<!-- Error state -->
-		<tr>
-			<td colspan={enableSelection ? columns.length + 1 : columns.length} class="h-24 text-center">
-				<div class="text-destructive">
-					<p class="font-medium">Error loading data</p>
-					<p class="text-sm text-muted-foreground">{error}</p>
+		<Table.Row>
+			<Table.Cell
+				colspan={enableSelection ? columns.length + 1 : columns.length}
+				class="h-48 text-center"
+			>
+				<div class="flex flex-col items-center justify-center gap-4">
+					<div class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+						<AlertCircle class="h-8 w-8 text-destructive" />
+					</div>
+					<div class="space-y-1">
+						<p class="font-medium text-destructive">Error loading data</p>
+						<p class="max-w-md text-sm text-muted-foreground">{error}</p>
+					</div>
+					<Button variant="outline" size="sm" onclick={handleRetry}>
+						<RefreshCw class="mr-2 h-4 w-4" />
+						Try again
+					</Button>
 				</div>
-			</td>
-		</tr>
+			</Table.Cell>
+		</Table.Row>
 	{:else if data.length === 0}
-		<!-- Empty state -->
-		<tr>
-			<td colspan={enableSelection ? columns.length + 1 : columns.length} class="h-24 text-center">
-				<div class="text-muted-foreground">
-					<p class="font-medium">No results found</p>
-					<p class="text-sm">Try adjusting your filters or search term</p>
+		<!-- Empty state - context aware -->
+		<Table.Row>
+			<Table.Cell
+				colspan={enableSelection ? columns.length + 1 : columns.length}
+				class="h-48 text-center"
+			>
+				<div class="flex flex-col items-center justify-center gap-4">
+					{#if hasFiltersOrSearch}
+						<!-- No results due to filters/search -->
+						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+							<SearchX class="h-8 w-8 text-muted-foreground" />
+						</div>
+						<div class="space-y-1">
+							<p class="font-medium">No matching records</p>
+							<p class="max-w-md text-sm text-muted-foreground">
+								{#if hasSearch && hasFilters}
+									No records match your search and filters.
+								{:else if hasSearch}
+									No records match "{table.state.globalFilter}".
+								{:else}
+									No records match your current filters.
+								{/if}
+							</p>
+						</div>
+						<div class="flex gap-2">
+							<Button variant="outline" size="sm" onclick={handleClearFilters}>
+								<FilterX class="mr-2 h-4 w-4" />
+								Clear {hasSearch && hasFilters ? 'all' : hasSearch ? 'search' : 'filters'}
+							</Button>
+						</div>
+					{:else}
+						<!-- No records exist yet -->
+						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+							<FileX2 class="h-8 w-8 text-muted-foreground" />
+						</div>
+						<div class="space-y-1">
+							<p class="font-medium">No records yet</p>
+							<p class="max-w-md text-sm text-muted-foreground">
+								Get started by creating your first record in this module.
+							</p>
+						</div>
+						{#if onCreateNew}
+							<Button size="sm" onclick={onCreateNew}>
+								<Plus class="mr-2 h-4 w-4" />
+								Create first record
+							</Button>
+						{/if}
+					{/if}
 				</div>
-			</td>
-		</tr>
+			</Table.Cell>
+		</Table.Row>
 	{:else}
 		<!-- Data rows -->
 		{#each data as row, index (row.id || index)}
 			{@const isSelected = table.state.rowSelection[row.id] || false}
-			<tr
-				class="border-b transition-colors {isSelected ? 'bg-muted/50' : 'hover:bg-muted/50'} {onRowClick ? 'cursor-pointer' : ''}"
+			<Table.Row
+				class="{isSelected ? 'bg-muted/50' : ''} {onRowClick ? 'cursor-pointer' : ''}"
 				onclick={() => handleRowClick(row)}
 			>
 				<!-- Selection checkbox -->
 				{#if enableSelection}
-					<td class="px-4">
+					<Table.Cell class="w-[50px]">
 						<div class="flex items-center justify-center">
 							<Checkbox
 								checked={isSelected}
@@ -99,7 +185,7 @@
 								onclick={(e) => e.stopPropagation()}
 							/>
 						</div>
-					</td>
+					</Table.Cell>
 				{/if}
 
 				<!-- Data cells -->
@@ -111,19 +197,13 @@
 					{@const cellClass = column.cellClass ? column.cellClass(value, row) : ''}
 					{@const editable = enableInlineEdit && isColumnEditable(column)}
 
-					<td class="px-4 py-3 align-middle {cellClass}">
+					<Table.Cell class={cellClass}>
 						{#if column.cell}
 							<!-- Custom cell component -->
 							<svelte:component this={column.cell} {value} {row} {column} {index} />
 						{:else if editable}
 							<!-- Editable cell with inline editing -->
-							<EditableCell
-								{value}
-								{row}
-								{column}
-								{moduleApiName}
-								onUpdate={onCellUpdate}
-							/>
+							<EditableCell {value} {row} {column} {moduleApiName} onUpdate={onCellUpdate} />
 						{:else}
 							<!-- Default cell rendering (non-editable) -->
 							<div class="flex items-center">
@@ -166,9 +246,9 @@
 								{/if}
 							</div>
 						{/if}
-					</td>
+					</Table.Cell>
 				{/each}
-			</tr>
+			</Table.Row>
 		{/each}
 	{/if}
-</tbody>
+</Table.Body>

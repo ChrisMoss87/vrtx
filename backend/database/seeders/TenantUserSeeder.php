@@ -21,18 +21,6 @@ class TenantUserSeeder extends Seeder
      * Password for all users: password123
      */
     private const USERS = [
-        'acme' => [
-            [
-                'name' => 'John Acme',
-                'email' => 'john@acme.com',
-                'password' => 'password123',
-            ],
-            [
-                'name' => 'Test Acme User',
-                'email' => 'testuser@acme.com',
-                'password' => 'password123',
-            ],
-        ],
         'techco' => [
             [
                 'name' => 'Bob TechCo',
@@ -40,15 +28,13 @@ class TenantUserSeeder extends Seeder
                 'password' => 'password123',
             ],
             [
-                'name' => 'Test TechCo User',
-                'email' => 'testuser@techco.com',
+                'name' => 'Sarah Johnson',
+                'email' => 'sarah@techco.com',
                 'password' => 'password123',
             ],
-        ],
-        'startup' => [
             [
-                'name' => 'Alice Startup',
-                'email' => 'alice@startup.com',
+                'name' => 'Mike Davis',
+                'email' => 'mike@techco.com',
                 'password' => 'password123',
             ],
         ],

@@ -17,8 +17,8 @@
 </script>
 
 {#if hasIssues}
-	<div class="border rounded-lg bg-card">
-		<div class="flex items-center justify-between p-4 border-b">
+	<div class="rounded-lg border bg-card">
+		<div class="flex items-center justify-between border-b p-4">
 			<div class="flex items-center gap-2">
 				{#if result.errors.length > 0}
 					<AlertCircle class="h-5 w-5 text-destructive" />
@@ -36,7 +36,7 @@
 		</div>
 
 		<ScrollArea class="h-[300px]">
-			<div class="p-4 space-y-3">
+			<div class="space-y-3 p-4">
 				<!-- Errors -->
 				{#if result.errors.length > 0}
 					<div class="space-y-2">
@@ -87,7 +87,9 @@
 							<span>{result.warnings.length} Warning{result.warnings.length !== 1 ? 's' : ''}</span>
 						</div>
 						{#each result.warnings as warning}
-							<Alert class="border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/30 py-3">
+							<Alert
+								class="border-yellow-200 bg-yellow-50 py-3 dark:border-yellow-900 dark:bg-yellow-950/30"
+							>
 								<AlertDescription class="text-yellow-900 dark:text-yellow-100">
 									{#if warning.blockIndex !== undefined && warning.fieldIndex !== undefined}
 										<span class="font-medium">

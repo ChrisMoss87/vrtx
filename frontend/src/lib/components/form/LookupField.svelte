@@ -6,7 +6,7 @@
 	import * as Command from '$lib/components/ui/command';
 	import * as Popover from '$lib/components/ui/popover';
 	import { Check, ChevronsUpDown, X, Loader2, Plus } from 'lucide-svelte';
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
 
 	interface RelatedRecord {
 		id: number;
@@ -171,7 +171,7 @@
 <FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
 	{#snippet children(props)}
 		<Popover.Root bind:open onOpenChange={handleOpenChange}>
-			<Popover.Trigger >
+			<Popover.Trigger>
 				<Button
 					{...props}
 					variant="outline"
@@ -238,10 +238,7 @@
 						{:else}
 							<Command.Group>
 								{#each records as record (record.id)}
-									<Command.Item
-										value={record.id.toString()}
-										onSelect={() => selectRecord(record)}
-									>
+									<Command.Item value={record.id.toString()} onSelect={() => selectRecord(record)}>
 										<Check
 											class={cn(
 												'mr-2 h-4 w-4',

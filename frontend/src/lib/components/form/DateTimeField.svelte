@@ -5,7 +5,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import * as Select from '$lib/components/ui/select';
 	import { CalendarIcon } from 'lucide-svelte';
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
 	import { DateFormatter, type DateValue, parseDate } from '@internationalized/date';
 
 	interface Props {
@@ -17,7 +17,6 @@
 		required?: boolean;
 		disabled?: boolean;
 		placeholder?: string;
-		width?: 25 | 50 | 75 | 100;
 		class?: string;
 		onchange?: (value: string) => void;
 	}
@@ -31,7 +30,6 @@
 		required = false,
 		disabled = false,
 		placeholder = 'Pick a date and time',
-		width = 100,
 		class: className,
 		onchange
 	}: Props = $props();
@@ -90,21 +88,17 @@
 		updateValue();
 	}
 
-	function handleHourChange(newValue: string | undefined) {
-		if (newValue) {
-			hour = newValue;
-			updateValue();
-		}
+	function handleHourChange(newValue: string) {
+		hour = newValue;
+		updateValue();
 	}
 
-	function handleMinuteChange(newValue: string | undefined) {
-		if (newValue) {
-			minute = newValue;
-			updateValue();
-		}
+	function handleMinuteChange(newValue: string) {
+		minute = newValue;
+		updateValue();
 	}
 
-	function handlePeriodChange(newValue: string | undefined) {
+	function handlePeriodChange(newValue: string) {
 		if (newValue === 'AM' || newValue === 'PM') {
 			period = newValue;
 			updateValue();
@@ -119,10 +113,10 @@
 	});
 </script>
 
-<FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
+<FieldBase {label} {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
 		<Popover.Root>
-			<Popover.Trigger >
+			<Popover.Trigger>
 				<Button
 					{...props}
 					variant="outline"
@@ -137,13 +131,9 @@
 			</Popover.Trigger>
 			<Popover.Content class="w-auto p-0" align="start">
 				<div class="p-3">
-					<Calendar.Calendar
-						value={dateValue}
-						onValueChange={handleDateChange}
-						initialFocus
-					/>
+					<Calendar.Calendar value={dateValue} onValueChange={handleDateChange} initialFocus />
 					<div class="mt-3 flex items-center gap-2 border-t pt-3">
-						<Select.Root selected={{ value: hour, label: hour }} onSelectedChange={(v) => handleHourChange(v?.value)}>
+						<Select.Root type="single" value={hour} onValueChange={handleHourChange}>
 							<Select.Trigger class="w-[70px]">
 								{hour}
 							</Select.Trigger>
@@ -154,7 +144,7 @@
 							</Select.Content>
 						</Select.Root>
 						<span>:</span>
-						<Select.Root selected={{ value: minute, label: minute }} onSelectedChange={(v) => handleMinuteChange(v?.value)}>
+						<Select.Root type="single" value={minute} onValueChange={handleMinuteChange}>
 							<Select.Trigger class="w-[70px]">
 								{minute}
 							</Select.Trigger>
@@ -164,7 +154,7 @@
 								{/each}
 							</Select.Content>
 						</Select.Root>
-						<Select.Root selected={{ value: period, label: period }} onSelectedChange={(v) => handlePeriodChange(v?.value)}>
+						<Select.Root type="single" value={period} onValueChange={handlePeriodChange}>
 							<Select.Trigger class="w-[70px]">
 								{period}
 							</Select.Trigger>

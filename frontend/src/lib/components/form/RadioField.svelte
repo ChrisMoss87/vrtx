@@ -48,7 +48,7 @@
 	{#snippet children(props)}
 		<RadioGroup
 			{...props}
-			value={value}
+			{value}
 			onValueChange={handleValueChange}
 			{disabled}
 			class={orientation === 'horizontal' ? 'flex flex-wrap gap-4' : 'flex flex-col gap-3'}
@@ -58,7 +58,9 @@
 					<RadioGroupItem value={option.value} id={`${name}-${option.value}`} {disabled} />
 					<Label
 						for={`${name}-${option.value}`}
-						class="text-sm font-normal cursor-pointer {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
+						class="cursor-pointer text-sm font-normal {disabled
+							? 'cursor-not-allowed opacity-50'
+							: ''}"
 					>
 						{option.label}
 					</Label>

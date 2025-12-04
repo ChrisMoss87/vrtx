@@ -5,7 +5,7 @@ interface FetchOptions extends RequestInit {
 }
 
 export class ApiClient {
-	private defaultHeaders: HeadersInit;
+	private defaultHeaders: Record<string, string>;
 
 	constructor() {
 		this.defaultHeaders = {
@@ -41,9 +41,9 @@ export class ApiClient {
 		const url = this.buildUrl(endpoint, params);
 
 		// Get auth token from localStorage if available
-		const headers: HeadersInit = {
+		const headers: Record<string, string> = {
 			...this.defaultHeaders,
-			...fetchOptions.headers
+			...((fetchOptions.headers as Record<string, string>) || {})
 		};
 
 		if (browser) {
@@ -59,8 +59,22 @@ export class ApiClient {
 		});
 
 		if (!response.ok) {
-			const error = await response.json().catch(() => ({ message: response.statusText }));
-			throw new Error(error.message || 'API request failed');
+			const errorData = await response.json().catch(() => ({ message: response.statusText }));
+			console.error('API Error Response:', {
+				status: response.status,
+				statusText: response.statusText,
+				url,
+				data: errorData
+			});
+
+			// Create error object with more details
+			const error: any = new Error(errorData.message || 'API request failed');
+			error.response = {
+				status: response.status,
+				statusText: response.statusText,
+				data: errorData
+			};
+			throw error;
 		}
 
 		return response.json();

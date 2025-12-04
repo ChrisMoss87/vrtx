@@ -60,34 +60,34 @@
 </script>
 
 <Popover.Root bind:open>
-	<Popover.Trigger >
-		<Button variant="outline" size="sm" class="h-8 border-dashed">
-			<ChevronDown class="mr-2 h-4 w-4" />
-			{column.label || column.id}
-			{#if selectedValues.length > 0}
-				<div class="ml-2 flex gap-1">
-					{#each selectedLabels.slice(0, 2) as label}
-						<Badge variant="secondary" class="rounded-sm px-1 font-normal">
-							{label}
-						</Badge>
-					{/each}
-					{#if selectedLabels.length > 2}
-						<Badge variant="secondary" class="rounded-sm px-1 font-normal">
-							+{selectedLabels.length - 2}
-						</Badge>
-					{/if}
-				</div>
-			{/if}
-		</Button>
+	<Popover.Trigger>
+		{#snippet child({ props })}
+			<Button {...props} variant="outline" size="sm" class="h-8 border-dashed">
+				<ChevronDown class="mr-2 h-4 w-4" />
+				{column.header || column.id}
+				{#if selectedValues.length > 0}
+					<div class="ml-2 flex gap-1">
+						{#each selectedLabels.slice(0, 2) as label}
+							<Badge variant="secondary" class="rounded-sm px-1 font-normal">
+								{label}
+							</Badge>
+						{/each}
+						{#if selectedLabels.length > 2}
+							<Badge variant="secondary" class="rounded-sm px-1 font-normal">
+								+{selectedLabels.length - 2}
+							</Badge>
+						{/if}
+					</div>
+				{/if}
+			</Button>
+		{/snippet}
 	</Popover.Trigger>
 	<Popover.Content class="w-64 p-0" align="start">
 		<div class="border-b p-2">
 			<div class="flex items-center justify-between">
-				<Label class="text-sm font-medium">{column.label || column.id}</Label>
+				<Label class="text-sm font-medium">{column.header || column.id}</Label>
 				{#if selectedValues.length > 0}
-					<Button variant="ghost" size="sm" onclick={clear} class="h-6 px-2 text-xs">
-						Clear
-					</Button>
+					<Button variant="ghost" size="sm" onclick={clear} class="h-6 px-2 text-xs">Clear</Button>
 				{/if}
 			</div>
 		</div>

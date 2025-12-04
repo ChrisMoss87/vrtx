@@ -270,4 +270,15 @@ final class RecordService
     {
         return $this->recordRepository->exists($moduleId, $recordId);
     }
+
+    /**
+     * Get multiple records by their IDs.
+     *
+     * @param  array<int>  $recordIds
+     * @return array<ModuleRecord>
+     */
+    public function getRecordsByIds(int $moduleId, array $recordIds): array
+    {
+        return $this->recordRepository->findByIds($moduleId, $recordIds);
+    }
 }

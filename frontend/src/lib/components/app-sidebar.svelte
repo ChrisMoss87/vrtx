@@ -1,157 +1,151 @@
 <script lang="ts" module>
-	import AudioWaveformIcon from "@lucide/svelte/icons/audio-waveform";
-	import BookOpenIcon from "@lucide/svelte/icons/book-open";
-	import BotIcon from "@lucide/svelte/icons/bot";
-	import ChartPieIcon from "@lucide/svelte/icons/chart-pie";
-	import CommandIcon from "@lucide/svelte/icons/command";
-	import FrameIcon from "@lucide/svelte/icons/frame";
-	import GalleryVerticalEndIcon from "@lucide/svelte/icons/gallery-vertical-end";
-	import MapIcon from "@lucide/svelte/icons/map";
-	import Settings2Icon from "@lucide/svelte/icons/settings-2";
-	import SquareTerminalIcon from "@lucide/svelte/icons/square-terminal";
+	import HomeIcon from '@lucide/svelte/icons/home';
+	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
+	import PackageIcon from '@lucide/svelte/icons/package';
+	import UsersIcon from '@lucide/svelte/icons/users';
+	import BriefcaseIcon from '@lucide/svelte/icons/briefcase';
+	import Settings2Icon from '@lucide/svelte/icons/settings-2';
+	import CodeIcon from '@lucide/svelte/icons/code';
+	import TrendingUpIcon from '@lucide/svelte/icons/trending-up';
 
-	// This is sample data.
+	// VRTX CRM Data
 	const data = {
 		user: {
-			name: "shadcn",
-			email: "m@example.com",
-			avatar: "/avatars/shadcn.jpg",
+			name: 'Bob TechCo',
+			email: 'bob@techco.com',
+			avatar: '/avatars/default.jpg'
 		},
 		teams: [
 			{
-				name: "Acme Inc",
-				logo: GalleryVerticalEndIcon,
-				plan: "Enterprise",
-			},
-			{
-				name: "Acme Corp.",
-				logo: AudioWaveformIcon,
-				plan: "Startup",
-			},
-			{
-				name: "Evil Corp.",
-				logo: CommandIcon,
-				plan: "Free",
-			},
+				name: 'TechCo Solutions',
+				logo: BriefcaseIcon,
+				plan: 'Enterprise'
+			}
 		],
 		navMain: [
 			{
-				title: "Playground",
-				url: "#",
-				icon: SquareTerminalIcon,
-				isActive: true,
-				items: [
-					{
-						title: "History",
-						url: "#",
-					},
-					{
-						title: "Starred",
-						url: "#",
-					},
-					{
-						title: "Settings",
-						url: "#",
-					},
-				],
+				title: 'Dashboard',
+				url: '/dashboard',
+				icon: HomeIcon,
+				isActive: true
 			},
 			{
-				title: "Models",
-				url: "#",
-				icon: BotIcon,
+				title: 'Modules',
+				url: '/modules',
+				icon: LayoutDashboardIcon,
 				items: [
 					{
-						title: "Genesis",
-						url: "#",
+						title: 'All Modules',
+						url: '/modules'
 					},
 					{
-						title: "Explorer",
-						url: "#",
-					},
-					{
-						title: "Quantum",
-						url: "#",
-					},
-				],
+						title: 'Create Module',
+						url: '/modules/create-builder'
+					}
+				]
 			},
 			{
-				title: "Documentation",
-				url: "#",
-				icon: BookOpenIcon,
+				title: 'CRM',
+				url: '#',
+				icon: BriefcaseIcon,
 				items: [
 					{
-						title: "Introduction",
-						url: "#",
+						title: 'Contacts',
+						url: '/records/contacts'
 					},
 					{
-						title: "Get Started",
-						url: "#",
+						title: 'Deals',
+						url: '/records/deals'
 					},
 					{
-						title: "Tutorials",
-						url: "#",
-					},
-					{
-						title: "Changelog",
-						url: "#",
-					},
-				],
+						title: 'Products',
+						url: '/records/products'
+					}
+				]
 			},
 			{
-				title: "Settings",
-				url: "#",
-				icon: Settings2Icon,
+				title: 'Settings',
+				url: '/settings',
+				icon: Settings2Icon
+			}
+		],
+		// Developer tools - collapsed by default, separate from main nav
+		devTools: [
+			{
+				title: 'Developer',
+				url: '#',
+				icon: CodeIcon,
 				items: [
 					{
-						title: "General",
-						url: "#",
+						title: 'DataTable Demo',
+						url: '/datatable-demo'
 					},
 					{
-						title: "Team",
-						url: "#",
+						title: 'Form Builder Test',
+						url: '/test-form'
 					},
 					{
-						title: "Billing",
-						url: "#",
+						title: 'Wizard Demo',
+						url: '/wizard-demo'
 					},
 					{
-						title: "Limits",
-						url: "#",
+						title: 'Wizard Builder Demo',
+						url: '/wizard-builder-demo'
 					},
-				],
-			},
+					{
+						title: 'Step Types Demo',
+						url: '/step-types-demo'
+					},
+					{
+						title: 'Conditional Wizard',
+						url: '/conditional-wizard-demo'
+					},
+					{
+						title: 'Draft Management',
+						url: '/draft-demo'
+					},
+					{
+						title: 'Field Types Demo',
+						url: '/field-types-demo'
+					},
+					{
+						title: 'Rich Text Editor',
+						url: '/editor-demo'
+					}
+				]
+			}
 		],
 		projects: [
 			{
-				name: "Design Engineering",
-				url: "#",
-				icon: FrameIcon,
+				name: 'Contacts',
+				url: '/records/contacts',
+				icon: UsersIcon
 			},
 			{
-				name: "Sales & Marketing",
-				url: "#",
-				icon: ChartPieIcon,
+				name: 'Deals',
+				url: '/records/deals',
+				icon: TrendingUpIcon
 			},
 			{
-				name: "Travel",
-				url: "#",
-				icon: MapIcon,
-			},
-		],
+				name: 'Products',
+				url: '/records/products',
+				icon: PackageIcon
+			}
+		]
 	};
 </script>
 
 <script lang="ts">
-	import NavMain from "./nav-main.svelte";
-	import NavProjects from "./nav-projects.svelte";
-	import NavUser from "./nav-user.svelte";
-	import TeamSwitcher from "./team-switcher.svelte";
-	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-	import type { ComponentProps } from "svelte";
+	import NavMain from './nav-main.svelte';
+	import NavProjects from './nav-projects.svelte';
+	import NavUser from './nav-user.svelte';
+	import TeamSwitcher from './team-switcher.svelte';
+	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import type { ComponentProps } from 'svelte';
 
 	let {
 		ref = $bindable(null),
-		collapsible = "icon",
+		collapsible = 'icon',
 		...restProps
 	}: ComponentProps<typeof Sidebar.Root> = $props();
 </script>
@@ -163,6 +157,8 @@
 	<Sidebar.Content>
 		<NavMain items={data.navMain} />
 		<NavProjects projects={data.projects} />
+		<!-- Developer tools - separate section at bottom -->
+		<NavMain items={data.devTools} label="Developer Tools" />
 	</Sidebar.Content>
 	<Sidebar.Footer>
 		<NavUser user={data.user} />

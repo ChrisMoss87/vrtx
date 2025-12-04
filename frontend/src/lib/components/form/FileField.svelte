@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Upload, X, FileIcon, Loader2 } from 'lucide-svelte';
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
 
 	interface UploadedFile {
 		name: string;
@@ -138,7 +138,7 @@
 
 		// Update value
 		const paths = uploadedFiles.map((f) => f.path || '');
-		value = multiple ? paths : (paths.length > 0 ? paths[0] : undefined);
+		value = multiple ? paths : paths.length > 0 ? paths[0] : undefined;
 		onchange?.(value);
 	}
 
@@ -147,7 +147,7 @@
 		const k = 1024;
 		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
 		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 	}
 
 	function handleDragOver(event: DragEvent) {
@@ -170,10 +170,10 @@
 				role="button"
 				tabindex="0"
 				class={cn(
-					'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
+					'cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors',
 					dragOver && 'border-primary bg-primary/5',
 					!dragOver && 'border-muted-foreground/25 hover:border-muted-foreground/50',
-					disabled && 'opacity-50 cursor-not-allowed',
+					disabled && 'cursor-not-allowed opacity-50',
 					error && 'border-destructive'
 				)}
 				ondragover={handleDragOver}
@@ -188,13 +188,11 @@
 				}}
 			>
 				{#if uploading}
-					<Loader2 class="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" />
+					<Loader2 class="mx-auto mb-2 h-8 w-8 animate-spin text-muted-foreground" />
 					<p class="text-sm text-muted-foreground">Uploading...</p>
 				{:else}
-					<Upload class="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-					<p class="text-sm text-muted-foreground mb-1">
-						Click to upload or drag and drop
-					</p>
+					<Upload class="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+					<p class="mb-1 text-sm text-muted-foreground">Click to upload or drag and drop</p>
 					<p class="text-xs text-muted-foreground">
 						{#if accept}
 							{accept.replace(/,/g, ', ')}
@@ -222,13 +220,11 @@
 			{#if uploadedFiles.length > 0}
 				<div class="space-y-2">
 					{#each uploadedFiles as file, index (index)}
-						<div
-							class="flex items-center justify-between p-3 border rounded-lg bg-muted/50"
-						>
-							<div class="flex items-center gap-3 flex-1 min-w-0">
-								<FileIcon class="h-5 w-5 text-muted-foreground shrink-0" />
-								<div class="flex-1 min-w-0">
-									<p class="text-sm font-medium truncate">{file.name}</p>
+						<div class="flex items-center justify-between rounded-lg border bg-muted/50 p-3">
+							<div class="flex min-w-0 flex-1 items-center gap-3">
+								<FileIcon class="h-5 w-5 shrink-0 text-muted-foreground" />
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium">{file.name}</p>
 									{#if file.size > 0}
 										<p class="text-xs text-muted-foreground">
 											{formatFileSize(file.size)}
@@ -242,7 +238,7 @@
 									variant="ghost"
 									size="sm"
 									onclick={() => removeFile(index)}
-									class="h-8 w-8 p-0 shrink-0"
+									class="h-8 w-8 shrink-0 p-0"
 								>
 									<X class="h-4 w-4" />
 								</Button>

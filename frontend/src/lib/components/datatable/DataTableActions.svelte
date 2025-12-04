@@ -26,7 +26,7 @@
 		showView = true,
 		showEdit = true,
 		showDuplicate = true,
-		showDelete = true,
+		showDelete = true
 	}: Props = $props();
 
 	function handleView() {
@@ -47,7 +47,7 @@
 		} else {
 			// Default duplicate behavior - navigate to create with prefilled data
 			router.visit(`/modules/${moduleApiName}/create`, {
-				data: { duplicate: row.id },
+				data: { duplicate: row.id }
 			});
 		}
 	}
@@ -65,7 +65,7 @@
 					},
 					onError: () => {
 						toast.error('Failed to delete record');
-					},
+					}
 				});
 			}
 		}
@@ -73,13 +73,8 @@
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger >
-		<Button
-			variant="ghost"
-			size="icon"
-			class="h-8 w-8 p-0"
-			onclick={(e) => e.stopPropagation()}
-		>
+	<DropdownMenu.Trigger>
+		<Button variant="ghost" size="icon" class="h-8 w-8 p-0" onclick={(e) => e.stopPropagation()}>
 			<span class="sr-only">Open menu</span>
 			<MoreHorizontal class="h-4 w-4" />
 		</Button>

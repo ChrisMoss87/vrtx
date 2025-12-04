@@ -39,12 +39,6 @@
 
 <FieldBase {label} {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
-		<Input
-			{...props}
-			{type}
-			{placeholder}
-			{value}
-			oninput={handleInput}
-		/>
+		<Input {...props} {type} {placeholder} {value} oninput={handleInput} />
 	{/snippet}
 </FieldBase>

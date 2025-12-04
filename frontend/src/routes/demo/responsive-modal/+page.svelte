@@ -1,7 +1,7 @@
 <script lang="ts">
-    import ResponsiveModal from "$lib/components/ui/responsive-modal/responsive-modal.svelte"
-        import Button from '$lib/components/ui/button/button.svelte'
-    import {Calendar} from "$lib/components/ui/calendar";
+	import ResponsiveModal from '$lib/components/ui/responsive-modal/responsive-modal.svelte';
+	import Button from '$lib/components/ui/button/button.svelte';
+	import { Calendar } from '$lib/components/ui/calendar';
 
 	let basicModalOpen = $state(false);
 	let formModalOpen = $state(false);
@@ -27,14 +27,12 @@
 	<title>Responsive Modal Demo</title>
 </svelte:head>
 
-<div class="container mx-auto p-8 max-w-4xl">
-
-
+<div class="container mx-auto max-w-4xl p-8">
 	<div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
 		<!-- Basic Modal Example -->
-		<div class="border rounded-lg p-6 space-y-4">
+		<div class="space-y-4 rounded-lg border p-6">
 			<div>
-				<h2 class="text-xl font-semibold mb-2">Basic Modal</h2>
+				<h2 class="mb-2 text-xl font-semibold">Basic Modal</h2>
 				<p class="text-sm text-muted-foreground">
 					Simple modal with title, description, and content.
 				</p>
@@ -43,9 +41,9 @@
 		</div>
 
 		<!-- Form Modal Example -->
-		<div class="border rounded-lg p-6 space-y-4">
+		<div class="space-y-4 rounded-lg border p-6">
 			<div>
-				<h2 class="text-xl font-semibold mb-2">Form Modal</h2>
+				<h2 class="mb-2 text-xl font-semibold">Form Modal</h2>
 				<p class="text-sm text-muted-foreground">
 					Modal containing a form with input fields and actions.
 				</p>
@@ -54,9 +52,9 @@
 		</div>
 
 		<!-- Custom Content Modal -->
-		<div class="border rounded-lg p-6 space-y-4">
+		<div class="space-y-4 rounded-lg border p-6">
 			<div>
-				<h2 class="text-xl font-semibold mb-2">Custom Content</h2>
+				<h2 class="mb-2 text-xl font-semibold">Custom Content</h2>
 				<p class="text-sm text-muted-foreground">Modal with rich custom content and styling.</p>
 			</div>
 			<Button onclick={() => (customModalOpen = true)} class="w-full">Open Custom Modal</Button>
@@ -69,30 +67,29 @@
 			<h2 class="text-2xl font-semibold">Features</h2>
 			<ul class="space-y-2">
 				<li class="flex items-start gap-2">
-					<span class="text-green-600 dark:text-green-400 mt-1">✓</span>
+					<span class="mt-1 text-green-600 dark:text-green-400">✓</span>
 					<span>Automatic responsive behavior based on screen width</span>
 				</li>
 				<li class="flex items-start gap-2">
-					<span class="text-green-600 dark:text-green-400 mt-1">✓</span>
+					<span class="mt-1 text-green-600 dark:text-green-400">✓</span>
 					<span>Smooth transitions between drawer and dialog modes</span>
 				</li>
 				<li class="flex items-start gap-2">
-					<span class="text-green-600 dark:text-green-400 mt-1">✓</span>
+					<span class="mt-1 text-green-600 dark:text-green-400">✓</span>
 					<span>Accessible keyboard navigation (Escape to close)</span>
 				</li>
 				<li class="flex items-start gap-2">
-					<span class="text-green-600 dark:text-green-400 mt-1">✓</span>
+					<span class="mt-1 text-green-600 dark:text-green-400">✓</span>
 					<span>Focus management and trapping</span>
 				</li>
 				<li class="flex items-start gap-2">
-					<span class="text-green-600 dark:text-green-400 mt-1">✓</span>
+					<span class="mt-1 text-green-600 dark:text-green-400">✓</span>
 					<span>Built with shadcn-svelte components</span>
 				</li>
 			</ul>
 		</div>
-
 	</div>
-	</div>
+</div>
 
 <!-- Basic Modal -->
 <ResponsiveModal
@@ -108,7 +105,8 @@
 		</p>
 		<p class="text-sm text-muted-foreground">
 			Try pressing <kbd
-				class="px-2 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800 border rounded">Escape</kbd
+				class="rounded border bg-slate-100 px-2 py-1 text-xs font-semibold dark:bg-slate-800"
+				>Escape</kbd
 			> to close this modal, or click the overlay.
 		</p>
 		<div class="flex justify-end gap-2">
@@ -126,7 +124,7 @@
 >
 	<form onsubmit={handleFormSubmit} class="space-y-4 py-4">
 		<div class="space-y-2">
-			<label for="name" class="text-sm font-medium leading-none">Name</label>
+			<label for="name" class="text-sm leading-none font-medium">Name</label>
 			<input
 				id="name"
 				type="text"
@@ -138,7 +136,7 @@
 		</div>
 
 		<div class="space-y-2">
-			<label for="email" class="text-sm font-medium leading-none">Email</label>
+			<label for="email" class="text-sm leading-none font-medium">Email</label>
 			<input
 				id="email"
 				type="email"
@@ -160,10 +158,10 @@
 
 <!-- Custom Content Modal -->
 <ResponsiveModal bind:open={customModalOpen}>
-	<div class="py-4 space-y-4">
-		<div class="text-center space-y-2">
+	<div class="space-y-4 py-4">
+		<div class="space-y-2 text-center">
 			<div
-				class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full mx-auto flex items-center justify-center"
+				class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500"
 			>
 				<span class="text-2xl">🎉</span>
 			</div>
@@ -173,20 +171,22 @@
 			</p>
 		</div>
 
-		<div class="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 rounded-lg p-4">
-			<h3 class="font-semibold mb-2">Pro Tip</h3>
+		<div
+			class="rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 p-4 dark:from-blue-950 dark:to-purple-950"
+		>
+			<h3 class="mb-2 font-semibold">Pro Tip</h3>
 			<p class="text-sm">
-				You can completely customize the content of the modal by not providing title or
-				description props and using your own HTML structure.
+				You can completely customize the content of the modal by not providing title or description
+				props and using your own HTML structure.
 			</p>
 		</div>
 
 		<div class="grid grid-cols-2 gap-2">
-			<div class="border rounded-lg p-3 text-center">
+			<div class="rounded-lg border p-3 text-center">
 				<div class="text-2xl font-bold text-blue-600 dark:text-blue-400">100%</div>
 				<div class="text-xs text-muted-foreground">Responsive</div>
 			</div>
-			<div class="border rounded-lg p-3 text-center">
+			<div class="rounded-lg border p-3 text-center">
 				<div class="text-2xl font-bold text-green-600 dark:text-green-400">A11y</div>
 				<div class="text-xs text-muted-foreground">Accessible</div>
 			</div>

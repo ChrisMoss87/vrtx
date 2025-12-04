@@ -67,18 +67,18 @@
 </script>
 
 <div
-	class="flex items-start gap-3 p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors group"
+	class="group flex items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-accent/50"
 	data-testid="field-item"
 >
 	<!-- Drag handle -->
-	<GripVertical class="h-5 w-5 text-muted-foreground cursor-move mt-1 flex-shrink-0" />
+	<GripVertical class="mt-1 h-5 w-5 flex-shrink-0 cursor-move text-muted-foreground" />
 
 	<!-- Field info -->
-	<div class="flex-1 min-w-0 space-y-2">
+	<div class="min-w-0 flex-1 space-y-2">
 		<div class="flex items-start justify-between gap-2">
-			<div class="flex-1 min-w-0">
-				<div class="flex items-center gap-2 flex-wrap">
-					<h4 class="font-medium text-sm truncate">{field.label}</h4>
+			<div class="min-w-0 flex-1">
+				<div class="flex flex-wrap items-center gap-2">
+					<h4 class="truncate text-sm font-medium">{field.label}</h4>
 					{#if field.is_required}
 						<Badge variant="destructive" class="text-xs">Required</Badge>
 					{/if}
@@ -90,8 +90,8 @@
 					{/if}
 				</div>
 
-				<div class="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
-					<code class="px-1.5 py-0.5 rounded bg-muted">{field.api_name}</code>
+				<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+					<code class="rounded bg-muted px-1.5 py-0.5">{field.api_name}</code>
 					<span>•</span>
 					<span>{fieldTypeLabel}</span>
 					<span>•</span>
@@ -99,23 +99,21 @@
 				</div>
 
 				{#if field.description}
-					<p class="text-sm text-muted-foreground mt-2">{field.description}</p>
+					<p class="mt-2 text-sm text-muted-foreground">{field.description}</p>
 				{/if}
 
 				{#if field.help_text}
-					<p class="text-xs text-muted-foreground mt-1 italic">{field.help_text}</p>
+					<p class="mt-1 text-xs text-muted-foreground italic">{field.help_text}</p>
 				{/if}
 
 				<!-- Show options for select/radio/multiselect -->
 				{#if ['select', 'radio', 'multiselect'].includes(field.type) && field.options?.length > 0}
-					<div class="flex items-center gap-1.5 mt-2 flex-wrap">
+					<div class="mt-2 flex flex-wrap items-center gap-1.5">
 						<span class="text-xs text-muted-foreground">Options:</span>
 						{#each field.options.slice(0, 5) as option}
 							<Badge variant="outline" class="text-xs">
 								{#if option.color}
-									<span
-										class="w-2 h-2 rounded-full mr-1.5"
-										style="background-color: {option.color}"
+									<span class="mr-1.5 h-2 w-2 rounded-full" style="background-color: {option.color}"
 									></span>
 								{/if}
 								{option.label}
@@ -134,7 +132,7 @@
 
 				<!-- Show validation rules -->
 				{#if Object.keys(field.validation_rules || {}).length > 0}
-					<div class="flex items-center gap-1.5 mt-2 flex-wrap text-xs text-muted-foreground">
+					<div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
 						<span>Validation:</span>
 						{#if field.validation_rules.min_length}
 							<Badge variant="outline" class="text-xs">
@@ -167,7 +165,7 @@
 			</div>
 
 			<!-- Action buttons -->
-			<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+			<div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
 				<Button
 					variant="ghost"
 					size="icon"

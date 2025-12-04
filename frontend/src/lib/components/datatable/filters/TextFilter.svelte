@@ -32,6 +32,11 @@
 		!['is_empty', 'is_not_empty', 'is_null', 'is_not_null'].includes(selectedOperator)
 	);
 
+	// Get the label for the currently selected operator
+	const selectedLabel = $derived(
+		operators.find((o) => o.value === selectedOperator)?.label || 'Contains'
+	);
+
 	function handleApply() {
 		if (requiresValue && !filterValue) {
 			return; // Don't apply empty filter
@@ -60,12 +65,9 @@
 <div class="space-y-3 p-3">
 	<div class="space-y-2">
 		<label class="text-xs font-medium">Operator</label>
-		<Select.Root
-			selected={{ value: selectedOperator, label: operators.find((o) => o.value === selectedOperator)?.label || 'Contains' }}
-			onSelectedChange={(selected) => handleOperatorChange(selected?.value)}
-		>
+		<Select.Root type="single" value={selectedOperator} onValueChange={handleOperatorChange}>
 			<Select.Trigger class="w-full">
-				<Select.Value placeholder="Select operator" />
+				<span>{selectedLabel}</span>
 			</Select.Trigger>
 			<Select.Content>
 				{#each operators as operator}

@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-svelte';
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
 
 	interface UploadedImage {
 		name: string;
@@ -158,7 +158,7 @@
 
 		// Update value
 		const paths = uploadedImages.map((img) => img.path || img.url || '');
-		value = multiple ? paths : (paths.length > 0 ? paths[0] : undefined);
+		value = multiple ? paths : paths.length > 0 ? paths[0] : undefined;
 		onchange?.(value);
 	}
 
@@ -167,7 +167,7 @@
 		const k = 1024;
 		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
 		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 	}
 
 	function handleDragOver(event: DragEvent) {
@@ -190,10 +190,10 @@
 				role="button"
 				tabindex="0"
 				class={cn(
-					'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
+					'cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors',
 					dragOver && 'border-primary bg-primary/5',
 					!dragOver && 'border-muted-foreground/25 hover:border-muted-foreground/50',
-					disabled && 'opacity-50 cursor-not-allowed',
+					disabled && 'cursor-not-allowed opacity-50',
 					error && 'border-destructive'
 				)}
 				ondragover={handleDragOver}
@@ -208,13 +208,11 @@
 				}}
 			>
 				{#if uploading}
-					<Loader2 class="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" />
+					<Loader2 class="mx-auto mb-2 h-8 w-8 animate-spin text-muted-foreground" />
 					<p class="text-sm text-muted-foreground">Uploading...</p>
 				{:else}
-					<ImageIcon class="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-					<p class="text-sm text-muted-foreground mb-1">
-						Click to upload or drag and drop
-					</p>
+					<ImageIcon class="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+					<p class="mb-1 text-sm text-muted-foreground">Click to upload or drag and drop</p>
 					<p class="text-xs text-muted-foreground">
 						PNG, JPG, GIF, WebP (max {maxSize}MB)
 					</p>
@@ -235,25 +233,25 @@
 
 			<!-- Uploaded Images Grid -->
 			{#if uploadedImages.length > 0}
-				<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+				<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
 					{#each uploadedImages as image, index (index)}
-						<div class="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
+						<div class="group relative aspect-square overflow-hidden rounded-lg border bg-muted">
 							<!-- Image Preview -->
 							<img
 								src={image.preview || image.url || image.path}
 								alt={image.name}
-								class="w-full h-full object-cover"
+								class="h-full w-full object-cover"
 							/>
 
 							<!-- Overlay with info and remove button -->
 							<div
-								class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2"
+								class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-2 opacity-0 transition-opacity group-hover:opacity-100"
 							>
-								<p class="text-xs text-white font-medium truncate w-full text-center mb-1">
+								<p class="mb-1 w-full truncate text-center text-xs font-medium text-white">
 									{image.name}
 								</p>
 								{#if image.size > 0}
-									<p class="text-xs text-white/70 mb-2">
+									<p class="mb-2 text-xs text-white/70">
 										{formatFileSize(image.size)}
 									</p>
 								{/if}
@@ -265,7 +263,7 @@
 										onclick={() => removeImage(index)}
 										class="h-7 px-2"
 									>
-										<X class="h-3 w-3 mr-1" />
+										<X class="mr-1 h-3 w-3" />
 										Remove
 									</Button>
 								{/if}

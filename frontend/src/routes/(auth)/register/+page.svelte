@@ -65,7 +65,7 @@
 						required
 						bind:value={name}
 						disabled={loading}
-						class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 disabled:opacity-50 sm:text-sm sm:leading-6"
+						class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-blue-600 focus:ring-inset disabled:opacity-50 sm:text-sm sm:leading-6"
 						placeholder="John Doe"
 					/>
 				</div>
@@ -80,7 +80,7 @@
 						required
 						bind:value={email}
 						disabled={loading}
-						class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 disabled:opacity-50 sm:text-sm sm:leading-6"
+						class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-blue-600 focus:ring-inset disabled:opacity-50 sm:text-sm sm:leading-6"
 						placeholder="john@example.com"
 					/>
 				</div>
@@ -95,7 +95,7 @@
 						required
 						bind:value={password}
 						disabled={loading}
-						class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 disabled:opacity-50 sm:text-sm sm:leading-6"
+						class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-blue-600 focus:ring-inset disabled:opacity-50 sm:text-sm sm:leading-6"
 						placeholder="Min. 8 characters"
 					/>
 				</div>
@@ -112,7 +112,7 @@
 						required
 						bind:value={password_confirmation}
 						disabled={loading}
-						class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 disabled:opacity-50 sm:text-sm sm:leading-6"
+						class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-blue-600 focus:ring-inset disabled:opacity-50 sm:text-sm sm:leading-6"
 						placeholder="Re-enter password"
 					/>
 				</div>

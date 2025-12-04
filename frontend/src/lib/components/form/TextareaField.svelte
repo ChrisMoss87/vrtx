@@ -41,12 +41,6 @@
 
 <FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
 	{#snippet children(props)}
-		<Textarea
-			{...props}
-			{placeholder}
-			{rows}
-			{value}
-			oninput={handleInput}
-		/>
+		<Textarea {...props} {placeholder} {rows} {value} oninput={handleInput} />
 	{/snippet}
 </FieldBase>

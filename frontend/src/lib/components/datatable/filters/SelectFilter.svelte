@@ -4,7 +4,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { X } from 'lucide-svelte';
 	import type { FilterConfig, FilterOption } from '../types';
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
 
 	interface Props {
 		field: string;
@@ -61,23 +61,14 @@
 	}
 </script>
 
-<div class="space-y-3 p-3 w-[280px]">
+<div class="w-[280px] space-y-3 p-3">
 	<div class="space-y-2">
-		<Input
-			type="search"
-			bind:value={searchValue}
-			placeholder="Search options..."
-			class="h-8"
-		/>
+		<Input type="search" bind:value={searchValue} placeholder="Search options..." class="h-8" />
 	</div>
 
 	<div class="flex gap-2">
-		<Button variant="ghost" size="sm" onclick={selectAll} class="flex-1 h-7">
-			Select all
-		</Button>
-		<Button variant="ghost" size="sm" onclick={clearAll} class="flex-1 h-7">
-			Clear all
-		</Button>
+		<Button variant="ghost" size="sm" onclick={selectAll} class="h-7 flex-1">Select all</Button>
+		<Button variant="ghost" size="sm" onclick={clearAll} class="h-7 flex-1">Clear all</Button>
 	</div>
 
 	<div class="max-h-[200px] space-y-1 overflow-y-auto">
@@ -85,7 +76,9 @@
 			<p class="py-4 text-center text-sm text-muted-foreground">No options found</p>
 		{:else}
 			{#each filteredOptions as option (option.value)}
-				<label class="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-accent cursor-pointer">
+				<label
+					class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-accent"
+				>
 					<Checkbox
 						checked={selectedValues.includes(option.value)}
 						onCheckedChange={() => toggleOption(option.value)}

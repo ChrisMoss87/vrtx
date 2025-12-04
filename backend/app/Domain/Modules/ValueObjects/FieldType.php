@@ -28,6 +28,11 @@ enum FieldType: string
     case FILE = 'file';
     case IMAGE = 'image';
     case RICH_TEXT = 'rich_text';
+    case PROGRESS_MAPPER = 'progress_mapper'; // Status-to-percentage visual mapping (e.g., sales pipeline)
+    case RATING = 'rating'; // Star/numeric rating field
+    case SIGNATURE = 'signature'; // Digital signature capture
+    case COLOR = 'color'; // Color picker
+    case AUTO_NUMBER = 'auto_number'; // Auto-incrementing number
 
     public function requiresOptions(): bool
     {
@@ -35,6 +40,7 @@ enum FieldType: string
             self::SELECT,
             self::MULTISELECT,
             self::RADIO,
+            self::PROGRESS_MAPPER, // Progress mapper requires stage options with percentages
         ], true);
     }
 
@@ -45,6 +51,7 @@ enum FieldType: string
             self::DECIMAL,
             self::CURRENCY,
             self::PERCENT,
+            self::RATING,
         ], true);
     }
 
@@ -78,6 +85,11 @@ enum FieldType: string
             self::FILE => 'File',
             self::IMAGE => 'Image',
             self::RICH_TEXT => 'Rich Text',
+            self::PROGRESS_MAPPER => 'Progress Mapper',
+            self::RATING => 'Rating',
+            self::SIGNATURE => 'Signature',
+            self::COLOR => 'Color',
+            self::AUTO_NUMBER => 'Auto Number',
         };
     }
 }

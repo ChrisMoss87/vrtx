@@ -1,12 +1,12 @@
 <script lang="ts">
-	import Calendar from "$lib/components/ui/calendar/calendar.svelte";
-	import * as Popover from "$lib/components/ui/popover/index.js";
-	import { Button } from "$lib/components/ui/button/index.js";
-	import { Label } from "$lib/components/ui/label/index.js";
-	import { Input } from "$lib/components/ui/input/index.js";
-	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-	import { getLocalTimeZone } from "@internationalized/date";
-	import type { CalendarDate } from "@internationalized/date";
+	import Calendar from '$lib/components/ui/calendar/calendar.svelte';
+	import * as Popover from '$lib/components/ui/popover/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Label } from '$lib/components/ui/label/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import { getLocalTimeZone } from '@internationalized/date';
+	import type { CalendarDate } from '@internationalized/date';
 
 	const id = $props.id();
 
@@ -23,18 +23,14 @@
 			<Popover.Root bind:open={openFrom}>
 				<Popover.Trigger id="{id}-date-from">
 					{#snippet child({ props })}
-						<Button
-							{...props}
-							variant="outline"
-							class="w-full justify-between font-normal"
-						>
+						<Button {...props} variant="outline" class="w-full justify-between font-normal">
 							{valueFrom
-								? valueFrom.toDate(getLocalTimeZone()).toLocaleDateString("en-US", {
-										day: "2-digit",
-										month: "short",
-										year: "numeric",
+								? valueFrom.toDate(getLocalTimeZone()).toLocaleDateString('en-US', {
+										day: '2-digit',
+										month: 'short',
+										year: 'numeric'
 									})
-								: "Select date"}
+								: 'Select date'}
 							<ChevronDownIcon />
 						</Button>
 					{/snippet}
@@ -58,7 +54,7 @@
 				id="{id}-time-from"
 				step="1"
 				value="10:30:00"
-				class="bg-background appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+				class="appearance-none bg-background [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
 			/>
 		</div>
 	</div>
@@ -68,18 +64,14 @@
 			<Popover.Root bind:open={openTo}>
 				<Popover.Trigger id="{id}-date-to">
 					{#snippet child({ props })}
-						<Button
-							{...props}
-							variant="outline"
-							class="w-full justify-between font-normal"
-						>
+						<Button {...props} variant="outline" class="w-full justify-between font-normal">
 							{valueTo
-								? valueTo.toDate(getLocalTimeZone()).toLocaleDateString("en-US", {
-										day: "2-digit",
-										month: "short",
-										year: "numeric",
+								? valueTo.toDate(getLocalTimeZone()).toLocaleDateString('en-US', {
+										day: '2-digit',
+										month: 'short',
+										year: 'numeric'
 									})
-								: "Select date"}
+								: 'Select date'}
 							<ChevronDownIcon />
 						</Button>
 					{/snippet}
@@ -106,7 +98,7 @@
 				id="{id}-time-to"
 				step="1"
 				value="12:30:00"
-				class="bg-background appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+				class="appearance-none bg-background [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
 			/>
 		</div>
 	</div>

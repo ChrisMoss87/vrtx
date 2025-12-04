@@ -40,7 +40,8 @@
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+					'X-CSRF-TOKEN':
+						document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 				},
 				body: JSON.stringify({
 					name: name.trim(),
@@ -98,12 +99,7 @@
 		<div class="grid gap-4 py-4">
 			<div class="grid gap-2">
 				<Label for="name">View Name</Label>
-				<Input
-					id="name"
-					bind:value={name}
-					placeholder="My Custom View"
-					autocomplete="off"
-				/>
+				<Input id="name" bind:value={name} placeholder="My Custom View" autocomplete="off" />
 			</div>
 			<div class="grid gap-2">
 				<Label for="description">Description (optional)</Label>
@@ -118,7 +114,7 @@
 				<Checkbox id="is_default" bind:checked={isDefault} />
 				<Label
 					for="is_default"
-					class="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+					class="text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
 				>
 					Set as my default view
 				</Label>
@@ -127,7 +123,7 @@
 				<Checkbox id="is_public" bind:checked={isPublic} />
 				<Label
 					for="is_public"
-					class="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+					class="text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
 				>
 					Make this view public (visible to all users)
 				</Label>

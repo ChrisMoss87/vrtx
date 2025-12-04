@@ -48,7 +48,9 @@
 			{#if label}
 				<Label
 					for={name}
-					class="text-sm font-medium cursor-pointer {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
+					class="cursor-pointer text-sm font-medium {disabled
+						? 'cursor-not-allowed opacity-50'
+						: ''}"
 				>
 					{label}
 				</Label>

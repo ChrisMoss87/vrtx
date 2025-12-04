@@ -9,13 +9,11 @@
 	const table = getContext<TableContext>('table');
 
 	// Get visible column count
-	let visibleCount = $derived(
-		Object.values(table.state.columnVisibility).filter(Boolean).length
-	);
+	let visibleCount = $derived(Object.values(table.state.columnVisibility).filter(Boolean).length);
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger asChild>
+	<DropdownMenu.Trigger>
 		{#snippet child({ props })}
 			<Button {...props} variant="outline" size="sm" class="ml-auto">
 				<Settings2 class="mr-2 h-4 w-4" />
@@ -37,7 +35,7 @@
 						/>
 						<label
 							for="toggle-{column.id}"
-							class="flex-1 text-sm font-normal cursor-pointer select-none"
+							class="flex-1 cursor-pointer text-sm font-normal select-none"
 						>
 							{column.header}
 						</label>

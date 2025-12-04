@@ -85,8 +85,7 @@
 		// Apply each pending filter that has a value
 		pendingFilters.forEach((filter) => {
 			// Check if value is valid (not empty, null, or undefined)
-			const hasValue =
-				filter.value !== '' && filter.value !== null && filter.value !== undefined;
+			const hasValue = filter.value !== '' && filter.value !== null && filter.value !== undefined;
 
 			// For operators that don't require a value (is_empty, is_not_empty, etc.)
 			const noValueRequired = ['is_empty', 'is_not_empty', 'is_null', 'is_not_null'].includes(
@@ -139,14 +138,14 @@
 						{#each pendingFilters as filter, index (index)}
 							{@const column = getColumn(filter.field)}
 
-							<div class="rounded-lg border p-3 space-y-3">
+							<div class="space-y-3 rounded-lg border p-3">
 								<!-- Filter Header -->
 								<div class="flex items-center justify-between gap-2">
-									<div class="flex items-center gap-2 min-w-0 flex-1">
-										<Badge variant="secondary" class="text-xs flex-shrink-0">
+									<div class="flex min-w-0 flex-1 items-center gap-2">
+										<Badge variant="secondary" class="flex-shrink-0 text-xs">
 											{index + 1}
 										</Badge>
-										<span class="text-sm font-medium truncate"
+										<span class="truncate text-sm font-medium"
 											>{column?.header || filter.field}</span
 										>
 									</div>
@@ -271,7 +270,7 @@
 			>
 				Cancel
 			</Button>
-			<div class="flex gap-2 order-1 sm:order-2">
+			<div class="order-1 flex gap-2 sm:order-2">
 				<Button
 					variant="outline"
 					onclick={clearAllFilters}
@@ -282,10 +281,9 @@
 					<Trash2 class="h-4 w-4" />
 				</Button>
 				<Button onclick={applyFilters} class="flex-1" disabled={pendingFilters.length === 0}>
-					Apply {pendingFilters.length > 0 ? `${pendingFilters.length} ` : ''}filter{pendingFilters.length ===
-					1
-						? ''
-						: 's'}
+					Apply {pendingFilters.length > 0
+						? `${pendingFilters.length} `
+						: ''}filter{pendingFilters.length === 1 ? '' : 's'}
 				</Button>
 			</div>
 		</ResponsiveDialog.Footer>

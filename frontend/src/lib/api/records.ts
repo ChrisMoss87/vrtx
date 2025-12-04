@@ -31,10 +31,27 @@ export interface CreateRecordResponse {
 }
 
 export interface FilterOperator {
-	operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with'
-		| 'greater_than' | 'less_than' | 'greater_than_or_equal' | 'less_than_or_equal'
-		| 'between' | 'in' | 'not_in' | 'is_null' | 'is_not_null'
-		| 'date_equals' | 'date_before' | 'date_after' | 'date_between' | 'search';
+	operator:
+		| 'equals'
+		| 'not_equals'
+		| 'contains'
+		| 'not_contains'
+		| 'starts_with'
+		| 'ends_with'
+		| 'greater_than'
+		| 'less_than'
+		| 'greater_than_or_equal'
+		| 'less_than_or_equal'
+		| 'between'
+		| 'in'
+		| 'not_in'
+		| 'is_null'
+		| 'is_not_null'
+		| 'date_equals'
+		| 'date_before'
+		| 'date_after'
+		| 'date_between'
+		| 'search';
 	value?: unknown;
 	fields?: string[];
 	min?: number;
@@ -74,12 +91,21 @@ export class RecordsApi {
 	}
 
 	async create(moduleApiName: string, data: Record<string, unknown>): Promise<ModuleRecord> {
-		const response = await this.client.post<CreateRecordResponse>(`/records/${moduleApiName}`, { data });
+		const response = await this.client.post<CreateRecordResponse>(`/records/${moduleApiName}`, {
+			data
+		});
 		return response.record;
 	}
 
-	async update(moduleApiName: string, recordId: number, data: Record<string, unknown>): Promise<ModuleRecord> {
-		const response = await this.client.put<CreateRecordResponse>(`/records/${moduleApiName}/${recordId}`, { data });
+	async update(
+		moduleApiName: string,
+		recordId: number,
+		data: Record<string, unknown>
+	): Promise<ModuleRecord> {
+		const response = await this.client.put<CreateRecordResponse>(
+			`/records/${moduleApiName}/${recordId}`,
+			{ data }
+		);
 		return response.record;
 	}
 
@@ -87,8 +113,52 @@ export class RecordsApi {
 		await this.client.delete(`/records/${moduleApiName}/${recordId}`);
 	}
 
-	async bulkDelete(moduleApiName: string, recordIds: number[]): Promise<{ message: string; deleted_count: number }> {
+	async bulkDelete(
+		moduleApiName: string,
+		recordIds: number[]
+	): Promise<{ message: string; deleted_count: number }> {
 		return this.client.post(`/records/${moduleApiName}/bulk-delete`, { record_ids: recordIds });
+	}
+
+	/**
+	 * Partial update (PATCH) - merges with existing data, ideal for inline editing
+	 */
+	async patch(
+		moduleApiName: string,
+		recordId: number,
+		data: Record<string, unknown>
+	): Promise<ModuleRecord> {
+		const response = await this.client.patch<CreateRecordResponse>(
+			`/records/${moduleApiName}/${recordId}`,
+			{ data }
+		);
+		return response.record;
+	}
+
+	/**
+	 * Update a single field - convenience method for inline editing
+	 */
+	async updateField(
+		moduleApiName: string,
+		recordId: number,
+		field: string,
+		value: unknown
+	): Promise<ModuleRecord> {
+		return this.patch(moduleApiName, recordId, { [field]: value });
+	}
+
+	/**
+	 * Bulk update multiple records with the same field values
+	 */
+	async bulkUpdate(
+		moduleApiName: string,
+		recordIds: number[],
+		data: Record<string, unknown>
+	): Promise<{ message: string; updated_count: number; errors?: string[] }> {
+		return this.client.post(`/records/${moduleApiName}/bulk-update`, {
+			record_ids: recordIds,
+			data
+		});
 	}
 }
 

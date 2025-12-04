@@ -55,7 +55,10 @@ export interface ColumnDef<TData = any> {
 	/** Custom filter component */
 	filterComponent?: Component;
 
-	/** Filter options for select/multiselect columns */
+	/** Options for select/multiselect columns (used for display) */
+	options?: FilterOption[];
+
+	/** Filter options for select/multiselect columns (used by Quick Filter Bar) */
 	filterOptions?: FilterOption[];
 
 	/** Format function for cell display */
@@ -73,6 +76,7 @@ export interface ColumnDef<TData = any> {
  */
 export type ColumnType =
 	| 'text'
+	| 'textarea'
 	| 'number'
 	| 'decimal'
 	| 'currency'
@@ -81,6 +85,9 @@ export type ColumnType =
 	| 'datetime'
 	| 'time'
 	| 'boolean'
+	| 'checkbox'
+	| 'toggle'
+	| 'radio'
 	| 'select'
 	| 'multiselect'
 	| 'email'
@@ -123,7 +130,16 @@ export type FilterOperator =
 	| 'is_null'
 	| 'is_not_null'
 	| 'is_empty'
-	| 'is_not_empty';
+	| 'is_not_empty'
+	// Date-specific operators
+	| 'today'
+	| 'yesterday'
+	| 'last_7_days'
+	| 'last_30_days'
+	| 'this_month'
+	| 'last_month'
+	| 'before'
+	| 'after';
 
 /**
  * Filter Configuration
@@ -357,7 +373,7 @@ export interface ColumnContext<TData = any> {
 export interface TableContext<TData = any> {
 	state: TableState<TData>;
 	columns: ColumnDef<TData>[];
-	updateSort: (field: string) => void;
+	updateSort: (field: string, shiftKey?: boolean) => void;
 	updateFilter: (filter: FilterConfig) => void;
 	removeFilter: (field: string) => void;
 	clearFilters: () => void;
@@ -372,7 +388,7 @@ export interface TableContext<TData = any> {
 	setColumnOrder: (order: ColumnOrder) => void;
 	resizeColumn: (columnId: string, width: number) => void;
 	pinColumn: (columnId: string, position: 'left' | 'right' | false) => void;
-	loadView: (view: TableViewConfig) => void;
+	loadView: (view: TableViewConfig | any) => void;
 	saveView: (view: Partial<TableViewConfig>) => Promise<void>;
 	deleteView: (viewId: number) => Promise<void>;
 	refresh: () => Promise<void>;

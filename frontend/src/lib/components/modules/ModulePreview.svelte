@@ -92,7 +92,7 @@
 	}
 </script>
 
-<Card class="h-full flex flex-col">
+<Card class="flex h-full flex-col">
 	<CardHeader class="border-b">
 		<div class="flex items-center justify-between">
 			<CardTitle>Live Preview</CardTitle>
@@ -127,10 +127,10 @@
 
 	<CardContent class="flex-1 overflow-auto p-6">
 		{#if blocks.length === 0}
-			<div class="flex items-center justify-center h-full text-center">
+			<div class="flex h-full items-center justify-center text-center">
 				<div class="text-muted-foreground">
 					<p class="text-sm">No blocks or fields to preview</p>
-					<p class="text-xs mt-1">Add blocks and fields to see a live preview</p>
+					<p class="mt-1 text-xs">Add blocks and fields to see a live preview</p>
 				</div>
 			</div>
 		{:else}

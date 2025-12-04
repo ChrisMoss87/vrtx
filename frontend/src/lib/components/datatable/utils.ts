@@ -36,6 +36,10 @@ export function generateColumnsFromModule(module: any): ColumnDef[] {
 	// Generate columns from module fields
 	module.blocks?.forEach((block: any) => {
 		block.fields?.forEach((field: any) => {
+			const fieldOptions = field.options?.map((opt: any) => ({
+				label: opt.label,
+				value: opt.value
+			}));
 			columns.push({
 				id: field.api_name,
 				header: field.label,
@@ -46,6 +50,8 @@ export function generateColumnsFromModule(module: any): ColumnDef[] {
 				searchable: field.is_searchable,
 				visible: true,
 				width: getDefaultColumnWidth(field.type),
+				options: fieldOptions,
+				filterOptions: fieldOptions, // Used by Quick Filter Bar
 				meta: {
 					field,
 					blockName: block.name
@@ -155,6 +161,42 @@ function getDefaultColumnWidth(fieldType: string): number {
 }
 
 /**
+ * Transform filters from frontend array format to backend object format
+ *
+ * Frontend format: [{ field: 'name', operator: 'contains', value: 'test' }]
+ * Backend format: { 'name': { operator: 'contains', value: 'test' } }
+ */
+export function transformFiltersForApi(filters: FilterConfig[]): Record<string, any> {
+	const filterObj: Record<string, any> = {};
+
+	filters.forEach((filter) => {
+		// Map frontend operators to backend operators if needed
+		const operatorMap: Record<string, string> = {
+			is_empty: 'is_null',
+			is_not_empty: 'is_not_null'
+		};
+
+		const operator = operatorMap[filter.operator] || filter.operator;
+
+		// Handle between filter format
+		if (filter.operator === 'between' && typeof filter.value === 'object') {
+			filterObj[filter.field] = {
+				operator,
+				min: filter.value.min || filter.value.from,
+				max: filter.value.max || filter.value.to
+			};
+		} else {
+			filterObj[filter.field] = {
+				operator,
+				value: filter.value
+			};
+		}
+	});
+
+	return filterObj;
+}
+
+/**
  * Build API request from table state
  */
 export function buildApiRequest(state: TableState): DataTableRequest {
@@ -168,7 +210,7 @@ export function buildApiRequest(state: TableState): DataTableRequest {
 		request.sort = state.sorting;
 	}
 
-	// Add filters
+	// Add filters - transform to backend format
 	if (state.filters.length > 0) {
 		request.filters = state.filters;
 	}
@@ -212,10 +254,7 @@ export function parseApiResponse<TData = any>(
 /**
  * Toggle sort direction
  */
-export function toggleSortDirection(
-	current: SortConfig[],
-	field: string
-): SortConfig[] {
+export function toggleSortDirection(current: SortConfig[], field: string): SortConfig[] {
 	const existing = current.find((s) => s.field === field);
 
 	if (!existing) {
@@ -492,8 +531,6 @@ export function areAllRowsSelected(
 /**
  * Check if some rows are selected
  */
-export function areSomeRowsSelected(
-	rowSelection: Record<string | number, boolean>
-): boolean {
+export function areSomeRowsSelected(rowSelection: Record<string | number, boolean>): boolean {
 	return getSelectedRowCount(rowSelection) > 0;
 }

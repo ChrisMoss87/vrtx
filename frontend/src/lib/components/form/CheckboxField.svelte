@@ -2,7 +2,7 @@
 	import FieldBase from './FieldBase.svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
 
 	interface Props {
 		label?: string;
@@ -64,7 +64,10 @@
 		/>
 		{#if label}
 			<div class="grid gap-1.5 leading-none">
-				<Label for={name} class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+				<Label
+					for={name}
+					class="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+				>
 					{label}
 					{#if required}
 						<span class="text-destructive">*</span>

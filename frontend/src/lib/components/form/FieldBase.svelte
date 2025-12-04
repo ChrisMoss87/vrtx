@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { cn } from '$lib/utils';
-    import { Field, Label, Error } from '../ui/field';
+	import { Field, Label, Error } from '../ui/field';
 	interface Props {
 		label?: string;
 		name: string;
@@ -9,14 +9,18 @@
 		required?: boolean;
 		disabled?: boolean;
 		class?: string;
-		children: import('svelte').Snippet<[{
-			id: string;
-			name: string;
-			required: boolean;
-			disabled: boolean;
-			'aria-invalid'?: boolean;
-			'aria-describedby'?: string;
-		}]>;
+		children: import('svelte').Snippet<
+			[
+				{
+					id: string;
+					name: string;
+					required: boolean;
+					disabled: boolean;
+					'aria-invalid'?: boolean;
+					'aria-describedby'?: string;
+				}
+			]
+		>;
 	}
 
 	let {
@@ -30,8 +34,6 @@
 		children
 	}: Props = $props();
 
-
-
 	const inputProps = $derived({
 		id: name,
 		name,
@@ -44,15 +46,15 @@
 
 <Field id={name}>
 	{#if label}
-		<Label for={name} >
+		<Label for={name}>
 			{label}
-            {#if required}
-                <span class="text-destructive">*</span>
-            {/if}
-        </Label>
-    {/if}
+			{#if required}
+				<span class="text-destructive">*</span>
+			{/if}
+		</Label>
+	{/if}
 
-    {@render children(inputProps)}
+	{@render children(inputProps)}
 
 	{#if description && !error}
 		<p id="{name}-description" class="text-sm text-muted-foreground">
@@ -61,6 +63,6 @@
 	{/if}
 
 	{#if error}
-        <Error id="{name}-error"> {error}</Error>
+		<Error id="{name}-error">{error}</Error>
 	{/if}
 </Field>

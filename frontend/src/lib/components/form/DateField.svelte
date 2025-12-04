@@ -4,7 +4,7 @@
 	import * as Calendar from '$lib/components/ui/calendar';
 	import * as Popover from '$lib/components/ui/popover';
 	import { CalendarIcon } from 'lucide-svelte';
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
 	import { DateFormatter, type DateValue, parseDate } from '@internationalized/date';
 
 	interface Props {
@@ -16,7 +16,6 @@
 		required?: boolean;
 		disabled?: boolean;
 		placeholder?: string;
-		width?: 25 | 50 | 75 | 100;
 		class?: string;
 		minDate?: string;
 		maxDate?: string;
@@ -32,7 +31,6 @@
 		required = false,
 		disabled = false,
 		placeholder = 'Pick a date',
-		width = 100,
 		class: className,
 		minDate,
 		maxDate,
@@ -58,31 +56,24 @@
 	}
 </script>
 
-<FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
+<FieldBase {label} {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
 		<Popover.Root>
-			<Popover.Trigger asChild>
-				{#snippet child({ props: triggerProps })}
-					<Button
-						{...props}
-						{...triggerProps}
-						variant="outline"
-						class={cn(
-							'w-full justify-start text-left font-normal',
-							!dateValue && 'text-muted-foreground'
-						)}
-					>
-						<CalendarIcon class="mr-2 h-4 w-4" />
-						{dateValue ? df.format(dateValue.toDate('UTC')) : placeholder}
-					</Button>
-				{/snippet}
+			<Popover.Trigger>
+				<Button
+					{...props}
+					variant="outline"
+					class={cn(
+						'w-full justify-start text-left font-normal',
+						!dateValue && 'text-muted-foreground'
+					)}
+				>
+					<CalendarIcon class="mr-2 h-4 w-4" />
+					{dateValue ? df.format(dateValue.toDate('UTC')) : placeholder}
+				</Button>
 			</Popover.Trigger>
 			<Popover.Content class="w-auto p-0" align="start">
-				<Calendar.Calendar
-					value={dateValue}
-					onValueChange={handleDateChange}
-					initialFocus
-				/>
+				<Calendar.Calendar value={dateValue} onValueChange={handleDateChange} initialFocus />
 			</Popover.Content>
 		</Popover.Root>
 	{/snippet}

@@ -1,61 +1,61 @@
 <script lang="ts">
-	import CalendarIcon from "@lucide/svelte/icons/calendar";
-	import * as Chart from "$lib/components/ui/chart/index.js";
-	import * as Card from "$lib/components/ui/card/index.js";
-	import * as Popover from "$lib/components/ui/popover/index.js";
-	import { Button } from "$lib/components/ui/button/index.js";
-	import { BarChart, Highlight, type ChartContextValue } from "layerchart";
-	import RangeCalendar from "$lib/components/ui/range-calendar/range-calendar.svelte";
-	import type { DateRange } from "bits-ui";
-	import { CalendarDate, getLocalTimeZone } from "@internationalized/date";
-	import { scaleBand } from "d3-scale";
-	import { cubicInOut } from "svelte/easing";
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import * as Chart from '$lib/components/ui/chart/index.js';
+	import * as Card from '$lib/components/ui/card/index.js';
+	import * as Popover from '$lib/components/ui/popover/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { BarChart, Highlight, type ChartContextValue } from 'layerchart';
+	import RangeCalendar from '$lib/components/ui/range-calendar/range-calendar.svelte';
+	import type { DateRange } from 'bits-ui';
+	import { CalendarDate, getLocalTimeZone } from '@internationalized/date';
+	import { scaleBand } from 'd3-scale';
+	import { cubicInOut } from 'svelte/easing';
 
 	let value = $state<DateRange | undefined>({
 		start: new CalendarDate(2025, 6, 5),
-		end: new CalendarDate(2025, 6, 20),
+		end: new CalendarDate(2025, 6, 20)
 	});
 
 	const chartData = [
-		{ date: new Date("2025-06-01"), visitors: 178 },
-		{ date: new Date("2025-06-02"), visitors: 470 },
-		{ date: new Date("2025-06-03"), visitors: 103 },
-		{ date: new Date("2025-06-04"), visitors: 439 },
-		{ date: new Date("2025-06-05"), visitors: 88 },
-		{ date: new Date("2025-06-06"), visitors: 294 },
-		{ date: new Date("2025-06-07"), visitors: 323 },
-		{ date: new Date("2025-06-08"), visitors: 385 },
-		{ date: new Date("2025-06-09"), visitors: 438 },
-		{ date: new Date("2025-06-10"), visitors: 155 },
-		{ date: new Date("2025-06-11"), visitors: 92 },
-		{ date: new Date("2025-06-12"), visitors: 492 },
-		{ date: new Date("2025-06-13"), visitors: 81 },
-		{ date: new Date("2025-06-14"), visitors: 426 },
-		{ date: new Date("2025-06-15"), visitors: 307 },
-		{ date: new Date("2025-06-16"), visitors: 371 },
-		{ date: new Date("2025-06-17"), visitors: 475 },
-		{ date: new Date("2025-06-18"), visitors: 107 },
-		{ date: new Date("2025-06-19"), visitors: 341 },
-		{ date: new Date("2025-06-20"), visitors: 408 },
-		{ date: new Date("2025-06-21"), visitors: 169 },
-		{ date: new Date("2025-06-22"), visitors: 317 },
-		{ date: new Date("2025-06-23"), visitors: 480 },
-		{ date: new Date("2025-06-24"), visitors: 132 },
-		{ date: new Date("2025-06-25"), visitors: 141 },
-		{ date: new Date("2025-06-26"), visitors: 434 },
-		{ date: new Date("2025-06-27"), visitors: 448 },
-		{ date: new Date("2025-06-28"), visitors: 149 },
-		{ date: new Date("2025-06-29"), visitors: 103 },
-		{ date: new Date("2025-06-30"), visitors: 446 },
+		{ date: new Date('2025-06-01'), visitors: 178 },
+		{ date: new Date('2025-06-02'), visitors: 470 },
+		{ date: new Date('2025-06-03'), visitors: 103 },
+		{ date: new Date('2025-06-04'), visitors: 439 },
+		{ date: new Date('2025-06-05'), visitors: 88 },
+		{ date: new Date('2025-06-06'), visitors: 294 },
+		{ date: new Date('2025-06-07'), visitors: 323 },
+		{ date: new Date('2025-06-08'), visitors: 385 },
+		{ date: new Date('2025-06-09'), visitors: 438 },
+		{ date: new Date('2025-06-10'), visitors: 155 },
+		{ date: new Date('2025-06-11'), visitors: 92 },
+		{ date: new Date('2025-06-12'), visitors: 492 },
+		{ date: new Date('2025-06-13'), visitors: 81 },
+		{ date: new Date('2025-06-14'), visitors: 426 },
+		{ date: new Date('2025-06-15'), visitors: 307 },
+		{ date: new Date('2025-06-16'), visitors: 371 },
+		{ date: new Date('2025-06-17'), visitors: 475 },
+		{ date: new Date('2025-06-18'), visitors: 107 },
+		{ date: new Date('2025-06-19'), visitors: 341 },
+		{ date: new Date('2025-06-20'), visitors: 408 },
+		{ date: new Date('2025-06-21'), visitors: 169 },
+		{ date: new Date('2025-06-22'), visitors: 317 },
+		{ date: new Date('2025-06-23'), visitors: 480 },
+		{ date: new Date('2025-06-24'), visitors: 132 },
+		{ date: new Date('2025-06-25'), visitors: 141 },
+		{ date: new Date('2025-06-26'), visitors: 434 },
+		{ date: new Date('2025-06-27'), visitors: 448 },
+		{ date: new Date('2025-06-28'), visitors: 149 },
+		{ date: new Date('2025-06-29'), visitors: 103 },
+		{ date: new Date('2025-06-30'), visitors: 446 }
 	];
 
 	const total = chartData.reduce((acc, curr) => acc + curr.visitors, 0);
 
 	const chartConfig = {
 		visitors: {
-			label: "Visitors",
-			color: "var(--color-primary)",
-		},
+			label: 'Visitors',
+			color: 'var(--color-primary)'
+		}
 	} satisfies Chart.ChartConfig;
 
 	const filteredData = $derived.by(() => {
@@ -75,10 +75,10 @@
 </script>
 
 <Card.Root class="@container/card w-full max-w-xl">
-	<Card.Header class="@md/card:grid flex flex-col border-b">
+	<Card.Header class="flex flex-col border-b @md/card:grid">
 		<Card.Title>Web Analytics</Card.Title>
 		<Card.Description>Showing total visitors for this month.</Card.Description>
-		<Card.Action class="@md/card:mt-0 mt-2">
+		<Card.Action class="mt-2 @md/card:mt-0">
 			<Popover.Root>
 				<Popover.Trigger>
 					{#snippet child({ props })}
@@ -86,7 +86,7 @@
 							<CalendarIcon />
 							{value?.start && value?.end
 								? `${value.start.toDate(getLocalTimeZone()).toLocaleDateString()} - ${value.end.toDate(getLocalTimeZone()).toLocaleDateString()}`
-								: "June 2025"}
+								: 'June 2025'}
 						</Button>
 					{/snippet}
 				</Popover.Trigger>
@@ -113,34 +113,34 @@
 				y="visitors"
 				props={{
 					bars: {
-						stroke: "none",
-						rounded: "all",
+						stroke: 'none',
+						rounded: 'all',
 						radius: 4,
 						// use the height of the chart to animate the bars
 						initialY: context?.height,
 						initialHeight: 0,
 						motion: {
-							x: { type: "tween", duration: 500, easing: cubicInOut },
-							width: { type: "tween", duration: 500, easing: cubicInOut },
-							height: { type: "tween", duration: 500, easing: cubicInOut },
-							y: { type: "tween", duration: 500, easing: cubicInOut },
-						},
+							x: { type: 'tween', duration: 500, easing: cubicInOut },
+							width: { type: 'tween', duration: 500, easing: cubicInOut },
+							height: { type: 'tween', duration: 500, easing: cubicInOut },
+							y: { type: 'tween', duration: 500, easing: cubicInOut }
+						}
 					},
-					xAxis: { format: (d) => d.toLocaleDateString("en-US", { day: "numeric" }) },
+					xAxis: { format: (d) => d.toLocaleDateString('en-US', { day: 'numeric' }) }
 				}}
 			>
 				{#snippet belowMarks()}
-					<Highlight area={{ class: "fill-muted" }} />
+					<Highlight area={{ class: 'fill-muted' }} />
 				{/snippet}
 				{#snippet tooltip()}
 					<Chart.Tooltip
 						class="w-[150px]"
 						nameKey="visitors"
 						labelFormatter={(d) =>
-							d.toLocaleDateString("en-US", {
-								month: "short",
-								day: "numeric",
-								year: "numeric",
+							d.toLocaleDateString('en-US', {
+								month: 'short',
+								day: 'numeric',
+								year: 'numeric'
 							})}
 					/>
 				{/snippet}

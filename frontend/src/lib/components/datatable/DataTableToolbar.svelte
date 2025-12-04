@@ -4,17 +4,17 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { Search, X, Download, Trash2, Tag, FileSpreadsheet, FileText, Filter } from 'lucide-svelte';
+	import { Search, X, Download, Trash2, Tag, FileSpreadsheet, FileText, Edit } from 'lucide-svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from 'svelte-sonner';
 	import axios from 'axios';
 	import type { TableContext } from './types';
-	import DataTableViewSwitcher from './DataTableViewSwitcher.svelte';
 	import DataTableColumnToggle from './DataTableColumnToggle.svelte';
-	import DataTableSaveViewDialog from './DataTableSaveViewDialog.svelte';
 	import DataTableFilterChips from './DataTableFilterChips.svelte';
-	import DataTableFiltersDrawer from './DataTableFiltersDrawer.svelte';
-	import { buildApiRequest } from './utils';
+	import DataTableFilters from './DataTableFilters.svelte';
+	import DataTableViews from './DataTableViews.svelte';
+	import DataTableMassUpdate from './DataTableMassUpdate.svelte';
+	import { buildApiRequest, transformFiltersForApi } from './utils';
 
 	interface Props {
 		enableSearch?: boolean;
@@ -45,11 +45,9 @@
 	const table = getContext<TableContext>('table');
 
 	let searchValue = $state(table.state.globalFilter);
-	let currentView = $state<any>(null);
-	let saveViewDialogOpen = $state(false);
 	let deleteDialogOpen = $state(false);
 	let isDeleting = $state(false);
-	let filtersDrawerOpen = $state(false);
+	let massUpdateOpen = $state(false);
 
 	function handleSearchInput(event: Event) {
 		const target = event.target as HTMLInputElement;
@@ -60,56 +58,6 @@
 	function clearSearch() {
 		searchValue = '';
 		table.updateGlobalFilter('');
-	}
-
-	async function handleViewChange(view: any) {
-		currentView = view;
-		await table.loadView(view);
-	}
-
-	function handleSaveView() {
-		if (currentView) {
-			// Update existing view
-			updateCurrentView();
-		} else {
-			// Open dialog to create new view
-			saveViewDialogOpen = true;
-		}
-	}
-
-	async function updateCurrentView() {
-		if (!currentView) return;
-
-		try {
-			const response = await fetch(`/api/table-views/${currentView.id}`, {
-				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-					'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-				},
-				body: JSON.stringify({
-					filters: table.state.filters || null,
-					sorting: table.state.sorting || null,
-					column_visibility: table.state.columnVisibility || null,
-					page_size: table.state.pagination.perPage || 50
-				})
-			});
-
-			if (response.ok) {
-				console.log('View updated successfully');
-			}
-		} catch (error) {
-			console.error('Failed to update view:', error);
-		}
-	}
-
-	function getCurrentTableState() {
-		return {
-			filters: table.state.filters,
-			sorting: table.state.sorting,
-			columnVisibility: table.state.columnVisibility,
-			pageSize: table.state.pagination.perPage
-		};
 	}
 
 	async function handleBulkDelete() {
@@ -163,7 +111,9 @@
 			}
 
 			if (request.filters) {
-				params.set('filters', JSON.stringify(request.filters));
+				// Transform filters to backend format
+				const transformedFilters = transformFiltersForApi(request.filters);
+				params.set('filters', JSON.stringify(transformedFilters));
 			}
 
 			if (request.search) {
@@ -191,60 +141,74 @@
 	}
 </script>
 
-<div class="flex flex-col gap-2">
-	<!-- Top row: View switcher and actions -->
-	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-2">
-			{#if enableViews && module}
-				<DataTableViewSwitcher
-					{module}
-					{defaultViewId}
-					bind:currentView
-					onViewChange={handleViewChange}
-					onSaveView={handleSaveView}
-					onCreateView={() => (saveViewDialogOpen = true)}
+<div class="flex flex-col gap-3">
+	<!-- Main toolbar row: Search, filters, and actions -->
+	<div class="flex flex-wrap items-center gap-2">
+		<!-- Search -->
+		{#if enableSearch}
+			<div class="relative w-full max-w-xs" role="search">
+				<Search
+					class="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground"
+					aria-hidden="true"
 				/>
-			{/if}
-		</div>
+				<Input
+					type="search"
+					placeholder="Search..."
+					value={searchValue}
+					oninput={handleSearchInput}
+					class="h-9 pr-8 pl-8"
+					aria-label="Search records"
+				/>
+				{#if searchValue}
+					<button
+						type="button"
+						onclick={clearSearch}
+						class="absolute top-2.5 right-2.5 text-muted-foreground hover:text-foreground"
+						aria-label="Clear search"
+					>
+						<X class="h-4 w-4" />
+					</button>
+				{/if}
+			</div>
+		{/if}
 
+		<!-- Filters (unified popover) -->
+		{#if enableFilters}
+			<DataTableFilters moduleApiName={module} />
+		{/if}
+
+		<!-- Views -->
+		{#if enableViews}
+			<DataTableViews moduleApiName={module} />
+		{/if}
+
+		<!-- Spacer -->
+		<div class="flex-1"></div>
+
+		<!-- Right side actions -->
 		<div class="flex items-center gap-2">
-			{#if enableFilters}
-				<Button
-					variant="outline"
-					size="sm"
-					onclick={() => (filtersDrawerOpen = true)}
-					class="relative"
-				>
-					<Filter class="mr-2 h-4 w-4" />
-					Filters
-					{#if table.state.filters.length > 0}
-						<Badge variant="secondary" class="ml-2 rounded-full px-1.5 py-0 text-xs">
-							{table.state.filters.length}
-						</Badge>
-					{/if}
-				</Button>
-			{/if}
-
 			{#if enableColumnToggle}
 				<DataTableColumnToggle />
 			{/if}
 
 			{#if enableExport && selectedCount === 0}
 				<DropdownMenu.Root>
-					<DropdownMenu.Trigger >
-						<Button variant="outline" size="sm" >
-							<Download class="mr-2 h-4 w-4" />
-							Export
-						</Button>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button variant="outline" size="sm" {...props}>
+								<Download class="mr-2 h-4 w-4" />
+								<span class="hidden sm:inline">Export</span>
+							</Button>
+						{/snippet}
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end">
 						<DropdownMenu.Item onclick={() => handleExport('xlsx')}>
 							<FileSpreadsheet class="mr-2 h-4 w-4" />
-							Export as Excel (.xlsx)
+							Export as Excel
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={() => handleExport('csv')}>
 							<FileText class="mr-2 h-4 w-4" />
-							Export as CSV (.csv)
+							Export as CSV
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
@@ -252,109 +216,90 @@
 		</div>
 	</div>
 
-	<!-- Filter chips row (if any filters active) -->
+	<!-- Filter chips (shown below toolbar when filters are active) -->
 	{#if table.state.filters.length > 0}
 		<DataTableFilterChips />
 	{/if}
 
-	<!-- Bottom row: Search, filters, and bulk actions -->
-	<div class="flex items-center justify-between">
-		<!-- Left side: Search and filters -->
-		<div class="flex flex-1 items-center gap-2">
-			{#if enableSearch}
-				<div class="relative w-full max-w-sm">
-					<Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-					<Input
-						type="search"
-						placeholder="Search..."
-						value={searchValue}
-						oninput={handleSearchInput}
-						class="pl-8 pr-8"
-					/>
-					{#if searchValue}
-						<button
-							onclick={clearSearch}
-							class="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-						>
-							<X class="h-4 w-4" />
-						</button>
-					{/if}
-				</div>
-			{/if}
+	<!-- Bulk actions (shown when items selected) -->
+	{#if selectedCount > 0 && enableBulkActions}
+		<div
+			class="flex items-center gap-2 rounded-lg bg-muted/50 p-2"
+			role="toolbar"
+			aria-label="Bulk actions"
+		>
+			<span class="text-sm font-medium" aria-live="polite">
+				{selectedCount}
+				{selectedCount === 1 ? 'record' : 'records'} selected
+			</span>
 
-			{#if hasFilters}
-				<Button variant="ghost" size="sm" onclick={() => table.clearFilters()}>
-					<X class="mr-2 h-4 w-4" />
-					Clear filters
-				</Button>
-			{/if}
+			<div class="flex-1"></div>
+
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button variant="outline" size="sm" {...props}>
+							<Download class="mr-2 h-4 w-4" />
+							Export selected
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end">
+					<DropdownMenu.Item onclick={() => handleExport('xlsx')}>
+						<FileSpreadsheet class="mr-2 h-4 w-4" />
+						Export as Excel
+					</DropdownMenu.Item>
+					<DropdownMenu.Item onclick={() => handleExport('csv')}>
+						<FileText class="mr-2 h-4 w-4" />
+						Export as CSV
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
+
+			<Button
+				variant="secondary"
+				size="sm"
+				onclick={() => (massUpdateOpen = true)}
+				aria-label="Mass update selected records"
+			>
+				<Edit class="mr-2 h-4 w-4" aria-hidden="true" />
+				Mass Update
+			</Button>
+
+			<Button
+				variant="destructive"
+				size="sm"
+				onclick={() => (deleteDialogOpen = true)}
+				aria-label="Delete selected records"
+			>
+				<Trash2 class="mr-2 h-4 w-4" aria-hidden="true" />
+				Delete
+			</Button>
+
+			<Button
+				variant="ghost"
+				size="sm"
+				onclick={() => table.clearSelection()}
+				aria-label="Clear selection"
+			>
+				<X class="h-4 w-4" />
+			</Button>
 		</div>
-
-		<!-- Right side: Bulk actions -->
-		<div class="flex items-center gap-2">
-			{#if selectedCount > 0 && enableBulkActions}
-				<div class="flex items-center gap-2">
-					<span class="text-sm text-muted-foreground">
-						{selectedCount} selected
-					</span>
-
-					<Button variant="outline" size="sm">
-						<Tag class="mr-2 h-4 w-4" />
-						Add tags
-					</Button>
-
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger >
-							<Button variant="outline" size="sm" >
-								<Download class="mr-2 h-4 w-4" />
-								Export
-							</Button>
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Content align="end">
-							<DropdownMenu.Item onclick={() => handleExport('xlsx')}>
-								<FileSpreadsheet class="mr-2 h-4 w-4" />
-								Export as Excel (.xlsx)
-							</DropdownMenu.Item>
-							<DropdownMenu.Item onclick={() => handleExport('csv')}>
-								<FileText class="mr-2 h-4 w-4" />
-								Export as CSV (.csv)
-							</DropdownMenu.Item>
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
-
-					<Button variant="destructive" size="sm" onclick={() => (deleteDialogOpen = true)}>
-						<Trash2 class="mr-2 h-4 w-4" />
-						Delete
-					</Button>
-
-					<Button variant="ghost" size="sm" onclick={() => table.clearSelection()}>
-						<X class="h-4 w-4" />
-					</Button>
-				</div>
-			{/if}
-		</div>
-	</div>
+	{/if}
 </div>
 
-{#if enableFilters}
-	<DataTableFiltersDrawer bind:open={filtersDrawerOpen} />
+<!-- Mass Update Dialog -->
+{#if module}
+	<DataTableMassUpdate moduleApiName={module} bind:open={massUpdateOpen} />
 {/if}
 
 {#if module}
-	<DataTableSaveViewDialog
-		bind:open={saveViewDialogOpen}
-		{module}
-		currentState={getCurrentTableState()}
-		onSaved={() => {
-			// Refresh the view switcher
-			currentView = null;
-		}}
-	/>
-
 	<AlertDialog.Root bind:open={deleteDialogOpen}>
 		<AlertDialog.Content>
 			<AlertDialog.Header>
-				<AlertDialog.Title>Delete {selectedCount} record{selectedCount === 1 ? '' : 's'}?</AlertDialog.Title>
+				<AlertDialog.Title
+					>Delete {selectedCount} record{selectedCount === 1 ? '' : 's'}?</AlertDialog.Title
+				>
 				<AlertDialog.Description>
 					This action cannot be undone. This will permanently delete the selected record{selectedCount ===
 					1

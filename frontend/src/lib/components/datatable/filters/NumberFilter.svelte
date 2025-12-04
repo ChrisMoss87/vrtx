@@ -41,6 +41,11 @@
 	const requiresValue = $derived(!['is_empty', 'is_not_empty'].includes(selectedOperator));
 	const isBetween = $derived(selectedOperator === 'between');
 
+	// Get the label for the currently selected operator
+	const selectedLabel = $derived(
+		operators.find((o) => o.value === selectedOperator)?.label || 'Equals'
+	);
+
 	function handleApply() {
 		if (requiresValue) {
 			if (isBetween) {
@@ -83,12 +88,9 @@
 <div class="space-y-3 p-3">
 	<div class="space-y-2">
 		<label class="text-xs font-medium">Operator</label>
-		<Select.Root
-			selected={{ value: selectedOperator, label: operators.find((o) => o.value === selectedOperator)?.label || 'Equals' }}
-			onSelectedChange={(selected) => handleOperatorChange(selected?.value)}
-		>
+		<Select.Root type="single" value={selectedOperator} onValueChange={handleOperatorChange}>
 			<Select.Trigger class="w-full">
-				<Select.Value placeholder="Select operator" />
+				<span>{selectedLabel}</span>
 			</Select.Trigger>
 			<Select.Content>
 				{#each operators as operator}

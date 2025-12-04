@@ -81,7 +81,8 @@
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+					'X-CSRF-TOKEN':
+						document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 				}
 			});
 
@@ -103,7 +104,8 @@
 				method: 'DELETE',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+					'X-CSRF-TOKEN':
+						document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 				}
 			});
 
@@ -124,7 +126,8 @@
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+					'X-CSRF-TOKEN':
+						document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 				},
 				body: JSON.stringify({
 					module: module,
@@ -146,7 +149,8 @@
 				method: 'DELETE',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+					'X-CSRF-TOKEN':
+						document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 				},
 				body: JSON.stringify({
 					module: module
@@ -185,7 +189,7 @@
 		<DropdownMenu.Group>
 			<DropdownMenu.Label>Views</DropdownMenu.Label>
 			<DropdownMenu.Item on:click={() => selectView(null)}>
-				<div class="flex items-center justify-between w-full">
+				<div class="flex w-full items-center justify-between">
 					<span>All Records</span>
 					{#if !currentView}
 						<Check class="h-4 w-4" />
@@ -199,14 +203,14 @@
 			<DropdownMenu.Group>
 				{#each views as view (view.id)}
 					<DropdownMenu.Item on:click={() => selectView(view)}>
-						<div class="flex items-center justify-between w-full">
-							<div class="flex items-center gap-2 min-w-0">
+						<div class="flex w-full items-center justify-between">
+							<div class="flex min-w-0 items-center gap-2">
 								{#if view.is_default}
-									<Star class="h-3 w-3 fill-current shrink-0" />
+									<Star class="h-3 w-3 shrink-0 fill-current" />
 								{/if}
 								<span class="truncate">{view.name}</span>
 								{#if view.is_public}
-									<span class="text-xs text-muted-foreground shrink-0">(Public)</span>
+									<span class="shrink-0 text-xs text-muted-foreground">(Public)</span>
 								{/if}
 							</div>
 							{#if currentView?.id === view.id}

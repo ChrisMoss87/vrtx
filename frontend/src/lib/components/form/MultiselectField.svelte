@@ -5,7 +5,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Check, ChevronsUpDown, X } from 'lucide-svelte';
-	import { cn } from '$lib/lib/utils';
+	import { cn } from '$lib/utils';
 
 	interface Option {
 		label: string;
@@ -50,9 +50,7 @@
 	// Filter options based on search
 	const filteredOptions = $derived(() => {
 		if (!searchValue) return options;
-		return options.filter((opt) =>
-			opt.label.toLowerCase().includes(searchValue.toLowerCase())
-		);
+		return options.filter((opt) => opt.label.toLowerCase().includes(searchValue.toLowerCase()));
 	});
 
 	// Get selected options for display
@@ -109,7 +107,7 @@
 										e.stopPropagation();
 										removeOption(option.value);
 									}}
-									class="ml-1 hover:bg-destructive/20 rounded-sm"
+									class="ml-1 rounded-sm hover:bg-destructive/20"
 								>
 									<X class="h-3 w-3" />
 								</button>
@@ -121,7 +119,7 @@
 
 			<!-- Combobox trigger -->
 			<Popover.Root bind:open>
-				<Popover.Trigger >
+				<Popover.Trigger>
 					<Button
 						{...props}
 						variant="outline"
@@ -160,10 +158,7 @@
 				</Popover.Trigger>
 				<Popover.Content class="w-[400px] p-0" align="start">
 					<Command.Root shouldFilter={false}>
-						<Command.Input
-							placeholder="Search options..."
-							bind:value={searchValue}
-						/>
+						<Command.Input placeholder="Search options..." bind:value={searchValue} />
 						<Command.List>
 							{#if filteredOptions().length === 0}
 								<Command.Empty>No options found.</Command.Empty>
@@ -173,7 +168,9 @@
 										<Command.Item
 											value={option.value}
 											onSelect={() => toggleOption(option.value)}
-											disabled={maxSelected && value.length >= maxSelected && !isSelected(option.value)}
+											disabled={maxSelected &&
+												value.length >= maxSelected &&
+												!isSelected(option.value)}
 										>
 											<Check
 												class={cn(

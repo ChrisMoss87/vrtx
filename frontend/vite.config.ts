@@ -7,14 +7,28 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
 		host: '0.0.0.0',
-        headers: {
-            'Access-Control-Allow-Origin': '*', // this is only for the local dev server so it can allow all
-        },
-		allowedHosts: [
-			'.vrtx.local',
-			'crm.startup.com',
-			'localhost'
-		]
+		headers: {
+			'Access-Control-Allow-Origin': '*' // this is only for the local dev server so it can allow all
+		},
+		allowedHosts: ['.vrtx.local', 'crm.startup.com', 'localhost'],
+		proxy: {
+			'/api': {
+				target: 'http://localhost:8000',
+				changeOrigin: true,
+				// Forward the host header from the request to preserve tenant subdomain
+				configure: (proxy) => {
+					proxy.on('proxyReq', (proxyReq, req) => {
+						// Forward the original host to the backend for tenant identification
+						const originalHost = req.headers.host;
+						if (originalHost) {
+							// Replace the frontend port with the backend port
+							const backendHost = originalHost.replace(':5173', ':8000').replace(':5174', ':8000');
+							proxyReq.setHeader('Host', backendHost);
+						}
+					});
+				}
+			}
+		}
 	},
 
 	test: {
@@ -43,6 +57,5 @@ export default defineConfig({
 				}
 			}
 		]
-	},
-
+	}
 });

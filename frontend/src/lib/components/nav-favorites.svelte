@@ -1,12 +1,12 @@
 <script lang="ts">
-	import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
-	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-	import { useSidebar } from "$lib/components/ui/sidebar/index.js";
-	import ArrowUpRightIcon from "@lucide/svelte/icons/arrow-up-right";
-	import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
-	import LinkIcon from "@lucide/svelte/icons/link";
-	import StarOffIcon from "@lucide/svelte/icons/star-off";
-	import Trash2Icon from "@lucide/svelte/icons/trash-2";
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
+	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import { useSidebar } from '$lib/components/ui/sidebar/index.js';
+	import ArrowUpRightIcon from '@lucide/svelte/icons/arrow-up-right';
+	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
+	import LinkIcon from '@lucide/svelte/icons/link';
+	import StarOffIcon from '@lucide/svelte/icons/star-off';
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 
 	let { favorites }: { favorites: { name: string; url: string; emoji: string }[] } = $props();
 
@@ -37,8 +37,8 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content
 						class="w-56 rounded-lg"
-						side={sidebar.isMobile ? "bottom" : "right"}
-						align={sidebar.isMobile ? "end" : "start"}
+						side={sidebar.isMobile ? 'bottom' : 'right'}
+						align={sidebar.isMobile ? 'end' : 'start'}
 					>
 						<DropdownMenu.Item>
 							<StarOffIcon class="text-muted-foreground" />

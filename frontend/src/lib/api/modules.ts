@@ -14,6 +14,13 @@ export interface Module {
 	created_at: string;
 	updated_at: string | null;
 	blocks?: Block[];
+	// Flattened fields from all blocks (convenience property, computed client-side)
+	fields?: Field[];
+	// Default datatable settings
+	default_filters?: any[];
+	default_sorting?: { id: string; desc: boolean }[];
+	default_column_visibility?: Record<string, boolean>;
+	default_page_size?: number;
 }
 
 export interface ModuleSettings {
@@ -44,6 +51,7 @@ export interface Field {
 	type: string;
 	description: string | null;
 	help_text: string | null;
+	placeholder: string | null;
 	is_required: boolean;
 	is_unique: boolean;
 	is_searchable: boolean;
@@ -51,10 +59,23 @@ export interface Field {
 	is_sortable: boolean;
 	validation_rules: string[];
 	settings: FieldSettings;
+	conditional_visibility: ConditionalVisibility | null;
+	field_dependency: FieldDependency | null;
+	formula_definition: FormulaDefinition | null;
 	default_value: string | null;
 	display_order: number;
 	width: number;
 	options: FieldOption[];
+}
+
+export interface LookupConfiguration {
+	related_module_id: number;
+	display_field: string;
+	search_fields: string[];
+	relationship_type: 'one_to_one' | 'many_to_one' | 'many_to_many';
+	cascading_field?: string;
+	allow_create: boolean;
+	filters?: Record<string, any>;
 }
 
 export interface FieldSettings {
@@ -65,11 +86,80 @@ export interface FieldSettings {
 	pattern?: string;
 	precision?: number;
 	currency_code?: string;
+	currency_symbol?: string;
+	rows?: number;
+	min_date?: string;
+	max_date?: string;
+	max_files?: number;
+	accepted_file_types?: string[];
 	related_module_id?: number;
+	related_module_name?: string;
+	display_field?: string;
+	search_fields?: string[];
+	allow_create?: boolean;
+	cascade_delete?: boolean;
+	relationship_type?: 'one_to_one' | 'many_to_one' | 'many_to_many';
 	formula?: string;
+	formula_definition?: FormulaDefinition | null;
+	conditional_visibility?: ConditionalVisibility | null;
+	lookup_configuration?: LookupConfiguration | null;
+	field_dependency?: FieldDependency;
 	allowed_file_types?: string[];
 	max_file_size?: number;
-	additional_settings: Record<string, unknown>;
+	placeholder?: string;
+	depends_on?: string;
+	dependency_filter?: DependencyFilter;
+	additional_settings?: Record<string, unknown>;
+}
+
+export interface ConditionalVisibility {
+	enabled: boolean;
+	operator: 'and' | 'or';
+	conditions: Condition[];
+}
+
+export interface Condition {
+	field: string;
+	operator:
+		| 'equals'
+		| 'not_equals'
+		| 'contains'
+		| 'not_contains'
+		| 'starts_with'
+		| 'ends_with'
+		| 'greater_than'
+		| 'less_than'
+		| 'greater_than_or_equal'
+		| 'less_than_or_equal'
+		| 'between'
+		| 'in'
+		| 'not_in'
+		| 'is_empty'
+		| 'is_not_empty'
+		| 'is_checked'
+		| 'is_not_checked';
+	value?: unknown;
+	field_value?: string;
+}
+
+export interface FieldDependency {
+	depends_on: string | null;
+	filter: DependencyFilter | null;
+}
+
+export interface DependencyFilter {
+	field: string;
+	operator: string;
+	target_field: string;
+}
+
+export interface FormulaDefinition {
+	formula: string;
+	formula_type: 'calculation' | 'lookup' | 'date_calculation' | 'text_manipulation' | 'conditional';
+	return_type: 'number' | 'text' | 'date' | 'currency' | 'boolean' | 'percentage';
+	dependencies: string[];
+	recalculate_on: string[];
+	additional_settings?: Record<string, unknown>;
 }
 
 export interface FieldOption {
@@ -89,6 +179,10 @@ export interface CreateModuleRequest {
 	is_active?: boolean;
 	display_order?: number;
 	settings?: Partial<ModuleSettings>;
+	default_filters?: any[];
+	default_sorting?: any[];
+	default_column_visibility?: Record<string, boolean>;
+	default_page_size?: number;
 	blocks?: CreateBlockRequest[];
 }
 
@@ -102,9 +196,11 @@ export interface CreateBlockRequest {
 
 export interface CreateFieldRequest {
 	label: string;
+	api_name?: string;
 	type: string;
 	description?: string;
 	help_text?: string;
+	placeholder?: string;
 	is_required?: boolean;
 	is_unique?: boolean;
 	is_searchable?: boolean;
@@ -115,6 +211,18 @@ export interface CreateFieldRequest {
 	width?: number;
 	validation_rules?: string[];
 	settings?: Partial<FieldSettings>;
+	conditional_visibility?: ConditionalVisibility;
+	field_dependency?: FieldDependency;
+	formula_definition?: FormulaDefinition;
+	options?: CreateFieldOptionRequest[];
+}
+
+export interface CreateFieldOptionRequest {
+	label: string;
+	value: string;
+	color?: string;
+	display_order?: number;
+	metadata?: Record<string, unknown>;
 }
 
 export interface UpdateModuleRequest {
@@ -123,7 +231,56 @@ export interface UpdateModuleRequest {
 	icon?: string;
 	description?: string;
 	display_order?: number;
+	is_active?: boolean;
 	settings?: Partial<ModuleSettings>;
+	// Default datatable settings
+	default_filters?: any[];
+	default_sorting?: { id: string; desc: boolean }[];
+	default_column_visibility?: Record<string, boolean>;
+	default_page_size?: number;
+	// Full blocks and fields update (for complete module editing)
+	blocks?: UpdateBlockRequest[];
+}
+
+export interface UpdateBlockRequest {
+	id?: number; // If provided, update existing block; otherwise create new
+	name: string;
+	type: 'section' | 'tab' | 'accordion' | 'card';
+	display_order?: number;
+	settings?: Record<string, unknown>;
+	fields?: UpdateFieldRequest[];
+}
+
+export interface UpdateFieldRequest {
+	id?: number; // If provided, update existing field; otherwise create new
+	label: string;
+	api_name?: string;
+	type: string;
+	description?: string;
+	help_text?: string;
+	placeholder?: string;
+	is_required?: boolean;
+	is_unique?: boolean;
+	is_searchable?: boolean;
+	is_filterable?: boolean;
+	is_sortable?: boolean;
+	default_value?: string;
+	display_order?: number;
+	width?: number;
+	validation_rules?: string[];
+	settings?: Partial<FieldSettings>;
+	conditional_visibility?: ConditionalVisibility;
+	field_dependency?: FieldDependency;
+	formula_definition?: FormulaDefinition;
+	options?: UpdateFieldOptionRequest[];
+}
+
+export interface UpdateFieldOptionRequest {
+	id?: number; // If provided, update existing option; otherwise create new
+	label: string;
+	value: string;
+	color?: string;
+	display_order?: number;
 }
 
 export interface ModulesResponse {
@@ -183,3 +340,20 @@ export class ModulesApi {
 }
 
 export const modulesApi = new ModulesApi(apiClient);
+
+// Helper function exports for convenience
+export async function getModules(): Promise<Module[]> {
+	return modulesApi.getAll();
+}
+
+export async function getActiveModules(): Promise<Module[]> {
+	return modulesApi.getActive();
+}
+
+export async function getModuleById(id: number): Promise<Module> {
+	return modulesApi.getById(id);
+}
+
+export async function getModuleByApiName(apiName: string): Promise<Module> {
+	return modulesApi.getByApiName(apiName);
+}

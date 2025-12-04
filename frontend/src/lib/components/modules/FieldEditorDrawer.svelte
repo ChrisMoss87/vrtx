@@ -109,10 +109,14 @@
 	const needsOptions = $derived(['select', 'radio', 'multiselect'].includes(editField?.type || ''));
 
 	// Check if field type is numeric
-	const isNumericType = $derived(['number', 'decimal', 'currency', 'percent'].includes(editField?.type || ''));
+	const isNumericType = $derived(
+		['number', 'decimal', 'currency', 'percent'].includes(editField?.type || '')
+	);
 
 	// Check if field type is text-based
-	const isTextType = $derived(['text', 'textarea', 'email', 'phone', 'url'].includes(editField?.type || ''));
+	const isTextType = $derived(
+		['text', 'textarea', 'email', 'phone', 'url'].includes(editField?.type || '')
+	);
 
 	// Check if field type is date-based
 	const isDateType = $derived(['date', 'datetime', 'time'].includes(editField?.type || ''));
@@ -122,9 +126,7 @@
 	<Drawer.Content class="max-h-[90vh]">
 		<Drawer.Header>
 			<Drawer.Title>{isNew ? 'Add New Field' : 'Edit Field'}</Drawer.Title>
-			<Drawer.Description>
-				Configure field properties and type-specific settings
-			</Drawer.Description>
+			<Drawer.Description>Configure field properties and type-specific settings</Drawer.Description>
 		</Drawer.Header>
 
 		{#if editField}
@@ -167,7 +169,7 @@
 							<select
 								id="field-type"
 								bind:value={editField.type}
-								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
 								required
 							>
 								{#each fieldTypes as fieldType}
@@ -182,7 +184,7 @@
 							<select
 								id="field-width"
 								bind:value={editField.width}
-								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
 							>
 								<option value={25}>25% - Quarter width</option>
 								<option value={33}>33% - Third width</option>
@@ -230,9 +232,7 @@
 						<div class="flex items-center justify-between space-x-2 rounded-lg border p-3">
 							<div class="space-y-0.5">
 								<Label for="field-unique">Unique</Label>
-								<p class="text-xs text-muted-foreground">
-									No duplicate values allowed
-								</p>
+								<p class="text-xs text-muted-foreground">No duplicate values allowed</p>
 							</div>
 							<Switch id="field-unique" bind:checked={editField.is_unique} />
 						</div>
@@ -240,9 +240,7 @@
 						<div class="flex items-center justify-between space-x-2 rounded-lg border p-3">
 							<div class="space-y-0.5">
 								<Label for="field-searchable">Searchable</Label>
-								<p class="text-xs text-muted-foreground">
-									Include in global search results
-								</p>
+								<p class="text-xs text-muted-foreground">Include in global search results</p>
 							</div>
 							<Switch id="field-searchable" bind:checked={editField.is_searchable} />
 						</div>
@@ -377,14 +375,9 @@
 							<div class="flex items-center justify-between space-x-2 rounded-lg border p-3">
 								<div class="space-y-0.5">
 									<Label for="default-today">Default to Today</Label>
-									<p class="text-xs text-muted-foreground">
-										Auto-fill with current date
-									</p>
+									<p class="text-xs text-muted-foreground">Auto-fill with current date</p>
 								</div>
-								<Switch
-									id="default-today"
-									bind:checked={editField.settings.default_to_today}
-								/>
+								<Switch id="default-today" bind:checked={editField.settings.default_to_today} />
 							</div>
 						</div>
 					{/if}
@@ -407,24 +400,16 @@
 							{:else}
 								<div class="space-y-2">
 									{#each editField.options as option, optIndex}
-										<div class="flex items-start gap-2 p-3 border rounded-lg">
-											<div class="flex-1 grid grid-cols-2 gap-2">
+										<div class="flex items-start gap-2 rounded-lg border p-3">
+											<div class="grid flex-1 grid-cols-2 gap-2">
 												<div class="space-y-1">
 													<Label class="text-xs">Label</Label>
-													<Input
-														bind:value={option.label}
-														placeholder="Display text"
-														class="h-8"
-													/>
+													<Input bind:value={option.label} placeholder="Display text" class="h-8" />
 												</div>
 
 												<div class="space-y-1">
 													<Label class="text-xs">Value</Label>
-													<Input
-														bind:value={option.value}
-														placeholder="Saved value"
-														class="h-8"
-													/>
+													<Input bind:value={option.value} placeholder="Saved value" class="h-8" />
 												</div>
 
 												<div class="col-span-2 flex items-center gap-4">
@@ -437,7 +422,7 @@
 														Default
 													</label>
 
-													<div class="flex items-center gap-2 flex-1">
+													<div class="flex flex-1 items-center gap-2">
 														<Label class="text-xs">Color</Label>
 														<input
 															type="color"

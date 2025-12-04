@@ -211,7 +211,11 @@ test.describe('Module Management', () => {
 		await page.goto(`${BASE_URL}/modules`);
 
 		// Click on View Records button for Contacts module
-		const viewButton = page.locator('text=Contacts').locator('..').locator('..').getByRole('button', { name: /view records/i });
+		const viewButton = page
+			.locator('text=Contacts')
+			.locator('..')
+			.locator('..')
+			.getByRole('button', { name: /view records/i });
 		await viewButton.click();
 
 		// Should navigate to records page
@@ -230,7 +234,9 @@ test.describe('Module Management', () => {
 		const initialStatus = await badge.textContent();
 
 		// Click the power button to toggle status
-		const powerButton = contactsCard.locator('button[title*="activate"], button[title*="Activate"]').first();
+		const powerButton = contactsCard
+			.locator('button[title*="activate"], button[title*="Activate"]')
+			.first();
 		await powerButton.click();
 
 		// Wait a bit for the update
@@ -328,7 +334,11 @@ test.describe('Module API Integration', () => {
 		await expect(page.locator(`text=${moduleName}`)).toBeVisible();
 
 		// Click to view records
-		const viewButton = page.locator(`text=${moduleName}`).locator('..').locator('..').getByRole('button', { name: /view records/i });
+		const viewButton = page
+			.locator(`text=${moduleName}`)
+			.locator('..')
+			.locator('..')
+			.getByRole('button', { name: /view records/i });
 		await viewButton.click();
 
 		// Should show module records page

@@ -126,7 +126,7 @@
 <FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
 	{#snippet children(props)}
 		<div class="relative">
-			<span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+			<span class="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
 				{symbol}
 			</span>
 			<Input

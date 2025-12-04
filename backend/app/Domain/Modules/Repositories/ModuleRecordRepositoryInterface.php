@@ -56,4 +56,12 @@ interface ModuleRecordRepositoryInterface
      * Check if a record exists.
      */
     public function exists(int $moduleId, int $recordId): bool;
+
+    /**
+     * Find multiple records by their IDs.
+     *
+     * @param  array<int>  $recordIds
+     * @return array<ModuleRecord>
+     */
+    public function findByIds(int $moduleId, array $recordIds): array;
 }

@@ -102,6 +102,19 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
             ->exists();
     }
 
+    public function findByIds(int $moduleId, array $recordIds): array
+    {
+        if (empty($recordIds)) {
+            return [];
+        }
+
+        $models = ModuleRecordModel::where('module_id', $moduleId)
+            ->whereIn('id', $recordIds)
+            ->get();
+
+        return array_map(fn ($model) => $this->toDomain($model), $models->all());
+    }
+
     /**
      * Apply filters to the query based on field types and operators.
      */

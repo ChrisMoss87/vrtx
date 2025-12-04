@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { router } from '@sveltejs/kit';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { setContext, onMount } from 'svelte';
 	import axios from 'axios';
 	import {
@@ -8,7 +9,8 @@
 		parseApiResponse,
 		toggleMultiSort,
 		serializeTableState,
-		debounce
+		debounce,
+		transformFiltersForApi
 	} from './utils';
 	import type {
 		ColumnDef,
@@ -22,7 +24,8 @@
 	import DataTableBody from './DataTableBody.svelte';
 	import DataTablePagination from './DataTablePagination.svelte';
 	import DataTableToolbar from './DataTableToolbar.svelte';
-	import DataTableColumnToggle from './DataTableColumnToggle.svelte';
+	import * as Table from '$lib/components/ui/table';
+	import { getDefaultView } from '$lib/api/views';
 
 	interface Props {
 		moduleApiName: string;
@@ -46,6 +49,7 @@
 		onSelectionChange?: (rows: any[]) => void;
 		onBulkAction?: (action: string, rows: any[]) => void;
 		onCellUpdate?: (recordId: string, field: string, value: any) => Promise<void>;
+		onCreateNew?: () => void;
 	}
 
 	let {
@@ -69,15 +73,16 @@
 		onRowClick,
 		onSelectionChange,
 		onBulkAction,
-		onCellUpdate
+		onCellUpdate,
+		onCreateNew
 	}: Props = $props();
 
 	// Generate columns from module if not provided
-	let columns = $state<ColumnDef[]>(
-		providedColumns || (module ? generateColumnsFromModule(module) : [])
-	);
+	const initialColumns: ColumnDef[] =
+		providedColumns || (module ? generateColumnsFromModule(module) : []);
+	let columns = $state<ColumnDef[]>(initialColumns);
 
-	// Initialize table state
+	// Initialize table state using initial columns to avoid circular reference
 	let state = $state<TableState>({
 		data: initialData || [],
 		loading: false,
@@ -93,23 +98,23 @@
 		sorting: [],
 		filters: [],
 		globalFilter: '',
-		columnVisibility: columns.reduce(
-			(acc, col) => {
+		columnVisibility: initialColumns.reduce(
+			(acc: Record<string, boolean>, col: ColumnDef) => {
 				acc[col.id] = col.visible !== false;
 				return acc;
 			},
 			{} as Record<string, boolean>
 		),
-		columnOrder: columns.map((c) => c.id),
-		columnWidths: columns.reduce(
-			(acc, col) => {
+		columnOrder: initialColumns.map((c: ColumnDef) => c.id),
+		columnWidths: initialColumns.reduce(
+			(acc: Record<string, number>, col: ColumnDef) => {
 				if (col.width) acc[col.id] = col.width;
 				return acc;
 			},
 			{} as Record<string, number>
 		),
-		columnPinning: columns.reduce(
-			(acc, col) => {
+		columnPinning: initialColumns.reduce(
+			(acc: Record<string, 'left' | 'right' | false>, col: ColumnDef) => {
 				if (col.pinned) acc[col.id] = col.pinned;
 				return acc;
 			},
@@ -122,20 +127,16 @@
 	// Visible columns based on columnVisibility and columnOrder
 	let visibleColumns = $derived(
 		state.columnOrder
-			.filter((id) => state.columnVisibility[id])
-			.map((id) => columns.find((c) => c.id === id))
+			.filter((id: string) => state.columnVisibility[id])
+			.map((id: string) => columns.find((c: ColumnDef) => c.id === id))
 			.filter(Boolean) as ColumnDef[]
 	);
 
 	// Selected rows
-	let selectedRows = $derived(
-		state.data.filter((row) => state.rowSelection[row.id])
-	);
+	let selectedRows = $derived(state.data.filter((row: any) => state.rowSelection[row.id]));
 
 	// Selected row count
-	let selectedCount = $derived(
-		Object.values(state.rowSelection).filter(Boolean).length
-	);
+	let selectedCount = $derived(Object.values(state.rowSelection).filter(Boolean).length);
 
 	// Table context for child components
 	const tableContext: TableContext = {
@@ -155,7 +156,7 @@
 			if (!enableFilters) return;
 
 			// Remove existing filter for same field
-			state.filters = state.filters.filter((f) => f.field !== filter.field);
+			state.filters = state.filters.filter((f: FilterConfig) => f.field !== filter.field);
 
 			// Add new filter
 			state.filters.push(filter);
@@ -166,7 +167,7 @@
 			fetchData();
 		},
 		removeFilter(field: string) {
-			state.filters = state.filters.filter((f) => f.field !== field);
+			state.filters = state.filters.filter((f: FilterConfig) => f.field !== field);
 			fetchData();
 		},
 		clearFilters() {
@@ -205,14 +206,14 @@
 		toggleAllRows() {
 			if (!enableSelection) return;
 
-			const allSelected = state.data.every((row) => state.rowSelection[row.id]);
+			const allSelected = state.data.every((row: any) => state.rowSelection[row.id]);
 
 			if (allSelected) {
 				// Deselect all
 				state.rowSelection = {};
 			} else {
 				// Select all visible rows
-				state.data.forEach((row) => {
+				state.data.forEach((row: any) => {
 					state.rowSelection[row.id] = true;
 				});
 			}
@@ -233,24 +234,12 @@
 		},
 		resetColumnVisibility() {
 			state.columnVisibility = columns.reduce(
-				(acc, col) => {
+				(acc: Record<string, boolean>, col: ColumnDef) => {
 					acc[col.id] = col.visible !== false;
 					return acc;
 				},
 				{} as Record<string, boolean>
 			);
-		},
-		updateColumnVisibility(visibility: Record<string, boolean>) {
-			state.columnVisibility = { ...visibility };
-		},
-		updateSorting(sorting: SortConfig[]) {
-			state.sorting = sorting;
-			fetchData();
-		},
-		updatePageSize(size: number) {
-			state.pagination.perPage = size;
-			state.pagination.page = 1;
-			fetchData();
 		},
 		setColumnOrder(order: string[]) {
 			state.columnOrder = order;
@@ -324,40 +313,101 @@
 		try {
 			const request = buildApiRequest(state);
 
-			const response = await axios.get(`/api/modules/${moduleApiName}/records`, {
+			// Get auth token from localStorage
+			const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+
+			const headers: Record<string, string> = {
+				'Content-Type': 'application/json',
+				Accept: 'application/json'
+			};
+
+			if (token) {
+				headers['Authorization'] = `Bearer ${token}`;
+			}
+
+			// Transform filters to backend format (field-indexed object)
+			const transformedFilters = request.filters
+				? transformFiltersForApi(request.filters)
+				: undefined;
+
+			// Log request for debugging
+			console.log('DataTable request:', {
+				filters: request.filters,
+				transformedFilters,
+				sort: request.sort,
+				search: request.search
+			});
+
+			const response = await axios.get(`/api/v1/records/${moduleApiName}`, {
 				params: {
 					page: request.page,
 					per_page: request.per_page,
 					sort: request.sort ? JSON.stringify(request.sort) : undefined,
-					filters: request.filters ? JSON.stringify(request.filters) : undefined,
+					filters: transformedFilters ? JSON.stringify(transformedFilters) : undefined,
 					search: request.search
-				}
+				},
+				headers
 			});
 
-			const { data, pagination } = parseApiResponse(response.data);
+			console.log('API Response:', response.data);
 
-			state.data = data;
-			state.pagination = pagination;
+			// Backend returns { records, meta } not { data, meta }
+			const apiData = response.data;
+			state.data = apiData.records || [];
+			state.pagination = {
+				page: apiData.meta?.current_page || 1,
+				perPage: apiData.meta?.per_page || 50,
+				total: apiData.meta?.total || 0,
+				from: apiData.meta?.from || 0,
+				to: apiData.meta?.to || 0,
+				lastPage: apiData.meta?.last_page || 1
+			};
 
-			// Update URL with current state
-			const params = serializeTableState(state);
-			router.visit(`?${params.toString()}`, {
-				preserveState: true,
-				preserveScroll: true,
-				replace: true
-			});
+			// Update URL with current state (optional, can be enabled later)
+			// const params = serializeTableState(state);
+			// goto(`?${params.toString()}`, { replaceState: true, keepFocus: true });
 		} catch (error: any) {
-			state.error = error.message || 'Failed to load data';
+			state.error = error.response?.data?.message || error.message || 'Failed to load data';
 			console.error('DataTable fetch error:', error);
 		} finally {
 			state.loading = false;
 		}
 	}
 
-	// Load initial data on mount
-	onMount(() => {
+	// Load default view and initial data on mount
+	onMount(async () => {
 		if (!initialData) {
-			fetchData();
+			// Try to load default view first
+			try {
+				const { view, module_defaults } = await getDefaultView(moduleApiName);
+
+				if (view) {
+					// Apply view settings
+					await tableContext.loadView(view);
+				} else if (module_defaults) {
+					// Apply module defaults
+					if (module_defaults.filters) {
+						state.filters = module_defaults.filters;
+					}
+					if (module_defaults.sorting) {
+						state.sorting = module_defaults.sorting;
+					}
+					if (module_defaults.column_visibility) {
+						state.columnVisibility = {
+							...state.columnVisibility,
+							...module_defaults.column_visibility
+						};
+					}
+					if (module_defaults.page_size) {
+						state.pagination.perPage = module_defaults.page_size;
+					}
+				}
+			} catch (error) {
+				console.warn('Failed to load default view, using table defaults:', error);
+			}
+
+			// Fetch data with applied settings
+			await fetchData();
 		}
 	});
 
@@ -379,12 +429,14 @@
 			});
 
 			// Update local state
-			const recordIndex = state.data.findIndex((r) => r.id === recordId);
+			const recordIndex = state.data.findIndex((r: { id: string }) => r.id === recordId);
 			if (recordIndex !== -1) {
 				state.data[recordIndex][field] = value;
 			}
 		}
 	}
+
+	console.log('state', state);
 </script>
 
 <div class="space-y-4 {className}">
@@ -399,20 +451,16 @@
 			enableColumnToggle={true}
 			module={moduleApiName}
 			defaultViewId={defaultView}
-			selectedCount={selectedCount}
+			{selectedCount}
 			hasFilters={state.filters.length > 0}
 		/>
 	{/if}
 
-	<!-- Table -->
-	<div class="rounded-md border">
-		<div class="relative overflow-auto">
-			<table class="w-full caption-bottom text-sm">
-				<DataTableHeader
-					columns={visibleColumns}
-					{enableSelection}
-					{enableSorting}
-				/>
+	<!-- Table with horizontal scroll on mobile -->
+	<div class="overflow-hidden rounded-md border">
+		<div class="overflow-x-auto" role="region" aria-label="Data table" tabindex="0">
+			<Table.Root>
+				<DataTableHeader columns={visibleColumns} {enableSelection} {enableSorting} />
 				<DataTableBody
 					columns={visibleColumns}
 					data={state.data}
@@ -423,8 +471,9 @@
 					{moduleApiName}
 					onRowClick={handleRowClick}
 					onCellUpdate={handleCellUpdate}
+					{onCreateNew}
 				/>
-			</table>
+			</Table.Root>
 		</div>
 	</div>
 

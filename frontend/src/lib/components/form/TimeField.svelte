@@ -1,7 +1,6 @@
 <script lang="ts">
 	import FieldBase from './FieldBase.svelte';
 	import * as Select from '$lib/components/ui/select';
-	import { cn } from '$lib/lib/utils';
 
 	interface Props {
 		label?: string;
@@ -12,7 +11,6 @@
 		required?: boolean;
 		disabled?: boolean;
 		placeholder?: string;
-		width?: 25 | 50 | 75 | 100;
 		class?: string;
 		use24Hour?: boolean;
 		onchange?: (value: string) => void;
@@ -27,7 +25,6 @@
 		required = false,
 		disabled = false,
 		placeholder = 'Select time',
-		width = 100,
 		class: className,
 		use24Hour = false,
 		onchange
@@ -90,21 +87,17 @@
 		}
 	}
 
-	function handleHourChange(newValue: string | undefined) {
-		if (newValue) {
-			hour = newValue;
-			updateValue();
-		}
+	function handleHourChange(newValue: string) {
+		hour = newValue;
+		updateValue();
 	}
 
-	function handleMinuteChange(newValue: string | undefined) {
-		if (newValue) {
-			minute = newValue;
-			updateValue();
-		}
+	function handleMinuteChange(newValue: string) {
+		minute = newValue;
+		updateValue();
 	}
 
-	function handlePeriodChange(newValue: string | undefined) {
+	function handlePeriodChange(newValue: string) {
 		if (newValue === 'AM' || newValue === 'PM') {
 			period = newValue;
 			updateValue();
@@ -112,10 +105,10 @@
 	}
 </script>
 
-<FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
+<FieldBase {label} {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
 		<div class="flex items-center gap-2">
-			<Select.Root selected={{ value: hour, label: hour }} onSelectedChange={(v) => handleHourChange(v?.value)}>
+			<Select.Root type="single" value={hour} onValueChange={handleHourChange}>
 				<Select.Trigger {...props} class="w-[80px]">
 					{hour}
 				</Select.Trigger>
@@ -128,7 +121,7 @@
 
 			<span class="text-muted-foreground">:</span>
 
-			<Select.Root selected={{ value: minute, label: minute }} onSelectedChange={(v) => handleMinuteChange(v?.value)}>
+			<Select.Root type="single" value={minute} onValueChange={handleMinuteChange}>
 				<Select.Trigger {...props} class="w-[80px]">
 					{minute}
 				</Select.Trigger>
@@ -140,7 +133,7 @@
 			</Select.Root>
 
 			{#if !use24Hour}
-				<Select.Root selected={{ value: period, label: period }} onSelectedChange={(v) => handlePeriodChange(v?.value)}>
+				<Select.Root type="single" value={period} onValueChange={handlePeriodChange}>
 					<Select.Trigger {...props} class="w-[80px]">
 						{period}
 					</Select.Trigger>

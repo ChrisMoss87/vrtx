@@ -8,7 +8,7 @@
 		fieldTemplates,
 		templateCategories,
 		getTemplatesByCategory,
-		type FieldTemplate,
+		type FieldTemplate
 	} from '$lib/lib/field-templates';
 	import { Search } from 'lucide-svelte';
 
@@ -24,9 +24,7 @@
 	let selectedCategory = $state<string | null>(null);
 
 	const filteredTemplates = $derived.by(() => {
-		let templates = selectedCategory
-			? getTemplatesByCategory(selectedCategory)
-			: fieldTemplates;
+		let templates = selectedCategory ? getTemplatesByCategory(selectedCategory) : fieldTemplates;
 
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
@@ -59,7 +57,7 @@
 </script>
 
 <Dialog.Root {open} onOpenChange={handleOpenChange}>
-	<Dialog.Content class="max-w-3xl max-h-[80vh]">
+	<Dialog.Content class="max-h-[80vh] max-w-3xl">
 		<Dialog.Header>
 			<Dialog.Title>Choose a Field Template</Dialog.Title>
 			<Dialog.Description>
@@ -70,12 +68,8 @@
 		<div class="space-y-4">
 			<!-- Search -->
 			<div class="relative">
-				<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-				<Input
-					bind:value={searchQuery}
-					placeholder="Search templates..."
-					class="pl-9"
-				/>
+				<Search class="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+				<Input bind:value={searchQuery} placeholder="Search templates..." class="pl-9" />
 			</div>
 
 			<!-- Category Filter -->
@@ -101,10 +95,10 @@
 			<!-- Templates Grid -->
 			<ScrollArea class="h-[400px] rounded-md border p-4">
 				{#if filteredTemplates.length === 0}
-					<div class="flex items-center justify-center h-full text-center py-12">
+					<div class="flex h-full items-center justify-center py-12 text-center">
 						<div class="text-muted-foreground">
 							<p class="text-sm">No templates found</p>
-							<p class="text-xs mt-1">Try a different search or category</p>
+							<p class="mt-1 text-xs">Try a different search or category</p>
 						</div>
 					</div>
 				{:else}
@@ -112,17 +106,17 @@
 						{#each filteredTemplates as template}
 							<button
 								onclick={() => handleSelect(template)}
-								class="group text-left p-4 rounded-lg border border-border hover:border-primary hover:bg-accent transition-colors"
+								class="group rounded-lg border border-border p-4 text-left transition-colors hover:border-primary hover:bg-accent"
 							>
-								<div class="flex items-start justify-between gap-2 mb-2">
-									<h4 class="font-medium group-hover:text-primary transition-colors">
+								<div class="mb-2 flex items-start justify-between gap-2">
+									<h4 class="font-medium transition-colors group-hover:text-primary">
 										{template.name}
 									</h4>
-									<Badge variant="secondary" class="text-xs shrink-0">
+									<Badge variant="secondary" class="shrink-0 text-xs">
 										{template.field.type}
 									</Badge>
 								</div>
-								<p class="text-xs text-muted-foreground line-clamp-2">
+								<p class="line-clamp-2 text-xs text-muted-foreground">
 									{template.description}
 								</p>
 								<div class="mt-3 flex flex-wrap gap-1">
@@ -144,9 +138,7 @@
 		</div>
 
 		<Dialog.Footer>
-			<Button variant="outline" onclick={() => handleOpenChange(false)}>
-				Cancel
-			</Button>
+			<Button variant="outline" onclick={() => handleOpenChange(false)}>Cancel</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

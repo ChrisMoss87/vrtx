@@ -4,7 +4,13 @@
 	import * as Select from '$lib/components/ui/select';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import { X } from 'lucide-svelte';
-	import { DateFormatter, type DateValue, parseDate, today, getLocalTimeZone } from '@internationalized/date';
+	import {
+		DateFormatter,
+		type DateValue,
+		parseDate,
+		today,
+		getLocalTimeZone
+	} from '@internationalized/date';
 
 	interface Props {
 		value?: {
@@ -36,15 +42,29 @@
 
 	let selectedOperator = $state(value?.operator || 'equals');
 	let date1 = $state<DateValue | undefined>(
-		typeof value?.value === 'string' ? parseDate(value.value) :
-		Array.isArray(value?.value) && value.value[0] ? parseDate(value.value[0]) : undefined
+		typeof value?.value === 'string'
+			? parseDate(value.value)
+			: Array.isArray(value?.value) && value.value[0]
+				? parseDate(value.value[0])
+				: undefined
 	);
 	let date2 = $state<DateValue | undefined>(
 		Array.isArray(value?.value) && value.value[1] ? parseDate(value.value[1]) : undefined
 	);
 
 	function handleApply() {
-		if (['is_empty', 'is_not_empty', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month'].includes(selectedOperator)) {
+		if (
+			[
+				'is_empty',
+				'is_not_empty',
+				'today',
+				'yesterday',
+				'last_7_days',
+				'last_30_days',
+				'this_month',
+				'last_month'
+			].includes(selectedOperator)
+		) {
 			onApply({ operator: selectedOperator, value: '' });
 		} else if (selectedOperator === 'between' && date1 && date2) {
 			onApply({ operator: selectedOperator, value: [date1.toString(), date2.toString()] });
@@ -63,22 +83,34 @@
 	}
 
 	const needsDatePicker = $derived(
-		!['is_empty', 'is_not_empty', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month'].includes(selectedOperator)
+		![
+			'is_empty',
+			'is_not_empty',
+			'today',
+			'yesterday',
+			'last_7_days',
+			'last_30_days',
+			'this_month',
+			'last_month'
+		].includes(selectedOperator)
 	);
 	const isBetween = $derived(selectedOperator === 'between');
 </script>
 
-<div class="space-y-4 p-4 w-auto">
+<div class="w-auto space-y-4 p-4">
 	<div class="space-y-2">
 		<Label>Operator</Label>
 		<Select.Root
-			selected={{ value: selectedOperator, label: operators.find(o => o.value === selectedOperator)?.label || 'Equals' }}
-			onSelectedChange={(selected) => {
-				if (selected) selectedOperator = selected.value;
+			type="single"
+			value={selectedOperator}
+			onValueChange={(value) => {
+				if (value) selectedOperator = value;
 			}}
 		>
 			<Select.Trigger class="w-[200px]">
-				{operators.find(o => o.value === selectedOperator)?.label || 'Select operator'}
+				<span
+					>{operators.find((o) => o.value === selectedOperator)?.label || 'Select operator'}</span
+				>
 			</Select.Trigger>
 			<Select.Content>
 				{#each operators as operator (operator.value)}
@@ -93,13 +125,13 @@
 	{#if needsDatePicker}
 		<div class="space-y-2">
 			<Label>{isBetween ? 'From' : 'Date'}</Label>
-			<Calendar value={date1} onValueChange={(v) => (date1 = v)} />
+			<Calendar type="single" bind:value={date1} />
 		</div>
 
 		{#if isBetween}
 			<div class="space-y-2">
 				<Label>To</Label>
-				<Calendar value={date2} onValueChange={(v) => (date2 = v)} />
+				<Calendar type="single" bind:value={date2} />
 			</div>
 		{/if}
 	{/if}

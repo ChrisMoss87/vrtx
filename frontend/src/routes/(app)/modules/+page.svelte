@@ -2,11 +2,11 @@
 	import { onMount } from 'svelte';
 	import { modulesApi, type Module } from '$lib/api/modules';
 	import { Button } from '$lib/components/ui/button';
-    import * as Card from "$lib/components/ui/card/index.ts";
+	import * as Card from '$lib/components/ui/card/index.ts';
 	import { Badge } from '$lib/components/ui/badge/index.ts';
 	import { goto } from '$app/navigation';
 	import { Plus, Database, Edit, Trash2, Power } from 'lucide-svelte';
-    import Page from "$lib/components/layout/Page.svelte";
+	import Page from '$lib/components/layout/Page.svelte';
 
 	let modules = $state<Module[]>([]);
 	let loading = $state(true);
@@ -54,16 +54,13 @@
 </script>
 
 <Page>
-
-
-
-	<div class="flex items-center justify-between mb-8">
+	<div class="mb-8 flex items-center justify-between">
 		<div>
 			<h1 class="text-3xl font-bold">Modules</h1>
-			<p class="text-muted-foreground mt-2">Manage your custom modules and data structures</p>
+			<p class="mt-2 text-muted-foreground">Manage your custom modules and data structures</p>
 		</div>
 		<Button onclick={createModule}>
-			<Plus class="w-4 h-4 mr-2" />
+			<Plus class="mr-2 h-4 w-4" />
 			Create Module
 		</Button>
 	</div>
@@ -71,7 +68,7 @@
 	{#if loading}
 		<div class="flex items-center justify-center py-12">
 			<div class="text-center">
-				<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+				<div class="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-primary"></div>
 				<p class="mt-4 text-muted-foreground">Loading modules...</p>
 			</div>
 		</div>
@@ -82,15 +79,15 @@
 			</Card.CardContent>
 		</Card.Root>
 	{:else if modules.length === 0}
-        <Card.Root>
-			<Card.CardContent class="pt-6 text-center py-12">
-				<Database class="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-				<h3 class="text-lg font-semibold mb-2">No modules yet</h3>
-				<p class="text-muted-foreground mb-4">
+		<Card.Root>
+			<Card.CardContent class="py-12 pt-6 text-center">
+				<Database class="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
+				<h3 class="mb-2 text-lg font-semibold">No modules yet</h3>
+				<p class="mb-4 text-muted-foreground">
 					Create your first custom module to start managing your data
 				</p>
 				<Button onclick={createModule}>
-					<Plus class="w-4 h-4 mr-2" />
+					<Plus class="mr-2 h-4 w-4" />
 					Create Your First Module
 				</Button>
 			</Card.CardContent>
@@ -98,13 +95,13 @@
 	{:else}
 		<div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
 			{#each modules as module (module.id)}
-				<Card.Root class="hover:shadow-lg transition-shadow">
+				<Card.Root class="transition-shadow hover:shadow-lg">
 					<Card.CardHeader>
 						<div class="flex items-start justify-between">
 							<div class="flex items-center gap-3">
 								{#if module.icon}
-									<div class="p-2 rounded-lg bg-primary/10">
-										<Database class="w-5 h-5 text-primary" />
+									<div class="rounded-lg bg-primary/10 p-2">
+										<Database class="h-5 w-5 text-primary" />
 									</div>
 								{/if}
 								<div>
@@ -121,13 +118,13 @@
 					</Card.CardHeader>
 					<Card.CardContent>
 						{#if module.description}
-							<p class="text-sm text-muted-foreground mb-4 line-clamp-2">
+							<p class="mb-4 line-clamp-2 text-sm text-muted-foreground">
 								{module.description}
 							</p>
 						{/if}
 
 						{#if module.blocks}
-							<div class="text-sm text-muted-foreground mb-4">
+							<div class="mb-4 text-sm text-muted-foreground">
 								<div class="flex items-center gap-4">
 									<span>{module.blocks.length} blocks</span>
 									<span>
@@ -139,8 +136,17 @@
 
 						<div class="flex items-center gap-2">
 							<Button variant="default" size="sm" onclick={() => viewModule(module.api_name)}>
-								<Database class="w-4 h-4 mr-2" />
+								<Database class="mr-2 h-4 w-4" />
 								View Records
+							</Button>
+
+							<Button
+								variant="outline"
+								size="icon"
+								onclick={() => goto(`/modules/edit/${module.id}`)}
+								title="Edit module"
+							>
+								<Edit class="h-4 w-4" />
 							</Button>
 
 							<Button
@@ -149,7 +155,7 @@
 								onclick={() => toggleModuleStatus(module.id)}
 								title={module.is_active ? 'Deactivate' : 'Activate'}
 							>
-								<Power class="w-4 h-4" />
+								<Power class="h-4 w-4" />
 							</Button>
 
 							<Button
@@ -158,7 +164,7 @@
 								onclick={() => deleteModule(module.id, module.name)}
 								title="Delete module"
 							>
-								<Trash2 class="w-4 h-4" />
+								<Trash2 class="h-4 w-4" />
 							</Button>
 						</div>
 					</Card.CardContent>
