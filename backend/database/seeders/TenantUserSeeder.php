@@ -26,16 +26,19 @@ class TenantUserSeeder extends Seeder
                 'name' => 'Bob TechCo',
                 'email' => 'bob@techco.com',
                 'password' => 'password123',
+                'role' => 'admin',
             ],
             [
                 'name' => 'Sarah Johnson',
                 'email' => 'sarah@techco.com',
                 'password' => 'password123',
+                'role' => 'manager',
             ],
             [
                 'name' => 'Mike Davis',
                 'email' => 'mike@techco.com',
                 'password' => 'password123',
+                'role' => 'sales_rep',
             ],
         ],
     ];
@@ -61,14 +64,26 @@ class TenantUserSeeder extends Seeder
         $users = self::USERS[$tenantId];
 
         foreach ($users as $userData) {
-            $user = User::create([
-                'name' => $userData['name'],
-                'email' => $userData['email'],
-                'password' => Hash::make($userData['password']),
-                'email_verified_at' => now(),
-            ]);
+            $user = User::updateOrCreate(
+                ['email' => $userData['email']],
+                [
+                    'name' => $userData['name'],
+                    'password' => Hash::make($userData['password']),
+                    'email_verified_at' => now(),
+                ]
+            );
 
-            $this->command->info("✓ Created user: {$user->name} ({$user->email})");
+            // Assign role if roles exist
+            if (isset($userData['role']) && class_exists(\Spatie\Permission\Models\Role::class)) {
+                try {
+                    $user->syncRoles([$userData['role']]);
+                    $this->command->info("✓ Created/updated user: {$user->name} ({$user->email}) with role: {$userData['role']}");
+                } catch (\Exception $e) {
+                    $this->command->info("✓ Created/updated user: {$user->name} ({$user->email})");
+                }
+            } else {
+                $this->command->info("✓ Created/updated user: {$user->name} ({$user->email})");
+            }
         }
 
         $this->command->newLine();

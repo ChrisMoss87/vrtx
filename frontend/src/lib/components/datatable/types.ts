@@ -368,6 +368,38 @@ export interface ColumnContext<TData = any> {
 }
 
 /**
+ * Create View Request (for saving new views)
+ */
+export interface CreateViewRequest {
+	name: string;
+	description?: string;
+	is_default?: boolean;
+	is_shared?: boolean;
+}
+
+/**
+ * Module View (returned from API)
+ */
+export interface ModuleView {
+	id: number;
+	module_id: number;
+	user_id: number | null;
+	name: string;
+	description: string | null;
+	filters: FilterConfig[];
+	sorting: SortConfig[];
+	column_visibility: Record<string, boolean>;
+	column_order: string[] | null;
+	column_widths: Record<string, number> | null;
+	page_size: number;
+	is_default: boolean;
+	is_shared: boolean;
+	display_order: number;
+	created_at: string;
+	updated_at: string;
+}
+
+/**
  * Table Context (for Svelte context API)
  */
 export interface TableContext<TData = any> {
@@ -388,9 +420,10 @@ export interface TableContext<TData = any> {
 	setColumnOrder: (order: ColumnOrder) => void;
 	resizeColumn: (columnId: string, width: number) => void;
 	pinColumn: (columnId: string, position: 'left' | 'right' | false) => void;
-	loadView: (view: TableViewConfig | any) => void;
-	saveView: (view: Partial<TableViewConfig>) => Promise<void>;
-	deleteView: (viewId: number) => Promise<void>;
+	loadView: (view: TableViewConfig | ModuleView | any) => void;
+	saveView: (view: CreateViewRequest) => Promise<ModuleView | null>;
+	deleteView: (viewId: number) => Promise<boolean>;
+	updateCurrentView: () => Promise<ModuleView | null>;
 	refresh: () => Promise<void>;
 }
 
@@ -408,4 +441,14 @@ export interface ExportOptions {
 	includeHeaders?: boolean;
 	selectedOnly?: boolean;
 	allPages?: boolean;
+}
+
+/**
+ * Filter Group Data (for nested filter conditions)
+ */
+export interface FilterGroupData {
+	id: string;
+	logic: 'AND' | 'OR';
+	conditions: FilterConfig[];
+	groups: FilterGroupData[];
 }

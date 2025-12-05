@@ -57,6 +57,7 @@
 			is_searchable: true,
 			is_filterable: true,
 			is_sortable: true,
+			is_mass_updatable: true,
 			validation_rules: [],
 			settings: options.settings ?? { additional_settings: {} },
 			conditional_visibility: null,

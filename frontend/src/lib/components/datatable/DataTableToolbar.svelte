@@ -4,7 +4,17 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { Search, X, Download, Trash2, Tag, FileSpreadsheet, FileText, Edit } from 'lucide-svelte';
+	import {
+		Search,
+		X,
+		Download,
+		Trash2,
+		Tag,
+		FileSpreadsheet,
+		FileText,
+		Edit,
+		FileType
+	} from 'lucide-svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from 'svelte-sonner';
 	import axios from 'axios';
@@ -139,6 +149,110 @@
 			toast.error('Failed to export data');
 		}
 	}
+
+	async function handlePdfExport() {
+		try {
+			// Dynamically import jsPDF and autotable (client-side only)
+			const { jsPDF } = await import('jspdf');
+			const { default: autoTable } = await import('jspdf-autotable');
+
+			// Get visible columns
+			const visibleCols = Object.entries(table.state.columnVisibility)
+				.filter(([_, visible]) => visible)
+				.map(([columnId]) => columnId)
+				.filter((id) => id !== 'actions');
+
+			// Get column definitions for headers
+			const columnDefs = table.columns.filter((col) => visibleCols.includes(col.id));
+			const headers = columnDefs.map((col) => col.header || col.id);
+
+			// Get data rows
+			const rows = table.state.data.map((row: Record<string, any>) => {
+				return columnDefs.map((col) => {
+					const value = col.accessorKey
+						? col.accessorKey.split('.').reduce((obj, key) => obj?.[key], row)
+						: row[col.id];
+
+					// Format value based on type
+					if (value === null || value === undefined) return '';
+					if (col.type === 'boolean') return value ? 'Yes' : 'No';
+					if (col.type === 'date' && value)
+						return new Date(value).toLocaleDateString();
+					if (col.type === 'datetime' && value)
+						return new Date(value).toLocaleString();
+					if (typeof value === 'object') return JSON.stringify(value);
+					return String(value);
+				});
+			});
+
+			// Create PDF
+			const doc = new jsPDF({
+				orientation: 'landscape',
+				unit: 'mm',
+				format: 'a4'
+			});
+
+			// Add title
+			const title = module
+				? module.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+				: 'Data Export';
+			doc.setFontSize(16);
+			doc.text(title, 14, 15);
+
+			// Add export date
+			doc.setFontSize(10);
+			doc.setTextColor(128);
+			doc.text(`Exported: ${new Date().toLocaleString()}`, 14, 22);
+			doc.setTextColor(0);
+
+			// Add table
+			autoTable(doc, {
+				head: [headers],
+				body: rows,
+				startY: 28,
+				theme: 'striped',
+				headStyles: {
+					fillColor: [51, 51, 51],
+					textColor: 255,
+					fontStyle: 'bold'
+				},
+				styles: {
+					fontSize: 8,
+					cellPadding: 2
+				},
+				columnStyles: columnDefs.reduce(
+					(acc, col, index) => {
+						// Adjust column widths based on type
+						if (col.type === 'boolean') {
+							acc[index] = { cellWidth: 15 };
+						} else if (col.type === 'date' || col.type === 'datetime') {
+							acc[index] = { cellWidth: 25 };
+						}
+						return acc;
+					},
+					{} as Record<number, { cellWidth: number }>
+				),
+				didDrawPage: (data) => {
+					// Add page number
+					doc.setFontSize(8);
+					doc.text(
+						`Page ${data.pageNumber}`,
+						doc.internal.pageSize.getWidth() - 20,
+						doc.internal.pageSize.getHeight() - 10
+					);
+				}
+			});
+
+			// Save PDF
+			const filename = `${module || 'export'}_${new Date().toISOString().split('T')[0]}.pdf`;
+			doc.save(filename);
+
+			toast.success('PDF exported successfully');
+		} catch (error: any) {
+			console.error('PDF export error:', error);
+			toast.error('Failed to export PDF');
+		}
+	}
 </script>
 
 <div class="flex flex-col gap-3">
@@ -210,6 +324,11 @@
 							<FileText class="mr-2 h-4 w-4" />
 							Export as CSV
 						</DropdownMenu.Item>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item onclick={handlePdfExport}>
+							<FileType class="mr-2 h-4 w-4" />
+							Export as PDF
+						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 			{/if}
@@ -252,6 +371,11 @@
 					<DropdownMenu.Item onclick={() => handleExport('csv')}>
 						<FileText class="mr-2 h-4 w-4" />
 						Export as CSV
+					</DropdownMenu.Item>
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item onclick={handlePdfExport}>
+						<FileType class="mr-2 h-4 w-4" />
+						Export as PDF
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>

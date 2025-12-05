@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { flip } from 'svelte/animate';
+	import { quintOut } from 'svelte/easing';
 	import type { StageInput } from '$lib/api/pipelines';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -24,12 +26,25 @@
 
 	function handleDragStart(e: DragEvent, index: number) {
 		draggedIndex = index;
-		e.dataTransfer?.setData('text/plain', String(index));
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', String(index));
+		}
+		// Add dragging class after a tick
+		requestAnimationFrame(() => {
+			const target = e.target as HTMLElement;
+			target.classList.add('is-dragging');
+		});
 	}
 
 	function handleDragOver(e: DragEvent, index: number) {
 		e.preventDefault();
-		dragOverIndex = index;
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'move';
+		}
+		if (dragOverIndex !== index) {
+			dragOverIndex = index;
+		}
 	}
 
 	function handleDragLeave() {
@@ -41,23 +56,35 @@
 		if (draggedIndex !== null && draggedIndex !== toIndex) {
 			onReorder(draggedIndex, toIndex);
 		}
+		resetDragState();
+	}
+
+	function handleDragEnd(e: DragEvent) {
+		const target = e.target as HTMLElement;
+		target.classList.remove('is-dragging');
+		resetDragState();
+	}
+
+	function resetDragState() {
 		draggedIndex = null;
 		dragOverIndex = null;
 	}
 
-	function handleDragEnd() {
-		draggedIndex = null;
-		dragOverIndex = null;
+	// Generate unique key for stage
+	function getStageKey(stage: StageInput, index: number): string {
+		return stage.id ? String(stage.id) : `stage-${index}-${stage.name}`;
 	}
 </script>
 
 <div class={cn('space-y-2', className)}>
-	{#each stages as stage, index (stage.id ?? index)}
+	{#each stages as stage, index (getStageKey(stage, index))}
+		{@const isDragging = draggedIndex === index}
+		{@const isDragOver = dragOverIndex === index && draggedIndex !== index}
 		<div
 			class={cn(
-				'flex items-center gap-3 rounded-lg border bg-card p-3 transition-all',
-				draggedIndex === index && 'opacity-50',
-				dragOverIndex === index && draggedIndex !== index && 'border-2 border-primary'
+				'stage-item flex items-center gap-3 rounded-lg border bg-card p-3 transition-all duration-200',
+				isDragging && 'scale-[0.98] opacity-50 shadow-lg',
+				isDragOver && 'border-2 border-primary ring-2 ring-primary/20'
 			)}
 			draggable="true"
 			ondragstart={(e) => handleDragStart(e, index)}
@@ -66,6 +93,7 @@
 			ondrop={(e) => handleDrop(e, index)}
 			ondragend={handleDragEnd}
 			role="listitem"
+			animate:flip={{ duration: 250, easing: quintOut }}
 		>
 			<!-- Drag Handle -->
 			<div class="cursor-grab text-muted-foreground active:cursor-grabbing">

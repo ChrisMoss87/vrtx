@@ -53,6 +53,9 @@ class TenantDemoSeeder extends Seeder
         $this->seedProductsRecords($user);
         $this->seedDealsRecords($user);
 
+        // Seed pipelines
+        $this->call(PipelineSeeder::class);
+
         // Seed wizard drafts
         $this->seedWizardDrafts($user);
 

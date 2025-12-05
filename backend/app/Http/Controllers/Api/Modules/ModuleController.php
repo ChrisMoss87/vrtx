@@ -549,6 +549,44 @@ class ModuleController extends Controller
     }
 
     /**
+     * Reorder modules.
+     */
+    public function reorder(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'modules' => 'required|array',
+                'modules.*.id' => 'required|integer|exists:modules,id',
+                'modules.*.display_order' => 'required|integer|min:0',
+            ]);
+
+            \DB::transaction(function () use ($validated) {
+                foreach ($validated['modules'] as $moduleData) {
+                    Module::where('id', $moduleData['id'])
+                        ->update(['display_order' => $moduleData['display_order']]);
+                }
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Modules reordered successfully',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reorder modules',
+                'error' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
      * Toggle module active status.
      */
     public function toggleStatus(int $id): JsonResponse

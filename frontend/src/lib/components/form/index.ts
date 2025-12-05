@@ -14,3 +14,4 @@ export { default as SwitchField } from './SwitchField.svelte';
 export { default as MultiselectField } from './MultiselectField.svelte';
 export { default as FileField } from './FileField.svelte';
 export { default as ImageField } from './ImageField.svelte';
+export { default as FormulaField } from './FormulaField.svelte';

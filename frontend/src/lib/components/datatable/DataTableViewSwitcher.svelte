@@ -171,7 +171,7 @@
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger asChild>
+	<DropdownMenu.Trigger>
 		{#snippet child({ props })}
 			<Button {...props} variant="outline" class="w-[200px] justify-between">
 				<span class="truncate">
@@ -188,7 +188,7 @@
 	<DropdownMenu.Content class="w-[250px]" align="start">
 		<DropdownMenu.Group>
 			<DropdownMenu.Label>Views</DropdownMenu.Label>
-			<DropdownMenu.Item on:click={() => selectView(null)}>
+			<DropdownMenu.Item onclick={() => selectView(null)}>
 				<div class="flex w-full items-center justify-between">
 					<span>All Records</span>
 					{#if !currentView}
@@ -202,7 +202,7 @@
 			<DropdownMenu.Separator />
 			<DropdownMenu.Group>
 				{#each views as view (view.id)}
-					<DropdownMenu.Item on:click={() => selectView(view)}>
+					<DropdownMenu.Item onclick={() => selectView(view)}>
 						<div class="flex w-full items-center justify-between">
 							<div class="flex min-w-0 items-center gap-2">
 								{#if view.is_default}
@@ -225,28 +225,28 @@
 		<DropdownMenu.Separator />
 		<DropdownMenu.Group>
 			{#if currentView}
-				<DropdownMenu.Item on:click={onSaveView}>
+				<DropdownMenu.Item onclick={onSaveView}>
 					<Save class="mr-2 h-4 w-4" />
 					<span>Update Current View</span>
 				</DropdownMenu.Item>
-				<DropdownMenu.Item on:click={() => currentView && duplicateView(currentView)}>
+				<DropdownMenu.Item onclick={() => currentView && duplicateView(currentView)}>
 					<Plus class="mr-2 h-4 w-4" />
 					<span>Duplicate View</span>
 				</DropdownMenu.Item>
 				<DropdownMenu.Separator />
-				<DropdownMenu.Item on:click={() => currentView && setAsDefaultView(currentView)}>
+				<DropdownMenu.Item onclick={() => currentView && setAsDefaultView(currentView)}>
 					<Star class="mr-2 h-4 w-4" />
 					<span>Set as Default</span>
 				</DropdownMenu.Item>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Item
 					class="text-destructive"
-					on:click={() => currentView && deleteView(currentView)}
+					onclick={() => currentView && deleteView(currentView)}
 				>
 					Delete View
 				</DropdownMenu.Item>
 			{:else}
-				<DropdownMenu.Item on:click={onCreateView}>
+				<DropdownMenu.Item onclick={onCreateView}>
 					<Plus class="mr-2 h-4 w-4" />
 					<span>Save as New View</span>
 				</DropdownMenu.Item>

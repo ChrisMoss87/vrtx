@@ -320,6 +320,60 @@
 										<Select.Item value="false">No</Select.Item>
 									</Select.Content>
 								</Select.Root>
+							{:else if column.type === 'date' || column.type === 'datetime' || column.type === 'time'}
+								<Select.Root
+									type="single"
+									value={filterValues[column.id + '_preset'] || ''}
+									onValueChange={(val) => {
+										if (val) {
+											filterValues[column.id + '_preset'] = val;
+											filterValues[column.id] = val;
+											// Apply date preset filter
+											table.updateFilter({
+												field: column.id,
+												operator: val as any,
+												value: ''
+											});
+										} else {
+											delete filterValues[column.id + '_preset'];
+											clearFilter(column.id);
+										}
+									}}
+								>
+									<Select.Trigger class={cn('h-8 text-sm', hasFilter && 'border-primary')}>
+										<span>
+											{#if filterValues[column.id + '_preset']}
+												{@const presetLabels: Record<string, string> = {
+													today: 'Today',
+													yesterday: 'Yesterday',
+													last_7_days: 'Last 7 days',
+													last_30_days: 'Last 30 days',
+													this_month: 'This month',
+													last_month: 'Last month',
+													is_empty: 'Is empty',
+													is_not_empty: 'Has value'
+												}}
+												{presetLabels[filterValues[column.id + '_preset'] as string] || 'Any'}
+											{:else}
+												Any
+											{/if}
+										</span>
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="">
+											<span class="text-muted-foreground">Any</span>
+										</Select.Item>
+										<Select.Item value="today">Today</Select.Item>
+										<Select.Item value="yesterday">Yesterday</Select.Item>
+										<Select.Item value="last_7_days">Last 7 days</Select.Item>
+										<Select.Item value="last_30_days">Last 30 days</Select.Item>
+										<Select.Item value="this_month">This month</Select.Item>
+										<Select.Item value="last_month">Last month</Select.Item>
+										<Select.Separator />
+										<Select.Item value="is_empty">Is empty</Select.Item>
+										<Select.Item value="is_not_empty">Has value</Select.Item>
+									</Select.Content>
+								</Select.Root>
 							{:else}
 								<Input
 									id="filter-{column.id}"
@@ -338,7 +392,7 @@
 
 					{#if filterableColumns.length > 6}
 						<p class="pt-2 text-center text-xs text-muted-foreground">
-							{filterableColumns.length - 6} more columns available in advanced filters
+							{filterableColumns.length - 6} more columns available in column header filters
 						</p>
 					{/if}
 				</div>

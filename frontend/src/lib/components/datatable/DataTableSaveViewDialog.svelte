@@ -5,6 +5,8 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { createView, type CreateViewRequest, type ModuleView } from '$lib/api/views';
+	import { toast } from 'svelte-sonner';
 
 	interface Props {
 		open?: boolean;
@@ -18,7 +20,7 @@
 			pageSize?: number;
 		};
 		onOpenChange?: (open: boolean) => void;
-		onSaved?: () => void;
+		onSaved?: (view: ModuleView) => void;
 	}
 
 	let { open = $bindable(false), module, currentState, onOpenChange, onSaved }: Props = $props();
@@ -26,49 +28,53 @@
 	let name = $state('');
 	let description = $state('');
 	let isDefault = $state(false);
-	let isPublic = $state(false);
+	let isShared = $state(false);
 	let saving = $state(false);
+	let error = $state('');
 
-	async function saveView() {
+	async function handleSaveView() {
 		if (!name.trim()) {
+			error = 'Please enter a view name';
 			return;
 		}
 
 		saving = true;
+		error = '';
+
 		try {
-			const response = await fetch('/api/table-views', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'X-CSRF-TOKEN':
-						document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-				},
-				body: JSON.stringify({
-					name: name.trim(),
-					module,
-					description: description.trim() || null,
-					filters: currentState.filters || null,
-					sorting: currentState.sorting || null,
-					column_visibility: currentState.columnVisibility || null,
-					column_order: currentState.columnOrder || null,
-					column_widths: currentState.columnWidths || null,
-					page_size: currentState.pageSize || 50,
-					is_default: isDefault,
-					is_public: isPublic
-				})
+			const viewData: CreateViewRequest = {
+				name: name.trim(),
+				description: description.trim() || undefined,
+				filters: currentState.filters || [],
+				sorting: currentState.sorting || [],
+				column_visibility: currentState.columnVisibility || {},
+				column_order: currentState.columnOrder || [],
+				column_widths: currentState.columnWidths || {},
+				page_size: currentState.pageSize || 50,
+				is_default: isDefault,
+				is_shared: isShared
+			};
+
+			const view = await createView(module, viewData);
+
+			// Reset form
+			name = '';
+			description = '';
+			isDefault = false;
+			isShared = false;
+			open = false;
+
+			toast.success('View saved', {
+				description: `"${view.name}" has been saved successfully.`
 			});
 
-			if (response.ok) {
-				// Reset form
-				name = '';
-				description = '';
-				isDefault = false;
-				isPublic = false;
-				open = false;
-				onSaved?.();
-			}
-		} catch (error) {
-			console.error('Failed to save view:', error);
+			onSaved?.(view);
+		} catch (err: any) {
+			console.error('Failed to save view:', err);
+			error = err.response?.data?.message || err.message || 'Failed to save view';
+			toast.error('Failed to save view', {
+				description: error
+			});
 		} finally {
 			saving = false;
 		}
@@ -83,7 +89,8 @@
 			name = '';
 			description = '';
 			isDefault = false;
-			isPublic = false;
+			isShared = false;
+			error = '';
 		}
 	}
 </script>
@@ -97,6 +104,9 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="grid gap-4 py-4">
+			{#if error}
+				<div class="text-sm text-destructive">{error}</div>
+			{/if}
 			<div class="grid gap-2">
 				<Label for="name">View Name</Label>
 				<Input id="name" bind:value={name} placeholder="My Custom View" autocomplete="off" />
@@ -120,18 +130,18 @@
 				</Label>
 			</div>
 			<div class="flex items-center space-x-2">
-				<Checkbox id="is_public" bind:checked={isPublic} />
+				<Checkbox id="is_shared" bind:checked={isShared} />
 				<Label
-					for="is_public"
+					for="is_shared"
 					class="text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
 				>
-					Make this view public (visible to all users)
+					Share this view with other users
 				</Label>
 			</div>
 		</div>
 		<Dialog.Footer>
-			<Button variant="outline" on:click={() => handleOpenChange(false)}>Cancel</Button>
-			<Button on:click={saveView} disabled={!name.trim() || saving}>
+			<Button variant="outline" onclick={() => handleOpenChange(false)}>Cancel</Button>
+			<Button onclick={handleSaveView} disabled={!name.trim() || saving}>
 				{saving ? 'Saving...' : 'Save View'}
 			</Button>
 		</Dialog.Footer>

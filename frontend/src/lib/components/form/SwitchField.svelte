@@ -35,7 +35,7 @@
 	}
 </script>
 
-<FieldBase {name} {description} {error} {required} {disabled} {width} class={className}>
+<FieldBase {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
 		<div class="flex items-center space-x-2">
 			<Switch

@@ -60,6 +60,20 @@ return [
             'report' => false,
         ],
 
+        'imports' => [
+            'driver' => 'local',
+            'root' => storage_path('app/imports'),
+            'throw' => false,
+            'report' => false,
+        ],
+
+        'exports' => [
+            'driver' => 'local',
+            'root' => storage_path('app/exports'),
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

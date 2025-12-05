@@ -282,6 +282,39 @@
 			</Card.Content>
 		</Card.Root>
 
+		<!-- Mass Actions -->
+		<Card.Root class="shadow-sm">
+			<Card.Header class="pb-3">
+				<Card.Title class="flex items-center gap-2 text-base">
+					<div class="h-4 w-1 rounded-full bg-amber-500"></div>
+					Mass Actions
+				</Card.Title>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				<div class="flex items-center space-x-2">
+					<Checkbox
+						id="field-mass-updatable"
+						checked={field.is_mass_updatable ?? true}
+						onCheckedChange={(checked) => updateField({ is_mass_updatable: !!checked })}
+						disabled={field.type === 'formula'}
+						data-testid="field-mass-updatable-checkbox"
+					/>
+					<Label for="field-mass-updatable" class="cursor-pointer font-normal">
+						Allow Mass Update
+					</Label>
+				</div>
+				{#if field.type === 'formula'}
+					<p class="text-xs text-muted-foreground">
+						Formula fields cannot be mass updated as they are calculated automatically.
+					</p>
+				{:else}
+					<p class="text-xs text-muted-foreground">
+						When enabled, this field can be updated for multiple records at once.
+					</p>
+				{/if}
+			</Card.Content>
+		</Card.Root>
+
 		<!-- Field-specific settings -->
 		{#if metadata?.isNumeric}
 			<Card.Root class="shadow-sm">

@@ -33,6 +33,7 @@ export interface FieldOption {
 	id?: number;
 	label: string;
 	value: string;
+	color?: string | null;
 	display_order: number;
 	is_active: boolean;
 	metadata?: Record<string, any>;

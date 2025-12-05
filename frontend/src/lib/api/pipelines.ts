@@ -266,3 +266,23 @@ export async function reorderStages(pipelineId: number, stageIds: number[]): Pro
 	);
 	return response.pipeline;
 }
+
+/**
+ * Sync field options with pipeline stages
+ */
+export async function syncFieldOptions(pipelineId: number): Promise<Pipeline> {
+	const response = await apiClient.post<PipelineResponse>(
+		`/pipelines/${pipelineId}/sync-field-options`
+	);
+	return response.pipeline;
+}
+
+/**
+ * Sync all pipelines' field options
+ */
+export async function syncAllFieldOptions(): Promise<{ message: string }> {
+	const response = await apiClient.post<{ success: boolean; message: string }>(
+		'/pipelines/sync-all-field-options'
+	);
+	return { message: response.message };
+}

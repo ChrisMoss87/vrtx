@@ -2,8 +2,10 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
+	import * as Popover from '$lib/components/ui/popover';
 	import { Calendar } from '$lib/components/ui/calendar';
-	import { X } from 'lucide-svelte';
+	import { X, CalendarIcon } from 'lucide-svelte';
+	import { cn } from '$lib/utils';
 	import {
 		DateFormatter,
 		type DateValue,
@@ -13,15 +15,17 @@
 	} from '@internationalized/date';
 
 	interface Props {
+		field?: string;
 		value?: {
 			operator: string;
 			value: string | string[];
 		};
+		initialValue?: any;
 		onApply: (filter: { operator: string; value: string | string[] } | null) => void;
 		onClose?: () => void;
 	}
 
-	let { value, onApply, onClose }: Props = $props();
+	let { field, value, initialValue, onApply, onClose }: Props = $props();
 
 	const df = new DateFormatter('en-US', { dateStyle: 'medium' });
 
@@ -42,7 +46,7 @@
 
 	let selectedOperator = $state(value?.operator || 'equals');
 	let date1 = $state<DateValue | undefined>(
-		typeof value?.value === 'string'
+		typeof value?.value === 'string' && value.value
 			? parseDate(value.value)
 			: Array.isArray(value?.value) && value.value[0]
 				? parseDate(value.value[0])
@@ -51,6 +55,9 @@
 	let date2 = $state<DateValue | undefined>(
 		Array.isArray(value?.value) && value.value[1] ? parseDate(value.value[1]) : undefined
 	);
+
+	let date1Open = $state(false);
+	let date2Open = $state(false);
 
 	function handleApply() {
 		if (
@@ -95,9 +102,14 @@
 		].includes(selectedOperator)
 	);
 	const isBetween = $derived(selectedOperator === 'between');
+
+	function formatDate(date: DateValue | undefined): string {
+		if (!date) return '';
+		return df.format(date.toDate(getLocalTimeZone()));
+	}
 </script>
 
-<div class="w-auto space-y-4 p-4">
+<div class="w-[280px] space-y-4 p-4">
 	<div class="space-y-2">
 		<Label>Operator</Label>
 		<Select.Root
@@ -107,7 +119,7 @@
 				if (value) selectedOperator = value;
 			}}
 		>
-			<Select.Trigger class="w-[200px]">
+			<Select.Trigger class="w-full">
 				<span
 					>{operators.find((o) => o.value === selectedOperator)?.label || 'Select operator'}</span
 				>
@@ -125,13 +137,65 @@
 	{#if needsDatePicker}
 		<div class="space-y-2">
 			<Label>{isBetween ? 'From' : 'Date'}</Label>
-			<Calendar type="single" bind:value={date1} />
+			<Popover.Root bind:open={date1Open}>
+				<Popover.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="outline"
+							class={cn(
+								'w-full justify-start text-left font-normal',
+								!date1 && 'text-muted-foreground'
+							)}
+						>
+							<CalendarIcon class="mr-2 h-4 w-4" />
+							{date1 ? formatDate(date1) : 'Pick a date'}
+						</Button>
+					{/snippet}
+				</Popover.Trigger>
+				<Popover.Content class="w-auto p-0" align="start">
+					<Calendar
+						type="single"
+						value={date1}
+						onValueChange={(d) => {
+							date1 = d;
+							date1Open = false;
+						}}
+					/>
+				</Popover.Content>
+			</Popover.Root>
 		</div>
 
 		{#if isBetween}
 			<div class="space-y-2">
 				<Label>To</Label>
-				<Calendar type="single" bind:value={date2} />
+				<Popover.Root bind:open={date2Open}>
+					<Popover.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								variant="outline"
+								class={cn(
+									'w-full justify-start text-left font-normal',
+									!date2 && 'text-muted-foreground'
+								)}
+							>
+								<CalendarIcon class="mr-2 h-4 w-4" />
+								{date2 ? formatDate(date2) : 'Pick a date'}
+							</Button>
+						{/snippet}
+					</Popover.Trigger>
+					<Popover.Content class="w-auto p-0" align="start">
+						<Calendar
+							type="single"
+							value={date2}
+							onValueChange={(d) => {
+								date2 = d;
+								date2Open = false;
+							}}
+						/>
+					</Popover.Content>
+				</Popover.Root>
 			</div>
 		{/if}
 	{/if}

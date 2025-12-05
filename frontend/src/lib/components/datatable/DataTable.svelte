@@ -22,10 +22,20 @@
 	} from './types';
 	import DataTableHeader from './DataTableHeader.svelte';
 	import DataTableBody from './DataTableBody.svelte';
+	import DataTableVirtualBody from './DataTableVirtualBody.svelte';
+	import DataTableGroupedBody from './DataTableGroupedBody.svelte';
 	import DataTablePagination from './DataTablePagination.svelte';
 	import DataTableToolbar from './DataTableToolbar.svelte';
 	import * as Table from '$lib/components/ui/table';
-	import { getDefaultView } from '$lib/api/views';
+	import {
+		getDefaultView,
+		createView,
+		updateView,
+		deleteView,
+		type ModuleView,
+		type CreateViewRequest
+	} from '$lib/api/views';
+	import { toast } from 'svelte-sonner';
 
 	interface Props {
 		moduleApiName: string;
@@ -44,6 +54,10 @@
 		enableColumnReorder?: boolean;
 		enableColumnResize?: boolean;
 		enableInlineEdit?: boolean;
+		enableVirtualScroll?: boolean;
+		virtualRowHeight?: number;
+		enableGrouping?: boolean;
+		groupByField?: string;
 		class?: string;
 		onRowClick?: (row: any) => void;
 		onSelectionChange?: (rows: any[]) => void;
@@ -69,6 +83,10 @@
 		enableColumnReorder = false,
 		enableColumnResize = false,
 		enableInlineEdit = true,
+		enableVirtualScroll = false,
+		virtualRowHeight = 48,
+		enableGrouping = false,
+		groupByField,
 		class: className = '',
 		onRowClick,
 		onSelectionChange,
@@ -80,10 +98,34 @@
 	// Generate columns from module if not provided
 	const initialColumns: ColumnDef[] =
 		providedColumns || (module ? generateColumnsFromModule(module) : []);
-	let columns = $state<ColumnDef[]>(initialColumns);
+	let columns: ColumnDef[] = $state(initialColumns);
 
-	// Initialize table state using initial columns to avoid circular reference
-	let state = $state<TableState>({
+	// Build initial state values from columns
+	const initialColumnVisibility = initialColumns.reduce(
+		(acc: Record<string, boolean>, col: ColumnDef) => {
+			acc[col.id] = col.visible !== false;
+			return acc;
+		},
+		{} as Record<string, boolean>
+	);
+	const initialColumnOrder = initialColumns.map((c: ColumnDef) => c.id);
+	const initialColumnWidths = initialColumns.reduce(
+		(acc: Record<string, number>, col: ColumnDef) => {
+			if (col.width) acc[col.id] = col.width;
+			return acc;
+		},
+		{} as Record<string, number>
+	);
+	const initialColumnPinning = initialColumns.reduce(
+		(acc: Record<string, 'left' | 'right' | false>, col: ColumnDef) => {
+			if (col.pinned) acc[col.id] = col.pinned;
+			return acc;
+		},
+		{} as Record<string, 'left' | 'right' | false>
+	);
+
+	// Initialize table state
+	let state: TableState = $state({
 		data: initialData || [],
 		loading: false,
 		error: null,
@@ -98,28 +140,10 @@
 		sorting: [],
 		filters: [],
 		globalFilter: '',
-		columnVisibility: initialColumns.reduce(
-			(acc: Record<string, boolean>, col: ColumnDef) => {
-				acc[col.id] = col.visible !== false;
-				return acc;
-			},
-			{} as Record<string, boolean>
-		),
-		columnOrder: initialColumns.map((c: ColumnDef) => c.id),
-		columnWidths: initialColumns.reduce(
-			(acc: Record<string, number>, col: ColumnDef) => {
-				if (col.width) acc[col.id] = col.width;
-				return acc;
-			},
-			{} as Record<string, number>
-		),
-		columnPinning: initialColumns.reduce(
-			(acc: Record<string, 'left' | 'right' | false>, col: ColumnDef) => {
-				if (col.pinned) acc[col.id] = col.pinned;
-				return acc;
-			},
-			{} as Record<string, 'left' | 'right' | false>
-		),
+		columnVisibility: initialColumnVisibility,
+		columnOrder: initialColumnOrder,
+		columnWidths: initialColumnWidths,
+		columnPinning: initialColumnPinning,
 		rowSelection: {},
 		currentView: null
 	});
@@ -291,11 +315,85 @@
 			// Fetch data with new view settings
 			await fetchData();
 		},
-		async saveView(view: any) {
-			// TODO: Implement view saving
+		async saveView(viewData: CreateViewRequest): Promise<ModuleView | null> {
+			try {
+				const view = await createView(moduleApiName, {
+					...viewData,
+					filters: state.filters,
+					sorting: state.sorting,
+					column_visibility: state.columnVisibility,
+					column_order: state.columnOrder,
+					column_widths: state.columnWidths,
+					page_size: state.pagination.perPage
+				});
+
+				state.currentView = view;
+				toast.success('View saved', {
+					description: `"${view.name}" has been saved successfully.`
+				});
+
+				return view;
+			} catch (error: any) {
+				console.error('Failed to save view:', error);
+				toast.error('Failed to save view', {
+					description: error.response?.data?.message || error.message || 'An error occurred'
+				});
+				return null;
+			}
 		},
-		async deleteView(viewId: number) {
-			// TODO: Implement view deletion
+		async deleteView(viewId: number): Promise<boolean> {
+			try {
+				await deleteView(moduleApiName, viewId);
+
+				// Clear current view if it was the deleted one
+				if (state.currentView?.id === viewId) {
+					state.currentView = null;
+				}
+
+				toast.success('View deleted', {
+					description: 'The view has been deleted successfully.'
+				});
+
+				return true;
+			} catch (error: any) {
+				console.error('Failed to delete view:', error);
+				toast.error('Failed to delete view', {
+					description: error.response?.data?.message || error.message || 'An error occurred'
+				});
+				return false;
+			}
+		},
+		async updateCurrentView(): Promise<ModuleView | null> {
+			if (!state.currentView) {
+				toast.error('No view selected', {
+					description: 'Please select a view to update.'
+				});
+				return null;
+			}
+
+			try {
+				const view = await updateView(moduleApiName, state.currentView.id, {
+					filters: state.filters,
+					sorting: state.sorting,
+					column_visibility: state.columnVisibility,
+					column_order: state.columnOrder,
+					column_widths: state.columnWidths,
+					page_size: state.pagination.perPage
+				});
+
+				state.currentView = view;
+				toast.success('View updated', {
+					description: `"${view.name}" has been updated successfully.`
+				});
+
+				return view;
+			} catch (error: any) {
+				console.error('Failed to update view:', error);
+				toast.error('Failed to update view', {
+					description: error.response?.data?.message || error.message || 'An error occurred'
+				});
+				return null;
+			}
 		},
 		async refresh() {
 			await fetchData();
@@ -338,15 +436,68 @@
 				search: request.search
 			});
 
+			// Build params object - axios will serialize arrays properly
+			const params: Record<string, any> = {
+				page: request.page,
+				per_page: request.per_page
+			};
+
+			// Add sort as array (Laravel expects array)
+			if (request.sort && request.sort.length > 0) {
+				params.sort = request.sort;
+			}
+
+			// Add filters as object (Laravel expects array/object)
+			if (transformedFilters && Object.keys(transformedFilters).length > 0) {
+				params.filters = transformedFilters;
+			}
+
+			// Add search
+			if (request.search) {
+				params.search = request.search;
+			}
+
 			const response = await axios.get(`/api/v1/records/${moduleApiName}`, {
-				params: {
-					page: request.page,
-					per_page: request.per_page,
-					sort: request.sort ? JSON.stringify(request.sort) : undefined,
-					filters: transformedFilters ? JSON.stringify(transformedFilters) : undefined,
-					search: request.search
-				},
-				headers
+				params,
+				headers,
+				paramsSerializer: {
+					serialize: (params) => {
+						// Custom serializer to handle nested objects/arrays for Laravel
+						const searchParams = new URLSearchParams();
+
+						for (const [key, value] of Object.entries(params)) {
+							if (value === undefined || value === null) continue;
+
+							if (Array.isArray(value)) {
+								// Handle arrays like sort[0][field]=name&sort[0][direction]=asc
+								value.forEach((item, index) => {
+									if (typeof item === 'object') {
+										for (const [itemKey, itemValue] of Object.entries(item)) {
+											searchParams.append(`${key}[${index}][${itemKey}]`, String(itemValue));
+										}
+									} else {
+										searchParams.append(`${key}[${index}]`, String(item));
+									}
+								});
+							} else if (typeof value === 'object') {
+								// Handle objects like filters[name][operator]=contains&filters[name][value]=test
+								for (const [objKey, objValue] of Object.entries(value)) {
+									if (typeof objValue === 'object' && objValue !== null) {
+										for (const [nestedKey, nestedValue] of Object.entries(objValue)) {
+											searchParams.append(`${key}[${objKey}][${nestedKey}]`, String(nestedValue));
+										}
+									} else {
+										searchParams.append(`${key}[${objKey}]`, String(objValue));
+									}
+								}
+							} else {
+								searchParams.append(key, String(value));
+							}
+						}
+
+						return searchParams.toString();
+					}
+				}
 			});
 
 			console.log('API Response:', response.data);
@@ -459,21 +610,85 @@
 	<!-- Table with horizontal scroll on mobile -->
 	<div class="overflow-hidden rounded-md border">
 		<div class="overflow-x-auto" role="region" aria-label="Data table" tabindex="0">
-			<Table.Root>
-				<DataTableHeader columns={visibleColumns} {enableSelection} {enableSorting} />
-				<DataTableBody
+			{#if enableGrouping && groupByField}
+				<!-- Grouped mode -->
+				<Table.Root class={enableColumnResize ? 'table-fixed' : ''}>
+					<DataTableHeader
+						columns={visibleColumns}
+						{enableSelection}
+						{enableSorting}
+						enableColumnFilters={enableFilters}
+						{enableColumnResize}
+						{enableColumnReorder}
+						hasGrouping={true}
+					/>
+					<DataTableGroupedBody
+						columns={visibleColumns}
+						data={state.data}
+						{groupByField}
+						loading={state.loading}
+						error={state.error}
+						{enableSelection}
+						{enableInlineEdit}
+						{enableColumnResize}
+						{moduleApiName}
+						onRowClick={handleRowClick}
+						onCellUpdate={handleCellUpdate}
+						{onCreateNew}
+					/>
+				</Table.Root>
+			{:else if enableVirtualScroll}
+				<!-- Virtual scrolling mode for large datasets -->
+				<Table.Root class={enableColumnResize ? 'table-fixed' : ''}>
+					<DataTableHeader
+						columns={visibleColumns}
+						{enableSelection}
+						{enableSorting}
+						enableColumnFilters={enableFilters}
+						{enableColumnResize}
+						{enableColumnReorder}
+					/>
+				</Table.Root>
+				<DataTableVirtualBody
 					columns={visibleColumns}
 					data={state.data}
 					loading={state.loading}
 					error={state.error}
 					{enableSelection}
 					{enableInlineEdit}
+					{enableColumnResize}
 					{moduleApiName}
+					rowHeight={virtualRowHeight}
 					onRowClick={handleRowClick}
 					onCellUpdate={handleCellUpdate}
 					{onCreateNew}
 				/>
-			</Table.Root>
+			{:else}
+				<!-- Standard mode -->
+				<Table.Root class={enableColumnResize ? 'table-fixed' : ''}>
+					<DataTableHeader
+						columns={visibleColumns}
+						{enableSelection}
+						{enableSorting}
+						enableColumnFilters={enableFilters}
+						{enableColumnResize}
+						{enableColumnReorder}
+					/>
+					<DataTableBody
+						columns={visibleColumns}
+						data={state.data}
+						loading={state.loading}
+						error={state.error}
+						{enableSelection}
+						{enableInlineEdit}
+						{enableColumnResize}
+						{moduleApiName}
+						onRowClick={handleRowClick}
+						onCellUpdate={handleCellUpdate}
+						{onCreateNew}
+					/>
+				</Table.Root>
+			{/if}
 		</div>
 	</div>
 

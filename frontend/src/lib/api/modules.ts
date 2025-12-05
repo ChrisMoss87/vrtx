@@ -38,6 +38,7 @@ export interface ModuleSettings {
 export interface Block {
 	id: number;
 	name: string;
+	description: string | null;
 	type: 'section' | 'tab' | 'accordion' | 'card';
 	display_order: number;
 	settings: Record<string, unknown>;
@@ -57,6 +58,7 @@ export interface Field {
 	is_searchable: boolean;
 	is_filterable: boolean;
 	is_sortable: boolean;
+	is_mass_updatable: boolean;
 	validation_rules: string[];
 	settings: FieldSettings;
 	conditional_visibility: ConditionalVisibility | null;
@@ -100,9 +102,9 @@ export interface FieldSettings {
 	cascade_delete?: boolean;
 	relationship_type?: 'one_to_one' | 'many_to_one' | 'many_to_many';
 	formula?: string;
-	formula_definition?: FormulaDefinition | null;
-	conditional_visibility?: ConditionalVisibility | null;
-	lookup_configuration?: LookupConfiguration | null;
+	formula_definition?: FormulaDefinition;
+	conditional_visibility?: ConditionalVisibility;
+	lookup_configuration?: LookupConfiguration;
 	field_dependency?: FieldDependency;
 	allowed_file_types?: string[];
 	max_file_size?: number;
@@ -206,6 +208,7 @@ export interface CreateFieldRequest {
 	is_searchable?: boolean;
 	is_filterable?: boolean;
 	is_sortable?: boolean;
+	is_mass_updatable?: boolean;
 	default_value?: string;
 	display_order?: number;
 	width?: number;
@@ -264,6 +267,7 @@ export interface UpdateFieldRequest {
 	is_searchable?: boolean;
 	is_filterable?: boolean;
 	is_sortable?: boolean;
+	is_mass_updatable?: boolean;
 	default_value?: string;
 	display_order?: number;
 	width?: number;
@@ -336,6 +340,10 @@ export class ModulesApi {
 	async toggleStatus(id: number): Promise<Module> {
 		const response = await this.client.post<CreateModuleResponse>(`/modules/${id}/toggle-status`);
 		return response.module;
+	}
+
+	async reorder(modules: { id: number; display_order: number }[]): Promise<void> {
+		await this.client.post('/modules/reorder', { modules });
 	}
 }
 

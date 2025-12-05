@@ -73,7 +73,7 @@
 				</Button>
 			</Popover.Trigger>
 			<Popover.Content class="w-auto p-0" align="start">
-				<Calendar.Calendar value={dateValue} onValueChange={handleDateChange} initialFocus />
+				<Calendar.Calendar type="single" value={dateValue} onValueChange={handleDateChange} initialFocus />
 			</Popover.Content>
 		</Popover.Root>
 	{/snippet}

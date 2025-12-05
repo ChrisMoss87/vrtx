@@ -123,7 +123,7 @@
 	});
 </script>
 
-<FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
+<FieldBase {label} {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
 		<div class="relative">
 			<span class="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">

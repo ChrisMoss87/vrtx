@@ -2,7 +2,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { MoreHorizontal, Eye, Pencil, Copy, Trash2 } from 'lucide-svelte';
-	import { router } from '@sveltejs/kit';
+	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 
 	interface Props {
@@ -30,14 +30,14 @@
 	}: Props = $props();
 
 	function handleView() {
-		router.visit(`/modules/${moduleApiName}/${row.id}`);
+		goto(`/modules/${moduleApiName}/${row.id}`);
 	}
 
 	function handleEdit() {
 		if (onEdit) {
 			onEdit(row);
 		} else {
-			router.visit(`/modules/${moduleApiName}/${row.id}/edit`);
+			goto(`/modules/${moduleApiName}/${row.id}/edit`);
 		}
 	}
 
@@ -46,27 +46,30 @@
 			onDuplicate(row);
 		} else {
 			// Default duplicate behavior - navigate to create with prefilled data
-			router.visit(`/modules/${moduleApiName}/create`, {
-				data: { duplicate: row.id }
-			});
+			goto(`/modules/${moduleApiName}/create?duplicate=${row.id}`);
 		}
 	}
 
-	function handleDelete() {
+	async function handleDelete() {
 		if (onDelete) {
 			onDelete(row);
 		} else {
 			// Default delete behavior with confirmation
 			if (confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
-				router.delete(`/api/modules/${moduleApiName}/records/${row.id}`, {
-					onSuccess: () => {
+				try {
+					const response = await fetch(`/api/modules/${moduleApiName}/records/${row.id}`, {
+						method: 'DELETE'
+					});
+					if (response.ok) {
 						toast.success('Record deleted successfully');
-						router.reload({ only: ['data'] });
-					},
-					onError: () => {
+						// Invalidate and reload page data
+						window.location.reload();
+					} else {
 						toast.error('Failed to delete record');
 					}
-				});
+				} catch {
+					toast.error('Failed to delete record');
+				}
 			}
 		}
 	}

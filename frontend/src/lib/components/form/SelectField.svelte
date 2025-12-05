@@ -5,6 +5,8 @@
 	interface Option {
 		label: string;
 		value: string;
+		color?: string;
+		metadata?: Record<string, unknown>;
 	}
 
 	interface Props {
@@ -17,8 +19,8 @@
 		required?: boolean;
 		disabled?: boolean;
 		placeholder?: string;
-		width?: 25 | 50 | 75 | 100;
 		class?: string;
+		showColors?: boolean;
 		onchange?: (value: string) => void;
 	}
 
@@ -32,8 +34,8 @@
 		required = false,
 		disabled = false,
 		placeholder = 'Select an option',
-		width = 100,
 		class: className,
+		showColors = false,
 		onchange
 	}: Props = $props();
 
@@ -43,21 +45,40 @@
 			onchange?.(value);
 		}
 	}
+
+	// Get color for the selected option
+	const selectedOption = $derived(options.find((o) => o.value === value));
+	const selectedColor = $derived(
+		showColors && selectedOption?.color ? selectedOption.color : undefined
+	);
 </script>
 
-<FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
+<FieldBase {label} {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
-		<Select.Root
-			selected={{ value, label: options.find((o) => o.value === value)?.label ?? placeholder }}
-			onSelectedChange={(selected) => handleValueChange(selected?.value)}
-		>
+		<Select.Root type="single" value={value} onValueChange={handleValueChange}>
 			<Select.Trigger {...props}>
-				{options.find((o) => o.value === value)?.label ?? placeholder}
+				<span class="flex items-center gap-2">
+					{#if selectedColor}
+						<span
+							class="h-3 w-3 shrink-0 rounded-full"
+							style="background-color: {selectedColor}"
+						></span>
+					{/if}
+					<span>{selectedOption?.label ?? placeholder}</span>
+				</span>
 			</Select.Trigger>
 			<Select.Content>
 				{#each options as option (option.value)}
 					<Select.Item value={option.value}>
-						{option.label}
+						<span class="flex items-center gap-2">
+							{#if showColors && option.color}
+								<span
+									class="h-3 w-3 shrink-0 rounded-full"
+									style="background-color: {option.color}"
+								></span>
+							{/if}
+							<span>{option.label}</span>
+						</span>
 					</Select.Item>
 				{/each}
 			</Select.Content>

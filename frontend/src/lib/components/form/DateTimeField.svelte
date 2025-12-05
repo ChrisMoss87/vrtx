@@ -131,7 +131,7 @@
 			</Popover.Trigger>
 			<Popover.Content class="w-auto p-0" align="start">
 				<div class="p-3">
-					<Calendar.Calendar value={dateValue} onValueChange={handleDateChange} initialFocus />
+					<Calendar.Calendar type="single" value={dateValue} onValueChange={handleDateChange} initialFocus />
 					<div class="mt-3 flex items-center gap-2 border-t pt-3">
 						<Select.Root type="single" value={hour} onValueChange={handleHourChange}>
 							<Select.Trigger class="w-[70px]">

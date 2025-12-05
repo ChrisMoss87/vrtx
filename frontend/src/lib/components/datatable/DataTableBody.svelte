@@ -15,6 +15,7 @@
 		error?: string | null;
 		enableSelection?: boolean;
 		enableInlineEdit?: boolean;
+		enableColumnResize?: boolean;
 		moduleApiName: string;
 		onRowClick?: (row: any) => void;
 		onCellUpdate?: (recordId: string, field: string, value: any) => Promise<void>;
@@ -28,11 +29,17 @@
 		error = null,
 		enableSelection = true,
 		enableInlineEdit = true,
+		enableColumnResize = false,
 		moduleApiName,
 		onRowClick,
 		onCellUpdate,
 		onCreateNew
 	}: Props = $props();
+
+	// Get column width from table state
+	function getColumnWidth(column: ColumnDef): number {
+		return table.state.columnWidths[column.id] || column.width || 150;
+	}
 
 	const table = getContext<TableContext>('table');
 
@@ -196,8 +203,12 @@
 						: formatCellValue(value, column.type)}
 					{@const cellClass = column.cellClass ? column.cellClass(value, row) : ''}
 					{@const editable = enableInlineEdit && isColumnEditable(column)}
+					{@const columnWidth = getColumnWidth(column)}
 
-					<Table.Cell class={cellClass}>
+					<Table.Cell
+						class={cellClass}
+						style={enableColumnResize ? `width: ${columnWidth}px; min-width: ${column.minWidth || 50}px; max-width: ${column.maxWidth || 500}px;` : ''}
+					>
 						{#if column.cell}
 							<!-- Custom cell component -->
 							<svelte:component this={column.cell} {value} {row} {column} {index} />

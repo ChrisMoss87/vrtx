@@ -17,8 +17,10 @@ interface UserSearchResponse {
  */
 export async function searchUsers(query: string, limit: number = 10): Promise<UserSearchResult[]> {
 	const response = await apiClient.get<UserSearchResponse>('/users/search', {
-		q: query,
-		limit: String(limit)
+		params: {
+			q: query,
+			limit: String(limit)
+		}
 	});
 	return response.users;
 }

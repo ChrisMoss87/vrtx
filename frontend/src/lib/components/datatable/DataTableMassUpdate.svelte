@@ -7,7 +7,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Select from '$lib/components/ui/select';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { Edit, Loader2, AlertCircle } from 'lucide-svelte';
+	import { Edit, Loader2, AlertCircle, Info } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import { recordsApi } from '$lib/api/records';
 	import type { TableContext, ColumnDef } from './types';
@@ -32,18 +32,25 @@
 			.map(([id]) => parseInt(id))
 	);
 
-	// Get editable columns (exclude non-editable types)
+	// Get editable columns (exclude non-editable types and non-mass-updatable fields)
 	const editableColumns = $derived(
 		table.columns.filter((col) => {
 			const nonEditableTypes = ['actions', 'id'];
+			// Exclude system columns, non-editable types, and fields marked as non-mass-updatable
 			return (
 				!nonEditableTypes.includes(col.type || '') &&
 				col.id !== 'id' &&
 				col.id !== 'actions' &&
 				col.id !== 'created_at' &&
-				col.id !== 'updated_at'
+				col.id !== 'updated_at' &&
+				col.meta?.is_mass_updatable !== false
 			);
 		})
+	);
+
+	// Get formula columns (for showing info message)
+	const formulaColumns = $derived(
+		table.columns.filter((col) => col.meta?.isFormula === true)
 	);
 
 	// Get the selected column definition
@@ -156,6 +163,17 @@
 					<p class="text-sm">No records selected. Please select records from the table first.</p>
 				</div>
 			{:else}
+				{#if formulaColumns.length > 0}
+					<div
+						class="flex items-center gap-2 rounded-lg bg-blue-50 p-3 text-blue-800 dark:bg-blue-950 dark:text-blue-200"
+					>
+						<Info class="h-4 w-4 flex-shrink-0" />
+						<p class="text-xs">
+							Formula and calculated fields are excluded from mass updates as they are computed automatically.
+						</p>
+					</div>
+				{/if}
+
 				<!-- Field Selection -->
 				<div class="space-y-2">
 					<Label>Field to Update</Label>

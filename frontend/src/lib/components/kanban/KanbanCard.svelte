@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { KanbanColumn } from '$lib/api/pipelines';
 	import { cn } from '$lib/utils';
-	import * as Card from '$lib/components/ui/card';
+	import { draggable } from '$lib/utils/dnd.svelte';
 
 	interface Props {
 		record: KanbanColumn['records'][0];
@@ -44,15 +44,6 @@
 		return String(value);
 	}
 
-	function handleDragStart(e: DragEvent) {
-		e.dataTransfer?.setData('text/plain', String(record.id));
-		onDragStart?.();
-	}
-
-	function handleDragEnd() {
-		onDragEnd?.();
-	}
-
 	function handleClick() {
 		onClick?.();
 	}
@@ -63,20 +54,25 @@
 			onClick?.();
 		}
 	}
+
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <article
 	class={cn(
-		'cursor-grab rounded-md border bg-card p-3 shadow-sm transition-all hover:shadow-md active:cursor-grabbing',
-		isDragging && 'opacity-50',
+		'kanban-card cursor-grab rounded-md border bg-card p-3 shadow-sm transition-all duration-200 hover:shadow-md active:cursor-grabbing',
+		isDragging && 'scale-[0.98] opacity-50 shadow-lg',
 		onClick && 'cursor-pointer',
 		className
 	)}
-	draggable="true"
-	ondragstart={handleDragStart}
-	ondragend={handleDragEnd}
+	use:draggable={{
+		data: { recordId: record.id, record },
+		id: `kanban-card-${record.id}`,
+		sourceId: 'kanban-board',
+		onDragStart: () => onDragStart?.(),
+		onDragEnd: () => onDragEnd?.()
+	}}
 	onclick={handleClick}
 	onkeydown={handleKeyDown}
 	tabindex="0"

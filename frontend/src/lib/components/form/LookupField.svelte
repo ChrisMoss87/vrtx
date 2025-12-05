@@ -168,7 +168,7 @@
 	}
 </script>
 
-<FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
+<FieldBase {label} {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
 		<Popover.Root bind:open onOpenChange={handleOpenChange}>
 			<Popover.Trigger>

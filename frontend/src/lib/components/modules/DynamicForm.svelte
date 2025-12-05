@@ -16,12 +16,15 @@
 		SwitchField,
 		MultiselectField,
 		FileField,
-		ImageField
+		ImageField,
+		FormulaField
 	} from '$lib/components/form';
-	import type { Module, ModuleRecord } from '$lib/types/modules';
+	import type { Module, FormulaDefinition } from '$lib/api/modules';
+	import type { ModuleRecord } from '$lib/types/modules';
 	import { Loader2 } from 'lucide-svelte';
 	import Debug from '$lib/components/Debug.svelte';
 	import Block from '$lib/components/form/Block.svelte';
+	import { evaluateFormula, type FormulaDefinition as FormulaDefCalc } from '$lib/utils/formulaCalculator';
 
 	interface Props {
 		module: Module;
@@ -112,15 +115,18 @@
 					{@const fieldType = getFieldType(field.type)}
 
 					{#if field.type === 'select'}
+						{@const isPipelineField = field.options?.some((opt) => opt.metadata?.pipeline_id)}
 						<SelectField
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
 							description={field.help_text}
 							error={errors[field.api_name]}
+							showColors={isPipelineField}
 							options={field.options?.map((opt) => ({
 								label: opt.label,
-								value: opt.value
+								value: opt.value,
+								color: opt.metadata?.color as string | undefined
 							})) || []}
 							bind:value={formData[field.api_name]}
 						/>
@@ -178,15 +184,14 @@
 							bind:value={formData[field.api_name]}
 						/>
 					{:else if field.type === 'datetime'}
-						<Debug {field} />
-						<!--									<DateTimeField-->
-						<!--										label={field.label}-->
-						<!--										name={field.api_name}-->
-						<!--										required={field.is_required}-->
-						<!--										description={field.help_text}-->
-						<!--										error={errors[field.api_name]}-->
-						<!--										bind:value={formData[field.api_name]}-->
-						<!--									/>-->
+						<DateTimeField
+							label={field.label}
+							name={field.api_name}
+							required={field.is_required}
+							description={field.help_text}
+							error={errors[field.api_name]}
+							bind:value={formData[field.api_name]}
+						/>
 					{:else if field.type === 'time'}
 						<TimeField
 							label={field.label}
@@ -223,7 +228,7 @@
 							required={field.is_required}
 							description={field.help_text}
 							error={errors[field.api_name]}
-							relationshipId={field.relationship_id}
+							relationshipId={field.settings?.related_module_id}
 							bind:value={formData[field.api_name]}
 						/>
 					{:else if field.type === 'file'}
@@ -245,7 +250,6 @@
 							bind:value={formData[field.api_name]}
 						/>
 					{:else if field.type === 'textarea' || field.type === 'rich_text'}
-						<Debug {field} />
 						<TextareaField
 							label={field.label}
 							name={field.api_name}
@@ -254,6 +258,18 @@
 							error={errors[field.api_name]}
 							placeholder={field.default_value || ''}
 							bind:value={formData[field.api_name]}
+						/>
+					{:else if field.type === 'formula'}
+						{@const formulaResult = field.formula_definition
+							? evaluateFormula(field.formula_definition as FormulaDefCalc, { data: formData })
+							: { success: false, value: null }}
+						<FormulaField
+							label={field.label}
+							name={field.api_name}
+							value={formulaResult.success ? formulaResult.value : formData[field.api_name]}
+							description={field.help_text || undefined}
+							error={formulaResult.success ? undefined : formulaResult.error}
+							returnType={field.formula_definition?.return_type as any || 'text'}
 						/>
 					{:else}
 						<TextField

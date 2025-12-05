@@ -24,6 +24,9 @@ final class AuthController extends Controller
             'password' => Hash::make($request->validated('password')),
         ]);
 
+        // Assign default role to new users
+        $user->assignRole('sales_rep');
+
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
@@ -32,6 +35,8 @@ final class AuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'roles' => $user->roles->pluck('name'),
+                    'permissions' => $user->getAllPermissions()->pluck('name'),
                 ],
                 'token' => $token,
             ],
@@ -58,6 +63,8 @@ final class AuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'roles' => $user->roles->pluck('name'),
+                    'permissions' => $user->getAllPermissions()->pluck('name'),
                 ],
                 'token' => $token,
             ],
@@ -83,6 +90,8 @@ final class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'roles' => $user->roles->pluck('name'),
+                'permissions' => $user->getAllPermissions()->pluck('name'),
             ],
         ]);
     }

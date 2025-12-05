@@ -17,7 +17,7 @@
 	<ResponsiveModal bind:open title="Responsive Modal" description="This adapts to your screen size">
 		<div class="grid gap-4 py-4">
 			<div class="space-y-2">
-				<h3 class="font-semibold">Mobile (< 768px)</h3>
+				<h3 class="font-semibold">Mobile (&lt; 768px)</h3>
 				<p class="text-sm text-muted-foreground">
 					On mobile devices, this displays as a drawer that slides up from the bottom of the screen.
 				</p>

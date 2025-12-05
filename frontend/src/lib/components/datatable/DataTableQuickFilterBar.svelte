@@ -242,29 +242,33 @@
 				{:else if column.type === 'date' || column.type === 'datetime'}
 					<!-- Date Picker -->
 					<Popover.Root>
-						<Popover.Trigger asChild let:builder>
-							<Button
-								builders={[builder]}
-								variant="outline"
-								class={cn(
-									'w-full justify-start text-left font-normal',
-									!filterValues[column.id] && 'text-muted-foreground',
-									hasFilter && 'border-primary'
-								)}
-							>
-								<CalendarIcon class="mr-2 h-4 w-4" />
-								{#if filterValues[column.id]}
-									{filterValues[column.id].toString()}
-								{:else}
-									Pick date
-								{/if}
-							</Button>
+						<Popover.Trigger>
+							{#snippet child({ props })}
+								<Button
+									{...props}
+									variant="outline"
+									class={cn(
+										'w-full justify-start text-left font-normal',
+										!filterValues[column.id] && 'text-muted-foreground',
+										hasFilter && 'border-primary'
+									)}
+								>
+									<CalendarIcon class="mr-2 h-4 w-4" />
+									{#if filterValues[column.id]}
+										{filterValues[column.id].toString()}
+									{:else}
+										Pick date
+									{/if}
+								</Button>
+							{/snippet}
 						</Popover.Trigger>
 						<Popover.Content class="w-auto p-0" align="start">
 							<Calendar
-								bind:value={filterValues[column.id]}
-								onValueChange={(date) => {
+								type="single"
+								value={filterValues[column.id]}
+								onValueChange={(date: any) => {
 									if (date) {
+										filterValues[column.id] = date;
 										applyFilter(column.id, date.toString());
 									}
 								}}

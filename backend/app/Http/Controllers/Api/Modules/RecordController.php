@@ -7,13 +7,15 @@ namespace App\Http\Controllers\Api\Modules;
 use App\Application\Services\RecordService;
 use App\Domain\Modules\Entities\ModuleRecord;
 use App\Http\Controllers\Controller;
+use App\Services\RbacService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 final class RecordController extends Controller
 {
     public function __construct(
-        private readonly RecordService $recordService
+        private readonly RecordService $recordService,
+        private readonly RbacService $rbacService
     ) {}
 
     /**
@@ -28,6 +30,13 @@ final class RecordController extends Controller
             return response()->json([
                 'error' => 'Module not found',
             ], 404);
+        }
+
+        // Check view permission
+        if (!$this->rbacService->canAccessModule($request->user(), $module, 'view')) {
+            return response()->json([
+                'error' => 'You do not have permission to view records in this module',
+            ], 403);
         }
 
         $validated = $request->validate([
@@ -62,8 +71,11 @@ final class RecordController extends Controller
                 );
             }
 
+            // Filter hidden fields from records
+            $hiddenFields = $this->rbacService->getHiddenFields($request->user(), $module);
+
             return response()->json([
-                'records' => array_map(fn (ModuleRecord $record) => $this->transformRecord($record), $result['data']),
+                'records' => array_map(fn (ModuleRecord $record) => $this->transformRecord($record, $hiddenFields), $result['data']),
                 'meta' => [
                     'total' => $result['total'],
                     'per_page' => $result['per_page'],
@@ -117,6 +129,13 @@ final class RecordController extends Controller
             ], 404);
         }
 
+        // Check create permission
+        if (!$this->rbacService->canAccessModule($request->user(), $module, 'create')) {
+            return response()->json([
+                'error' => 'You do not have permission to create records in this module',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'data' => ['required', 'array'],
         ]);
@@ -151,6 +170,21 @@ final class RecordController extends Controller
             return response()->json([
                 'error' => 'Module not found',
             ], 404);
+        }
+
+        // Check edit permission at module level
+        if (!$this->rbacService->canAccessModule($request->user(), $module, 'edit')) {
+            return response()->json([
+                'error' => 'You do not have permission to edit records in this module',
+            ], 403);
+        }
+
+        // Check record-level access (ownership rules)
+        $existingRecord = \App\Models\ModuleRecord::find($recordId);
+        if ($existingRecord && !$this->rbacService->canEditRecord($request->user(), $existingRecord)) {
+            return response()->json([
+                'error' => 'You do not have permission to edit this record',
+            ], 403);
         }
 
         $validated = $request->validate([
@@ -292,7 +326,7 @@ final class RecordController extends Controller
     /**
      * Delete a record.
      */
-    public function destroy(string $moduleApiName, int $recordId): JsonResponse
+    public function destroy(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
         // Get module by API name
         $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
@@ -301,6 +335,21 @@ final class RecordController extends Controller
             return response()->json([
                 'error' => 'Module not found',
             ], 404);
+        }
+
+        // Check delete permission at module level
+        if (!$this->rbacService->canAccessModule($request->user(), $module, 'delete')) {
+            return response()->json([
+                'error' => 'You do not have permission to delete records in this module',
+            ], 403);
+        }
+
+        // Check record-level access (ownership rules)
+        $existingRecord = \App\Models\ModuleRecord::find($recordId);
+        if ($existingRecord && !$this->rbacService->canDeleteRecord($request->user(), $existingRecord)) {
+            return response()->json([
+                'error' => 'You do not have permission to delete this record',
+            ], 403);
         }
 
         try {
@@ -474,12 +523,19 @@ final class RecordController extends Controller
     /**
      * Transform record entity to array.
      */
-    private function transformRecord(ModuleRecord $record): array
+    private function transformRecord(ModuleRecord $record, array $hiddenFields = []): array
     {
+        $data = $record->data();
+
+        // Remove hidden fields from data
+        foreach ($hiddenFields as $field) {
+            unset($data[$field]);
+        }
+
         return [
             'id' => $record->id(),
             'module_id' => $record->moduleId(),
-            'data' => $record->data(),
+            'data' => $data,
             'created_by' => $record->createdBy(),
             'updated_by' => $record->updatedBy(),
             'created_at' => $record->createdAt()->format('Y-m-d H:i:s'),

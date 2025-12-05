@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { authApi } from '$lib/api/auth';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import GalleryVerticalEndIcon from '@lucide/svelte/icons/gallery-vertical-end';
@@ -20,6 +21,9 @@
 	let error = $state('');
 	let loading = $state(false);
 
+	// Get redirect URL from query params
+	const redirectUrl = $derived($page.url.searchParams.get('redirect') || '/dashboard');
+
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		error = '';
@@ -27,7 +31,8 @@
 
 		try {
 			await authApi.login({ email, password });
-			goto('/dashboard');
+			// Redirect to the original destination or dashboard
+			goto(redirectUrl);
 		} catch (err: any) {
 			error = err.message || 'Login failed. Please check your credentials.';
 		} finally {

@@ -106,8 +106,7 @@
 				{@const Icon = fieldType.icon}
 				<button
 					class="field-type-card group flex cursor-grab items-center gap-3 rounded-lg border bg-card p-3 text-left transition-all hover:border-primary hover:bg-accent active:cursor-grabbing"
-					draggable="true"
-					ondragstart={(e) => handleDragStart(e, fieldType.value)}
+					use:draggable={getDraggableOptions(fieldType.value)}
 					data-testid="field-type-{fieldType.value}"
 				>
 					<div

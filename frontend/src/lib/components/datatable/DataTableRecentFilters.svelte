@@ -176,14 +176,16 @@
 
 {#if recentFilters.length > 0}
 	<DropdownMenu.Root>
-		<DropdownMenu.Trigger asChild let:builder>
-			<Button builders={[builder]} variant="outline" size="sm">
-				<Clock class="mr-1 h-3 w-3" />
-				Recent
-				<Badge variant="secondary" class="ml-1 h-4 px-1 text-xs">
-					{recentFilters.length}
-				</Badge>
-			</Button>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<Button {...props} variant="outline" size="sm">
+					<Clock class="mr-1 h-3 w-3" />
+					Recent
+					<Badge variant="secondary" class="ml-1 h-4 px-1 text-xs">
+						{recentFilters.length}
+					</Badge>
+				</Button>
+			{/snippet}
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content class="w-96" align="start">
 			<div class="flex items-center justify-between border-b px-2 py-1.5">

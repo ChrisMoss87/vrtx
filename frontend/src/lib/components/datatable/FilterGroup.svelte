@@ -5,7 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { X, Plus } from 'lucide-svelte';
 	import type { FilterConfig, ColumnDef } from './types';
-	import type { FilterGroupData } from './DataTableAdvancedFilters.svelte';
+	import type { FilterGroupData } from './types';
 	import { cn } from '$lib/utils';
 
 	interface Props {
@@ -73,12 +73,20 @@
 				];
 			case 'select':
 			case 'multiselect':
-			case 'boolean':
+			case 'radio':
+			case 'tags':
 				return [
 					{ value: 'equals', label: 'Is' },
 					{ value: 'not_equals', label: 'Is not' },
 					{ value: 'in', label: 'Is one of' },
 					{ value: 'not_in', label: 'Is not one of' }
+				];
+			case 'boolean':
+			case 'checkbox':
+			case 'toggle':
+				return [
+					{ value: 'equals', label: 'Is' },
+					{ value: 'not_equals', label: 'Is not' }
 				];
 			default:
 				return [
@@ -209,7 +217,8 @@
 
 					<!-- Value Input -->
 					{#if needsValue}
-						{#if column?.type === 'select' && column.filterOptions}
+						{@const selectOptions = column?.filterOptions || column?.options || []}
+						{#if (column?.type === 'select' || column?.type === 'multiselect' || column?.type === 'radio') && selectOptions.length > 0}
 							<Select.Root
 								type="single"
 								value={condition.value || undefined}
@@ -218,15 +227,15 @@
 								}}
 							>
 								<Select.Trigger class="flex-1">
-									{column.filterOptions.find((opt) => opt.value === condition.value)?.label || 'Select value'}
+									{selectOptions.find((opt) => opt.value === condition.value)?.label || 'Select value'}
 								</Select.Trigger>
 								<Select.Content>
-									{#each column.filterOptions as option}
+									{#each selectOptions as option}
 										<Select.Item value={option.value}>{option.label}</Select.Item>
 									{/each}
 								</Select.Content>
 							</Select.Root>
-						{:else if column?.type === 'boolean'}
+						{:else if column?.type === 'boolean' || column?.type === 'checkbox' || column?.type === 'toggle'}
 							<Select.Root
 								type="single"
 								value={condition.value !== undefined ? String(condition.value) : undefined}

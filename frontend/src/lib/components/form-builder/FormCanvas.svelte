@@ -2,7 +2,7 @@
 	import { flip } from 'svelte/animate';
 	import { crossfade, fade, scale } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
-	import { Plus, Settings, Trash2, GripVertical } from 'lucide-svelte';
+	import { Plus, Settings, Trash2, GripVertical, ArrowDownToLine } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { getFieldTypeMetadata, type FieldType } from '$lib/constants/fieldTypes';
@@ -40,6 +40,10 @@
 	let draggedField = $state<{ blockIndex: number; fieldIndex: number } | null>(null);
 	let dragOverField = $state<{ blockIndex: number; fieldIndex: number } | null>(null);
 
+	// Track when dragging from palette to show insert zones
+	let isDraggingFromPalette = $state(false);
+	let insertAtBlockIndex = $state<number | null>(null);
+
 	function addBlock() {
 		const newBlock: CreateBlockRequest = {
 			name: `Block ${blocks.length + 1}`,
@@ -56,9 +60,26 @@
 	}
 
 	function handlePaletteDrop(blockIndex: number, data: { fieldType?: FieldType }) {
+		isDraggingFromPalette = false;
+		insertAtBlockIndex = null;
 		if (data.fieldType) {
 			addFieldToBlock(blockIndex, data.fieldType);
 		}
+	}
+
+	function handlePaletteDragEnter(blockIndex: number) {
+		isDraggingFromPalette = true;
+		insertAtBlockIndex = blockIndex;
+	}
+
+	function handlePaletteDragLeave() {
+		// Small delay to prevent flicker when moving between elements
+		setTimeout(() => {
+			// Only reset if we're not over another valid target
+			if (insertAtBlockIndex !== null) {
+				insertAtBlockIndex = null;
+			}
+		}, 50);
 	}
 
 	function generateApiName(label: string): string {
@@ -87,6 +108,8 @@
 			is_searchable: true,
 			is_filterable: true,
 			is_sortable: true,
+			// Formula fields cannot be mass updated - they're calculated
+			is_mass_updatable: fieldType !== 'formula',
 			settings: {
 				additional_settings: {}
 			}
@@ -226,10 +249,14 @@
 	}
 
 	function getWidthClass(width: number = 100): string {
-		if (width <= 25) return 'w-1/4';
-		if (width <= 33) return 'w-1/3';
-		if (width <= 50) return 'w-1/2';
-		return 'w-full';
+		// Use flex-basis with calc to account for gap spacing
+		// Gap is 12px (gap-3), so we subtract half gap from each side
+		if (width <= 25) return 'basis-[calc(25%-9px)]';
+		if (width <= 33) return 'basis-[calc(33.333%-8px)]';
+		if (width <= 50) return 'basis-[calc(50%-6px)]';
+		if (width <= 66) return 'basis-[calc(66.666%-4px)]';
+		if (width <= 75) return 'basis-[calc(75%-3px)]';
+		return 'basis-full';
 	}
 
 	// Generate unique key for field based on its properties
@@ -296,28 +323,51 @@
 				</Card.Header>
 
 				<Card.Content class="pt-4">
+					{@const isDropTarget = insertAtBlockIndex === blockIndex}
 					<!-- Drop Zone with droppable action -->
 					<div
-						class="drop-zone min-h-32 rounded-lg border-2 border-dashed p-4 {block.fields?.length
-							? 'border-border bg-background'
-							: 'border-muted-foreground/30 bg-muted/20 hover:border-muted-foreground/50 hover:bg-muted/30'} transition-all"
+						class="drop-zone min-h-32 rounded-lg border-2 border-dashed p-4 transition-all
+							{isDropTarget
+							? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+							: block.fields?.length
+								? 'border-border bg-background'
+								: 'border-muted-foreground/30 bg-muted/20 hover:border-muted-foreground/50 hover:bg-muted/30'}"
 						use:droppable={{
 							accepts: ['field-palette'],
+							onDragEnter: () => handlePaletteDragEnter(blockIndex),
+							onDragLeave: handlePaletteDragLeave,
 							onDrop: (item) => handlePaletteDrop(blockIndex, item.data as { fieldType?: FieldType })
 						}}
 						data-testid="drop-zone-{blockIndex}"
 					>
 						{#if !block.fields || block.fields.length === 0}
-							<div class="py-10 text-center text-muted-foreground" in:fade={{ duration: 150 }}>
+							<div
+								class="py-10 text-center text-muted-foreground {isDropTarget
+									? 'scale-105'
+									: ''} transition-transform"
+								in:fade={{ duration: 150 }}
+							>
 								<div class="relative mb-3">
 									<div
-										class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted/50"
+										class="mx-auto flex h-16 w-16 items-center justify-center rounded-full {isDropTarget
+											? 'bg-primary/20'
+											: 'bg-muted/50'} transition-colors"
 									>
-										<Plus class="h-8 w-8 opacity-50" />
+										{#if isDropTarget}
+											<ArrowDownToLine class="h-8 w-8 text-primary animate-pulse" />
+										{:else}
+											<Plus class="h-8 w-8 opacity-50" />
+										{/if}
 									</div>
 								</div>
-								<p class="mb-1 text-base font-medium">Drop fields here</p>
-								<p class="text-sm">Drag field types from the palette to get started</p>
+								<p class="mb-1 text-base font-medium">
+									{isDropTarget ? 'Release to add field' : 'Drop fields here'}
+								</p>
+								<p class="text-sm">
+									{isDropTarget
+										? 'The field will be added to this block'
+										: 'Drag field types from the palette to get started'}
+								</p>
 							</div>
 						{:else}
 							<!-- Fields Grid with animations -->
@@ -404,6 +454,24 @@
 									</div>
 								{/each}
 							</div>
+
+							<!-- Always-visible add field drop zone at the bottom when block has fields -->
+							<div
+								class="add-field-zone mt-4 flex items-center justify-center rounded-lg border-2 border-dashed py-4 transition-all
+									{isDropTarget
+									? 'border-primary bg-primary/10'
+									: 'border-border/50 hover:border-primary/50 hover:bg-accent/30'}"
+							>
+								<div class="flex items-center gap-2 text-muted-foreground">
+									{#if isDropTarget}
+										<ArrowDownToLine class="h-4 w-4 text-primary animate-pulse" />
+										<span class="text-sm font-medium text-primary">Drop here to add field</span>
+									{:else}
+										<Plus class="h-4 w-4" />
+										<span class="text-sm">Drag field here to add</span>
+									{/if}
+								</div>
+							</div>
 						{/if}
 					</div>
 				</Card.Content>
@@ -456,6 +524,13 @@
 
 	.field-preview {
 		min-width: 200px;
+		flex-shrink: 0;
+		flex-grow: 0;
+	}
+
+	/* Allow full-width fields to actually be full width */
+	.field-preview.basis-full {
+		min-width: 100%;
 	}
 
 	/* Dragging state styles */
@@ -468,5 +543,10 @@
 	/* Smooth transitions for field items */
 	.field-preview {
 		transition: transform 0.2s ease, opacity 0.2s ease;
+	}
+
+	/* Add field zone - needs pointer-events for better UX */
+	.add-field-zone {
+		min-height: 48px;
 	}
 </style>

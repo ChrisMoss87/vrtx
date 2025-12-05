@@ -1,7 +1,19 @@
 import { browser } from '$app/environment';
+import { goto } from '$app/navigation';
 
 interface FetchOptions extends RequestInit {
-	params?: Record<string, string>;
+	params?: Record<string, string | number | boolean | undefined>;
+	responseType?: 'json' | 'blob';
+}
+
+export interface PaginatedResponse<T> {
+	data: T[];
+	current_page: number;
+	last_page: number;
+	per_page: number;
+	total: number;
+	from: number | null;
+	to: number | null;
 }
 
 export class ApiClient {
@@ -23,14 +35,16 @@ export class ApiClient {
 		return `${window.location.origin}/api/v1`;
 	}
 
-	private buildUrl(endpoint: string, params?: Record<string, string>): string {
+	private buildUrl(endpoint: string, params?: Record<string, string | number | boolean | undefined>): string {
 		const baseUrl = this.getBaseUrl();
 		// Remove leading slash from endpoint if present
 		const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
 		const url = new URL(cleanEndpoint, baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
 		if (params) {
 			Object.entries(params).forEach(([key, value]) => {
-				url.searchParams.append(key, value);
+				if (value !== undefined) {
+					url.searchParams.append(key, String(value));
+				}
 			});
 		}
 		return url.toString();
@@ -67,6 +81,20 @@ export class ApiClient {
 				data: errorData
 			});
 
+			// Handle 401 Unauthorized - redirect to login
+			if (response.status === 401 && browser) {
+				// Clear stored auth data
+				localStorage.removeItem('auth_token');
+				localStorage.removeItem('auth_user');
+
+				// Get current path for redirect after login
+				const currentPath = window.location.pathname;
+				const redirectUrl = currentPath !== '/login' ? `?redirect=${encodeURIComponent(currentPath)}` : '';
+
+				// Redirect to login page
+				goto(`/login${redirectUrl}`);
+			}
+
 			// Create error object with more details
 			const error: any = new Error(errorData.message || 'API request failed');
 			error.response = {
@@ -80,8 +108,8 @@ export class ApiClient {
 		return response.json();
 	}
 
-	async get<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
-		return this.request<T>(endpoint, { method: 'GET', params });
+	async get<T>(endpoint: string, options?: { params?: Record<string, string | number | boolean | undefined>; responseType?: 'json' | 'blob' }): Promise<T> {
+		return this.request<T>(endpoint, { method: 'GET', ...options });
 	}
 
 	async post<T>(endpoint: string, data?: unknown): Promise<T> {
@@ -107,6 +135,42 @@ export class ApiClient {
 
 	async delete<T>(endpoint: string): Promise<T> {
 		return this.request<T>(endpoint, { method: 'DELETE' });
+	}
+
+	async upload<T>(endpoint: string, formData: FormData): Promise<T> {
+		const baseUrl = this.getBaseUrl();
+		const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+		const url = new URL(cleanEndpoint, baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
+
+		const headers: Record<string, string> = {
+			Accept: 'application/json'
+		};
+
+		if (browser) {
+			const token = localStorage.getItem('auth_token');
+			if (token) {
+				headers['Authorization'] = `Bearer ${token}`;
+			}
+		}
+
+		const response = await fetch(url.toString(), {
+			method: 'POST',
+			headers,
+			body: formData
+		});
+
+		if (!response.ok) {
+			const errorData = await response.json().catch(() => ({ message: response.statusText }));
+			const error: any = new Error(errorData.message || 'Upload failed');
+			error.response = {
+				status: response.status,
+				statusText: response.statusText,
+				data: errorData
+			};
+			throw error;
+		}
+
+		return response.json();
 	}
 
 	setAuthToken(token: string) {

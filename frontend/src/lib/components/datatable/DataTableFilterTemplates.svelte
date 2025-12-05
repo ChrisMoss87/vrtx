@@ -100,43 +100,26 @@
 		});
 	}
 
-	async function deleteTemplate(templateId: number) {
+	function deleteTemplate(templateId: number) {
 		if (!confirm('Are you sure you want to delete this filter template?')) return;
 
-		try {
-			// TODO: Replace with actual API call
-			await fetch(`/api/filter-templates/${templateId}`, { method: 'DELETE' });
-			templates = templates.filter((t) => t.id !== templateId);
-		} catch (error) {
-			console.error('Failed to delete template:', error);
-			// Fallback to local storage
-			templates = templates.filter((t) => t.id !== templateId);
-			localStorage.setItem(`filter-templates-${moduleApiName}`, JSON.stringify(templates));
-		}
+		templates = templates.filter((t) => t.id !== templateId);
+		localStorage.setItem(`filter-templates-${moduleApiName}`, JSON.stringify(templates));
 	}
 
-	async function toggleFavorite(template: FilterTemplate) {
+	function toggleFavorite(template: FilterTemplate) {
 		template.is_favorite = !template.is_favorite;
-
-		try {
-			// TODO: Replace with actual API call
-			await fetch(`/api/filter-templates/${template.id}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ is_favorite: template.is_favorite })
-			});
-		} catch (error) {
-			console.error('Failed to update template:', error);
-			// Fallback to local storage
-			localStorage.setItem(`filter-templates-${moduleApiName}`, JSON.stringify(templates));
-		}
+		// Force reactivity by creating new array
+		templates = templates.map((t) => (t.id === template.id ? { ...t, is_favorite: template.is_favorite } : t));
+		localStorage.setItem(`filter-templates-${moduleApiName}`, JSON.stringify(templates));
 	}
 
-	async function duplicateTemplate(template: FilterTemplate) {
-		const duplicate: Partial<FilterTemplate> = {
+	function duplicateTemplate(template: FilterTemplate) {
+		const newTemplate: FilterTemplate = {
+			id: Date.now(),
 			name: `${template.name} (Copy)`,
 			description: template.description,
-			filters: template.filters,
+			filters: [...template.filters],
 			is_public: false,
 			is_favorite: false,
 			module: moduleApiName,
@@ -144,25 +127,8 @@
 			updated_at: new Date().toISOString()
 		};
 
-		try {
-			// TODO: Replace with actual API call
-			const response = await fetch('/api/filter-templates', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(duplicate)
-			});
-
-			if (response.ok) {
-				const saved = await response.json();
-				templates = [...templates, saved];
-			}
-		} catch (error) {
-			console.error('Failed to duplicate template:', error);
-			// Fallback to local storage
-			const newTemplate = { ...duplicate, id: Date.now() } as FilterTemplate;
-			templates = [...templates, newTemplate];
-			localStorage.setItem(`filter-templates-${moduleApiName}`, JSON.stringify(templates));
-		}
+		templates = [...templates, newTemplate];
+		localStorage.setItem(`filter-templates-${moduleApiName}`, JSON.stringify(templates));
 	}
 
 	const favoriteTemplates = $derived(templates.filter((t) => t.is_favorite));

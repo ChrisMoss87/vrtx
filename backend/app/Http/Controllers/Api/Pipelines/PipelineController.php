@@ -10,6 +10,7 @@ use App\Models\ModuleRecord;
 use App\Models\Pipeline;
 use App\Models\Stage;
 use App\Models\StageHistory;
+use App\Services\PipelineFieldSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -17,6 +18,10 @@ use Illuminate\Support\Facades\DB;
 
 class PipelineController extends Controller
 {
+    public function __construct(
+        private PipelineFieldSyncService $fieldSyncService
+    ) {}
+
     /**
      * Get all pipelines.
      */
@@ -134,6 +139,9 @@ class PipelineController extends Controller
                 return $pipeline;
             });
 
+            // Sync field options with stages
+            $this->fieldSyncService->syncFieldOptionsFromStages($pipeline);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Pipeline created successfully',
@@ -228,6 +236,9 @@ class PipelineController extends Controller
                     $this->syncStages($pipeline, $validated['stages']);
                 }
             });
+
+            // Sync field options with stages
+            $this->fieldSyncService->syncFieldOptionsFromStages($pipeline->fresh());
 
             return response()->json([
                 'success' => true,
@@ -523,6 +534,66 @@ class PipelineController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to reorder stages',
+                'error' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Sync pipeline stages to field options.
+     */
+    public function syncFieldOptions(int $id): JsonResponse
+    {
+        try {
+            $pipeline = Pipeline::with(['stages', 'module'])->find($id);
+
+            if (!$pipeline) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pipeline not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $this->fieldSyncService->syncFieldOptionsFromStages($pipeline);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Field options synced successfully',
+                'pipeline' => $pipeline,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync field options',
+                'error' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Sync all pipelines' stages to their field options.
+     */
+    public function syncAllFieldOptions(): JsonResponse
+    {
+        try {
+            $pipelines = Pipeline::with(['stages', 'module'])
+                ->whereNotNull('stage_field_api_name')
+                ->get();
+
+            $syncedCount = 0;
+            foreach ($pipelines as $pipeline) {
+                $this->fieldSyncService->syncFieldOptionsFromStages($pipeline);
+                $syncedCount++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Synced field options for {$syncedCount} pipelines",
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync field options',
                 'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

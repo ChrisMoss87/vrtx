@@ -4,6 +4,7 @@
 	import { cn } from '$lib/utils';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Badge } from '$lib/components/ui/badge';
+	import { droppable } from '$lib/utils/dnd.svelte';
 
 	interface Props {
 		stage: Stage;
@@ -11,7 +12,7 @@
 		totalValue?: number;
 		weightedValue?: number;
 		isDragOver?: boolean;
-		onDrop?: () => void;
+		onDrop?: (data: any) => void;
 		children: Snippet;
 		class?: string;
 	}
@@ -29,31 +30,24 @@
 
 	let isOver = $state(false);
 
-	function handleDragOver(e: DragEvent) {
-		e.preventDefault();
-		isOver = true;
-	}
-
-	function handleDragLeave() {
+	function handleDropEvent(item: { data: any }) {
 		isOver = false;
-	}
-
-	function handleDrop(e: DragEvent) {
-		e.preventDefault();
-		isOver = false;
-		onDrop?.();
+		onDrop?.(item.data);
 	}
 </script>
 
 <div
 	class={cn(
-		'flex max-w-[300px] min-w-[300px] flex-col rounded-lg border bg-muted/30',
-		isOver && isDragOver && 'border-primary bg-primary/5',
+		'kanban-column flex max-w-[300px] min-w-[300px] flex-col rounded-lg border bg-muted/30 transition-all duration-200',
+		isOver && isDragOver && 'border-primary bg-primary/5 ring-2 ring-primary/20',
 		className
 	)}
-	ondragover={handleDragOver}
-	ondragleave={handleDragLeave}
-	ondrop={handleDrop}
+	use:droppable={{
+		accepts: ['kanban-board'],
+		onDragEnter: () => (isOver = true),
+		onDragLeave: () => (isOver = false),
+		onDrop: handleDropEvent
+	}}
 	role="list"
 >
 	<!-- Column Header -->

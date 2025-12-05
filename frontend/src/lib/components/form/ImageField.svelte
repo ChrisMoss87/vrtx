@@ -182,7 +182,7 @@
 	}
 </script>
 
-<FieldBase {label} {name} {description} {error} {required} {disabled} {width} class={className}>
+<FieldBase {label} {name} {description} {error} {required} {disabled} class={className}>
 	{#snippet children(props)}
 		<div class="w-full space-y-3">
 			<!-- Upload Area -->

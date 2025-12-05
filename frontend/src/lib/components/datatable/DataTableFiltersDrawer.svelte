@@ -166,14 +166,12 @@
 										>Column</label
 									>
 									<Select.Root
-										selected={{
-											value: filter.field,
-											label: column?.header || filter.field
-										}}
-										onSelectedChange={(selected) => {
-											if (selected?.value) {
+										type="single"
+										value={filter.field}
+										onValueChange={(val) => {
+											if (val) {
 												updateFilter(index, {
-													field: selected.value,
+													field: val,
 													operator: 'contains',
 													value: ''
 												});
@@ -181,7 +179,7 @@
 										}}
 									>
 										<Select.Trigger class="w-full" id="column-{index}">
-											<Select.Value placeholder="Select column" />
+											<span>{column?.header || filter.field || 'Select column'}</span>
 										</Select.Trigger>
 										<Select.Content>
 											{#each filterableColumns as col}
@@ -223,7 +221,11 @@
 												initialValue={filter}
 												onApply={(newFilter) => {
 													if (newFilter) {
-														updateFilter(index, newFilter);
+														updateFilter(index, {
+															field: filter.field,
+															operator: newFilter.operator as any,
+															value: newFilter.value
+														});
 													}
 												}}
 												onClose={() => {}}
