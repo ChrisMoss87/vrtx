@@ -158,6 +158,53 @@ Route::middleware([
             Route::get('/{id}/executions/{executionId}', [WorkflowController::class, 'showExecution']);
         });
 
+        // Blueprint Routes (Stage Transitions & SLAs)
+        Route::prefix('blueprints')->group(function () {
+            // Blueprint CRUD
+            Route::get('/', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroy']);
+            Route::put('/{id}/layout', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateLayout']);
+            Route::post('/{id}/toggle-active', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'toggleActive']);
+            Route::post('/{id}/sync-states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'syncStates']);
+
+            // State management
+            Route::get('/{id}/states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'states']);
+            Route::post('/{id}/states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'storeState']);
+            Route::put('/{id}/states/{stateId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateState']);
+            Route::delete('/{id}/states/{stateId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroyState']);
+
+            // Transition management
+            Route::get('/{id}/transitions', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'transitions']);
+            Route::post('/{id}/transitions', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'storeTransition']);
+            Route::put('/{id}/transitions/{transitionId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateTransition']);
+            Route::delete('/{id}/transitions/{transitionId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroyTransition']);
+        });
+
+        // Blueprint Execution Routes (Runtime)
+        Route::prefix('blueprint-records')->group(function () {
+            Route::get('/{recordId}/state', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'getRecordState']);
+            Route::post('/{recordId}/transitions/{transitionId}/start', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'startTransition']);
+            Route::get('/{recordId}/history', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'getTransitionHistory']);
+            Route::get('/{recordId}/sla-status', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'getSLAStatus']);
+        });
+
+        // Blueprint Execution Management
+        Route::prefix('blueprint-executions')->group(function () {
+            Route::post('/{executionId}/requirements', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'submitRequirements']);
+            Route::post('/{executionId}/complete', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'completeExecution']);
+            Route::post('/{executionId}/cancel', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'cancelExecution']);
+        });
+
+        // Blueprint Approvals
+        Route::prefix('blueprint-approvals')->group(function () {
+            Route::get('/pending', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'pendingApprovals']);
+            Route::post('/{requestId}/approve', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'approve']);
+            Route::post('/{requestId}/reject', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'reject']);
+        });
+
         // Email Account Routes
         Route::prefix('email-accounts')->group(function () {
             Route::get('/', [EmailAccountController::class, 'index']);

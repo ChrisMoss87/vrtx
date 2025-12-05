@@ -5,6 +5,7 @@
 	import Settings2Icon from '@lucide/svelte/icons/settings-2';
 	import CodeIcon from '@lucide/svelte/icons/code';
 	import KanbanIcon from '@lucide/svelte/icons/kanban';
+	import WorkflowIcon from '@lucide/svelte/icons/workflow';
 	import ZapIcon from '@lucide/svelte/icons/zap';
 	import BarChart2Icon from '@lucide/svelte/icons/bar-chart-2';
 	import LayoutGridIcon from '@lucide/svelte/icons/layout-grid';
@@ -39,21 +40,36 @@
 	// Features navigation
 	const featureNavItems = [
 		{
-			title: 'Pipelines',
+			title: 'Kanban',
 			url: '/pipelines',
 			icon: KanbanIcon,
 			items: [
 				{
-					title: 'View Pipelines',
+					title: 'View Boards',
 					url: '/pipelines'
 				},
 				{
-					title: 'Manage Pipelines',
+					title: 'Manage Boards',
 					url: '/admin/pipelines'
 				},
 				{
-					title: 'Create Pipeline',
+					title: 'Create Board',
 					url: '/admin/pipelines/create'
+				}
+			]
+		},
+		{
+			title: 'Blueprints',
+			url: '/admin/blueprints',
+			icon: WorkflowIcon,
+			items: [
+				{
+					title: 'All Blueprints',
+					url: '/admin/blueprints'
+				},
+				{
+					title: 'Create Blueprint',
+					url: '/admin/blueprints/create'
 				}
 			]
 		},
