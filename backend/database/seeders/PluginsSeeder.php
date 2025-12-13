@@ -1,0 +1,546 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Plugin;
+use App\Models\PluginBundle;
+use Illuminate\Database\Seeder;
+
+class PluginsSeeder extends Seeder
+{
+    public function run(): void
+    {
+        // Clear existing data
+        PluginBundle::truncate();
+        Plugin::truncate();
+
+        // ============================================
+        // TIER 1: CORE PLUGINS (Included in all plans)
+        // ============================================
+        $corePlugins = [
+            [
+                'slug' => 'core-modules',
+                'name' => 'Modules & Records',
+                'description' => 'Core module management and record CRUD operations',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'database',
+                'features' => ['Custom modules', 'Record management', 'Field customization', 'Relationships'],
+                'display_order' => 1,
+            ],
+            [
+                'slug' => 'core-datatable',
+                'name' => 'DataTable Views',
+                'description' => 'Advanced data table with sorting, filtering, and inline editing',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'table',
+                'features' => ['Sortable columns', 'Advanced filters', 'Inline editing', 'Column customization'],
+                'display_order' => 2,
+            ],
+            [
+                'slug' => 'core-kanban',
+                'name' => 'Kanban Views',
+                'description' => 'Visual pipeline management with drag-and-drop',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'layout-kanban',
+                'features' => ['Drag-and-drop', 'Pipeline stages', 'Card customization', 'Quick actions'],
+                'display_order' => 3,
+            ],
+            [
+                'slug' => 'core-dashboards',
+                'name' => 'Dashboards',
+                'description' => 'Customizable dashboards with widgets',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'layout-dashboard',
+                'features' => ['Widget library', 'Custom layouts', 'Real-time data', 'Sharing'],
+                'display_order' => 4,
+            ],
+            [
+                'slug' => 'core-workflows-basic',
+                'name' => 'Basic Workflows',
+                'description' => 'Automation workflows with basic triggers and actions',
+                'category' => Plugin::CATEGORY_ADMIN,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'workflow',
+                'features' => ['Trigger on create/update', 'Email actions', 'Field updates', 'Up to 5 workflows'],
+                'limits' => ['workflows' => 5],
+                'display_order' => 5,
+            ],
+            [
+                'slug' => 'core-reports',
+                'name' => 'Basic Reports',
+                'description' => 'Standard reporting and analytics',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'bar-chart-2',
+                'features' => ['Pre-built reports', 'Basic charts', 'Export to CSV', 'Date filtering'],
+                'display_order' => 6,
+            ],
+            [
+                'slug' => 'core-email',
+                'name' => 'Email Integration',
+                'description' => 'Gmail and Outlook email sync',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'mail',
+                'features' => ['Email sync', 'Email tracking', 'Templates', 'Scheduling'],
+                'display_order' => 7,
+            ],
+            [
+                'slug' => 'core-import-export',
+                'name' => 'Import/Export',
+                'description' => 'Data import and export capabilities',
+                'category' => Plugin::CATEGORY_ADMIN,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'download',
+                'features' => ['CSV import', 'Excel export', 'Field mapping', 'Duplicate handling'],
+                'display_order' => 8,
+            ],
+        ];
+
+        // ============================================
+        // TIER 2: PROFESSIONAL ADD-ONS
+        // ============================================
+        $professionalPlugins = [
+            [
+                'slug' => 'forecasting-pro',
+                'name' => 'Sales Forecasting',
+                'description' => 'Advanced sales forecasting with AI-powered predictions',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'trending-up',
+                'features' => ['Pipeline forecasting', 'Historical trends', 'Accuracy tracking', 'Team rollups', 'Adjustments'],
+                'display_order' => 10,
+            ],
+            [
+                'slug' => 'quotes-invoices',
+                'name' => 'Quotes & Invoices',
+                'description' => 'Professional quote and invoice management',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 20.00,
+                'price_yearly' => 192.00,
+                'icon' => 'file-text',
+                'features' => ['Quote builder', 'Invoice generation', 'PDF export', 'Payment tracking', 'Templates'],
+                'display_order' => 11,
+            ],
+            [
+                'slug' => 'meeting-scheduler',
+                'name' => 'Meeting Scheduler',
+                'description' => 'Calendly-style meeting booking with calendar sync',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 10.00,
+                'price_yearly' => 96.00,
+                'icon' => 'calendar',
+                'features' => ['Booking pages', 'Calendar sync', 'Meeting types', 'Reminders', 'Custom availability'],
+                'display_order' => 12,
+            ],
+            [
+                'slug' => 'duplicate-detection',
+                'name' => 'Duplicate Detection',
+                'description' => 'AI-powered duplicate record detection and merging',
+                'category' => Plugin::CATEGORY_ADMIN,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 10.00,
+                'price_yearly' => 96.00,
+                'icon' => 'copy',
+                'features' => ['Fuzzy matching', 'Bulk merge', 'Custom rules', 'Merge history', 'Real-time alerts'],
+                'display_order' => 13,
+            ],
+            [
+                'slug' => 'deal-rotting',
+                'name' => 'Deal Rotting Alerts',
+                'description' => 'Automatic alerts for stale deals in pipeline',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 8.00,
+                'price_yearly' => 76.00,
+                'icon' => 'alert-triangle',
+                'features' => ['Stage-based thresholds', 'Email digests', 'Dashboard widget', 'Custom rules'],
+                'display_order' => 14,
+            ],
+            [
+                'slug' => 'web-forms-pro',
+                'name' => 'Public Web Forms',
+                'description' => 'Embeddable lead capture forms',
+                'category' => Plugin::CATEGORY_MARKETING,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'file-input',
+                'features' => ['Drag-drop builder', 'Custom styling', 'Embed codes', 'Analytics', 'Spam protection'],
+                'display_order' => 15,
+            ],
+            [
+                'slug' => 'workflows-advanced',
+                'name' => 'Advanced Workflows',
+                'description' => 'Unlimited workflows with advanced conditions',
+                'category' => Plugin::CATEGORY_ADMIN,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'git-branch',
+                'features' => ['Unlimited workflows', 'Conditional branching', 'Scheduled triggers', 'Webhooks', 'Custom actions'],
+                'display_order' => 16,
+            ],
+            [
+                'slug' => 'blueprints-pro',
+                'name' => 'Advanced Blueprints',
+                'description' => 'Process blueprints with SLAs and approvals',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 12.00,
+                'price_yearly' => 115.00,
+                'icon' => 'map',
+                'features' => ['Unlimited blueprints', 'SLA enforcement', 'Approval flows', 'Requirements', 'Compliance tracking'],
+                'display_order' => 17,
+            ],
+            [
+                'slug' => 'custom-reports',
+                'name' => 'Custom Reports',
+                'description' => 'Advanced report builder with custom formulas',
+                'category' => Plugin::CATEGORY_ANALYTICS,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 10.00,
+                'price_yearly' => 96.00,
+                'icon' => 'pie-chart',
+                'features' => ['Report builder', 'Custom formulas', 'Scheduled reports', 'Multiple formats', 'Sharing'],
+                'display_order' => 18,
+            ],
+        ];
+
+        // ============================================
+        // TIER 3: ADVANCED ADD-ONS (Differentiators)
+        // ============================================
+        $advancedPlugins = [
+            [
+                'slug' => 'time-machine',
+                'name' => 'Time Machine',
+                'description' => 'View any record at any point in time with full history',
+                'category' => Plugin::CATEGORY_ADMIN,
+                'tier' => Plugin::TIER_ADVANCED,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 20.00,
+                'price_yearly' => 192.00,
+                'icon' => 'clock',
+                'features' => ['Point-in-time view', 'Field change history', 'Diff comparison', 'Restore capability', 'Audit trail'],
+                'display_order' => 20,
+            ],
+            [
+                'slug' => 'scenario-planner',
+                'name' => 'Scenario Planner',
+                'description' => 'What-if analysis and scenario modeling for deals',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_ADVANCED,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 25.00,
+                'price_yearly' => 240.00,
+                'icon' => 'git-compare',
+                'features' => ['Scenario creation', 'Deal adjustments', 'Comparison view', 'Gap analysis', 'Commit tracking'],
+                'display_order' => 21,
+            ],
+            [
+                'slug' => 'revenue-graph',
+                'name' => 'Revenue Intelligence Graph',
+                'description' => 'Visual relationship mapping for revenue opportunities',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_ADVANCED,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 30.00,
+                'price_yearly' => 288.00,
+                'icon' => 'share-2',
+                'features' => ['Relationship visualization', 'Path analysis', 'Influence mapping', 'Revenue attribution', 'Interactive graph'],
+                'display_order' => 22,
+            ],
+            [
+                'slug' => 'deal-rooms',
+                'name' => 'Deal Rooms',
+                'description' => 'Collaborative spaces for buyer-seller engagement',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_ADVANCED,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 25.00,
+                'price_yearly' => 240.00,
+                'icon' => 'users',
+                'features' => ['Branded rooms', 'Document sharing', 'Action items', 'Chat', 'Engagement analytics'],
+                'display_order' => 23,
+            ],
+            [
+                'slug' => 'competitor-battlecards',
+                'name' => 'Competitor Battlecards',
+                'description' => 'Competitive intelligence and objection handling',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_ADVANCED,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 20.00,
+                'price_yearly' => 192.00,
+                'icon' => 'swords',
+                'features' => ['Battlecard builder', 'Objection library', 'Win/loss tracking', 'Team feedback', 'Analytics'],
+                'display_order' => 24,
+            ],
+            [
+                'slug' => 'process-recorder',
+                'name' => 'Process Recorder',
+                'description' => 'Record actions and generate workflows automatically',
+                'category' => Plugin::CATEGORY_ADMIN,
+                'tier' => Plugin::TIER_ADVANCED,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'video',
+                'features' => ['Action recording', 'Step parameterization', 'Workflow generation', 'Template library'],
+                'display_order' => 25,
+            ],
+        ];
+
+        // ============================================
+        // TIER 4: COMMUNICATION CHANNELS (Flat pricing)
+        // ============================================
+        $communicationPlugins = [
+            [
+                'slug' => 'live-chat',
+                'name' => 'Live Chat Widget',
+                'description' => 'Embeddable chat widget for websites',
+                'category' => Plugin::CATEGORY_SERVICE,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 25.00,
+                'price_yearly' => 240.00,
+                'icon' => 'message-circle',
+                'features' => ['Customizable widget', 'Agent routing', 'Canned responses', 'File sharing', 'Visitor tracking'],
+                'display_order' => 30,
+            ],
+            [
+                'slug' => 'whatsapp-integration',
+                'name' => 'WhatsApp Business',
+                'description' => 'WhatsApp Business API integration',
+                'category' => Plugin::CATEGORY_COMMUNICATION,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 30.00,
+                'price_yearly' => 288.00,
+                'icon' => 'message-square',
+                'features' => ['Template messages', 'Rich media', 'Automated replies', 'Contact sync', 'Analytics'],
+                'display_order' => 31,
+            ],
+            [
+                'slug' => 'sms-automation',
+                'name' => 'SMS Automation',
+                'description' => 'SMS messaging with Twilio integration',
+                'category' => Plugin::CATEGORY_COMMUNICATION,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 20.00,
+                'price_yearly' => 192.00,
+                'icon' => 'smartphone',
+                'features' => ['SMS campaigns', 'Two-way messaging', 'Templates', 'Opt-out management', 'Delivery tracking'],
+                'display_order' => 32,
+            ],
+            [
+                'slug' => 'team-chat',
+                'name' => 'Team Chat Integration',
+                'description' => 'Slack and Microsoft Teams integration',
+                'category' => Plugin::CATEGORY_COMMUNICATION,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'hash',
+                'features' => ['Deal notifications', 'Channel posting', 'Slash commands', 'User mapping'],
+                'display_order' => 33,
+            ],
+            [
+                'slug' => 'shared-inbox',
+                'name' => 'Shared Team Inbox',
+                'description' => 'Collaborative email inbox for teams',
+                'category' => Plugin::CATEGORY_SERVICE,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 25.00,
+                'price_yearly' => 240.00,
+                'icon' => 'inbox',
+                'features' => ['Shared inbox', 'Assignment rules', 'Collision detection', 'Internal notes', 'SLAs'],
+                'display_order' => 34,
+            ],
+        ];
+
+        // ============================================
+        // TIER 5: MARKETING SUITE
+        // ============================================
+        $marketingPlugins = [
+            [
+                'slug' => 'marketing-campaigns',
+                'name' => 'Marketing Campaigns',
+                'description' => 'Multi-channel marketing campaign management',
+                'category' => Plugin::CATEGORY_MARKETING,
+                'tier' => Plugin::TIER_ADVANCED,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 35.00,
+                'price_yearly' => 336.00,
+                'icon' => 'megaphone',
+                'features' => ['Campaign builder', 'Email marketing', 'A/B testing', 'Analytics', 'Audience segmentation'],
+                'display_order' => 40,
+            ],
+            [
+                'slug' => 'smart-cadences',
+                'name' => 'Smart Cadences',
+                'description' => 'Multi-touch sales sequences with optimization',
+                'category' => Plugin::CATEGORY_MARKETING,
+                'tier' => Plugin::TIER_ADVANCED,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 30.00,
+                'price_yearly' => 288.00,
+                'icon' => 'repeat',
+                'features' => ['Sequence builder', 'Multi-channel', 'AI optimization', 'Performance tracking', 'Templates'],
+                'display_order' => 41,
+            ],
+        ];
+
+        // ============================================
+        // TIER 6: AI/ML FEATURES
+        // ============================================
+        $aiPlugins = [
+            [
+                'slug' => 'ai-email-composition',
+                'name' => 'AI Email Composition',
+                'description' => 'AI-powered email writing assistance',
+                'category' => Plugin::CATEGORY_AI,
+                'tier' => Plugin::TIER_ENTERPRISE,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 30.00,
+                'price_yearly' => 288.00,
+                'icon' => 'sparkles',
+                'features' => ['Email generation', 'Tone adjustment', 'Subject lines', 'Personalization', 'Templates'],
+                'display_order' => 50,
+            ],
+            [
+                'slug' => 'ai-lead-scoring',
+                'name' => 'AI Lead Scoring',
+                'description' => 'Machine learning-based lead prioritization',
+                'category' => Plugin::CATEGORY_AI,
+                'tier' => Plugin::TIER_ENTERPRISE,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 40.00,
+                'price_yearly' => 384.00,
+                'icon' => 'brain',
+                'features' => ['Predictive scoring', 'Custom models', 'Score explanations', 'Auto-assignment', 'Trends'],
+                'display_order' => 51,
+            ],
+            [
+                'slug' => 'meeting-summarization',
+                'name' => 'Meeting Summarization',
+                'description' => 'AI-powered meeting notes and action items',
+                'category' => Plugin::CATEGORY_AI,
+                'tier' => Plugin::TIER_ENTERPRISE,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 35.00,
+                'price_yearly' => 336.00,
+                'icon' => 'file-audio',
+                'features' => ['Transcription', 'Summary generation', 'Action extraction', 'CRM sync', 'Search'],
+                'display_order' => 52,
+            ],
+        ];
+
+        // Insert all plugins
+        $allPlugins = array_merge(
+            $corePlugins,
+            $professionalPlugins,
+            $advancedPlugins,
+            $communicationPlugins,
+            $marketingPlugins,
+            $aiPlugins
+        );
+
+        foreach ($allPlugins as $pluginData) {
+            Plugin::create($pluginData);
+        }
+
+        // ============================================
+        // BUNDLES
+        // ============================================
+        $bundles = [
+            [
+                'slug' => 'sales-pro-pack',
+                'name' => 'Sales Pro Pack',
+                'description' => 'Essential sales tools for growing teams',
+                'plugins' => ['forecasting-pro', 'quotes-invoices', 'meeting-scheduler', 'deal-rotting'],
+                'price_monthly' => 40.00,
+                'price_yearly' => 384.00,
+                'discount_percent' => 25,
+                'icon' => 'briefcase',
+                'display_order' => 1,
+            ],
+            [
+                'slug' => 'revenue-intelligence-pack',
+                'name' => 'Revenue Intelligence Pack',
+                'description' => 'Advanced insights for enterprise sales',
+                'plugins' => ['time-machine', 'scenario-planner', 'revenue-graph', 'competitor-battlecards'],
+                'price_monthly' => 75.00,
+                'price_yearly' => 720.00,
+                'discount_percent' => 21,
+                'icon' => 'line-chart',
+                'display_order' => 2,
+            ],
+            [
+                'slug' => 'omnichannel-pack',
+                'name' => 'Omnichannel Pack',
+                'description' => 'Connect with customers on every channel',
+                'plugins' => ['live-chat', 'whatsapp-integration', 'sms-automation', 'shared-inbox'],
+                'price_monthly' => 80.00,
+                'price_yearly' => 768.00,
+                'discount_percent' => 20,
+                'icon' => 'radio',
+                'display_order' => 3,
+            ],
+            [
+                'slug' => 'marketing-hub',
+                'name' => 'Marketing Hub',
+                'description' => 'Complete marketing automation suite',
+                'plugins' => ['marketing-campaigns', 'smart-cadences', 'web-forms-pro'],
+                'price_monthly' => 70.00,
+                'price_yearly' => 672.00,
+                'discount_percent' => 17,
+                'icon' => 'target',
+                'display_order' => 4,
+            ],
+            [
+                'slug' => 'ai-copilot',
+                'name' => 'AI Copilot',
+                'description' => 'AI-powered sales assistance',
+                'plugins' => ['ai-email-composition', 'ai-lead-scoring', 'meeting-summarization'],
+                'price_monthly' => 85.00,
+                'price_yearly' => 816.00,
+                'discount_percent' => 24,
+                'icon' => 'bot',
+                'display_order' => 5,
+            ],
+        ];
+
+        foreach ($bundles as $bundleData) {
+            PluginBundle::create($bundleData);
+        }
+    }
+}

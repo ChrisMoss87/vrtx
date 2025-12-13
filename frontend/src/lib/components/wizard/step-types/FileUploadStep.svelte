@@ -2,7 +2,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Upload, File, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-svelte';
+	import { Upload, File as FileIcon, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-svelte';
 	import { generateId } from '$lib/utils/id';
 
 	interface UploadedFile {

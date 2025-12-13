@@ -100,6 +100,7 @@ class ReportService
 
     /**
      * Execute a table report (simple list).
+     * Uses cursor-based iteration and lazy collection for memory efficiency.
      */
     protected function executeTableReport($query, array $sorting, int $limit): array
     {
@@ -117,12 +118,23 @@ class ReportService
             }
         }
 
-        $records = $query->limit($limit)->get();
+        // Use cursor for memory efficiency with large datasets
+        // Only collect the limited amount we need
+        $data = [];
+        $count = 0;
+
+        foreach ($query->cursor() as $record) {
+            if ($count >= $limit) {
+                break;
+            }
+            $data[] = array_merge(['id' => $record->id], $record->data);
+            $count++;
+        }
 
         return [
             'type' => 'table',
-            'data' => $records->map(fn($r) => array_merge(['id' => $r->id], $r->data))->toArray(),
-            'total' => $records->count(),
+            'data' => $data,
+            'total' => $count,
         ];
     }
 
@@ -416,7 +428,8 @@ class ReportService
      */
     public function getModuleFields(int $moduleId): array
     {
-        $module = Module::with(['fields', 'blocks.fields'])->find($moduleId);
+        // Eager load fields with their options to avoid N+1 queries
+        $module = Module::with(['fields.options', 'blocks.fields.options'])->find($moduleId);
 
         if (!$module) {
             return [];
@@ -516,10 +529,11 @@ class ReportService
 
     /**
      * Export report to various formats.
+     * For large exports, consider using streamExportToCsv() instead.
      */
     public function exportReport(Report $report, string $format = 'csv'): string
     {
-        $result = $this->executeReport($report);
+        $result = $this->executeReport($report, useCache: false);
         $data = $result['data'] ?? [];
 
         return match ($format) {
@@ -527,6 +541,139 @@ class ReportService
             'json' => json_encode($data, JSON_PRETTY_PRINT),
             default => $this->toCsv($data),
         };
+    }
+
+    /**
+     * Stream a large report export directly to a file path.
+     * Much more memory efficient for large datasets.
+     *
+     * @param Report $report The report to export
+     * @param string $filePath The path to write the export to
+     * @param string $format Export format (csv, json)
+     * @return int Number of records exported
+     */
+    public function streamExportToCsv(Report $report, string $filePath): int
+    {
+        $config = [
+            'module_id' => $report->module_id,
+            'type' => $report->type,
+            'filters' => $report->filters ?? [],
+            'sorting' => $report->sorting ?? [],
+            'date_range' => $report->date_range ?? [],
+        ];
+
+        $query = ModuleRecord::query();
+
+        if ($config['module_id']) {
+            $query->where('module_id', $config['module_id']);
+        }
+
+        $this->applyFilters($query, $config['filters']);
+        $this->applyDateRange($query, $config['date_range']);
+
+        // Apply sorting
+        foreach ($config['sorting'] as $sort) {
+            $field = $sort['field'] ?? null;
+            $direction = $sort['direction'] ?? 'asc';
+
+            if ($field) {
+                if (in_array($field, ['id', 'created_at', 'updated_at'])) {
+                    $query->orderBy($field, $direction);
+                } else {
+                    $query->orderBy("data->{$field}", $direction);
+                }
+            }
+        }
+
+        $output = fopen($filePath, 'w');
+        if ($output === false) {
+            throw new \RuntimeException("Could not open file for writing: {$filePath}");
+        }
+
+        $headerWritten = false;
+        $count = 0;
+
+        // Use cursor to stream records one at a time
+        foreach ($query->cursor() as $record) {
+            $row = array_merge(['id' => $record->id], $record->data);
+
+            // Write header on first row
+            if (!$headerWritten) {
+                fputcsv($output, array_keys($row));
+                $headerWritten = true;
+            }
+
+            fputcsv($output, array_values($row));
+            $count++;
+
+            // Periodically clear memory
+            if ($count % 1000 === 0) {
+                gc_collect_cycles();
+            }
+        }
+
+        fclose($output);
+
+        return $count;
+    }
+
+    /**
+     * Stream JSON export for large datasets.
+     * Writes records as a JSON array incrementally.
+     *
+     * @param Report $report The report to export
+     * @param string $filePath The path to write the export to
+     * @return int Number of records exported
+     */
+    public function streamExportToJson(Report $report, string $filePath): int
+    {
+        $config = [
+            'module_id' => $report->module_id,
+            'filters' => $report->filters ?? [],
+            'sorting' => $report->sorting ?? [],
+            'date_range' => $report->date_range ?? [],
+        ];
+
+        $query = ModuleRecord::query();
+
+        if ($config['module_id']) {
+            $query->where('module_id', $config['module_id']);
+        }
+
+        $this->applyFilters($query, $config['filters']);
+        $this->applyDateRange($query, $config['date_range']);
+
+        $output = fopen($filePath, 'w');
+        if ($output === false) {
+            throw new \RuntimeException("Could not open file for writing: {$filePath}");
+        }
+
+        fwrite($output, "[\n");
+
+        $count = 0;
+        $first = true;
+
+        foreach ($query->cursor() as $record) {
+            $row = array_merge(['id' => $record->id], $record->data);
+
+            if (!$first) {
+                fwrite($output, ",\n");
+            }
+            $first = false;
+
+            fwrite($output, json_encode($row, JSON_PRETTY_PRINT));
+            $count++;
+
+            // Periodically clear memory
+            if ($count % 1000 === 0) {
+                gc_collect_cycles();
+            }
+        }
+
+        fwrite($output, "\n]");
+        fclose($output);
+
+        return $count;
     }
 
     /**

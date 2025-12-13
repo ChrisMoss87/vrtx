@@ -15,7 +15,7 @@
 		disabled?: boolean;
 		placeholder?: string;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		options?: FieldOption[];
 		onchange: (value: number | number[] | string | string[]) => void;
 	}

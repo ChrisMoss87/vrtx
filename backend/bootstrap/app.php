@@ -17,6 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
+
+        // Register all custom middleware aliases
+        $middleware->alias([
+            'permission' => \App\Http\Middleware\CheckPermission::class,
+            'permission.any' => \App\Http\Middleware\CheckAnyPermission::class,
+            'plugin' => \App\Http\Middleware\CheckPluginLicense::class,
+            'feature' => \App\Http\Middleware\CheckFeatureFlag::class,
+            'plan' => \App\Http\Middleware\CheckPlan::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -23,7 +23,8 @@
 		ArrowRight,
 		Copy,
 		Settings,
-		ToggleLeft
+		ToggleLeft,
+		Link
 	} from 'lucide-svelte';
 	import type { ActionType, WorkflowStepInput } from '$lib/api/workflows';
 	import type { Field } from '$lib/api/modules';
@@ -145,6 +146,13 @@
 			description: 'Branch based on conditions',
 			icon: GitBranch,
 			category: 'Flow Control'
+		},
+		{
+			value: 'update_related_record',
+			label: 'Update Related Record',
+			description: 'Update parent or child records',
+			icon: Link,
+			category: 'Record Operations'
 		}
 	];
 

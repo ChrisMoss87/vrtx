@@ -12,27 +12,41 @@ export type FieldCategory =
 	| 'media';
 
 export type FieldType =
+	// Basic text fields
 	| 'text'
 	| 'textarea'
 	| 'rich_text'
 	| 'email'
 	| 'phone'
 	| 'url'
+	// Numeric fields
 	| 'number'
+	| 'decimal'
 	| 'currency'
 	| 'percent'
+	// Date/time fields
 	| 'date'
 	| 'datetime'
 	| 'time'
+	// Choice fields
 	| 'checkbox'
+	| 'toggle'
 	| 'select'
 	| 'multiselect'
 	| 'radio'
+	// Relationship fields
 	| 'lookup'
+	// Calculated fields
 	| 'formula'
 	| 'auto_number'
+	// Media fields
 	| 'file'
-	| 'image';
+	| 'image'
+	// Special fields
+	| 'progress_mapper'
+	| 'rating'
+	| 'signature'
+	| 'color';
 
 export interface FieldTypeDefinition {
 	type: FieldType;
@@ -284,6 +298,70 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeDefinition> = {
 		supportsValidation: true,
 		supportsConditionalLogic: true,
 		supportsDefaultValue: false
+	},
+
+	// Extended numeric fields
+	decimal: {
+		type: 'decimal',
+		label: 'Decimal',
+		description: 'Decimal number with precision',
+		icon: 'Hash',
+		category: 'numeric',
+		supportsValidation: true,
+		supportsConditionalLogic: true,
+		supportsDefaultValue: true
+	},
+
+	// Extended choice fields
+	toggle: {
+		type: 'toggle',
+		label: 'Toggle Switch',
+		description: 'On/Off toggle switch',
+		icon: 'ToggleLeft',
+		category: 'choice',
+		supportsConditionalLogic: true,
+		supportsDefaultValue: true
+	},
+
+	// Special fields
+	progress_mapper: {
+		type: 'progress_mapper',
+		label: 'Progress Mapper',
+		description: 'Visual progress indicator with stages',
+		icon: 'BarChart2',
+		category: 'calculated',
+		supportsConditionalLogic: false,
+		supportsDefaultValue: false
+	},
+	rating: {
+		type: 'rating',
+		label: 'Rating',
+		description: 'Star or numeric rating field',
+		icon: 'Star',
+		category: 'choice',
+		supportsValidation: true,
+		supportsConditionalLogic: true,
+		supportsDefaultValue: true
+	},
+	signature: {
+		type: 'signature',
+		label: 'Signature',
+		description: 'Digital signature capture',
+		icon: 'PenTool',
+		category: 'media',
+		supportsValidation: true,
+		supportsConditionalLogic: false,
+		supportsDefaultValue: false
+	},
+	color: {
+		type: 'color',
+		label: 'Color Picker',
+		description: 'Color selection field',
+		icon: 'Palette',
+		category: 'basic',
+		supportsValidation: false,
+		supportsConditionalLogic: true,
+		supportsDefaultValue: true
 	}
 };
 

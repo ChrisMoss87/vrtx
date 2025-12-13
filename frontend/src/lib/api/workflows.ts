@@ -35,7 +35,8 @@ export type ActionType =
 	| 'delay'
 	| 'condition'
 	| 'create_task'
-	| 'move_stage';
+	| 'move_stage'
+	| 'update_related_record';
 
 export interface WorkflowStep {
 	id: number;

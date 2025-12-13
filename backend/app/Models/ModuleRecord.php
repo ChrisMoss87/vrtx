@@ -13,11 +13,21 @@ class ModuleRecord extends Model
 {
     use HasFactory, SoftDeletes;
 
+    // Forecast categories
+    public const FORECAST_COMMIT = 'commit';
+    public const FORECAST_BEST_CASE = 'best_case';
+    public const FORECAST_PIPELINE = 'pipeline';
+    public const FORECAST_OMITTED = 'omitted';
+
     protected $fillable = [
         'module_id',
         'data',
         'created_by',
         'updated_by',
+        'last_activity_at',
+        'forecast_category',
+        'forecast_override',
+        'expected_close_date',
     ];
 
     protected $casts = [
@@ -25,6 +35,9 @@ class ModuleRecord extends Model
         'data' => 'array',
         'created_by' => 'integer',
         'updated_by' => 'integer',
+        'last_activity_at' => 'datetime',
+        'forecast_override' => 'decimal:2',
+        'expected_close_date' => 'date',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -56,6 +69,22 @@ class ModuleRecord extends Model
     public function updater(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    /**
+     * Get the owner (alias for creator) for RBAC purposes.
+     */
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Get owner_id attribute (alias for created_by) for RBAC purposes.
+     */
+    public function getOwnerIdAttribute(): ?int
+    {
+        return $this->created_by;
     }
 
     /**

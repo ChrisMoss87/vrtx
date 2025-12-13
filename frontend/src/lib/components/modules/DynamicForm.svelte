@@ -22,7 +22,6 @@
 	import type { Module, FormulaDefinition } from '$lib/api/modules';
 	import type { ModuleRecord } from '$lib/types/modules';
 	import { Loader2 } from 'lucide-svelte';
-	import Debug from '$lib/components/Debug.svelte';
 	import Block from '$lib/components/form/Block.svelte';
 	import { evaluateFormula, type FormulaDefinition as FormulaDefCalc } from '$lib/utils/formulaCalculator';
 
@@ -120,7 +119,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							showColors={isPipelineField}
 							options={field.options?.map((opt) => ({
@@ -135,7 +134,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							options={field.options?.map((opt) => ({
 								label: opt.label,
@@ -148,7 +147,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							options={field.options?.map((opt) => ({
 								label: opt.label,
@@ -161,7 +160,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							bind:value={formData[field.api_name]}
 						/>
@@ -170,7 +169,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							bind:value={formData[field.api_name]}
 						/>
@@ -179,7 +178,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							bind:value={formData[field.api_name]}
 						/>
@@ -188,7 +187,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							bind:value={formData[field.api_name]}
 						/>
@@ -197,7 +196,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							bind:value={formData[field.api_name]}
 						/>
@@ -206,7 +205,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							placeholder={field.default_value || '0.00'}
 							bind:value={formData[field.api_name]}
@@ -216,7 +215,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							placeholder={field.default_value || '0'}
 							bind:value={formData[field.api_name]}
@@ -226,9 +225,9 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
-							relationshipId={field.settings?.related_module_id}
+							relationshipId={field.settings?.related_module_id ?? 0}
 							bind:value={formData[field.api_name]}
 						/>
 					{:else if field.type === 'file'}
@@ -236,7 +235,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							bind:value={formData[field.api_name]}
 						/>
@@ -245,7 +244,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							bind:value={formData[field.api_name]}
 						/>
@@ -254,7 +253,7 @@
 							label={field.label}
 							name={field.api_name}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							placeholder={field.default_value || ''}
 							bind:value={formData[field.api_name]}
@@ -275,9 +274,9 @@
 						<TextField
 							label={field.label}
 							name={field.api_name}
-							type={fieldType}
+							type={fieldType as 'text' | 'email' | 'tel' | 'url' | 'password'}
 							required={field.is_required}
-							description={field.help_text}
+							description={field.help_text ?? undefined}
 							error={errors[field.api_name]}
 							placeholder={field.default_value || ''}
 							bind:value={formData[field.api_name]}

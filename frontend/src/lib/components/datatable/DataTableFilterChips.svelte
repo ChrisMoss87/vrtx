@@ -17,6 +17,20 @@
 	// Track which filter chip is being edited
 	let editingField = $state<string | null>(null);
 
+	// Get option labels for a column's values
+	function getValueLabels(filter: FilterConfig): string[] {
+		const column = table.columns.find((c) => c.id === filter.field);
+		const options = column?.filterOptions || column?.options || [];
+
+		const values: (string | number | boolean | null)[] = Array.isArray(filter.value)
+			? filter.value as (string | number | boolean | null)[]
+			: [filter.value as string | number | boolean | null];
+		return values.map((val) => {
+			const option = options.find((opt) => opt.value === val);
+			return option?.label || String(val ?? '');
+		});
+	}
+
 	// Format filter value for display
 	function formatFilterValue(filter: FilterConfig): string {
 		const operators: Record<string, string> = {
@@ -30,7 +44,7 @@
 			greater_or_equal: '≥',
 			less_or_equal: '≤',
 			between: 'between',
-			in: 'in',
+			in: 'is',
 			is_empty: 'is empty',
 			is_not_empty: 'is not empty',
 			today: 'today',
@@ -53,8 +67,12 @@
 			return `${operator} ${filter.value[0]} and ${filter.value[1]}`;
 		}
 
-		if (filter.operator === 'in' && Array.isArray(filter.value)) {
-			return `${operator} (${filter.value.length})`;
+		if ((filter.operator === 'in' || filter.operator === 'equals') && Array.isArray(filter.value)) {
+			const labels = getValueLabels(filter);
+			if (labels.length <= 2) {
+				return `${operator} ${labels.join(' or ')}`;
+			}
+			return `${operator} ${labels.slice(0, 2).join(', ')} +${labels.length - 2}`;
 		}
 
 		if (
@@ -68,7 +86,9 @@
 			return operator;
 		}
 
-		return `${operator} ${filter.value}`;
+		// For single values, try to get the label
+		const labels = getValueLabels(filter);
+		return `${operator} ${labels[0]}`;
 	}
 
 	// Get column header by ID

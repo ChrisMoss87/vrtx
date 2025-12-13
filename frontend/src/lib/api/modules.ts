@@ -80,6 +80,22 @@ export interface LookupConfiguration {
 	filters?: Record<string, any>;
 }
 
+export interface ProgressMappingStage {
+	value: string;
+	label: string;
+	percentage: number;
+	color?: string;
+}
+
+export interface ProgressMapping {
+	stages: ProgressMappingStage[];
+	show_percentage?: boolean;
+	show_label?: boolean;
+	display_style?: 'bar' | 'steps' | 'funnel';
+	allow_backward?: boolean;
+	completed_color?: string;
+}
+
 export interface FieldSettings {
 	min_length?: number;
 	max_length?: number;
@@ -89,6 +105,7 @@ export interface FieldSettings {
 	precision?: number;
 	currency_code?: string;
 	currency_symbol?: string;
+	currency?: string; // Alias for currency_code
 	rows?: number;
 	min_date?: string;
 	max_date?: string;
@@ -112,6 +129,17 @@ export interface FieldSettings {
 	depends_on?: string;
 	dependency_filter?: DependencyFilter;
 	additional_settings?: Record<string, unknown>;
+	// Progress Mapper settings
+	progress_mapping?: ProgressMapping;
+	// Rating settings
+	max_rating?: number;
+	allow_half?: boolean;
+	rating_icon?: 'star' | 'heart' | 'circle';
+	// Auto Number settings
+	prefix?: string;
+	suffix?: string;
+	start_number?: number;
+	pad_length?: number;
 }
 
 export interface ConditionalVisibility {
@@ -171,6 +199,7 @@ export interface FieldOption {
 	color: string | null;
 	is_active: boolean;
 	display_order: number;
+	metadata?: Record<string, unknown>;
 }
 
 export interface CreateModuleRequest {

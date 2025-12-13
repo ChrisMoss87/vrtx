@@ -1,33 +1,28 @@
-export type FieldType =
-	| 'text'
-	| 'textarea'
-	| 'number'
-	| 'decimal'
-	| 'email'
-	| 'phone'
-	| 'url'
-	| 'select'
-	| 'multiselect'
-	| 'radio'
-	| 'checkbox'
-	| 'toggle'
-	| 'date'
-	| 'datetime'
-	| 'time'
-	| 'currency'
-	| 'percent'
-	| 'lookup'
-	| 'formula'
-	| 'file'
-	| 'image'
-	| 'rich_text'
-	| 'progress_mapper'
-	| 'rating'
-	| 'signature'
-	| 'color'
-	| 'auto_number';
+// Import and re-export FieldType from the canonical source
+import type {
+	FieldType as BaseFieldType,
+	FieldCategory,
+	FieldTypeDefinition
+} from '$lib/types/field-types';
+
+// Re-export API types for consistency
+export type {
+	FieldSettings as ApiFieldSettings,
+	FieldOption as ApiFieldOption,
+	ConditionalVisibility as ApiConditionalVisibility
+} from '$lib/api/modules';
+
+// Re-export for consumers
+export type { FieldCategory, FieldTypeDefinition };
+export type FieldType = BaseFieldType;
 
 export type BlockType = 'section' | 'tab' | 'repeating';
+
+export interface FieldOptionMetadata {
+	icon?: string;
+	description?: string;
+	[key: string]: string | number | boolean | undefined;
+}
 
 export interface FieldOption {
 	id?: number;
@@ -36,7 +31,7 @@ export interface FieldOption {
 	color?: string | null;
 	display_order: number;
 	is_active: boolean;
-	metadata?: Record<string, any>;
+	metadata?: FieldOptionMetadata;
 }
 
 export interface ValidationRules {
@@ -49,10 +44,12 @@ export interface ConditionalVisibility {
 	conditions: Condition[];
 }
 
+export type ConditionValue = string | number | boolean | string[] | number[] | null;
+
 export interface Condition {
 	field: string;
 	operator: ConditionOperator;
-	value?: any;
+	value?: ConditionValue;
 	field_value?: string;
 }
 
@@ -91,6 +88,7 @@ export interface FieldSettings {
 	precision?: number;
 	currency_code?: string;
 	currency_symbol?: string;
+	currency?: string; // Alias for currency_code
 
 	// Date/DateTime
 	min_date?: string;
@@ -150,8 +148,8 @@ export interface FieldSettings {
 	start_number?: number;
 	pad_length?: number;
 
-	// Additional settings
-	additional_settings?: Record<string, any>;
+	// Additional settings (type-safe but extensible)
+	additional_settings?: Record<string, string | number | boolean | null>;
 }
 
 export interface ProgressStage {
@@ -211,7 +209,7 @@ export interface ModuleSettings {
 	has_activity_log?: boolean;
 	has_custom_views?: boolean;
 	record_name_field?: string;
-	additional_settings?: Record<string, any>;
+	additional_settings?: Record<string, string | number | boolean | null>;
 }
 
 export interface Module {
@@ -231,10 +229,28 @@ export interface Module {
 	deleted_at?: string;
 }
 
+/**
+ * Record field value types - supports all CRM field types
+ */
+export type RecordFieldValue =
+	| string
+	| number
+	| boolean
+	| null
+	| string[]
+	| number[]
+	| Record<string, unknown>
+	| { id: number; name?: string }; // For lookup fields
+
+/**
+ * Generic record data with type-safe field access
+ */
+export type RecordData = Record<string, RecordFieldValue>;
+
 export interface ModuleRecord {
 	id: number;
 	module_id: number;
-	data: Record<string, any>;
+	data: RecordData;
 	created_by?: number;
 	updated_by?: number;
 	created_at: string;
@@ -252,24 +268,28 @@ export interface PaginatedRecords {
 	};
 }
 
+export type FilterOperator =
+	| 'eq'
+	| 'neq'
+	| 'gt'
+	| 'gte'
+	| 'lt'
+	| 'lte'
+	| 'contains'
+	| 'starts'
+	| 'ends'
+	| 'in'
+	| 'not_in'
+	| 'null'
+	| 'not_null'
+	| 'between';
+
+export type FilterValue = RecordFieldValue | [RecordFieldValue, RecordFieldValue]; // between takes two values
+
 export interface FilterConfig {
 	field: string;
-	operator:
-		| 'eq'
-		| 'neq'
-		| 'gt'
-		| 'gte'
-		| 'lt'
-		| 'lte'
-		| 'contains'
-		| 'starts'
-		| 'ends'
-		| 'in'
-		| 'not_in'
-		| 'null'
-		| 'not_null'
-		| 'between';
-	value: any;
+	operator: FilterOperator;
+	value: FilterValue;
 }
 
 export interface SortConfig {
@@ -300,11 +320,11 @@ export interface UpdateModuleRequest {
 }
 
 export interface CreateRecordRequest {
-	data: Record<string, any>;
+	data: RecordData;
 }
 
 export interface UpdateRecordRequest {
-	data: Record<string, any>;
+	data: Partial<RecordData>;
 }
 
 export interface ApiResponse<T> {

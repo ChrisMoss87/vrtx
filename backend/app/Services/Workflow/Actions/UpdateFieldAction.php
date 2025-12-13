@@ -131,27 +131,13 @@ class UpdateFieldAction implements ActionInterface
     }
 
     /**
-     * Evaluate a simple formula.
+     * Evaluate a simple formula safely without using eval().
      */
     protected function evaluateFormula(string $formula, array $context): mixed
     {
-        // Simple formula evaluation
-        // Supports: {{field_name}} + 1, {{field_name}} * 2, etc.
-
-        $result = preg_replace_callback('/\{\{([^}]+)\}\}/', function ($matches) use ($context) {
-            $field = trim($matches[1]);
-            return $context['record']['data'][$field] ?? 0;
-        }, $formula);
-
-        // Only evaluate simple math expressions
-        if (preg_match('/^[\d\s\+\-\*\/\(\)\.]+$/', $result)) {
-            try {
-                return eval("return {$result};");
-            } catch (\Throwable) {
-                return $formula;
-            }
-        }
-
-        return $result;
+        // Use safe expression evaluator
+        return \App\Services\Workflow\SafeExpressionEvaluator::evaluate($formula, [
+            'record' => $context['record'] ?? [],
+        ]);
     }
 }

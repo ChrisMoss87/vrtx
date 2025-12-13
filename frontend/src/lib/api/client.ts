@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
+import { ApiError, type ApiErrorData } from './utils';
 
 interface FetchOptions extends RequestInit {
 	params?: Record<string, string | number | boolean | undefined>;
@@ -73,13 +74,19 @@ export class ApiClient {
 		});
 
 		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({ message: response.statusText }));
-			console.error('API Error Response:', {
-				status: response.status,
-				statusText: response.statusText,
-				url,
-				data: errorData
-			});
+			const errorData: ApiErrorData = await response
+				.json()
+				.catch(() => ({ message: response.statusText }));
+
+			// Log in development
+			if (import.meta.env.DEV) {
+				console.error('API Error Response:', {
+					status: response.status,
+					statusText: response.statusText,
+					url,
+					data: errorData
+				});
+			}
 
 			// Handle 401 Unauthorized - redirect to login
 			if (response.status === 401 && browser) {
@@ -89,20 +96,20 @@ export class ApiClient {
 
 				// Get current path for redirect after login
 				const currentPath = window.location.pathname;
-				const redirectUrl = currentPath !== '/login' ? `?redirect=${encodeURIComponent(currentPath)}` : '';
+				const redirectUrl =
+					currentPath !== '/login' ? `?redirect=${encodeURIComponent(currentPath)}` : '';
 
 				// Redirect to login page
 				goto(`/login${redirectUrl}`);
 			}
 
-			// Create error object with more details
-			const error: any = new Error(errorData.message || 'API request failed');
-			error.response = {
-				status: response.status,
-				statusText: response.statusText,
-				data: errorData
-			};
-			throw error;
+			// Create properly typed ApiError
+			throw new ApiError(
+				errorData.message || errorData.error || 'API request failed',
+				response.status,
+				response.statusText,
+				errorData
+			);
 		}
 
 		return response.json();
@@ -160,14 +167,16 @@ export class ApiClient {
 		});
 
 		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({ message: response.statusText }));
-			const error: any = new Error(errorData.message || 'Upload failed');
-			error.response = {
-				status: response.status,
-				statusText: response.statusText,
-				data: errorData
-			};
-			throw error;
+			const errorData: ApiErrorData = await response
+				.json()
+				.catch(() => ({ message: response.statusText }));
+
+			throw new ApiError(
+				errorData.message || errorData.error || 'Upload failed',
+				response.status,
+				response.statusText,
+				errorData
+			);
 		}
 
 		return response.json();

@@ -116,6 +116,229 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		@apply bg-background text-foreground;
+		@apply bg-background text-foreground antialiased;
+	}
+}
+
+/* ============================================
+   UTILITY CLASSES - Shadows, Animations, Effects
+   ============================================ */
+@layer utilities {
+	/* Enhanced shadows using existing colors */
+	.shadow-soft {
+		box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.08), 0 4px 16px -4px rgb(0 0 0 / 0.12);
+	}
+
+	.shadow-elevated {
+		box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.1), 0 8px 24px -4px rgb(0 0 0 / 0.15);
+	}
+
+	.shadow-float {
+		box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.12), 0 16px 40px -8px rgb(0 0 0 / 0.18);
+	}
+
+	/* Hover lift effect */
+	.hover-lift {
+		@apply transition-all duration-200 ease-out;
+	}
+	.hover-lift:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.12), 0 16px 40px -8px rgb(0 0 0 / 0.18);
+	}
+
+	/* Subtle scale on hover */
+	.hover-scale {
+		@apply transition-transform duration-200 ease-out;
+	}
+	.hover-scale:hover {
+		transform: scale(1.02);
+	}
+
+	/* Press effect */
+	.press-effect {
+		@apply transition-transform duration-100;
+	}
+	.press-effect:active {
+		transform: scale(0.98);
+	}
+
+	/* Fade in animation */
+	.animate-fade-in {
+		animation: fadeIn 0.3s ease-out forwards;
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	/* Slide in from left */
+	.animate-slide-in-left {
+		animation: slideInLeft 0.3s ease-out forwards;
+	}
+
+	@keyframes slideInLeft {
+		from {
+			opacity: 0;
+			transform: translateX(-16px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+
+	/* Shimmer loading effect */
+	.shimmer {
+		position: relative;
+		overflow: hidden;
+	}
+	.shimmer::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		transform: translateX(-100%);
+		background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.4), transparent);
+		animation: shimmer 1.5s infinite;
+	}
+
+	@keyframes shimmer {
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	/* Glassmorphism effect */
+	.glass {
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+	}
+
+	/* Better border radius options */
+	.rounded-2xl {
+		border-radius: calc(var(--radius) + 8px);
+	}
+
+	.rounded-3xl {
+		border-radius: calc(var(--radius) + 12px);
+	}
+
+	/* Focus ring enhancement */
+	.focus-ring {
+		@apply outline-none ring-offset-2 ring-offset-background transition-shadow;
+	}
+	.focus-ring:focus-visible {
+		@apply ring-2 ring-ring;
+	}
+
+	/* Active indicator line */
+	.active-indicator {
+		position: relative;
+	}
+	.active-indicator::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 3px;
+		height: 60%;
+		border-radius: 0 2px 2px 0;
+		background: var(--primary);
+		opacity: 0;
+		transition: opacity 0.2s ease;
+	}
+	.active-indicator[data-active="true"]::before,
+	.active-indicator.active::before {
+		opacity: 1;
+	}
+
+	/* Dot indicator */
+	.dot-indicator {
+		@apply relative;
+	}
+	.dot-indicator::after {
+		content: '';
+		@apply absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary;
+	}
+
+	/* Staggered animation for lists */
+	.stagger-children > * {
+		opacity: 0;
+		animation: fadeIn 0.3s ease-out forwards;
+	}
+	.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+	.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+	.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+	.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+	.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+	.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+	.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+	.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+
+	/* Divider with fade */
+	.divider-fade {
+		@apply h-px w-full;
+		background: linear-gradient(90deg, transparent, var(--border), transparent);
+	}
+
+	/* Text truncate with ellipsis */
+	.line-clamp-1 {
+		display: -webkit-box;
+		-webkit-line-clamp: 1;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.line-clamp-2 {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.line-clamp-3 {
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+}
+
+/* ============================================
+   SCROLLBAR STYLING
+   ============================================ */
+@layer base {
+	/* Webkit scrollbar */
+	::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	::-webkit-scrollbar-thumb {
+		background: var(--border);
+		border-radius: 5px;
+		border: 2px solid transparent;
+		background-clip: content-box;
+	}
+
+	::-webkit-scrollbar-thumb:hover {
+		background: var(--muted-foreground);
+		border: 2px solid transparent;
+		background-clip: content-box;
+	}
+
+	/* Firefox scrollbar */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--border) transparent;
 	}
 }

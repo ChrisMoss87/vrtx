@@ -27,14 +27,14 @@
 	];
 
 	let selectedOperator = $state<FilterOperator>(initialValue?.operator || 'equals');
-	let filterValue = $state(
+	let filterValue = $state<string>(
 		initialValue?.operator === 'between' && Array.isArray(initialValue?.value)
-			? initialValue.value[0]
-			: initialValue?.value || ''
+			? String(initialValue.value[0] ?? '')
+			: initialValue?.value != null ? String(initialValue.value) : ''
 	);
-	let filterValueTo = $state(
+	let filterValueTo = $state<string>(
 		initialValue?.operator === 'between' && Array.isArray(initialValue?.value)
-			? initialValue.value[1]
+			? String(initialValue.value[1] ?? '')
 			: ''
 	);
 

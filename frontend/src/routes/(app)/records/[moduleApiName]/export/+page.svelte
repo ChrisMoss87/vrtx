@@ -9,7 +9,7 @@
 	import { recordsApi } from '$lib/api/records';
 	import type { Export } from '$lib/api/exports';
 
-	const moduleApiName = $page.params.moduleApiName;
+	const moduleApiName = $page.params.moduleApiName!;
 
 	let module = $state<Module | null>(null);
 	let fields = $state<Field[]>([]);
@@ -24,7 +24,7 @@
 			fields = module.blocks?.flatMap((block) => block.fields) ?? module.fields ?? [];
 
 			// Get record count
-			const records = await recordsApi.list(moduleApiName, { per_page: 1 });
+			const records = await recordsApi.getAll(moduleApiName, { per_page: 1 });
 			recordCount = records.meta.total;
 		} catch (e) {
 			console.error('Failed to load module:', e);

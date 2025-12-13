@@ -173,7 +173,7 @@ class RbacService
         return match ($permission->record_access_level) {
             ModulePermission::ACCESS_ALL => $query,
             ModulePermission::ACCESS_TEAM => $this->applyTeamScope($query, $user),
-            ModulePermission::ACCESS_OWN => $query->where('owner_id', $user->id),
+            ModulePermission::ACCESS_OWN => $query->where('created_by', $user->id),
             default => $query->whereRaw('1 = 0'),
         };
     }

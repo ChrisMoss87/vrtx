@@ -41,7 +41,9 @@
 		type ReportSorting,
 		type ReportDateRange,
 		type ModuleField,
-		type ReportResult
+		type ReportResult,
+		type CreateReportRequest,
+		type UpdateReportRequest
 	} from '$lib/api/reports';
 	import ReportFilterBuilder from './ReportFilterBuilder.svelte';
 	import ReportPreview from './ReportPreview.svelte';
@@ -85,7 +87,7 @@
 	async function loadInitialData() {
 		try {
 			// Load modules
-			const modulesResponse = await modulesApi.list();
+			const modulesResponse = await modulesApi.getAll();
 			modules = modulesResponse.map((m) => ({ id: m.id, name: m.name, api_name: m.api_name }));
 
 			// Load report types
@@ -186,12 +188,12 @@
 
 		loading = true;
 		try {
-			const data = {
+			const data: CreateReportRequest = {
 				name,
 				description: description || undefined,
 				module_id: moduleId || undefined,
 				type: reportType,
-				chart_type: reportType === 'chart' ? chartType : undefined,
+				chart_type: reportType === 'chart' && chartType ? chartType : undefined,
 				is_public: isPublic,
 				filters,
 				grouping,
@@ -202,7 +204,7 @@
 
 			let savedReport: Report;
 			if (report?.id) {
-				savedReport = await reportsApi.update(report.id, data);
+				savedReport = await reportsApi.update(report.id, data as UpdateReportRequest);
 				toast.success('Report updated successfully');
 			} else {
 				savedReport = await reportsApi.create(data);

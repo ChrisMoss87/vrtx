@@ -172,7 +172,7 @@ class ImportController extends Controller
     /**
      * Validate import data.
      */
-    public function validate(string $moduleApiName, int $importId): JsonResponse
+    public function validateImport(string $moduleApiName, int $importId): JsonResponse
     {
         $module = Module::findByApiName($moduleApiName);
 

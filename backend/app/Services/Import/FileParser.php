@@ -7,6 +7,33 @@ namespace App\Services\Import;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Reader\Csv as CsvReader;
+use PhpOffice\PhpSpreadsheet\Reader\IReadFilter;
+
+/**
+ * Read filter for chunked Excel reading.
+ * Only loads specific rows into memory at a time.
+ */
+class ChunkReadFilter implements IReadFilter
+{
+    private int $startRow;
+    private int $endRow;
+
+    public function setRows(int $startRow, int $chunkSize): void
+    {
+        $this->startRow = $startRow;
+        $this->endRow = $startRow + $chunkSize;
+    }
+
+    public function readCell(string $columnAddress, int $row, string $worksheetName = ''): bool
+    {
+        // Always read header row (row 1)
+        if ($row === 1) {
+            return true;
+        }
+        // Only read rows in the current chunk
+        return $row >= $this->startRow && $row < $this->endRow;
+    }
+}
 
 class FileParser
 {
@@ -168,8 +195,86 @@ class FileParser
 
     /**
      * Get all Excel rows as generator.
+     * Uses chunked reading for large files to reduce memory usage.
      */
     protected function getExcelRows(string $filePath): \Generator
+    {
+        // Get total row count first
+        $totalRows = $this->countExcelRows($filePath) + 1; // +1 for header
+
+        // For small files, load directly
+        if ($totalRows <= 1000) {
+            yield from $this->getExcelRowsDirect($filePath);
+            return;
+        }
+
+        // For large files, use chunked reading
+        $chunkSize = 500;
+        $chunkFilter = new ChunkReadFilter();
+        $headers = [];
+
+        // First, get headers
+        $reader = IOFactory::createReaderForFile($filePath);
+        $reader->setReadDataOnly(true);
+        $chunkFilter->setRows(1, 1);
+        $reader->setReadFilter($chunkFilter);
+        $spreadsheet = $reader->load($filePath);
+        $worksheet = $spreadsheet->getActiveSheet();
+
+        foreach ($worksheet->getRowIterator(1, 1) as $row) {
+            $cellIterator = $row->getCellIterator();
+            $cellIterator->setIterateOnlyExistingCells(false);
+            foreach ($cellIterator as $cell) {
+                $headers[] = $cell->getValue();
+            }
+        }
+
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        // Now read data in chunks
+        for ($startRow = 2; $startRow <= $totalRows; $startRow += $chunkSize) {
+            $chunkFilter->setRows($startRow, $chunkSize);
+
+            $reader = IOFactory::createReaderForFile($filePath);
+            $reader->setReadDataOnly(true);
+            $reader->setReadFilter($chunkFilter);
+            $spreadsheet = $reader->load($filePath);
+            $worksheet = $spreadsheet->getActiveSheet();
+
+            foreach ($worksheet->getRowIterator($startRow, min($startRow + $chunkSize - 1, $totalRows)) as $rowIndex => $row) {
+                // Skip header row if included
+                if ($rowIndex === 1) {
+                    continue;
+                }
+
+                $cellIterator = $row->getCellIterator();
+                $cellIterator->setIterateOnlyExistingCells(false);
+
+                $rowData = [];
+                foreach ($cellIterator as $cell) {
+                    $rowData[] = $cell->getValue();
+                }
+
+                // Skip completely empty rows
+                if (array_filter($rowData) === []) {
+                    continue;
+                }
+
+                yield $rowIndex => array_combine($headers, array_pad($rowData, count($headers), null));
+            }
+
+            // Clear memory after each chunk
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
+            gc_collect_cycles();
+        }
+    }
+
+    /**
+     * Get Excel rows directly (for small files).
+     */
+    protected function getExcelRowsDirect(string $filePath): \Generator
     {
         $spreadsheet = IOFactory::load($filePath);
         $worksheet = $spreadsheet->getActiveSheet();
@@ -196,6 +301,9 @@ class FileParser
                 yield $rowIndex => array_combine($headers, array_pad($rowData, count($headers), null));
             }
         }
+
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
     }
 
     /**

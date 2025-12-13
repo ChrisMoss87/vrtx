@@ -21,6 +21,7 @@ class ImportEngine
 
     /**
      * Validate import data and create import rows.
+     * Uses chunked inserts for memory efficiency.
      */
     public function validate(Import $import): void
     {
@@ -28,27 +29,53 @@ class ImportEngine
 
         try {
             $module = $import->module;
-            $fields = $module->fields()->get()->keyBy('api_name');
+            // Eager load options to avoid N+1 queries during validation
+            $fields = $module->fields()->with('options')->get()->keyBy('api_name');
             $columnMapping = $import->column_mapping ?? [];
             $validationErrors = [];
             $rowNumber = 0;
+
+            // Batch insert configuration
+            $batchSize = 500;
+            $rowBatch = [];
 
             foreach ($this->fileParser->getAllRows($import->file_path, $import->file_type) as $excelRow => $data) {
                 $rowNumber++;
                 $mappedData = $this->mapRow($data, $columnMapping);
                 $rowErrors = $this->validateRow($mappedData, $fields, $import->import_options ?? []);
 
-                $import->rows()->create([
+                // Collect rows for batch insert
+                $rowBatch[] = [
+                    'import_id' => $import->id,
                     'row_number' => $rowNumber,
-                    'original_data' => $data,
-                    'mapped_data' => $mappedData,
+                    'original_data' => json_encode($data),
+                    'mapped_data' => json_encode($mappedData),
                     'status' => empty($rowErrors) ? ImportRow::STATUS_PENDING : ImportRow::STATUS_FAILED,
-                    'errors' => $rowErrors ?: null,
-                ]);
+                    'errors' => $rowErrors ? json_encode($rowErrors) : null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
 
                 if (!empty($rowErrors)) {
-                    $validationErrors["row_{$rowNumber}"] = $rowErrors;
+                    // Only store first 100 validation errors to avoid memory issues
+                    if (count($validationErrors) < 100) {
+                        $validationErrors["row_{$rowNumber}"] = $rowErrors;
+                    }
                 }
+
+                // Batch insert when batch size reached
+                if (count($rowBatch) >= $batchSize) {
+                    DB::table('import_rows')->insert($rowBatch);
+                    $rowBatch = [];
+
+                    // Periodically clear memory
+                    gc_collect_cycles();
+                }
+            }
+
+            // Insert remaining rows
+            if (!empty($rowBatch)) {
+                DB::table('import_rows')->insert($rowBatch);
             }
 
             $import->update([
@@ -69,6 +96,7 @@ class ImportEngine
 
     /**
      * Execute the import.
+     * Uses chunked processing with periodic memory cleanup.
      */
     public function execute(Import $import): void
     {
@@ -76,25 +104,34 @@ class ImportEngine
 
         try {
             $module = $import->module;
-            $fields = $module->fields()->get()->keyBy('api_name');
+            // Eager load options for consistency with validation
+            $fields = $module->fields()->with('options')->get()->keyBy('api_name');
             $options = $import->import_options ?? [];
             $duplicateHandling = $options['duplicate_handling'] ?? Import::DUPLICATE_SKIP;
             $duplicateField = $options['duplicate_check_field'] ?? null;
 
-            $pendingRows = $import->rows()
+            // Process in chunks for better memory management
+            $chunkSize = 100;
+            $processedCount = 0;
+
+            $import->rows()
                 ->where('status', ImportRow::STATUS_PENDING)
                 ->orderBy('row_number')
-                ->cursor();
+                ->chunk($chunkSize, function ($rows) use ($module, $fields, $duplicateHandling, $duplicateField, $import, &$processedCount) {
+                    foreach ($rows as $row) {
+                        try {
+                            $this->processRow($row, $module, $fields, $duplicateHandling, $duplicateField, $import->user_id);
+                        } catch (\Exception $e) {
+                            $row->markAsFailed(['error' => $e->getMessage()]);
+                        }
 
-            foreach ($pendingRows as $row) {
-                try {
-                    $this->processRow($row, $module, $fields, $duplicateHandling, $duplicateField, $import->user_id);
-                } catch (\Exception $e) {
-                    $row->markAsFailed(['error' => $e->getMessage()]);
-                }
+                        $import->incrementProcessed($row->fresh()->status);
+                        $processedCount++;
+                    }
 
-                $import->incrementProcessed($row->fresh()->status);
-            }
+                    // Clear memory after each chunk
+                    gc_collect_cycles();
+                });
 
             $import->markAsCompleted();
         } catch (\Exception $e) {
@@ -232,7 +269,8 @@ class ImportEngine
                 break;
             case 'select':
             case 'radio':
-                $options = $field->options()->pluck('value')->toArray();
+                // Use pre-loaded options relation to avoid N+1 queries
+                $options = $field->options->pluck('value')->toArray();
                 if (!empty($options)) {
                     $rules[] = 'in:' . implode(',', $options);
                 }

@@ -22,6 +22,7 @@ class Stage extends Model
         'display_order',
         'is_won_stage',
         'is_lost_stage',
+        'rotting_days',
         'settings',
     ];
 
@@ -31,6 +32,7 @@ class Stage extends Model
         'display_order' => 'integer',
         'is_won_stage' => 'boolean',
         'is_lost_stage' => 'boolean',
+        'rotting_days' => 'integer',
         'settings' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -72,10 +74,14 @@ class Stage extends Model
 
     /**
      * Get records in this stage.
+     *
+     * Note: For bulk operations, prefer fetching all records at once and grouping in PHP
+     * to avoid N+1 queries. Use Pipeline::getRecordsByStage() for optimized bulk fetching.
      */
     public function getRecords()
     {
-        $pipeline = $this->pipeline;
+        // Use already loaded relation if available to avoid N+1
+        $pipeline = $this->relationLoaded('pipeline') ? $this->pipeline : $this->pipeline()->first();
         $stageFieldName = $pipeline->stage_field_api_name;
 
         return ModuleRecord::where('module_id', $pipeline->module_id)
@@ -85,10 +91,14 @@ class Stage extends Model
 
     /**
      * Get the count of records in this stage.
+     *
+     * Note: For bulk operations, prefer fetching all records at once and counting in PHP
+     * to avoid N+1 queries.
      */
     public function getRecordCount(): int
     {
-        $pipeline = $this->pipeline;
+        // Use already loaded relation if available to avoid N+1
+        $pipeline = $this->relationLoaded('pipeline') ? $this->pipeline : $this->pipeline()->first();
         $stageFieldName = $pipeline->stage_field_api_name;
 
         return ModuleRecord::where('module_id', $pipeline->module_id)
@@ -98,15 +108,51 @@ class Stage extends Model
 
     /**
      * Get the total value of records in this stage.
+     *
+     * Note: For bulk operations, prefer fetching all records at once and summing in PHP
+     * to avoid N+1 queries.
      */
     public function getTotalValue(string $valueFieldName): float
     {
-        $pipeline = $this->pipeline;
+        // Use already loaded relation if available to avoid N+1
+        $pipeline = $this->relationLoaded('pipeline') ? $this->pipeline : $this->pipeline()->first();
         $stageFieldName = $pipeline->stage_field_api_name;
 
         return (float) ModuleRecord::where('module_id', $pipeline->module_id)
             ->whereRaw("data->>? = ?", [$stageFieldName, (string) $this->id])
             ->selectRaw("SUM((data->>?)::numeric) as total", [$valueFieldName])
             ->value('total') ?? 0;
+    }
+
+    /**
+     * Efficient bulk method to get all stage data for a pipeline in one query.
+     * Returns array keyed by stage_id with count and totalValue.
+     *
+     * @param Pipeline $pipeline
+     * @param string|null $valueFieldName
+     * @return array<int, array{count: int, totalValue: float}>
+     */
+    public static function getStageMetricsForPipeline(Pipeline $pipeline, ?string $valueFieldName = null): array
+    {
+        $stageFieldName = $pipeline->stage_field_api_name;
+
+        $query = ModuleRecord::where('module_id', $pipeline->module_id)
+            ->selectRaw("(data->>?)::text as stage_id, COUNT(*) as count", [$stageFieldName]);
+
+        if ($valueFieldName) {
+            $query->selectRaw("COALESCE(SUM((data->>?)::numeric), 0) as total_value", [$valueFieldName]);
+        }
+
+        $results = $query->groupByRaw("data->>?", [$stageFieldName])->get();
+
+        $metrics = [];
+        foreach ($results as $row) {
+            $metrics[$row->stage_id] = [
+                'count' => (int) $row->count,
+                'totalValue' => (float) ($row->total_value ?? 0),
+            ];
+        }
+
+        return $metrics;
     }
 }

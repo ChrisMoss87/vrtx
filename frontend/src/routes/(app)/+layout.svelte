@@ -10,6 +10,7 @@
 	import CommandPalette from '$lib/components/command-palette/CommandPalette.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { authApi } from '$lib/api/auth';
+	import { license } from '$lib/stores/license';
 	import {
 		Provider as SidebarProvider,
 		Inset as SidebarInset,
@@ -49,6 +50,9 @@
 			return;
 		}
 
+		// Load license/subscription info
+		await license.load();
+
 		checkingAuth = false;
 	});
 </script>
@@ -58,10 +62,10 @@
 </svelte:head>
 
 {#if checkingAuth}
-	<div class="flex min-h-screen items-center justify-center">
-		<div class="flex flex-col items-center gap-2">
-			<div class="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-			<span class="text-sm text-muted-foreground">Loading...</span>
+	<div class="flex min-h-screen items-center justify-center animate-fade-in">
+		<div class="flex flex-col items-center gap-3">
+			<div class="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent shadow-soft"></div>
+			<span class="text-sm text-muted-foreground animate-pulse">Loading...</span>
 		</div>
 	</div>
 {:else}
@@ -70,7 +74,7 @@
 		<AppSidebar />
 		<SidebarInset>
 			<header
-				class="sticky top-0 flex h-16 shrink-0 items-center gap-2 bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
+				class="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 bg-background/95 backdrop-blur-sm border-b border-border/50 transition-all duration-200 ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
 			>
 				<div class="flex items-center gap-2 px-4">
 					<SidebarTrigger class="-ml-1" />

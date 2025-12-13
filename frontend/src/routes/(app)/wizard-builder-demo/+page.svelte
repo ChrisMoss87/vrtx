@@ -45,12 +45,12 @@
 		}
 	};
 
-	function handleSave(config: typeof initialConfig) {
+	function handleSave(config: unknown) {
 		console.log('Wizard configuration saved:', config);
 		toast.success('Wizard configuration saved!');
 	}
 
-	function handlePreview(config: typeof initialConfig) {
+	function handlePreview(config: unknown) {
 		console.log('Preview wizard:', config);
 		toast.info('Preview mode - configuration logged to console');
 	}

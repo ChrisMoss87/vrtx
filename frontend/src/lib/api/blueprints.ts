@@ -10,7 +10,7 @@
  * - Approval workflows
  */
 
-import { api } from './index';
+import { apiClient } from './client';
 
 // ==================== Types ====================
 
@@ -235,19 +235,79 @@ export interface PendingApproval {
 	created_at: string;
 }
 
+// ==================== Response Types ====================
+
+interface BlueprintsListResponse {
+	blueprints: Blueprint[];
+}
+
+interface BlueprintResponse {
+	blueprint: Blueprint;
+}
+
+interface StatesListResponse {
+	states: BlueprintState[];
+}
+
+interface StateResponse {
+	state: BlueprintState;
+}
+
+interface TransitionsListResponse {
+	transitions: BlueprintTransition[];
+}
+
+interface TransitionResponse {
+	transition: BlueprintTransition;
+}
+
+interface RecordStateResponse {
+	blueprint: { id: number; name: string; is_active: boolean };
+	current_state: RecordState | null;
+	available_transitions: AvailableTransition[];
+	sla_status: SLAStatus | null;
+}
+
+interface StartTransitionResponse {
+	execution: TransitionExecution;
+	requirements: FormattedRequirement[];
+}
+
+interface SubmitRequirementsResponse {
+	execution: TransitionExecution;
+	next_step: string;
+}
+
+interface CompleteExecutionResponse {
+	execution: TransitionExecution;
+	new_state: RecordState;
+}
+
+interface TransitionHistoryResponse {
+	history: TransitionHistoryItem[];
+}
+
+interface SLAStatusResponse {
+	sla_status: SLAStatus | null;
+}
+
+interface PendingApprovalsResponse {
+	pending_approvals: PendingApproval[];
+}
+
 // ==================== Blueprint CRUD ====================
 
 export async function getBlueprints(params?: {
 	module_id?: number;
 	active?: boolean;
 }): Promise<Blueprint[]> {
-	const response = await api.get('/blueprints', { params });
-	return response.data.blueprints;
+	const response = await apiClient.get<BlueprintsListResponse>('/blueprints', { params });
+	return response.blueprints;
 }
 
 export async function getBlueprint(id: number): Promise<Blueprint> {
-	const response = await api.get(`/blueprints/${id}`);
-	return response.data.blueprint;
+	const response = await apiClient.get<BlueprintResponse>(`/blueprints/${id}`);
+	return response.blueprint;
 }
 
 export async function createBlueprint(data: {
@@ -258,8 +318,8 @@ export async function createBlueprint(data: {
 	is_active?: boolean;
 	sync_states_from_field?: boolean;
 }): Promise<Blueprint> {
-	const response = await api.post('/blueprints', data);
-	return response.data.blueprint;
+	const response = await apiClient.post<BlueprintResponse>('/blueprints', data);
+	return response.blueprint;
 }
 
 export async function updateBlueprint(
@@ -271,36 +331,36 @@ export async function updateBlueprint(
 		layout_data?: Record<string, unknown>;
 	}
 ): Promise<Blueprint> {
-	const response = await api.put(`/blueprints/${id}`, data);
-	return response.data.blueprint;
+	const response = await apiClient.put<BlueprintResponse>(`/blueprints/${id}`, data);
+	return response.blueprint;
 }
 
 export async function updateBlueprintLayout(
 	id: number,
 	layoutData: Record<string, unknown>
 ): Promise<void> {
-	await api.put(`/blueprints/${id}/layout`, { layout_data: layoutData });
+	await apiClient.put(`/blueprints/${id}/layout`, { layout_data: layoutData });
 }
 
 export async function deleteBlueprint(id: number): Promise<void> {
-	await api.delete(`/blueprints/${id}`);
+	await apiClient.delete(`/blueprints/${id}`);
 }
 
 export async function toggleBlueprintActive(id: number): Promise<Blueprint> {
-	const response = await api.post(`/blueprints/${id}/toggle-active`);
-	return response.data.blueprint;
+	const response = await apiClient.post<BlueprintResponse>(`/blueprints/${id}/toggle-active`);
+	return response.blueprint;
 }
 
 export async function syncBlueprintStates(id: number): Promise<Blueprint> {
-	const response = await api.post(`/blueprints/${id}/sync-states`);
-	return response.data.blueprint;
+	const response = await apiClient.post<BlueprintResponse>(`/blueprints/${id}/sync-states`);
+	return response.blueprint;
 }
 
 // ==================== State Management ====================
 
 export async function getStates(blueprintId: number): Promise<BlueprintState[]> {
-	const response = await api.get(`/blueprints/${blueprintId}/states`);
-	return response.data.states;
+	const response = await apiClient.get<StatesListResponse>(`/blueprints/${blueprintId}/states`);
+	return response.states;
 }
 
 export async function createState(
@@ -316,8 +376,8 @@ export async function createState(
 		metadata?: Record<string, unknown>;
 	}
 ): Promise<BlueprintState> {
-	const response = await api.post(`/blueprints/${blueprintId}/states`, data);
-	return response.data.state;
+	const response = await apiClient.post<StateResponse>(`/blueprints/${blueprintId}/states`, data);
+	return response.state;
 }
 
 export async function updateState(
@@ -334,19 +394,24 @@ export async function updateState(
 		metadata?: Record<string, unknown>;
 	}
 ): Promise<BlueprintState> {
-	const response = await api.put(`/blueprints/${blueprintId}/states/${stateId}`, data);
-	return response.data.state;
+	const response = await apiClient.put<StateResponse>(
+		`/blueprints/${blueprintId}/states/${stateId}`,
+		data
+	);
+	return response.state;
 }
 
 export async function deleteState(blueprintId: number, stateId: number): Promise<void> {
-	await api.delete(`/blueprints/${blueprintId}/states/${stateId}`);
+	await apiClient.delete(`/blueprints/${blueprintId}/states/${stateId}`);
 }
 
 // ==================== Transition Management ====================
 
 export async function getTransitions(blueprintId: number): Promise<BlueprintTransition[]> {
-	const response = await api.get(`/blueprints/${blueprintId}/transitions`);
-	return response.data.transitions;
+	const response = await apiClient.get<TransitionsListResponse>(
+		`/blueprints/${blueprintId}/transitions`
+	);
+	return response.transitions;
 }
 
 export async function createTransition(
@@ -361,8 +426,11 @@ export async function createTransition(
 		is_active?: boolean;
 	}
 ): Promise<BlueprintTransition> {
-	const response = await api.post(`/blueprints/${blueprintId}/transitions`, data);
-	return response.data.transition;
+	const response = await apiClient.post<TransitionResponse>(
+		`/blueprints/${blueprintId}/transitions`,
+		data
+	);
+	return response.transition;
 }
 
 export async function updateTransition(
@@ -378,12 +446,256 @@ export async function updateTransition(
 		is_active?: boolean;
 	}
 ): Promise<BlueprintTransition> {
-	const response = await api.put(`/blueprints/${blueprintId}/transitions/${transitionId}`, data);
-	return response.data.transition;
+	const response = await apiClient.put<TransitionResponse>(
+		`/blueprints/${blueprintId}/transitions/${transitionId}`,
+		data
+	);
+	return response.transition;
 }
 
 export async function deleteTransition(blueprintId: number, transitionId: number): Promise<void> {
-	await api.delete(`/blueprints/${blueprintId}/transitions/${transitionId}`);
+	await apiClient.delete(`/blueprints/${blueprintId}/transitions/${transitionId}`);
+}
+
+// ==================== Transition Conditions ====================
+
+export async function getConditions(transitionId: number): Promise<BlueprintTransitionCondition[]> {
+	const response = await apiClient.get<{ conditions: BlueprintTransitionCondition[] }>(
+		`/blueprint-transitions/${transitionId}/conditions`
+	);
+	return response.conditions;
+}
+
+export async function createCondition(
+	transitionId: number,
+	data: {
+		field_id: number;
+		operator: string;
+		value?: string | null;
+		logical_group?: string;
+		display_order?: number;
+	}
+): Promise<BlueprintTransitionCondition> {
+	const response = await apiClient.post<{ condition: BlueprintTransitionCondition }>(
+		`/blueprint-transitions/${transitionId}/conditions`,
+		data
+	);
+	return response.condition;
+}
+
+export async function updateCondition(
+	transitionId: number,
+	conditionId: number,
+	data: Partial<BlueprintTransitionCondition>
+): Promise<BlueprintTransitionCondition> {
+	const response = await apiClient.put<{ condition: BlueprintTransitionCondition }>(
+		`/blueprint-transitions/${transitionId}/conditions/${conditionId}`,
+		data
+	);
+	return response.condition;
+}
+
+export async function deleteCondition(transitionId: number, conditionId: number): Promise<void> {
+	await apiClient.delete(`/blueprint-transitions/${transitionId}/conditions/${conditionId}`);
+}
+
+// ==================== Transition Requirements ====================
+
+export async function getRequirements(transitionId: number): Promise<BlueprintTransitionRequirement[]> {
+	const response = await apiClient.get<{ requirements: BlueprintTransitionRequirement[] }>(
+		`/blueprint-transitions/${transitionId}/requirements`
+	);
+	return response.requirements;
+}
+
+export async function createRequirement(
+	transitionId: number,
+	data: {
+		type: string;
+		field_id?: number;
+		label?: string;
+		description?: string;
+		is_required?: boolean;
+		config?: Record<string, unknown>;
+		display_order?: number;
+	}
+): Promise<BlueprintTransitionRequirement> {
+	const response = await apiClient.post<{ requirement: BlueprintTransitionRequirement }>(
+		`/blueprint-transitions/${transitionId}/requirements`,
+		data
+	);
+	return response.requirement;
+}
+
+export async function updateRequirement(
+	transitionId: number,
+	requirementId: number,
+	data: Partial<BlueprintTransitionRequirement>
+): Promise<BlueprintTransitionRequirement> {
+	const response = await apiClient.put<{ requirement: BlueprintTransitionRequirement }>(
+		`/blueprint-transitions/${transitionId}/requirements/${requirementId}`,
+		data
+	);
+	return response.requirement;
+}
+
+export async function deleteRequirement(transitionId: number, requirementId: number): Promise<void> {
+	await apiClient.delete(`/blueprint-transitions/${transitionId}/requirements/${requirementId}`);
+}
+
+// ==================== Transition Actions ====================
+
+export async function getActions(transitionId: number): Promise<BlueprintTransitionAction[]> {
+	const response = await apiClient.get<{ actions: BlueprintTransitionAction[] }>(
+		`/blueprint-transitions/${transitionId}/actions`
+	);
+	return response.actions;
+}
+
+export async function createAction(
+	transitionId: number,
+	data: {
+		type: string;
+		config: Record<string, unknown>;
+		display_order?: number;
+		is_active?: boolean;
+	}
+): Promise<BlueprintTransitionAction> {
+	const response = await apiClient.post<{ action: BlueprintTransitionAction }>(
+		`/blueprint-transitions/${transitionId}/actions`,
+		data
+	);
+	return response.action;
+}
+
+export async function updateAction(
+	transitionId: number,
+	actionId: number,
+	data: Partial<BlueprintTransitionAction>
+): Promise<BlueprintTransitionAction> {
+	const response = await apiClient.put<{ action: BlueprintTransitionAction }>(
+		`/blueprint-transitions/${transitionId}/actions/${actionId}`,
+		data
+	);
+	return response.action;
+}
+
+export async function deleteAction(transitionId: number, actionId: number): Promise<void> {
+	await apiClient.delete(`/blueprint-transitions/${transitionId}/actions/${actionId}`);
+}
+
+// ==================== Transition Approval ====================
+
+export async function getApproval(transitionId: number): Promise<BlueprintApproval | null> {
+	const response = await apiClient.get<{ approval: BlueprintApproval | null }>(
+		`/blueprint-transitions/${transitionId}/approval`
+	);
+	return response.approval;
+}
+
+export async function setApproval(
+	transitionId: number,
+	data: Partial<BlueprintApproval>
+): Promise<BlueprintApproval> {
+	const response = await apiClient.put<{ approval: BlueprintApproval }>(
+		`/blueprint-transitions/${transitionId}/approval`,
+		data
+	);
+	return response.approval;
+}
+
+export async function removeApproval(transitionId: number): Promise<void> {
+	await apiClient.delete(`/blueprint-transitions/${transitionId}/approval`);
+}
+
+// ==================== SLA Management ====================
+
+export async function getSlas(blueprintId: number): Promise<BlueprintSla[]> {
+	const response = await apiClient.get<{ slas: BlueprintSla[] }>(
+		`/blueprints/${blueprintId}/slas`
+	);
+	return response.slas;
+}
+
+export async function getSla(blueprintId: number, slaId: number): Promise<BlueprintSla> {
+	const response = await apiClient.get<{ sla: BlueprintSla }>(
+		`/blueprints/${blueprintId}/slas/${slaId}`
+	);
+	return response.sla;
+}
+
+export async function createSla(
+	blueprintId: number,
+	data: {
+		state_id: number;
+		name: string;
+		duration_hours: number;
+		business_hours_only?: boolean;
+		exclude_weekends?: boolean;
+		is_active?: boolean;
+	}
+): Promise<BlueprintSla> {
+	const response = await apiClient.post<{ sla: BlueprintSla }>(
+		`/blueprints/${blueprintId}/slas`,
+		data
+	);
+	return response.sla;
+}
+
+export async function updateSla(
+	blueprintId: number,
+	slaId: number,
+	data: Partial<BlueprintSla>
+): Promise<BlueprintSla> {
+	const response = await apiClient.put<{ sla: BlueprintSla }>(
+		`/blueprints/${blueprintId}/slas/${slaId}`,
+		data
+	);
+	return response.sla;
+}
+
+export async function deleteSla(blueprintId: number, slaId: number): Promise<void> {
+	await apiClient.delete(`/blueprints/${blueprintId}/slas/${slaId}`);
+}
+
+export async function getEscalations(slaId: number): Promise<BlueprintSlaEscalation[]> {
+	const response = await apiClient.get<{ escalations: BlueprintSlaEscalation[] }>(
+		`/blueprint-slas/${slaId}/escalations`
+	);
+	return response.escalations;
+}
+
+export async function createSlaEscalation(
+	slaId: number,
+	data: {
+		trigger_type: 'approaching' | 'breached';
+		trigger_value?: number;
+		action_type: string;
+		config: Record<string, unknown>;
+		display_order?: number;
+	}
+): Promise<BlueprintSlaEscalation> {
+	const response = await apiClient.post<{ escalation: BlueprintSlaEscalation }>(
+		`/blueprint-slas/${slaId}/escalations`,
+		data
+	);
+	return response.escalation;
+}
+
+export async function updateSlaEscalation(
+	slaId: number,
+	escalationId: number,
+	data: Partial<BlueprintSlaEscalation>
+): Promise<BlueprintSlaEscalation> {
+	const response = await apiClient.put<{ escalation: BlueprintSlaEscalation }>(
+		`/blueprint-slas/${slaId}/escalations/${escalationId}`,
+		data
+	);
+	return response.escalation;
+}
+
+export async function deleteSlaEscalation(slaId: number, escalationId: number): Promise<void> {
+	await apiClient.delete(`/blueprint-slas/${slaId}/escalations/${escalationId}`);
 }
 
 // ==================== Runtime Execution ====================
@@ -394,30 +706,20 @@ export async function getRecordState(
 		blueprint_id?: number;
 		module_id?: number;
 		field_id?: number;
-		record_data?: Record<string, unknown>;
 	}
-): Promise<{
-	blueprint: { id: number; name: string; is_active: boolean };
-	current_state: RecordState | null;
-	available_transitions: AvailableTransition[];
-	sla_status: SLAStatus | null;
-}> {
-	const response = await api.get(`/blueprint-records/${recordId}/state`, { params });
-	return response.data;
+): Promise<RecordStateResponse> {
+	return apiClient.get<RecordStateResponse>(`/blueprint-records/${recordId}/state`, { params });
 }
 
 export async function startTransition(
 	recordId: number,
 	transitionId: number,
 	recordData?: Record<string, unknown>
-): Promise<{
-	execution: TransitionExecution;
-	requirements: FormattedRequirement[];
-}> {
-	const response = await api.post(`/blueprint-records/${recordId}/transitions/${transitionId}/start`, {
-		record_data: recordData
-	});
-	return response.data;
+): Promise<StartTransitionResponse> {
+	return apiClient.post<StartTransitionResponse>(
+		`/blueprint-records/${recordId}/transitions/${transitionId}/start`,
+		{ record_data: recordData }
+	);
 }
 
 export async function submitRequirements(
@@ -428,56 +730,58 @@ export async function submitRequirements(
 		note?: string;
 		checklist?: Record<string | number, boolean>;
 	}
-): Promise<{
-	execution: TransitionExecution;
-	next_step: string;
-}> {
-	const response = await api.post(`/blueprint-executions/${executionId}/requirements`, data);
-	return response.data;
+): Promise<SubmitRequirementsResponse> {
+	return apiClient.post<SubmitRequirementsResponse>(
+		`/blueprint-executions/${executionId}/requirements`,
+		data
+	);
 }
 
-export async function completeExecution(executionId: number): Promise<{
-	execution: TransitionExecution;
-	new_state: RecordState;
-}> {
-	const response = await api.post(`/blueprint-executions/${executionId}/complete`);
-	return response.data;
+export async function completeExecution(executionId: number): Promise<CompleteExecutionResponse> {
+	return apiClient.post<CompleteExecutionResponse>(
+		`/blueprint-executions/${executionId}/complete`
+	);
 }
 
 export async function cancelExecution(executionId: number): Promise<void> {
-	await api.post(`/blueprint-executions/${executionId}/cancel`);
+	await apiClient.post(`/blueprint-executions/${executionId}/cancel`);
 }
 
 export async function getTransitionHistory(
 	recordId: number,
 	blueprintId: number
 ): Promise<TransitionHistoryItem[]> {
-	const response = await api.get(`/blueprint-records/${recordId}/history`, {
-		params: { blueprint_id: blueprintId }
-	});
-	return response.data.history;
+	const response = await apiClient.get<TransitionHistoryResponse>(
+		`/blueprint-records/${recordId}/history`,
+		{ params: { blueprint_id: blueprintId } }
+	);
+	return response.history;
 }
 
-export async function getSLAStatus(recordId: number, blueprintId: number): Promise<SLAStatus | null> {
-	const response = await api.get(`/blueprint-records/${recordId}/sla-status`, {
-		params: { blueprint_id: blueprintId }
-	});
-	return response.data.sla_status;
+export async function getSLAStatus(
+	recordId: number,
+	blueprintId: number
+): Promise<SLAStatus | null> {
+	const response = await apiClient.get<SLAStatusResponse>(
+		`/blueprint-records/${recordId}/sla-status`,
+		{ params: { blueprint_id: blueprintId } }
+	);
+	return response.sla_status;
 }
 
 // ==================== Approvals ====================
 
 export async function getPendingApprovals(): Promise<PendingApproval[]> {
-	const response = await api.get('/blueprint-approvals/pending');
-	return response.data.pending_approvals;
+	const response = await apiClient.get<PendingApprovalsResponse>('/blueprint-approvals/pending');
+	return response.pending_approvals;
 }
 
 export async function approveRequest(requestId: number, comments?: string): Promise<void> {
-	await api.post(`/blueprint-approvals/${requestId}/approve`, { comments });
+	await apiClient.post(`/blueprint-approvals/${requestId}/approve`, { comments });
 }
 
 export async function rejectRequest(requestId: number, comments?: string): Promise<void> {
-	await api.post(`/blueprint-approvals/${requestId}/reject`, { comments });
+	await apiClient.post(`/blueprint-approvals/${requestId}/reject`, { comments });
 }
 
 // ==================== Utility Functions ====================

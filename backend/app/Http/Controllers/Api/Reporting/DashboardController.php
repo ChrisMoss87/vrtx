@@ -8,12 +8,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Dashboard;
 use App\Models\DashboardWidget;
 use App\Services\Reporting\ReportService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
+    use AuthorizesRequests;
+
     public function __construct(
         protected ReportService $reportService
     ) {}

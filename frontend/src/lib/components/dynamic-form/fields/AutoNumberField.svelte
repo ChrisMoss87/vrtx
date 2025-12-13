@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge';
-	import type { FieldSettings } from '$lib/types/modules';
+	import type { FieldSettings } from '$lib/api/modules';
 	import { cn } from '$lib/utils';
 	import { Hash } from 'lucide-svelte';
 
@@ -9,7 +9,7 @@
 		error?: string;
 		disabled?: boolean;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		onchange: (value: string | null) => void;
 	}
 

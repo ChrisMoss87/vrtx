@@ -122,6 +122,7 @@ class DashboardWidget extends Model
 
     /**
      * Get KPI widget data.
+     * Works with module_records table which stores data as JSON.
      */
     protected function getKpiData(): array
     {
@@ -131,12 +132,104 @@ class DashboardWidget extends Model
             return ['value' => 0, 'label' => $this->title];
         }
 
-        // This would be handled by the ReportService
+        $module = Module::find($config['module_id']);
+        if (!$module) {
+            return ['value' => 0, 'label' => $this->title];
+        }
+
+        // Query module_records table with JSON data extraction
+        $query = ModuleRecord::where('module_id', $config['module_id'])
+            ->whereNull('deleted_at');
+
+        // Apply filters on JSON data fields
+        if (!empty($config['filters'])) {
+            foreach ($config['filters'] as $filter) {
+                $this->applyJsonFilter($query, $filter);
+            }
+        }
+
+        // Apply date range if configured
+        if (!empty($config['date_range'])) {
+            $this->applyDateRange($query, $config['date_range']);
+        }
+
+        // Calculate the aggregation
+        $aggregation = $config['aggregation'];
+        $field = $config['field'] ?? null;
+        $value = 0;
+
+        switch ($aggregation) {
+            case 'count':
+                $value = $query->count();
+                break;
+            case 'sum':
+                if ($field) {
+                    // Sum JSON field values
+                    $value = (float) $query->selectRaw("SUM(CAST(data->>'$field' AS NUMERIC))")->value('sum') ?? 0;
+                }
+                break;
+            case 'avg':
+                if ($field) {
+                    $value = round((float) $query->selectRaw("AVG(CAST(data->>'$field' AS NUMERIC))")->value('avg') ?? 0, 2);
+                }
+                break;
+            case 'min':
+                if ($field) {
+                    $value = (float) $query->selectRaw("MIN(CAST(data->>'$field' AS NUMERIC))")->value('min') ?? 0;
+                }
+                break;
+            case 'max':
+                if ($field) {
+                    $value = (float) $query->selectRaw("MAX(CAST(data->>'$field' AS NUMERIC))")->value('max') ?? 0;
+                }
+                break;
+            default:
+                $value = $query->count();
+        }
+
+        // Calculate comparison if configured
+        $changePercent = null;
+        $changeType = null;
+
+        if (!empty($config['compare_range'])) {
+            $compareQuery = ModuleRecord::where('module_id', $config['module_id'])
+                ->whereNull('deleted_at');
+
+            // Apply same filters
+            if (!empty($config['filters'])) {
+                foreach ($config['filters'] as $filter) {
+                    $this->applyJsonFilter($compareQuery, $filter);
+                }
+            }
+
+            // Apply comparison date range
+            $this->applyDateRange($compareQuery, [
+                'field' => $config['date_range']['field'] ?? 'created_at',
+                'range' => $config['compare_range'],
+            ]);
+
+            // Calculate comparison value
+            $compareField = $config['field'] ?? null;
+            $compareValue = match ($aggregation) {
+                'count' => $compareQuery->count(),
+                'sum' => $compareField ? ((float) $compareQuery->selectRaw("SUM(CAST(data->>'$compareField' AS NUMERIC))")->value('sum') ?? 0) : 0,
+                'avg' => $compareField ? round((float) $compareQuery->selectRaw("AVG(CAST(data->>'$compareField' AS NUMERIC))")->value('avg') ?? 0, 2) : 0,
+                'min' => $compareField ? ((float) $compareQuery->selectRaw("MIN(CAST(data->>'$compareField' AS NUMERIC))")->value('min') ?? 0) : 0,
+                'max' => $compareField ? ((float) $compareQuery->selectRaw("MAX(CAST(data->>'$compareField' AS NUMERIC))")->value('max') ?? 0) : 0,
+                default => $compareQuery->count(),
+            };
+
+            if ($compareValue > 0) {
+                $changePercent = round((($value - $compareValue) / $compareValue) * 100, 1);
+                $changeType = $changePercent > 0 ? 'increase' : ($changePercent < 0 ? 'decrease' : 'no_change');
+            }
+        }
+
         return [
-            'value' => 0,
+            'value' => $value,
             'label' => $this->title,
-            'change' => null,
-            'change_type' => null,
+            'change_percent' => $changePercent,
+            'change_type' => $changeType,
         ];
     }
 
@@ -196,10 +289,107 @@ class DashboardWidget extends Model
         return Activity::query()
             ->where('type', 'task')
             ->where('user_id', $userId)
-            ->where('is_completed', false)
+            ->whereNull('completed_at')
             ->orderBy('scheduled_at')
             ->limit($limit)
             ->get()
             ->toArray();
+    }
+
+    /**
+     * Apply a filter to a query on JSON data field.
+     */
+    protected function applyJsonFilter($query, array $filter): void
+    {
+        if (!isset($filter['field']) || !isset($filter['operator'])) {
+            return;
+        }
+
+        $field = $filter['field'];
+        $operator = $filter['operator'];
+        $value = $filter['value'] ?? null;
+
+        // Use PostgreSQL JSON operators for data field
+        $jsonPath = "data->>'$field'";
+
+        match ($operator) {
+            'equals', 'eq', '=' => $query->whereRaw("$jsonPath = ?", [$value]),
+            'not_equals', 'ne', '!=' => $query->whereRaw("$jsonPath != ?", [$value]),
+            'gt', '>' => $query->whereRaw("CAST($jsonPath AS NUMERIC) > ?", [$value]),
+            'gte', '>=' => $query->whereRaw("CAST($jsonPath AS NUMERIC) >= ?", [$value]),
+            'lt', '<' => $query->whereRaw("CAST($jsonPath AS NUMERIC) < ?", [$value]),
+            'lte', '<=' => $query->whereRaw("CAST($jsonPath AS NUMERIC) <= ?", [$value]),
+            'contains' => $query->whereRaw("$jsonPath ILIKE ?", ["%{$value}%"]),
+            'in' => is_array($value)
+                ? $query->whereRaw("$jsonPath IN (" . implode(',', array_fill(0, count($value), '?')) . ")", $value)
+                : null,
+            'not_in' => is_array($value)
+                ? $query->whereRaw("$jsonPath NOT IN (" . implode(',', array_fill(0, count($value), '?')) . ")", $value)
+                : null,
+            'is_null' => $query->whereRaw("$jsonPath IS NULL"),
+            'is_not_null' => $query->whereRaw("$jsonPath IS NOT NULL"),
+            default => null,
+        };
+    }
+
+    /**
+     * Apply a date range filter to a query.
+     */
+    protected function applyDateRange($query, array $dateRange): void
+    {
+        $field = $dateRange['field'] ?? 'created_at';
+        $range = $dateRange['range'] ?? null;
+
+        // Check if field is a JSON data field or a table column
+        $isJsonField = !in_array($field, ['created_at', 'updated_at', 'deleted_at']);
+        $fieldExpr = $isJsonField ? "data->>'$field'" : $field;
+
+        // Handle predefined ranges
+        if ($range) {
+            $now = now();
+            [$start, $end] = match ($range) {
+                'today' => [$now->copy()->startOfDay(), $now->copy()->endOfDay()],
+                'yesterday' => [$now->copy()->subDay()->startOfDay(), $now->copy()->subDay()->endOfDay()],
+                'this_week' => [$now->copy()->startOfWeek(), $now->copy()->endOfWeek()],
+                'last_week' => [$now->copy()->subWeek()->startOfWeek(), $now->copy()->subWeek()->endOfWeek()],
+                'this_month' => [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()],
+                'last_month' => [$now->copy()->subMonth()->startOfMonth(), $now->copy()->subMonth()->endOfMonth()],
+                'this_quarter' => [$now->copy()->startOfQuarter(), $now->copy()->endOfQuarter()],
+                'last_quarter' => [$now->copy()->subQuarter()->startOfQuarter(), $now->copy()->subQuarter()->endOfQuarter()],
+                'this_year' => [$now->copy()->startOfYear(), $now->copy()->endOfYear()],
+                'last_year' => [$now->copy()->subYear()->startOfYear(), $now->copy()->subYear()->endOfYear()],
+                'last_7_days' => [$now->copy()->subDays(7)->startOfDay(), $now->copy()->endOfDay()],
+                'last_30_days' => [$now->copy()->subDays(30)->startOfDay(), $now->copy()->endOfDay()],
+                'last_90_days' => [$now->copy()->subDays(90)->startOfDay(), $now->copy()->endOfDay()],
+                default => [null, null],
+            };
+
+            if ($start && $end) {
+                if ($isJsonField) {
+                    $query->whereRaw("CAST($fieldExpr AS DATE) >= ?", [$start->toDateString()]);
+                    $query->whereRaw("CAST($fieldExpr AS DATE) <= ?", [$end->toDateString()]);
+                } else {
+                    $query->where($field, '>=', $start);
+                    $query->where($field, '<=', $end);
+                }
+            }
+        }
+
+        // Handle explicit start/end dates
+        if (!empty($dateRange['start'])) {
+            if ($isJsonField) {
+                $query->whereRaw("CAST($fieldExpr AS DATE) >= ?", [$dateRange['start']]);
+            } else {
+                $query->where($field, '>=', $dateRange['start']);
+            }
+        }
+
+        if (!empty($dateRange['end'])) {
+            if ($isJsonField) {
+                $query->whereRaw("CAST($fieldExpr AS DATE) <= ?", [$dateRange['end']]);
+            } else {
+                $query->where($field, '<=', $dateRange['end']);
+            }
+        }
     }
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Eraser, Check } from 'lucide-svelte';
-	import type { FieldSettings } from '$lib/types/modules';
+	import type { FieldSettings } from '$lib/api/modules';
 	import { cn } from '$lib/utils';
 	import { onMount } from 'svelte';
 
@@ -10,7 +10,7 @@
 		error?: string;
 		disabled?: boolean;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		onchange: (value: string | null) => void;
 	}
 
@@ -23,8 +23,8 @@
 		onchange
 	}: Props = $props();
 
-	const penColor = $derived(settings?.additional_settings?.penColor ?? '#000000');
-	const backgroundColor = $derived(settings?.additional_settings?.backgroundColor ?? '#ffffff');
+	const penColor = $derived((settings?.additional_settings?.penColor as string) ?? '#000000');
+	const backgroundColor = $derived((settings?.additional_settings?.backgroundColor as string) ?? '#ffffff');
 
 	let canvas: HTMLCanvasElement;
 	let ctx: CanvasRenderingContext2D | null = null;

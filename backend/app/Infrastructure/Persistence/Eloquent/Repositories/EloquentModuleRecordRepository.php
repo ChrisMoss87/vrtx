@@ -149,13 +149,18 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
             // JSON column path for dynamic fields
             $jsonPath = "data->{$fieldName}";
 
+            // Ensure string value for string operations
+            $stringValue = is_array($value) ? '' : (string) $value;
+            // Ensure array value for array operations (in, not_in)
+            $arrayValue = is_array($value) ? $value : [$value];
+
             match ($operator) {
-                'equals' => $query->whereJsonContains($jsonPath, $value),
-                'not_equals' => $query->whereJsonDoesntContain($jsonPath, $value),
-                'contains' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, '%'.mb_strtolower($value).'%']),
-                'not_contains' => $query->whereRaw('LOWER(data->>?) NOT LIKE ?', [$fieldName, '%'.mb_strtolower($value).'%']),
-                'starts_with' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, mb_strtolower($value).'%']),
-                'ends_with' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, '%'.mb_strtolower($value)]),
+                'equals' => $query->whereRaw('data->>? = ?', [$fieldName, $stringValue]),
+                'not_equals' => $query->whereRaw('data->>? != ?', [$fieldName, $stringValue]),
+                'contains' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, '%'.mb_strtolower($stringValue).'%']),
+                'not_contains' => $query->whereRaw('LOWER(data->>?) NOT LIKE ?', [$fieldName, '%'.mb_strtolower($stringValue).'%']),
+                'starts_with' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, mb_strtolower($stringValue).'%']),
+                'ends_with' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, '%'.mb_strtolower($stringValue)]),
                 'greater_than' => $query->whereRaw('CAST(data->>? AS NUMERIC) > ?', [$fieldName, $value]),
                 'less_than' => $query->whereRaw('CAST(data->>? AS NUMERIC) < ?', [$fieldName, $value]),
                 'greater_than_or_equal' => $query->whereRaw('CAST(data->>? AS NUMERIC) >= ?', [$fieldName, $value]),
@@ -165,12 +170,12 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
                     [$fieldName, $filterConfig['min'] ?? 0, $filterConfig['max'] ?? 0]
                 ),
                 'in' => $query->whereRaw(
-                    'data->>? IN ('.implode(',', array_fill(0, count($value), '?')).')',
-                    array_merge([$fieldName], $value)
+                    'data->>? IN ('.implode(',', array_fill(0, count($arrayValue), '?')).')',
+                    array_merge([$fieldName], $arrayValue)
                 ),
                 'not_in' => $query->whereRaw(
-                    'data->>? NOT IN ('.implode(',', array_fill(0, count($value), '?')).')',
-                    array_merge([$fieldName], $value)
+                    'data->>? NOT IN ('.implode(',', array_fill(0, count($arrayValue), '?')).')',
+                    array_merge([$fieldName], $arrayValue)
                 ),
                 'is_null' => $query->whereNull($jsonPath),
                 'is_not_null' => $query->whereNotNull($jsonPath),
@@ -194,7 +199,11 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
     private function applySorting(Builder $query, array $sort): Builder
     {
         foreach ($sort as $fieldName => $direction) {
-            $direction = mb_strtolower($direction) === 'desc' ? 'DESC' : 'ASC';
+            // Handle direction that could be array or string
+            if (is_array($direction)) {
+                $direction = $direction['direction'] ?? 'asc';
+            }
+            $direction = mb_strtolower((string) $direction) === 'desc' ? 'DESC' : 'ASC';
 
             // Special handling for system fields
             if (in_array($fieldName, ['id', 'created_at', 'updated_at'])) {

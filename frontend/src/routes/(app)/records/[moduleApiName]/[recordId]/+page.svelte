@@ -10,6 +10,7 @@
 	import { ArrowLeft, Pencil, Trash2, Loader2, Copy } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import { BlueprintStatus } from '$lib/components/blueprint/runtime';
 
 	const moduleApiName = $derived($page.params.moduleApiName as string);
 	const recordId = $derived(parseInt($page.params.recordId as string));
@@ -156,6 +157,21 @@
 					<span>Last updated: {new Date(record.updated_at).toLocaleString()}</span>
 				{/if}
 			</div>
+
+			<!-- Blueprint Status -->
+			<Card.Root>
+				<Card.Header class="pb-3">
+					<Card.Title class="text-base">Status & Workflow</Card.Title>
+				</Card.Header>
+				<Card.Content>
+					<BlueprintStatus
+						recordId={record.id}
+						moduleId={module.id}
+						recordData={record.data}
+						onStateChange={() => loadData()}
+					/>
+				</Card.Content>
+			</Card.Root>
 
 			<!-- Record data by blocks -->
 			{#each module.blocks || [] as block}

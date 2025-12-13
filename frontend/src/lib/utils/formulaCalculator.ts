@@ -3,7 +3,11 @@
  *
  * Evaluates formulas defined in the form builder at runtime.
  * Supports field references, mathematical operations, and built-in functions.
+ *
+ * SECURITY: Uses a safe recursive descent parser instead of eval() or new Function()
  */
+
+import { safeMathEvaluate, isSafeExpression } from './safeMathParser';
 
 export interface FormulaDefinition {
 	formula: string;
@@ -107,63 +111,38 @@ function replaceFieldReferences(formula: string, data: Record<string, any>): str
 }
 
 /**
- * Evaluate mathematical formulas
+ * Evaluate mathematical formulas using safe parser (no eval/Function)
  */
 function evaluateMathFormula(expression: string): number {
-	// Replace function calls with JavaScript equivalents
+	// Validate expression is safe
+	if (!isSafeExpression(expression)) {
+		console.warn('Unsafe expression detected:', expression);
+		return 0;
+	}
+
+	// Normalize function names to lowercase for the safe parser
 	expression = expression
 		// Math functions
 		.replace(/\bSUM\s*\(/gi, 'sum(')
 		.replace(/\bAVERAGE\s*\(/gi, 'average(')
-		.replace(/\bMIN\s*\(/gi, 'Math.min(')
-		.replace(/\bMAX\s*\(/gi, 'Math.max(')
+		.replace(/\bMIN\s*\(/gi, 'min(')
+		.replace(/\bMAX\s*\(/gi, 'max(')
 		.replace(/\bROUND\s*\(/gi, 'round(')
-		.replace(/\bCEILING\s*\(/gi, 'Math.ceil(')
-		.replace(/\bFLOOR\s*\(/gi, 'Math.floor(')
-		.replace(/\bABS\s*\(/gi, 'Math.abs(')
-		.replace(/\bPOWER\s*\(/gi, 'Math.pow(')
-		.replace(/\bSQRT\s*\(/gi, 'Math.sqrt(')
+		.replace(/\bCEILING\s*\(/gi, 'ceiling(')
+		.replace(/\bFLOOR\s*\(/gi, 'floor(')
+		.replace(/\bABS\s*\(/gi, 'abs(')
+		.replace(/\bPOWER\s*\(/gi, 'power(')
+		.replace(/\bSQRT\s*\(/gi, 'sqrt(')
 		// Logical
-		.replace(/\bIF\s*\(/gi, 'ifFunc(')
-		.replace(/\bAND\s*\(/gi, 'andFunc(')
-		.replace(/\bOR\s*\(/gi, 'orFunc(')
-		.replace(/\bNOT\s*\(/gi, '!')
-		.replace(/\bIS_BLANK\s*\(/gi, 'isBlank(')
-		.replace(/\bIS_NUMBER\s*\(/gi, 'isNumber(');
+		.replace(/\bIF\s*\(/gi, 'if(')
+		.replace(/\bAND\s*\(/gi, 'and(')
+		.replace(/\bOR\s*\(/gi, 'or(')
+		.replace(/\bNOT\s*\(/gi, 'not(')
+		.replace(/\bIS_BLANK\s*\(/gi, 'isblank(')
+		.replace(/\bIS_NUMBER\s*\(/gi, 'isnumber(');
 
-	// Define helper functions available in the formula context
-	const helpers = `
-		function sum(...args) {
-			return args.flat().reduce((a, b) => Number(a) + Number(b), 0);
-		}
-		function average(...args) {
-			const flat = args.flat();
-			return flat.length > 0 ? sum(flat) / flat.length : 0;
-		}
-		function round(value, decimals = 0) {
-			const factor = Math.pow(10, decimals);
-			return Math.round(value * factor) / factor;
-		}
-		function ifFunc(condition, trueValue, falseValue) {
-			return condition ? trueValue : falseValue;
-		}
-		function andFunc(...conditions) {
-			return conditions.every(Boolean);
-		}
-		function orFunc(...conditions) {
-			return conditions.some(Boolean);
-		}
-		function isBlank(value) {
-			return value === null || value === undefined || value === '';
-		}
-		function isNumber(value) {
-			return !isNaN(Number(value));
-		}
-	`;
-
-	// Use Function constructor instead of eval for better security
-	const func = new Function(helpers + 'return ' + expression);
-	const result = func();
+	// Use safe recursive descent parser instead of eval/Function
+	const result = safeMathEvaluate(expression);
 
 	return typeof result === 'number' ? result : Number(result) || 0;
 }
@@ -239,70 +218,109 @@ function parseDefaultValue(value: string): any {
 }
 
 /**
- * Evaluate date formulas
+ * Parse a date safely from various formats
  */
-function evaluateDateFormula(expression: string, data: Record<string, any>): any {
-	// Replace date functions
-	expression = expression
-		.replace(/\bTODAY\s*\(\s*\)/gi, `new Date("${new Date().toDateString()}")`)
-		.replace(/\bNOW\s*\(\s*\)/gi, `new Date()`)
-		.replace(/\bDAYS_BETWEEN\s*\(/gi, 'daysBetween(')
-		.replace(/\bMONTHS_BETWEEN\s*\(/gi, 'monthsBetween(')
-		.replace(/\bYEARS_BETWEEN\s*\(/gi, 'yearsBetween(')
-		.replace(/\bADD_DAYS\s*\(/gi, 'addDays(')
-		.replace(/\bADD_MONTHS\s*\(/gi, 'addMonths(')
-		.replace(/\bADD_YEARS\s*\(/gi, 'addYears(')
-		.replace(/\bDATE_DIFF\s*\(/gi, 'daysBetween(')
-		.replace(/\bDATE_ADD\s*\(/gi, 'addDays(');
-
-	const helpers = `
-		function parseDate(val) {
-			if (val instanceof Date) return val;
-			if (typeof val === 'string') return new Date(val);
-			return new Date();
-		}
-		function daysBetween(date1, date2) {
-			const d1 = parseDate(date1);
-			const d2 = parseDate(date2);
-			const diff = d2.getTime() - d1.getTime();
-			return Math.round(diff / (1000 * 60 * 60 * 24));
-		}
-		function monthsBetween(date1, date2) {
-			const d1 = parseDate(date1);
-			const d2 = parseDate(date2);
-			return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
-		}
-		function yearsBetween(date1, date2) {
-			const d1 = parseDate(date1);
-			const d2 = parseDate(date2);
-			return d2.getFullYear() - d1.getFullYear();
-		}
-		function addDays(date, days) {
-			const d = parseDate(date);
-			d.setDate(d.getDate() + Number(days));
-			return d;
-		}
-		function addMonths(date, months) {
-			const d = parseDate(date);
-			d.setMonth(d.getMonth() + Number(months));
-			return d;
-		}
-		function addYears(date, years) {
-			const d = parseDate(date);
-			d.setFullYear(d.getFullYear() + Number(years));
-			return d;
-		}
-	`;
-
-	const func = new Function(helpers + 'return ' + expression);
-	return func();
+function parseDate(val: any): Date {
+	if (val instanceof Date) return val;
+	if (typeof val === 'string') return new Date(val);
+	return new Date();
 }
 
 /**
- * Evaluate text manipulation formulas
+ * Evaluate date formulas safely (no eval/Function)
+ */
+function evaluateDateFormula(expression: string, data: Record<string, any>): any {
+	// Handle TODAY() and NOW() directly
+	if (/\bTODAY\s*\(\s*\)/i.test(expression)) {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		return today;
+	}
+	if (/\bNOW\s*\(\s*\)/i.test(expression)) {
+		return new Date();
+	}
+
+	// Handle date function calls with regex parsing
+	const daysBetweenMatch = expression.match(/DAYS_BETWEEN\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/i);
+	if (daysBetweenMatch) {
+		const d1 = parseDate(resolveValue(daysBetweenMatch[1].trim(), data));
+		const d2 = parseDate(resolveValue(daysBetweenMatch[2].trim(), data));
+		const diff = d2.getTime() - d1.getTime();
+		return Math.round(diff / (1000 * 60 * 60 * 24));
+	}
+
+	const monthsBetweenMatch = expression.match(/MONTHS_BETWEEN\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/i);
+	if (monthsBetweenMatch) {
+		const d1 = parseDate(resolveValue(monthsBetweenMatch[1].trim(), data));
+		const d2 = parseDate(resolveValue(monthsBetweenMatch[2].trim(), data));
+		return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+	}
+
+	const yearsBetweenMatch = expression.match(/YEARS_BETWEEN\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/i);
+	if (yearsBetweenMatch) {
+		const d1 = parseDate(resolveValue(yearsBetweenMatch[1].trim(), data));
+		const d2 = parseDate(resolveValue(yearsBetweenMatch[2].trim(), data));
+		return d2.getFullYear() - d1.getFullYear();
+	}
+
+	const addDaysMatch = expression.match(/ADD_DAYS\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/i);
+	if (addDaysMatch) {
+		const d = parseDate(resolveValue(addDaysMatch[1].trim(), data));
+		const days = Number(resolveValue(addDaysMatch[2].trim(), data)) || 0;
+		d.setDate(d.getDate() + days);
+		return d;
+	}
+
+	const addMonthsMatch = expression.match(/ADD_MONTHS\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/i);
+	if (addMonthsMatch) {
+		const d = parseDate(resolveValue(addMonthsMatch[1].trim(), data));
+		const months = Number(resolveValue(addMonthsMatch[2].trim(), data)) || 0;
+		d.setMonth(d.getMonth() + months);
+		return d;
+	}
+
+	const addYearsMatch = expression.match(/ADD_YEARS\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/i);
+	if (addYearsMatch) {
+		const d = parseDate(resolveValue(addYearsMatch[1].trim(), data));
+		const years = Number(resolveValue(addYearsMatch[2].trim(), data)) || 0;
+		d.setFullYear(d.getFullYear() + years);
+		return d;
+	}
+
+	// Fall back to trying to parse as a date string
+	return parseDate(expression);
+}
+
+/**
+ * Resolve a value - either a literal or a field reference
+ */
+function resolveValue(val: string, data: Record<string, any>): any {
+	val = val.trim();
+
+	// Remove quotes if it's a string literal
+	if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+		return val.slice(1, -1);
+	}
+
+	// Check if it's a number
+	if (!isNaN(Number(val))) {
+		return Number(val);
+	}
+
+	// Check if it's a field reference
+	if (data[val] !== undefined) {
+		return data[val];
+	}
+
+	return val;
+}
+
+/**
+ * Evaluate text manipulation formulas safely (no eval/Function)
  */
 function evaluateTextFormula(expression: string, data: Record<string, any>): string {
-	expression = expression
+	// Use the safe parser which handles text functions
+	const normalized = expression
 		.replace(/\bCONCAT\s*\(/gi, 'concat(')
 		.replace(/\bUPPER\s*\(/gi, 'upper(')
 		.replace(/\bLOWER\s*\(/gi, 'lower(')
@@ -310,42 +328,10 @@ function evaluateTextFormula(expression: string, data: Record<string, any>): str
 		.replace(/\bLEFT\s*\(/gi, 'left(')
 		.replace(/\bRIGHT\s*\(/gi, 'right(')
 		.replace(/\bSUBSTRING\s*\(/gi, 'substring(')
-		.replace(/\bREPLACE\s*\(/gi, 'replace(')
 		.replace(/\bLENGTH\s*\(/gi, 'length(');
 
-	const helpers = `
-		function concat(...args) {
-			return args.map(a => a ?? '').join('');
-		}
-		function upper(text) {
-			return String(text ?? '').toUpperCase();
-		}
-		function lower(text) {
-			return String(text ?? '').toLowerCase();
-		}
-		function trim(text) {
-			return String(text ?? '').trim();
-		}
-		function left(text, length) {
-			return String(text ?? '').substring(0, length);
-		}
-		function right(text, length) {
-			const str = String(text ?? '');
-			return str.substring(str.length - length);
-		}
-		function substring(text, start, length) {
-			return String(text ?? '').substring(start, start + length);
-		}
-		function replace(text, find, replaceWith) {
-			return String(text ?? '').replace(new RegExp(find, 'g'), replaceWith);
-		}
-		function length(text) {
-			return String(text ?? '').length;
-		}
-	`;
-
-	const func = new Function(helpers + 'return ' + expression);
-	const result = func();
+	// Use safe math evaluator which handles text functions
+	const result = safeMathEvaluate(normalized);
 	return String(result ?? '');
 }
 

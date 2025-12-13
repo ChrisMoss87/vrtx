@@ -9,19 +9,18 @@
 		X,
 		Download,
 		Trash2,
-		Tag,
 		FileSpreadsheet,
 		FileText,
 		Edit,
 		FileType
 	} from 'lucide-svelte';
-	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from 'svelte-sonner';
 	import axios from 'axios';
 	import type { TableContext } from './types';
 	import DataTableColumnToggle from './DataTableColumnToggle.svelte';
 	import DataTableFilterChips from './DataTableFilterChips.svelte';
 	import DataTableFilters from './DataTableFilters.svelte';
+	import DataTableFilterPanel from './DataTableFilterPanel.svelte';
 	import DataTableViews from './DataTableViews.svelte';
 	import DataTableMassUpdate from './DataTableMassUpdate.svelte';
 	import { buildApiRequest, transformFiltersForApi } from './utils';
@@ -58,6 +57,7 @@
 	let deleteDialogOpen = $state(false);
 	let isDeleting = $state(false);
 	let massUpdateOpen = $state(false);
+	let filterPanelOpen = $state(false);
 
 	function handleSearchInput(event: Event) {
 		const target = event.target as HTMLInputElement;
@@ -68,6 +68,10 @@
 	function clearSearch() {
 		searchValue = '';
 		table.updateGlobalFilter('');
+	}
+
+	function toggleFilterPanel() {
+		filterPanelOpen = !filterPanelOpen;
 	}
 
 	async function handleBulkDelete() {
@@ -255,9 +259,9 @@
 	}
 </script>
 
-<div class="flex flex-col gap-3">
+<div class="flex flex-col gap-4">
 	<!-- Main toolbar row: Search, filters, and actions -->
-	<div class="flex flex-wrap items-center gap-2">
+	<div class="flex flex-wrap items-center gap-3">
 		<!-- Search -->
 		{#if enableSearch}
 			<div class="relative w-full max-w-xs" role="search">
@@ -286,9 +290,13 @@
 			</div>
 		{/if}
 
-		<!-- Filters (unified popover) -->
+		<!-- Filters button (toggles panel) -->
 		{#if enableFilters}
-			<DataTableFilters moduleApiName={module} />
+			<DataTableFilters
+				moduleApiName={module}
+				isOpen={filterPanelOpen}
+				onToggle={toggleFilterPanel}
+			/>
 		{/if}
 
 		<!-- Views -->
@@ -335,6 +343,14 @@
 		</div>
 	</div>
 
+	<!-- Filter panel (expandable area) -->
+	{#if enableFilters}
+		<DataTableFilterPanel
+			open={filterPanelOpen}
+			onClose={() => (filterPanelOpen = false)}
+		/>
+	{/if}
+
 	<!-- Filter chips (shown below toolbar when filters are active) -->
 	{#if table.state.filters.length > 0}
 		<DataTableFilterChips />
@@ -343,7 +359,7 @@
 	<!-- Bulk actions (shown when items selected) -->
 	{#if selectedCount > 0 && enableBulkActions}
 		<div
-			class="flex items-center gap-2 rounded-lg bg-muted/50 p-2"
+			class="flex items-center gap-3 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/50 px-4 py-3"
 			role="toolbar"
 			aria-label="Bulk actions"
 		>

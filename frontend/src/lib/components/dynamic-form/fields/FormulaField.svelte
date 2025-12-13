@@ -11,7 +11,7 @@
 		disabled?: boolean;
 		placeholder?: string;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		onchange: (value: any) => void;
 	}
 

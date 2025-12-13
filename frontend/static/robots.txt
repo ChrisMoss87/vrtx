@@ -1,3 +1,24 @@
-# allow crawling everything by default
+# VRTX CRM - robots.txt
+# https://vrtx.io
+
 User-agent: *
-Disallow:
+Allow: /
+Allow: /pricing
+Allow: /about
+Allow: /blog
+Allow: /contact
+
+# Disallow app/authenticated areas
+Disallow: /dashboard
+Disallow: /records
+Disallow: /modules
+Disallow: /pipelines
+Disallow: /reports
+Disallow: /workflows
+Disallow: /settings
+Disallow: /admin
+Disallow: /approvals
+Disallow: /email
+
+# Sitemap
+Sitemap: https://vrtx.io/sitemap.xml

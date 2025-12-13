@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
-	import type { FieldSettings } from '$lib/types/modules';
+	import type { FieldSettings } from '$lib/api/modules';
 	import { cn } from '$lib/utils';
 
 	interface Props {
@@ -10,7 +10,7 @@
 		disabled?: boolean;
 		placeholder?: string;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		onchange: (value: string) => void;
 	}
 
@@ -25,20 +25,23 @@
 	}: Props = $props();
 
 	// Preset colors (can be customized via settings)
+	const defaultPresets = [
+		'#ef4444', // red
+		'#f97316', // orange
+		'#eab308', // yellow
+		'#22c55e', // green
+		'#14b8a6', // teal
+		'#3b82f6', // blue
+		'#8b5cf6', // purple
+		'#ec4899', // pink
+		'#6b7280', // gray
+		'#000000', // black
+		'#ffffff' // white
+	];
 	const presetColors = $derived(
-		settings?.additional_settings?.presetColors ?? [
-			'#ef4444', // red
-			'#f97316', // orange
-			'#eab308', // yellow
-			'#22c55e', // green
-			'#14b8a6', // teal
-			'#3b82f6', // blue
-			'#8b5cf6', // purple
-			'#ec4899', // pink
-			'#6b7280', // gray
-			'#000000', // black
-			'#ffffff' // white
-		]
+		(Array.isArray(settings?.additional_settings?.presetColors)
+			? (settings.additional_settings.presetColors as string[])
+			: defaultPresets)
 	);
 
 	let showPicker = $state(false);

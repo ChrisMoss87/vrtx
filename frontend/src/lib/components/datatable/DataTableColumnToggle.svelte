@@ -8,8 +8,11 @@
 
 	const table = getContext<TableContext>('table');
 
-	// Get visible column count
-	let visibleCount = $derived(Object.values(table.state.columnVisibility).filter(Boolean).length);
+	// Get visible column count - count columns that are not explicitly hidden
+	// Columns without an entry in columnVisibility are considered visible
+	let visibleCount = $derived(
+		table.columns.filter((col) => col.id !== 'select' && table.state.columnVisibility[col.id] !== false).length
+	);
 </script>
 
 <DropdownMenu.Root>
@@ -21,10 +24,10 @@
 			</Button>
 		{/snippet}
 	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="end" class="w-[200px]">
-		<DropdownMenu.Label>Toggle columns</DropdownMenu.Label>
+	<DropdownMenu.Content align="end" class="w-[220px]">
+		<DropdownMenu.Label>Toggle columns ({table.columns.length - 1})</DropdownMenu.Label>
 		<DropdownMenu.Separator />
-		<div class="space-y-1 p-1">
+		<div class="max-h-[350px] overflow-y-auto space-y-1 p-1">
 			{#each table.columns as column (column.id)}
 				{#if column.id !== 'select'}
 					<div class="flex items-center space-x-2 rounded-sm px-2 py-1.5 hover:bg-accent">
@@ -35,7 +38,7 @@
 						/>
 						<label
 							for="toggle-{column.id}"
-							class="flex-1 cursor-pointer text-sm font-normal select-none"
+							class="flex-1 cursor-pointer text-sm font-normal select-none truncate"
 						>
 							{column.header}
 						</label>

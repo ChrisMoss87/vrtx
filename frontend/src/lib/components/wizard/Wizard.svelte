@@ -108,13 +108,13 @@
 			</div>
 		{:else}
 			<!-- Step Content with Transitions -->
-			<div key={wizard.currentStepIndex}>
+			{#key wizard.currentStepIndex}
 				{#if children}
 					<div in:fly={{ x: 20, duration: 200, delay: 100 }} out:fly={{ x: -20, duration: 200 }}>
 						{@render children()}
 					</div>
 				{/if}
-			</div>
+			{/key}
 		{/if}
 	</div>
 

@@ -230,7 +230,7 @@
 								<span class="text-muted-foreground">All {column.header.toLowerCase()}</span>
 							</Select.Item>
 							{#each column.filterOptions || column.options || [] as option}
-								<Select.Item value={option.value}>
+								<Select.Item value={String(option.value)}>
 									{option.label}
 									{#if option.count !== undefined}
 										<span class="ml-2 text-xs text-muted-foreground">({option.count})</span>

@@ -9,6 +9,8 @@ use App\Models\Module;
 use App\Models\ModulePermission;
 use App\Models\User;
 use App\Services\RbacService;
+use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
@@ -16,6 +18,8 @@ use Spatie\Permission\Models\Role;
 
 class RbacController extends Controller
 {
+    use AuthorizesRequests;
+
     public function __construct(
         private RbacService $rbacService
     ) {}
@@ -25,14 +29,17 @@ class RbacController extends Controller
      */
     public function getRoles(): JsonResponse
     {
-        $roles = Role::with('permissions')->get()->map(function ($role) {
-            return [
-                'id' => $role->id,
-                'name' => $role->name,
-                'permissions' => $role->permissions->pluck('name'),
-                'users_count' => $role->users()->count(),
-            ];
-        });
+        // Get roles with permissions - count users manually to avoid Spatie relation issues
+        $roles = Role::with('permissions')
+            ->get()
+            ->map(function ($role) {
+                return [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'permissions' => $role->permissions->pluck('name'),
+                    'users_count' => User::role($role->name)->count(),
+                ];
+            });
 
         return response()->json(['data' => $roles]);
     }
@@ -42,10 +49,35 @@ class RbacController extends Controller
      */
     public function getRole(int $id): JsonResponse
     {
-        $role = Role::with('permissions')->findOrFail($id);
-        $modulePermissions = ModulePermission::where('role_id', $id)
-            ->with('module:id,name,api_name')
-            ->get();
+        // Use withCount to avoid N+1 query for users_count
+        $role = Role::with('permissions')
+            ->withCount('users')
+            ->findOrFail($id);
+
+        // Get all modules (only necessary columns) and existing permissions in single queries
+        $modules = Module::select('id', 'name', 'api_name')->get();
+        $existingPermissions = ModulePermission::where('role_id', $id)
+            ->get()
+            ->keyBy('module_id');
+
+        // Build module permissions with module names
+        $modulePermissions = $modules->map(function ($module) use ($existingPermissions) {
+            $permission = $existingPermissions->get($module->id);
+
+            return [
+                'module_id' => $module->id,
+                'module_name' => $module->name,
+                'module_api_name' => $module->api_name,
+                'can_view' => $permission?->can_view ?? false,
+                'can_create' => $permission?->can_create ?? false,
+                'can_edit' => $permission?->can_edit ?? false,
+                'can_delete' => $permission?->can_delete ?? false,
+                'can_export' => $permission?->can_export ?? false,
+                'can_import' => $permission?->can_import ?? false,
+                'record_access_level' => $permission?->record_access_level ?? 'own',
+                'field_restrictions' => $permission?->field_restrictions ?? [],
+            ];
+        });
 
         return response()->json([
             'data' => [
@@ -53,7 +85,7 @@ class RbacController extends Controller
                 'name' => $role->name,
                 'permissions' => $role->permissions->pluck('name'),
                 'module_permissions' => $modulePermissions,
-                'users_count' => $role->users()->count(),
+                'users_count' => $role->users_count,
             ],
         ]);
     }
@@ -123,7 +155,7 @@ class RbacController extends Controller
         $role = Role::findOrFail($id);
 
         // Prevent deletion of system roles
-        if (in_array($role->name, ['admin', 'manager', 'sales_rep', 'read_only'])) {
+        if (in_array($role->name, RolesAndPermissionsSeeder::SYSTEM_ROLES, true)) {
             return response()->json([
                 'message' => 'Cannot delete system roles',
             ], 422);
@@ -163,7 +195,8 @@ class RbacController extends Controller
     public function getModulePermissions(int $roleId): JsonResponse
     {
         $role = Role::findOrFail($roleId);
-        $modules = Module::all();
+        // Only select necessary columns for performance
+        $modules = Module::select('id', 'name', 'api_name')->get();
         $existingPermissions = ModulePermission::where('role_id', $roleId)
             ->get()
             ->keyBy('module_id');
@@ -357,30 +390,58 @@ class RbacController extends Controller
     public function getCurrentUserPermissions(Request $request): JsonResponse
     {
         $user = $request->user();
+        $isAdmin = $user->hasRole('admin');
 
-        // Get module-level permissions
-        $modules = Module::all();
+        // Get module-level permissions - only select necessary columns
+        $modules = Module::select('id', 'name', 'api_name')->get();
+
+        // Pre-fetch all module permissions for this user's roles in one query
+        $userRoleIds = $user->roles->pluck('id');
+        $allModulePermissions = ModulePermission::whereIn('role_id', $userRoleIds)
+            ->get()
+            ->groupBy('module_id');
+
         $modulePermissions = [];
 
         foreach ($modules as $module) {
-            $permission = $this->rbacService->getModulePermission($user, $module);
+            // Get the best permission for this module from all user's roles
+            $modulePerms = $allModulePermissions->get($module->id, collect());
+
+            // Merge permissions - if any role has the permission, user has it
+            $hasView = $modulePerms->contains('can_view', true);
+            $hasCreate = $modulePerms->contains('can_create', true);
+            $hasEdit = $modulePerms->contains('can_edit', true);
+            $hasDelete = $modulePerms->contains('can_delete', true);
+            $hasExport = $modulePerms->contains('can_export', true);
+            $hasImport = $modulePerms->contains('can_import', true);
+
+            // Get the highest access level
+            $accessLevels = ['none' => 0, 'own' => 1, 'team' => 2, 'all' => 3];
+            $highestAccessLevel = $modulePerms->reduce(function ($carry, $perm) use ($accessLevels) {
+                $currentLevel = $accessLevels[$perm->record_access_level] ?? 0;
+                $carryLevel = $accessLevels[$carry] ?? 0;
+                return $currentLevel > $carryLevel ? $perm->record_access_level : $carry;
+            }, 'none');
+
+            // Merge field restrictions (intersection - only fields restricted in ALL roles)
+            $fieldRestrictions = $modulePerms->pluck('field_restrictions')->filter()->toArray();
 
             $modulePermissions[$module->api_name] = [
-                'can_view' => $user->hasRole('admin') || ($permission?->can_view ?? false),
-                'can_create' => $user->hasRole('admin') || ($permission?->can_create ?? false),
-                'can_edit' => $user->hasRole('admin') || ($permission?->can_edit ?? false),
-                'can_delete' => $user->hasRole('admin') || ($permission?->can_delete ?? false),
-                'can_export' => $user->hasRole('admin') || ($permission?->can_export ?? false),
-                'can_import' => $user->hasRole('admin') || ($permission?->can_import ?? false),
-                'record_access_level' => $user->hasRole('admin') ? 'all' : ($permission?->record_access_level ?? 'none'),
-                'hidden_fields' => $user->hasRole('admin') ? [] : ($permission?->field_restrictions ?? []),
+                'can_view' => $isAdmin || $hasView,
+                'can_create' => $isAdmin || $hasCreate,
+                'can_edit' => $isAdmin || $hasEdit,
+                'can_delete' => $isAdmin || $hasDelete,
+                'can_export' => $isAdmin || $hasExport,
+                'can_import' => $isAdmin || $hasImport,
+                'record_access_level' => $isAdmin ? 'all' : $highestAccessLevel,
+                'hidden_fields' => $isAdmin ? [] : (empty($fieldRestrictions) ? [] : array_intersect(...$fieldRestrictions)),
             ];
         }
 
         return response()->json([
             'data' => [
                 'user_id' => $user->id,
-                'is_admin' => $user->hasRole('admin'),
+                'is_admin' => $isAdmin,
                 'roles' => $user->roles->pluck('name'),
                 'system_permissions' => $user->getAllPermissions()->pluck('name'),
                 'module_permissions' => $modulePermissions,

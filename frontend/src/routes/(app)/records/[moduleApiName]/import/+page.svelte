@@ -8,7 +8,7 @@
 	import { modulesApi, type Module, type Field } from '$lib/api/modules';
 	import type { Import } from '$lib/api/imports';
 
-	const moduleApiName = $page.params.moduleApiName;
+	const moduleApiName = $page.params.moduleApiName!;
 
 	let module = $state<Module | null>(null);
 	let fields = $state<Field[]>([]);

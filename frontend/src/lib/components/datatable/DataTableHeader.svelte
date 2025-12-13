@@ -39,12 +39,18 @@
 
 	// Check if all rows are selected
 	let allSelected = $derived(
-		table.state.data.length > 0 && table.state.data.every((row) => table.state.rowSelection[row.id])
+		table.state.data.length > 0 && table.state.data.every((row) => {
+			const rowId = row.id as string | number;
+			return table.state.rowSelection[rowId];
+		})
 	);
 
 	// Check if some rows are selected
 	let someSelected = $derived(
-		table.state.data.some((row) => table.state.rowSelection[row.id]) && !allSelected
+		table.state.data.some((row) => {
+			const rowId = row.id as string | number;
+			return table.state.rowSelection[rowId];
+		}) && !allSelected
 	);
 
 	// Get sort info for column

@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\RbacController;
 use App\Http\Controllers\Api\UserSearchController;
 use App\Http\Controllers\Api\WizardDraftController;
 use App\Http\Controllers\Api\Workflows\WorkflowController;
+use App\Http\Controllers\Api\Workflow\WorkflowEmailTemplateController;
 use App\Http\Controllers\Api\Reporting\ReportController;
 use App\Http\Controllers\Api\Reporting\DashboardController;
 use App\Http\Controllers\Api\DataManagement\ImportController;
@@ -25,7 +26,52 @@ use App\Http\Controllers\Api\DataManagement\ExportController;
 use App\Http\Controllers\Api\Integration\ApiKeyController;
 use App\Http\Controllers\Api\Integration\WebhookController;
 use App\Http\Controllers\Api\Integration\IncomingWebhookController;
+use App\Http\Controllers\Api\ForecastController;
+use App\Http\Controllers\Api\RottingAlertController;
 use App\Http\Controllers\Api\SearchController;
+use App\Http\Controllers\Api\Blueprints\BlueprintTransitionConfigController;
+use App\Http\Controllers\Api\Blueprints\BlueprintSlaController;
+use App\Http\Controllers\Api\WebFormController;
+use App\Http\Controllers\Api\WebFormPublicController;
+use App\Http\Controllers\Api\Scheduling\SchedulingPageController;
+use App\Http\Controllers\Api\Scheduling\MeetingTypeController;
+use App\Http\Controllers\Api\Scheduling\AvailabilityController;
+use App\Http\Controllers\Api\Scheduling\ScheduledMeetingController;
+use App\Http\Controllers\Api\Scheduling\PublicBookingController;
+use App\Http\Controllers\Api\TimeMachine\RecordHistoryController;
+use App\Http\Controllers\Api\Graph\GraphController;
+use App\Http\Controllers\Api\Billing\ProductController;
+use App\Http\Controllers\Api\Billing\QuoteController;
+use App\Http\Controllers\Api\Billing\InvoiceController;
+use App\Http\Controllers\Api\Billing\PublicQuoteController;
+use App\Http\Controllers\Api\Billing\LicenseController;
+use App\Http\Controllers\Api\Billing\PluginController as BillingPluginController;
+use App\Http\Controllers\Api\Billing\BundleController;
+use App\Http\Controllers\Api\Billing\SubscriptionController;
+use App\Http\Controllers\Api\Recording\RecordingController;
+use App\Http\Controllers\Api\Competitor\CompetitorController;
+use App\Http\Controllers\Api\AbTest\AbTestController;
+use App\Http\Controllers\Api\LandingPage\LandingPageController;
+use App\Http\Controllers\Api\LandingPage\PublicLandingPageController;
+use App\Http\Controllers\Api\Meeting\MeetingController;
+use App\Http\Controllers\Api\Quotas\QuotaController;
+use App\Http\Controllers\Api\Quotas\QuotaPeriodController;
+use App\Http\Controllers\Api\Quotas\GoalController;
+use App\Http\Controllers\Api\Chat\ChatWidgetController;
+use App\Http\Controllers\Api\Chat\ChatConversationController;
+use App\Http\Controllers\Api\Chat\ChatAgentController;
+use App\Http\Controllers\Api\Chat\PublicChatController;
+use App\Http\Controllers\Api\Whatsapp\WhatsappConnectionController;
+use App\Http\Controllers\Api\Whatsapp\WhatsappTemplateController;
+use App\Http\Controllers\Api\Whatsapp\WhatsappConversationController;
+use App\Http\Controllers\Api\Whatsapp\WhatsappWebhookController;
+use App\Http\Controllers\Api\Lookalike\LookalikeController;
+use App\Http\Controllers\Api\Document\DocumentTemplateController;
+use App\Http\Controllers\Api\Signature\SignatureController;
+use App\Http\Controllers\Api\Signature\PublicSignatureController;
+use App\Http\Controllers\Api\Proposal\ProposalController;
+use App\Http\Controllers\Api\Proposal\PublicProposalController;
+use App\Http\Controllers\Api\Approval\ApprovalController;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
@@ -44,10 +90,13 @@ Route::middleware([
     'api',
     InitializeTenancyByDomain::class,
     PreventAccessFromCentralDomains::class,
+    'throttle:api',
 ])->prefix('api/v1')->group(function () {
-    // Public authentication routes
-    Route::post('/auth/register', [AuthController::class, 'register']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
+    // Public authentication routes (stricter rate limiting)
+    Route::middleware('throttle:auth')->group(function () {
+        Route::post('/auth/register', [AuthController::class, 'register']);
+        Route::post('/auth/login', [AuthController::class, 'login']);
+    });
 
     // Protected routes
     Route::middleware('auth:sanctum')->group(function () {
@@ -56,15 +105,26 @@ Route::middleware([
 
         // Module Management Routes
         Route::prefix('modules')->group(function () {
-            Route::get('/', [ModuleController::class, 'index']);
-            Route::get('/active', [ModuleController::class, 'active']);
-            Route::get('/by-api-name/{apiName}', [ModuleController::class, 'showByApiName']);
-            Route::post('/', [ModuleController::class, 'store']);
-            Route::post('/reorder', [ModuleController::class, 'reorder']);
-            Route::get('/{id}', [ModuleController::class, 'show']);
-            Route::put('/{id}', [ModuleController::class, 'update']);
-            Route::delete('/{id}', [ModuleController::class, 'destroy']);
-            Route::post('/{id}/toggle-status', [ModuleController::class, 'toggleStatus']);
+            // View operations - requires modules.view
+            Route::middleware('permission:modules.view')->group(function () {
+                Route::get('/', [ModuleController::class, 'index']);
+                Route::get('/active', [ModuleController::class, 'active']);
+                Route::get('/by-api-name/{apiName}', [ModuleController::class, 'showByApiName']);
+                Route::get('/{id}', [ModuleController::class, 'show']);
+            });
+
+            // Create operations - requires modules.create
+            Route::post('/', [ModuleController::class, 'store'])->middleware('permission:modules.create');
+
+            // Edit operations - requires modules.edit
+            Route::middleware('permission:modules.edit')->group(function () {
+                Route::post('/reorder', [ModuleController::class, 'reorder']);
+                Route::put('/{id}', [ModuleController::class, 'update']);
+                Route::post('/{id}/toggle-status', [ModuleController::class, 'toggleStatus']);
+            });
+
+            // Delete operations - requires modules.delete
+            Route::delete('/{id}', [ModuleController::class, 'destroy'])->middleware('permission:modules.delete');
         });
 
         // Dynamic Module Records Routes
@@ -78,16 +138,29 @@ Route::middleware([
             Route::put('/{moduleApiName}/{recordId}', [RecordController::class, 'update']);
             Route::patch('/{moduleApiName}/{recordId}', [RecordController::class, 'patch']);
             Route::delete('/{moduleApiName}/{recordId}', [RecordController::class, 'destroy']);
+
+            // Time Machine Routes (Record History)
+            Route::get('/{moduleApiName}/{recordId}/history', [RecordHistoryController::class, 'history']);
+            Route::get('/{moduleApiName}/{recordId}/at/{timestamp}', [RecordHistoryController::class, 'atTimestamp']);
+            Route::get('/{moduleApiName}/{recordId}/diff', [RecordHistoryController::class, 'diff']);
+            Route::get('/{moduleApiName}/{recordId}/compare', [RecordHistoryController::class, 'compare']);
+            Route::get('/{moduleApiName}/{recordId}/timeline', [RecordHistoryController::class, 'timeline']);
+            Route::get('/{moduleApiName}/{recordId}/timeline-markers', [RecordHistoryController::class, 'timelineMarkers']);
+            Route::get('/{moduleApiName}/{recordId}/field-changes', [RecordHistoryController::class, 'fieldChanges']);
+            Route::post('/{moduleApiName}/{recordId}/snapshot', [RecordHistoryController::class, 'createSnapshot']);
         });
 
         // Module Views Routes
         Route::prefix('views')->group(function () {
             Route::get('/{moduleApiName}', [ViewsController::class, 'index']);
             Route::get('/{moduleApiName}/default', [ViewsController::class, 'getDefaultView']);
+            Route::get('/{moduleApiName}/kanban-fields', [ViewsController::class, 'getKanbanFields']);
             Route::post('/{moduleApiName}', [ViewsController::class, 'store']);
             Route::get('/{moduleApiName}/{viewId}', [ViewsController::class, 'show']);
             Route::put('/{moduleApiName}/{viewId}', [ViewsController::class, 'update']);
             Route::delete('/{moduleApiName}/{viewId}', [ViewsController::class, 'destroy']);
+            Route::get('/{moduleApiName}/{viewId}/kanban', [ViewsController::class, 'getKanbanData']);
+            Route::post('/{moduleApiName}/{viewId}/kanban/move', [ViewsController::class, 'moveKanbanRecord']);
         });
 
         // Wizard Draft Routes
@@ -103,8 +176,8 @@ Route::middleware([
             Route::post('/{id}/extend', [WizardDraftController::class, 'extendExpiration']);
         });
 
-        // File Upload Routes
-        Route::prefix('files')->group(function () {
+        // File Upload Routes (with upload rate limiting)
+        Route::prefix('files')->middleware('throttle:uploads')->group(function () {
             Route::post('/upload', [FileUploadController::class, 'upload']);
             Route::post('/upload-multiple', [FileUploadController::class, 'uploadMultiple']);
             Route::post('/delete', [FileUploadController::class, 'delete']);
@@ -114,24 +187,34 @@ Route::middleware([
         // User Search (for mentions)
         Route::get('/users/search', [UserSearchController::class, 'search']);
 
-        // Simple upload endpoint at root level
-        Route::post('/upload', [FileUploadController::class, 'upload']);
-        Route::post('/upload-multiple', [FileUploadController::class, 'uploadMultiple']);
+        // NOTE: Use /files/upload instead - these root-level endpoints are deprecated
+        // Keeping for backwards compatibility but should be removed in v2
 
         // Pipeline Routes
         Route::prefix('pipelines')->group(function () {
-            Route::get('/', [PipelineController::class, 'index']);
-            Route::get('/module/{moduleApiName}', [PipelineController::class, 'forModule']);
-            Route::post('/sync-all-field-options', [PipelineController::class, 'syncAllFieldOptions']);
-            Route::post('/', [PipelineController::class, 'store']);
-            Route::get('/{id}', [PipelineController::class, 'show']);
-            Route::put('/{id}', [PipelineController::class, 'update']);
-            Route::delete('/{id}', [PipelineController::class, 'destroy']);
-            Route::get('/{id}/kanban', [PipelineController::class, 'kanbanData']);
-            Route::post('/{id}/move-record', [PipelineController::class, 'moveRecord']);
-            Route::get('/{id}/record/{recordId}/history', [PipelineController::class, 'recordHistory']);
-            Route::post('/{id}/reorder-stages', [PipelineController::class, 'reorderStages']);
-            Route::post('/{id}/sync-field-options', [PipelineController::class, 'syncFieldOptions']);
+            // View operations
+            Route::middleware('permission:pipelines.view')->group(function () {
+                Route::get('/', [PipelineController::class, 'index']);
+                Route::get('/module/{moduleApiName}', [PipelineController::class, 'forModule']);
+                Route::get('/{id}', [PipelineController::class, 'show']);
+                Route::get('/{id}/kanban', [PipelineController::class, 'kanbanData']);
+                Route::get('/{id}/record/{recordId}/history', [PipelineController::class, 'recordHistory']);
+            });
+
+            // Create operations
+            Route::post('/', [PipelineController::class, 'store'])->middleware('permission:pipelines.create');
+
+            // Edit operations
+            Route::middleware('permission:pipelines.edit')->group(function () {
+                Route::post('/sync-all-field-options', [PipelineController::class, 'syncAllFieldOptions']);
+                Route::put('/{id}', [PipelineController::class, 'update']);
+                Route::post('/{id}/move-record', [PipelineController::class, 'moveRecord']);
+                Route::post('/{id}/reorder-stages', [PipelineController::class, 'reorderStages']);
+                Route::post('/{id}/sync-field-options', [PipelineController::class, 'syncFieldOptions']);
+            });
+
+            // Delete operations
+            Route::delete('/{id}', [PipelineController::class, 'destroy'])->middleware('permission:pipelines.delete');
         });
 
         // Workflow Automation Routes
@@ -158,29 +241,52 @@ Route::middleware([
             Route::get('/{id}/executions/{executionId}', [WorkflowController::class, 'showExecution']);
         });
 
+        // Workflow Email Templates Routes
+        Route::prefix('workflow-email-templates')->group(function () {
+            Route::get('/', [WorkflowEmailTemplateController::class, 'index']);
+            Route::get('/categories', [WorkflowEmailTemplateController::class, 'categories']);
+            Route::get('/variables', [WorkflowEmailTemplateController::class, 'variables']);
+            Route::post('/', [WorkflowEmailTemplateController::class, 'store']);
+            Route::get('/{workflowEmailTemplate}', [WorkflowEmailTemplateController::class, 'show']);
+            Route::put('/{workflowEmailTemplate}', [WorkflowEmailTemplateController::class, 'update']);
+            Route::delete('/{workflowEmailTemplate}', [WorkflowEmailTemplateController::class, 'destroy']);
+            Route::post('/{workflowEmailTemplate}/duplicate', [WorkflowEmailTemplateController::class, 'duplicate']);
+            Route::post('/{workflowEmailTemplate}/preview', [WorkflowEmailTemplateController::class, 'preview']);
+        });
+
         // Blueprint Routes (Stage Transitions & SLAs)
         Route::prefix('blueprints')->group(function () {
-            // Blueprint CRUD
-            Route::get('/', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'index']);
-            Route::post('/', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'store']);
-            Route::get('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'show']);
-            Route::put('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'update']);
-            Route::delete('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroy']);
-            Route::put('/{id}/layout', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateLayout']);
-            Route::post('/{id}/toggle-active', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'toggleActive']);
-            Route::post('/{id}/sync-states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'syncStates']);
+            // View operations
+            Route::middleware('permission:blueprints.view')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'index']);
+                Route::get('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'show']);
+                Route::get('/{id}/states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'states']);
+                Route::get('/{id}/transitions', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'transitions']);
+            });
 
-            // State management
-            Route::get('/{id}/states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'states']);
-            Route::post('/{id}/states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'storeState']);
-            Route::put('/{id}/states/{stateId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateState']);
-            Route::delete('/{id}/states/{stateId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroyState']);
+            // Create operations
+            Route::middleware('permission:blueprints.create')->group(function () {
+                Route::post('/', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'store']);
+                Route::post('/{id}/states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'storeState']);
+                Route::post('/{id}/transitions', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'storeTransition']);
+            });
 
-            // Transition management
-            Route::get('/{id}/transitions', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'transitions']);
-            Route::post('/{id}/transitions', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'storeTransition']);
-            Route::put('/{id}/transitions/{transitionId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateTransition']);
-            Route::delete('/{id}/transitions/{transitionId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroyTransition']);
+            // Edit operations
+            Route::middleware('permission:blueprints.edit')->group(function () {
+                Route::put('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'update']);
+                Route::put('/{id}/layout', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateLayout']);
+                Route::post('/{id}/toggle-active', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'toggleActive']);
+                Route::post('/{id}/sync-states', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'syncStates']);
+                Route::put('/{id}/states/{stateId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateState']);
+                Route::put('/{id}/transitions/{transitionId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'updateTransition']);
+            });
+
+            // Delete operations
+            Route::middleware('permission:blueprints.delete')->group(function () {
+                Route::delete('/{id}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroy']);
+                Route::delete('/{id}/states/{stateId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroyState']);
+                Route::delete('/{id}/transitions/{transitionId}', [\App\Http\Controllers\Api\Blueprints\BlueprintController::class, 'destroyTransition']);
+            });
         });
 
         // Blueprint Execution Routes (Runtime)
@@ -203,6 +309,49 @@ Route::middleware([
             Route::get('/pending', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'pendingApprovals']);
             Route::post('/{requestId}/approve', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'approve']);
             Route::post('/{requestId}/reject', [\App\Http\Controllers\Api\Blueprints\BlueprintExecutionController::class, 'reject']);
+        });
+
+        // Blueprint Transition Configuration (Conditions, Requirements, Actions, Approval)
+        Route::prefix('blueprint-transitions')->middleware('permission:blueprints.edit')->group(function () {
+            // Conditions
+            Route::get('/{transitionId}/conditions', [BlueprintTransitionConfigController::class, 'getConditions']);
+            Route::post('/{transitionId}/conditions', [BlueprintTransitionConfigController::class, 'storeCondition']);
+            Route::put('/{transitionId}/conditions/{conditionId}', [BlueprintTransitionConfigController::class, 'updateCondition']);
+            Route::delete('/{transitionId}/conditions/{conditionId}', [BlueprintTransitionConfigController::class, 'destroyCondition']);
+
+            // Requirements
+            Route::get('/{transitionId}/requirements', [BlueprintTransitionConfigController::class, 'getRequirements']);
+            Route::post('/{transitionId}/requirements', [BlueprintTransitionConfigController::class, 'storeRequirement']);
+            Route::put('/{transitionId}/requirements/{requirementId}', [BlueprintTransitionConfigController::class, 'updateRequirement']);
+            Route::delete('/{transitionId}/requirements/{requirementId}', [BlueprintTransitionConfigController::class, 'destroyRequirement']);
+
+            // Actions
+            Route::get('/{transitionId}/actions', [BlueprintTransitionConfigController::class, 'getActions']);
+            Route::post('/{transitionId}/actions', [BlueprintTransitionConfigController::class, 'storeAction']);
+            Route::put('/{transitionId}/actions/{actionId}', [BlueprintTransitionConfigController::class, 'updateAction']);
+            Route::delete('/{transitionId}/actions/{actionId}', [BlueprintTransitionConfigController::class, 'destroyAction']);
+
+            // Approval
+            Route::get('/{transitionId}/approval', [BlueprintTransitionConfigController::class, 'getApproval']);
+            Route::put('/{transitionId}/approval', [BlueprintTransitionConfigController::class, 'setApproval']);
+            Route::delete('/{transitionId}/approval', [BlueprintTransitionConfigController::class, 'removeApproval']);
+        });
+
+        // Blueprint SLA Management
+        Route::prefix('blueprints/{blueprintId}/slas')->middleware('permission:blueprints.edit')->group(function () {
+            Route::get('/', [BlueprintSlaController::class, 'index']);
+            Route::post('/', [BlueprintSlaController::class, 'store']);
+            Route::get('/{slaId}', [BlueprintSlaController::class, 'show']);
+            Route::put('/{slaId}', [BlueprintSlaController::class, 'update']);
+            Route::delete('/{slaId}', [BlueprintSlaController::class, 'destroy']);
+        });
+
+        // Blueprint SLA Escalations
+        Route::prefix('blueprint-slas/{slaId}/escalations')->middleware('permission:blueprints.edit')->group(function () {
+            Route::get('/', [BlueprintSlaController::class, 'getEscalations']);
+            Route::post('/', [BlueprintSlaController::class, 'storeEscalation']);
+            Route::put('/{escalationId}', [BlueprintSlaController::class, 'updateEscalation']);
+            Route::delete('/{escalationId}', [BlueprintSlaController::class, 'destroyEscalation']);
         });
 
         // Email Account Routes
@@ -239,35 +388,47 @@ Route::middleware([
 
         // Email Template Routes
         Route::prefix('email-templates')->group(function () {
-            Route::get('/', [EmailTemplateController::class, 'index']);
-            Route::get('/categories', [EmailTemplateController::class, 'categories']);
-            Route::post('/', [EmailTemplateController::class, 'store']);
-            Route::get('/{emailTemplate}', [EmailTemplateController::class, 'show']);
-            Route::put('/{emailTemplate}', [EmailTemplateController::class, 'update']);
-            Route::delete('/{emailTemplate}', [EmailTemplateController::class, 'destroy']);
-            Route::post('/{emailTemplate}/duplicate', [EmailTemplateController::class, 'duplicate']);
-            Route::post('/{emailTemplate}/preview', [EmailTemplateController::class, 'preview']);
+            // View operations
+            Route::middleware('permission:email_templates.view')->group(function () {
+                Route::get('/', [EmailTemplateController::class, 'index']);
+                Route::get('/categories', [EmailTemplateController::class, 'categories']);
+                Route::get('/{emailTemplate}', [EmailTemplateController::class, 'show']);
+                Route::post('/{emailTemplate}/preview', [EmailTemplateController::class, 'preview']);
+            });
+
+            // Create operations
+            Route::middleware('permission:email_templates.create')->group(function () {
+                Route::post('/', [EmailTemplateController::class, 'store']);
+                Route::post('/{emailTemplate}/duplicate', [EmailTemplateController::class, 'duplicate']);
+            });
+
+            // Edit operations
+            Route::put('/{emailTemplate}', [EmailTemplateController::class, 'update'])->middleware('permission:email_templates.edit');
+
+            // Delete operations
+            Route::delete('/{emailTemplate}', [EmailTemplateController::class, 'destroy'])->middleware('permission:email_templates.delete');
         });
 
-        // Activity Routes
-        Route::prefix('activities')->group(function () {
+        // Activity Routes - requires activity.view permission
+        Route::prefix('activities')->middleware('permission:activity.view')->group(function () {
             Route::get('/types', [ActivityController::class, 'types']);
             Route::get('/outcomes', [ActivityController::class, 'outcomes']);
             Route::get('/timeline', [ActivityController::class, 'timeline']);
             Route::get('/upcoming', [ActivityController::class, 'upcoming']);
             Route::get('/overdue', [ActivityController::class, 'overdue']);
-
             Route::get('/', [ActivityController::class, 'index']);
-            Route::post('/', [ActivityController::class, 'store']);
             Route::get('/{activity}', [ActivityController::class, 'show']);
+
+            // Write operations (still require activity.view as base)
+            Route::post('/', [ActivityController::class, 'store']);
             Route::put('/{activity}', [ActivityController::class, 'update']);
             Route::delete('/{activity}', [ActivityController::class, 'destroy']);
             Route::post('/{activity}/complete', [ActivityController::class, 'complete']);
             Route::post('/{activity}/toggle-pin', [ActivityController::class, 'togglePin']);
         });
 
-        // Audit Log Routes
-        Route::prefix('audit-logs')->group(function () {
+        // Audit Log Routes - requires activity.view permission
+        Route::prefix('audit-logs')->middleware('permission:activity.view')->group(function () {
             Route::get('/', [AuditLogController::class, 'index']);
             Route::get('/for-record', [AuditLogController::class, 'forRecord']);
             Route::get('/summary', [AuditLogController::class, 'summary']);
@@ -278,88 +439,114 @@ Route::middleware([
 
         // Report Routes
         Route::prefix('reports')->group(function () {
-            Route::get('/types', [ReportController::class, 'types']);
-            Route::get('/fields', [ReportController::class, 'fields']);
-            Route::post('/preview', [ReportController::class, 'preview']);
-            Route::post('/kpi', [ReportController::class, 'kpi']);
+            // View operations
+            Route::middleware('permission:reports.view')->group(function () {
+                Route::get('/types', [ReportController::class, 'types']);
+                Route::get('/fields', [ReportController::class, 'fields']);
+                Route::post('/preview', [ReportController::class, 'preview']);
+                Route::post('/kpi', [ReportController::class, 'kpi']);
+                Route::get('/', [ReportController::class, 'index']);
+                Route::get('/{report}', [ReportController::class, 'show']);
+                Route::get('/{report}/execute', [ReportController::class, 'execute']);
+                Route::get('/{report}/export', [ReportController::class, 'export']);
+            });
 
-            Route::get('/', [ReportController::class, 'index']);
-            Route::post('/', [ReportController::class, 'store']);
-            Route::get('/{report}', [ReportController::class, 'show']);
-            Route::put('/{report}', [ReportController::class, 'update']);
-            Route::delete('/{report}', [ReportController::class, 'destroy']);
-            Route::get('/{report}/execute', [ReportController::class, 'execute']);
-            Route::get('/{report}/export', [ReportController::class, 'export']);
-            Route::post('/{report}/toggle-favorite', [ReportController::class, 'toggleFavorite']);
-            Route::post('/{report}/duplicate', [ReportController::class, 'duplicate']);
+            // Create operations
+            Route::middleware('permission:reports.create')->group(function () {
+                Route::post('/', [ReportController::class, 'store']);
+                Route::post('/{report}/duplicate', [ReportController::class, 'duplicate']);
+            });
+
+            // Edit operations
+            Route::middleware('permission:reports.edit')->group(function () {
+                Route::put('/{report}', [ReportController::class, 'update']);
+                Route::post('/{report}/toggle-favorite', [ReportController::class, 'toggleFavorite']);
+            });
+
+            // Delete operations
+            Route::delete('/{report}', [ReportController::class, 'destroy'])->middleware('permission:reports.delete');
         });
 
         // Dashboard Routes
         Route::prefix('dashboards')->group(function () {
-            Route::get('/widget-types', [DashboardController::class, 'widgetTypes']);
+            // View operations
+            Route::middleware('permission:dashboards.view')->group(function () {
+                Route::get('/widget-types', [DashboardController::class, 'widgetTypes']);
+                Route::get('/', [DashboardController::class, 'index']);
+                Route::get('/{dashboard}', [DashboardController::class, 'show']);
+                Route::get('/{dashboard}/data', [DashboardController::class, 'allWidgetData']);
+                Route::get('/{dashboard}/widgets/{widget}/data', [DashboardController::class, 'widgetData']);
+            });
 
-            Route::get('/', [DashboardController::class, 'index']);
-            Route::post('/', [DashboardController::class, 'store']);
-            Route::get('/{dashboard}', [DashboardController::class, 'show']);
-            Route::put('/{dashboard}', [DashboardController::class, 'update']);
-            Route::delete('/{dashboard}', [DashboardController::class, 'destroy']);
-            Route::post('/{dashboard}/duplicate', [DashboardController::class, 'duplicate']);
-            Route::post('/{dashboard}/set-default', [DashboardController::class, 'setDefault']);
-            Route::put('/{dashboard}/layout', [DashboardController::class, 'updateLayout']);
-            Route::get('/{dashboard}/data', [DashboardController::class, 'allWidgetData']);
+            // Create operations
+            Route::middleware('permission:dashboards.create')->group(function () {
+                Route::post('/', [DashboardController::class, 'store']);
+                Route::post('/{dashboard}/duplicate', [DashboardController::class, 'duplicate']);
+            });
 
-            // Widget routes
-            Route::post('/{dashboard}/widgets', [DashboardController::class, 'addWidget']);
-            Route::put('/{dashboard}/widgets/{widget}', [DashboardController::class, 'updateWidget']);
-            Route::delete('/{dashboard}/widgets/{widget}', [DashboardController::class, 'removeWidget']);
-            Route::post('/{dashboard}/widgets/reorder', [DashboardController::class, 'reorderWidgets']);
-            Route::get('/{dashboard}/widgets/{widget}/data', [DashboardController::class, 'widgetData']);
+            // Edit operations
+            Route::middleware('permission:dashboards.edit')->group(function () {
+                Route::put('/{dashboard}', [DashboardController::class, 'update']);
+                Route::post('/{dashboard}/set-default', [DashboardController::class, 'setDefault']);
+                Route::put('/{dashboard}/layout', [DashboardController::class, 'updateLayout']);
+                Route::post('/{dashboard}/widgets', [DashboardController::class, 'addWidget']);
+                Route::put('/{dashboard}/widgets/{widget}', [DashboardController::class, 'updateWidget']);
+                Route::delete('/{dashboard}/widgets/{widget}', [DashboardController::class, 'removeWidget']);
+                Route::post('/{dashboard}/widgets/reorder', [DashboardController::class, 'reorderWidgets']);
+            });
+
+            // Delete operations
+            Route::delete('/{dashboard}', [DashboardController::class, 'destroy'])->middleware('permission:dashboards.delete');
         });
 
         // RBAC (Role-Based Access Control) Routes
         Route::prefix('rbac')->group(function () {
-            // Current user permissions
+            // Current user permissions - always accessible
             Route::get('/my-permissions', [RbacController::class, 'getCurrentUserPermissions']);
 
-            // Roles management
-            Route::get('/roles', [RbacController::class, 'getRoles']);
-            Route::post('/roles', [RbacController::class, 'createRole']);
-            Route::get('/roles/{id}', [RbacController::class, 'getRole']);
-            Route::put('/roles/{id}', [RbacController::class, 'updateRole']);
-            Route::delete('/roles/{id}', [RbacController::class, 'deleteRole']);
-            Route::get('/roles/{id}/users', [RbacController::class, 'getRoleUsers']);
+            // View operations
+            Route::middleware('permission:roles.view')->group(function () {
+                Route::get('/roles', [RbacController::class, 'getRoles']);
+                Route::get('/roles/{id}', [RbacController::class, 'getRole']);
+                Route::get('/roles/{id}/users', [RbacController::class, 'getRoleUsers']);
+                Route::get('/permissions', [RbacController::class, 'getPermissions']);
+                Route::get('/roles/{roleId}/module-permissions', [RbacController::class, 'getModulePermissions']);
+                Route::get('/users/{userId}/permissions', [RbacController::class, 'getUserPermissions']);
+            });
 
-            // Permissions
-            Route::get('/permissions', [RbacController::class, 'getPermissions']);
+            // Create operations
+            Route::post('/roles', [RbacController::class, 'createRole'])->middleware('permission:roles.create');
 
-            // Module permissions
-            Route::get('/roles/{roleId}/module-permissions', [RbacController::class, 'getModulePermissions']);
-            Route::put('/roles/{roleId}/module-permissions', [RbacController::class, 'updateModulePermissions']);
-            Route::put('/roles/{roleId}/module-permissions/bulk', [RbacController::class, 'bulkUpdateModulePermissions']);
+            // Edit operations
+            Route::middleware('permission:roles.edit')->group(function () {
+                Route::put('/roles/{id}', [RbacController::class, 'updateRole']);
+                Route::put('/roles/{roleId}/module-permissions', [RbacController::class, 'updateModulePermissions']);
+                Route::put('/roles/{roleId}/module-permissions/bulk', [RbacController::class, 'bulkUpdateModulePermissions']);
+                Route::post('/users/assign-role', [RbacController::class, 'assignRoleToUser']);
+                Route::post('/users/remove-role', [RbacController::class, 'removeRoleFromUser']);
+                Route::put('/users/{userId}/roles', [RbacController::class, 'syncUserRoles']);
+            });
 
-            // User role assignment
-            Route::post('/users/assign-role', [RbacController::class, 'assignRoleToUser']);
-            Route::post('/users/remove-role', [RbacController::class, 'removeRoleFromUser']);
-            Route::get('/users/{userId}/permissions', [RbacController::class, 'getUserPermissions']);
-            Route::put('/users/{userId}/roles', [RbacController::class, 'syncUserRoles']);
+            // Delete operations
+            Route::delete('/roles/{id}', [RbacController::class, 'deleteRole'])->middleware('permission:roles.delete');
         });
 
-        // Import Routes
-        Route::prefix('imports/{moduleApiName}')->group(function () {
+        // Import Routes - requires data.import permission
+        Route::prefix('imports/{moduleApiName}')->middleware('permission:data.import')->group(function () {
             Route::get('/', [ImportController::class, 'index']);
             Route::get('/template', [ImportController::class, 'template']);
             Route::post('/upload', [ImportController::class, 'upload']);
             Route::get('/{importId}', [ImportController::class, 'show']);
             Route::put('/{importId}/configure', [ImportController::class, 'configure']);
-            Route::post('/{importId}/validate', [ImportController::class, 'validate']);
+            Route::post('/{importId}/validate', [ImportController::class, 'validateImport']);
             Route::post('/{importId}/execute', [ImportController::class, 'execute']);
             Route::post('/{importId}/cancel', [ImportController::class, 'cancel']);
             Route::get('/{importId}/errors', [ImportController::class, 'errors']);
             Route::delete('/{importId}', [ImportController::class, 'destroy']);
         });
 
-        // Export Routes
-        Route::prefix('exports/{moduleApiName}')->group(function () {
+        // Export Routes - requires data.export permission (with export rate limiting)
+        Route::prefix('exports/{moduleApiName}')->middleware(['permission:data.export', 'throttle:exports'])->group(function () {
             Route::get('/', [ExportController::class, 'index']);
             Route::post('/', [ExportController::class, 'store']);
             Route::get('/templates', [ExportController::class, 'templates']);
@@ -374,43 +561,76 @@ Route::middleware([
 
         // API Keys Management Routes
         Route::prefix('api-keys')->group(function () {
-            Route::get('/', [ApiKeyController::class, 'index']);
-            Route::post('/', [ApiKeyController::class, 'store']);
-            Route::get('/{id}', [ApiKeyController::class, 'show']);
-            Route::put('/{id}', [ApiKeyController::class, 'update']);
-            Route::delete('/{id}', [ApiKeyController::class, 'destroy']);
-            Route::post('/{id}/revoke', [ApiKeyController::class, 'revoke']);
-            Route::post('/{id}/regenerate', [ApiKeyController::class, 'regenerate']);
-            Route::get('/{id}/logs', [ApiKeyController::class, 'logs']);
+            // View operations
+            Route::middleware('permission:api_keys.view')->group(function () {
+                Route::get('/', [ApiKeyController::class, 'index']);
+                Route::get('/{id}', [ApiKeyController::class, 'show']);
+                Route::get('/{id}/logs', [ApiKeyController::class, 'logs']);
+            });
+
+            // Create operations
+            Route::post('/', [ApiKeyController::class, 'store'])->middleware('permission:api_keys.create');
+
+            // Edit operations
+            Route::middleware('permission:api_keys.edit')->group(function () {
+                Route::put('/{id}', [ApiKeyController::class, 'update']);
+                Route::post('/{id}/revoke', [ApiKeyController::class, 'revoke']);
+                Route::post('/{id}/regenerate', [ApiKeyController::class, 'regenerate']);
+            });
+
+            // Delete operations
+            Route::delete('/{id}', [ApiKeyController::class, 'destroy'])->middleware('permission:api_keys.delete');
         });
 
         // Outgoing Webhooks Management Routes
         Route::prefix('webhooks')->group(function () {
-            Route::get('/', [WebhookController::class, 'index']);
-            Route::post('/', [WebhookController::class, 'store']);
-            Route::get('/{id}', [WebhookController::class, 'show']);
-            Route::put('/{id}', [WebhookController::class, 'update']);
-            Route::delete('/{id}', [WebhookController::class, 'destroy']);
-            Route::post('/{id}/rotate-secret', [WebhookController::class, 'rotateSecret']);
-            Route::post('/{id}/test', [WebhookController::class, 'test']);
-            Route::get('/{id}/deliveries', [WebhookController::class, 'deliveries']);
-            Route::get('/{webhookId}/deliveries/{deliveryId}', [WebhookController::class, 'getDelivery']);
-            Route::post('/{webhookId}/deliveries/{deliveryId}/retry', [WebhookController::class, 'retryDelivery']);
+            // View operations
+            Route::middleware('permission:webhooks.view')->group(function () {
+                Route::get('/', [WebhookController::class, 'index']);
+                Route::get('/{id}', [WebhookController::class, 'show']);
+                Route::get('/{id}/deliveries', [WebhookController::class, 'deliveries']);
+                Route::get('/{webhookId}/deliveries/{deliveryId}', [WebhookController::class, 'getDelivery']);
+            });
+
+            // Create operations
+            Route::post('/', [WebhookController::class, 'store'])->middleware('permission:webhooks.create');
+
+            // Edit operations
+            Route::middleware('permission:webhooks.edit')->group(function () {
+                Route::put('/{id}', [WebhookController::class, 'update']);
+                Route::post('/{id}/rotate-secret', [WebhookController::class, 'rotateSecret']);
+                Route::post('/{id}/test', [WebhookController::class, 'test']);
+                Route::post('/{webhookId}/deliveries/{deliveryId}/retry', [WebhookController::class, 'retryDelivery']);
+            });
+
+            // Delete operations
+            Route::delete('/{id}', [WebhookController::class, 'destroy'])->middleware('permission:webhooks.delete');
         });
 
         // Incoming Webhooks Management Routes
         Route::prefix('incoming-webhooks')->group(function () {
-            Route::get('/', [IncomingWebhookController::class, 'index']);
-            Route::post('/', [IncomingWebhookController::class, 'store']);
-            Route::get('/{id}', [IncomingWebhookController::class, 'show']);
-            Route::put('/{id}', [IncomingWebhookController::class, 'update']);
-            Route::delete('/{id}', [IncomingWebhookController::class, 'destroy']);
-            Route::post('/{id}/regenerate-token', [IncomingWebhookController::class, 'regenerateToken']);
-            Route::get('/{id}/logs', [IncomingWebhookController::class, 'logs']);
+            // View operations
+            Route::middleware('permission:webhooks.view')->group(function () {
+                Route::get('/', [IncomingWebhookController::class, 'index']);
+                Route::get('/{id}', [IncomingWebhookController::class, 'show']);
+                Route::get('/{id}/logs', [IncomingWebhookController::class, 'logs']);
+            });
+
+            // Create operations
+            Route::post('/', [IncomingWebhookController::class, 'store'])->middleware('permission:webhooks.create');
+
+            // Edit operations
+            Route::middleware('permission:webhooks.edit')->group(function () {
+                Route::put('/{id}', [IncomingWebhookController::class, 'update']);
+                Route::post('/{id}/regenerate-token', [IncomingWebhookController::class, 'regenerateToken']);
+            });
+
+            // Delete operations
+            Route::delete('/{id}', [IncomingWebhookController::class, 'destroy'])->middleware('permission:webhooks.delete');
         });
 
-        // Global Search & Command Palette Routes
-        Route::prefix('search')->group(function () {
+        // Global Search & Command Palette Routes (with search rate limiting)
+        Route::prefix('search')->middleware('throttle:search')->group(function () {
             Route::get('/', [SearchController::class, 'search']);
             Route::get('/quick', [SearchController::class, 'quickSearch']);
             Route::get('/suggestions', [SearchController::class, 'suggestions']);
@@ -423,6 +643,1187 @@ Route::middleware([
             Route::post('/reindex', [SearchController::class, 'reindex']);
             Route::get('/commands', [SearchController::class, 'commands']);
         });
+
+        // Deal Rotting Alerts Routes
+        Route::prefix('rotting')->group(function () {
+            // User's rotting deals and alerts
+            Route::get('/deals', [RottingAlertController::class, 'index']);
+            Route::get('/deals/{recordId}', [RottingAlertController::class, 'show']);
+            Route::get('/summary/{pipelineId}', [RottingAlertController::class, 'summary']);
+
+            // Alerts management
+            Route::get('/alerts', [RottingAlertController::class, 'alerts']);
+            Route::get('/alerts/count', [RottingAlertController::class, 'count']);
+            Route::post('/alerts/{alertId}/acknowledge', [RottingAlertController::class, 'acknowledge']);
+            Route::post('/alerts/acknowledge-all', [RottingAlertController::class, 'acknowledgeAll']);
+
+            // User settings
+            Route::get('/settings', [RottingAlertController::class, 'settings']);
+            Route::put('/settings', [RottingAlertController::class, 'updateSettings']);
+
+            // Stage configuration (requires pipeline edit permission)
+            Route::middleware('permission:pipelines.edit')->group(function () {
+                Route::put('/pipelines/{pipelineId}/stages/{stageId}', [RottingAlertController::class, 'configureStage']);
+                Route::delete('/pipelines/{pipelineId}/stages/{stageId}', [RottingAlertController::class, 'removeStageConfig']);
+            });
+
+            // Record activity
+            Route::post('/record-activity/{recordId}', [RottingAlertController::class, 'recordActivity']);
+        });
+
+        // Revenue Intelligence Graph Routes
+        Route::prefix('graph')->group(function () {
+            // Graph data endpoints
+            Route::get('/nodes', [GraphController::class, 'nodes']);
+            Route::get('/edges', [GraphController::class, 'edges']);
+            Route::get('/neighborhood/{type}/{id}', [GraphController::class, 'neighborhood']);
+            Route::get('/path', [GraphController::class, 'path']);
+            Route::get('/metrics/{type}/{id}', [GraphController::class, 'metrics']);
+            Route::get('/relationship-types', [GraphController::class, 'relationshipTypes']);
+
+            // Relationship management
+            Route::post('/relationships', [GraphController::class, 'createRelationship']);
+            Route::delete('/relationships/{id}', [GraphController::class, 'deleteRelationship']);
+        });
+
+        // Deal Rooms Routes
+        Route::prefix('deal-rooms')->group(function () {
+            // Room management
+            Route::get('/', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'destroy']);
+
+            // Members
+            Route::get('/{id}/members', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'members']);
+            Route::post('/{id}/members', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'addMember']);
+            Route::delete('/{id}/members/{memberId}', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'removeMember']);
+
+            // Action Items
+            Route::get('/{id}/actions', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'actions']);
+            Route::post('/{id}/actions', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'createAction']);
+            Route::put('/{id}/actions/{actionId}', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'updateAction']);
+            Route::delete('/{id}/actions/{actionId}', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'deleteAction']);
+
+            // Documents
+            Route::get('/{id}/documents', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'documents']);
+            Route::post('/{id}/documents', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'uploadDocument']);
+            Route::delete('/{id}/documents/{docId}', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'deleteDocument']);
+
+            // Messages
+            Route::get('/{id}/messages', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'messages']);
+            Route::post('/{id}/messages', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'sendMessage']);
+
+            // Analytics & Activities
+            Route::get('/{id}/analytics', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'analytics']);
+            Route::get('/{id}/activities', [\App\Http\Controllers\Api\DealRoom\DealRoomController::class, 'activities']);
+        });
+
+        // Competitor Battlecards Routes
+        Route::prefix('competitors')->group(function () {
+            // Competitor CRUD
+            Route::get('/', [CompetitorController::class, 'index']);
+            Route::post('/', [CompetitorController::class, 'store']);
+            Route::get('/comparison', [CompetitorController::class, 'comparison']);
+            Route::get('/{id}', [CompetitorController::class, 'show']);
+            Route::put('/{id}', [CompetitorController::class, 'update']);
+            Route::delete('/{id}', [CompetitorController::class, 'destroy']);
+
+            // Battlecard
+            Route::get('/{id}/battlecard', [CompetitorController::class, 'battlecard']);
+            Route::post('/{id}/battlecard/sections', [CompetitorController::class, 'storeSection']);
+            Route::put('/{id}/battlecard/sections/{sectionId}', [CompetitorController::class, 'updateSection']);
+
+            // Objections
+            Route::get('/{id}/objections', [CompetitorController::class, 'objections']);
+            Route::post('/{id}/objections', [CompetitorController::class, 'storeObjection']);
+            Route::put('/{id}/objections/{objectionId}', [CompetitorController::class, 'updateObjection']);
+            Route::post('/{id}/objections/{objectionId}/feedback', [CompetitorController::class, 'objectionFeedback']);
+
+            // Notes
+            Route::get('/{id}/notes', [CompetitorController::class, 'notes']);
+            Route::post('/{id}/notes', [CompetitorController::class, 'storeNote']);
+
+            // Analytics
+            Route::get('/{id}/analytics', [CompetitorController::class, 'analytics']);
+        });
+
+        // Deal-Competitor linking
+        Route::prefix('deals/{dealId}/competitors')->group(function () {
+            Route::get('/', [CompetitorController::class, 'getDealCompetitors']);
+            Route::post('/', [CompetitorController::class, 'addToDeal']);
+            Route::delete('/{competitorId}', [CompetitorController::class, 'removeFromDeal']);
+            Route::put('/{competitorId}/outcome', [CompetitorController::class, 'updateDealOutcome']);
+        });
+
+        // Process Recorder Routes
+        Route::prefix('recordings')->group(function () {
+            // Recording session management
+            Route::get('/active', [RecordingController::class, 'active']);
+            Route::post('/start', [RecordingController::class, 'start']);
+            Route::post('/capture', [RecordingController::class, 'captureAction']);
+
+            // Recording CRUD
+            Route::get('/', [RecordingController::class, 'index']);
+            Route::get('/{id}', [RecordingController::class, 'show']);
+            Route::delete('/{id}', [RecordingController::class, 'destroy']);
+
+            // Recording controls
+            Route::post('/{id}/stop', [RecordingController::class, 'stop']);
+            Route::post('/{id}/pause', [RecordingController::class, 'pause']);
+            Route::post('/{id}/resume', [RecordingController::class, 'resume']);
+            Route::post('/{id}/duplicate', [RecordingController::class, 'duplicate']);
+
+            // Step management
+            Route::get('/{id}/steps', [RecordingController::class, 'steps']);
+            Route::delete('/{id}/steps/{stepId}', [RecordingController::class, 'removeStep']);
+            Route::put('/{id}/steps/reorder', [RecordingController::class, 'reorderSteps']);
+            Route::post('/{id}/steps/{stepId}/parameterize', [RecordingController::class, 'parameterizeStep']);
+            Route::delete('/{id}/steps/{stepId}/parameterize', [RecordingController::class, 'resetStepParameterization']);
+
+            // Workflow generation
+            Route::get('/{id}/preview', [RecordingController::class, 'preview']);
+            Route::post('/{id}/generate-workflow', [RecordingController::class, 'generateWorkflow']);
+        });
+
+        // Document Templates Routes (Phase F)
+        Route::prefix('document-templates')->group(function () {
+            Route::get('/variables', [DocumentTemplateController::class, 'variables']);
+            Route::get('/generated', [DocumentTemplateController::class, 'generatedDocuments']);
+            Route::get('/generated/{generatedDocument}', [DocumentTemplateController::class, 'showGeneratedDocument']);
+            Route::delete('/generated/{generatedDocument}', [DocumentTemplateController::class, 'deleteGeneratedDocument']);
+
+            Route::get('/', [DocumentTemplateController::class, 'index']);
+            Route::post('/', [DocumentTemplateController::class, 'store']);
+            Route::get('/{documentTemplate}', [DocumentTemplateController::class, 'show']);
+            Route::put('/{documentTemplate}', [DocumentTemplateController::class, 'update']);
+            Route::delete('/{documentTemplate}', [DocumentTemplateController::class, 'destroy']);
+            Route::post('/{documentTemplate}/duplicate', [DocumentTemplateController::class, 'duplicate']);
+            Route::post('/{documentTemplate}/generate', [DocumentTemplateController::class, 'generate']);
+            Route::post('/{documentTemplate}/preview', [DocumentTemplateController::class, 'preview']);
+        });
+
+        // E-Signature Routes (Phase F)
+        Route::prefix('signatures')->group(function () {
+            // Templates
+            Route::get('/templates', [SignatureController::class, 'templates']);
+            Route::post('/templates', [SignatureController::class, 'storeTemplate']);
+            Route::get('/templates/{signatureTemplate}', [SignatureController::class, 'showTemplate']);
+            Route::put('/templates/{signatureTemplate}', [SignatureController::class, 'updateTemplate']);
+            Route::delete('/templates/{signatureTemplate}', [SignatureController::class, 'destroyTemplate']);
+
+            // Signature Requests
+            Route::get('/', [SignatureController::class, 'index']);
+            Route::post('/', [SignatureController::class, 'store']);
+            Route::post('/from-document/{generatedDocument}', [SignatureController::class, 'storeFromDocument']);
+            Route::get('/{signatureRequest}', [SignatureController::class, 'show']);
+            Route::put('/{signatureRequest}', [SignatureController::class, 'update']);
+            Route::delete('/{signatureRequest}', [SignatureController::class, 'destroy']);
+            Route::post('/{signatureRequest}/send', [SignatureController::class, 'send']);
+            Route::post('/{signatureRequest}/void', [SignatureController::class, 'void']);
+            Route::post('/{signatureRequest}/remind', [SignatureController::class, 'remind']);
+            Route::get('/{signatureRequest}/audit-log', [SignatureController::class, 'auditLog']);
+        });
+
+        // Proposals Routes (Phase F)
+        Route::prefix('proposals')->group(function () {
+            // Templates
+            Route::get('/templates', [ProposalController::class, 'templates']);
+            Route::post('/templates', [ProposalController::class, 'storeTemplate']);
+            Route::get('/templates/{proposalTemplate}', [ProposalController::class, 'showTemplate']);
+            Route::put('/templates/{proposalTemplate}', [ProposalController::class, 'updateTemplate']);
+            Route::delete('/templates/{proposalTemplate}', [ProposalController::class, 'destroyTemplate']);
+
+            // Content Blocks
+            Route::get('/content-blocks', [ProposalController::class, 'contentBlocks']);
+            Route::post('/content-blocks', [ProposalController::class, 'storeContentBlock']);
+            Route::put('/content-blocks/{proposalContentBlock}', [ProposalController::class, 'updateContentBlock']);
+            Route::delete('/content-blocks/{proposalContentBlock}', [ProposalController::class, 'destroyContentBlock']);
+
+            // Proposals
+            Route::get('/', [ProposalController::class, 'index']);
+            Route::post('/', [ProposalController::class, 'store']);
+            Route::get('/{proposal}', [ProposalController::class, 'show']);
+            Route::put('/{proposal}', [ProposalController::class, 'update']);
+            Route::delete('/{proposal}', [ProposalController::class, 'destroy']);
+            Route::post('/{proposal}/duplicate', [ProposalController::class, 'duplicate']);
+            Route::post('/{proposal}/send', [ProposalController::class, 'send']);
+            Route::get('/{proposal}/analytics', [ProposalController::class, 'analytics']);
+            Route::get('/{proposal}/comments', [ProposalController::class, 'comments']);
+            Route::post('/{proposal}/comments', [ProposalController::class, 'addComment']);
+            Route::post('/comments/{proposalComment}/resolve', [ProposalController::class, 'resolveComment']);
+
+            // Sections
+            Route::post('/{proposal}/sections', [ProposalController::class, 'addSection']);
+            Route::put('/sections/{proposalSection}', [ProposalController::class, 'updateSection']);
+            Route::delete('/sections/{proposalSection}', [ProposalController::class, 'deleteSection']);
+            Route::post('/{proposal}/sections/reorder', [ProposalController::class, 'reorderSections']);
+
+            // Pricing Items
+            Route::post('/{proposal}/pricing-items', [ProposalController::class, 'addPricingItem']);
+            Route::put('/pricing-items/{proposalPricingItem}', [ProposalController::class, 'updatePricingItem']);
+            Route::delete('/pricing-items/{proposalPricingItem}', [ProposalController::class, 'deletePricingItem']);
+        });
+
+        // Approval Workflow Routes (Phase F)
+        Route::prefix('approvals')->group(function () {
+            // Current user views
+            Route::get('/pending', [ApprovalController::class, 'pending']);
+            Route::get('/my-requests', [ApprovalController::class, 'myRequests']);
+            Route::post('/check', [ApprovalController::class, 'checkNeedsApproval']);
+
+            // Approval Requests
+            Route::get('/', [ApprovalController::class, 'index']);
+            Route::post('/submit', [ApprovalController::class, 'submit']);
+            Route::get('/{approvalRequest}', [ApprovalController::class, 'show']);
+            Route::post('/{approvalRequest}/approve', [ApprovalController::class, 'approve']);
+            Route::post('/{approvalRequest}/reject', [ApprovalController::class, 'reject']);
+            Route::post('/{approvalRequest}/cancel', [ApprovalController::class, 'cancel']);
+            Route::get('/{approvalRequest}/history', [ApprovalController::class, 'history']);
+
+            // Approval Rules
+            Route::get('/rules', [ApprovalController::class, 'rules']);
+            Route::post('/rules', [ApprovalController::class, 'storeRule']);
+            Route::get('/rules/{approvalRule}', [ApprovalController::class, 'showRule']);
+            Route::put('/rules/{approvalRule}', [ApprovalController::class, 'updateRule']);
+            Route::delete('/rules/{approvalRule}', [ApprovalController::class, 'destroyRule']);
+
+            // Delegations
+            Route::get('/delegations', [ApprovalController::class, 'delegations']);
+            Route::get('/delegations/to-me', [ApprovalController::class, 'delegatedToMe']);
+            Route::post('/delegations', [ApprovalController::class, 'storeDelegation']);
+            Route::delete('/delegations/{approvalDelegation}', [ApprovalController::class, 'destroyDelegation']);
+
+            // Quick Actions
+            Route::get('/quick-actions', [ApprovalController::class, 'quickActions']);
+            Route::post('/quick-actions', [ApprovalController::class, 'storeQuickAction']);
+            Route::post('/quick-actions/{approvalQuickAction}/use/{approvalRequest}', [ApprovalController::class, 'useQuickAction']);
+            Route::delete('/quick-actions/{approvalQuickAction}', [ApprovalController::class, 'destroyQuickAction']);
+        });
+
+        // A/B Testing Routes
+        Route::prefix('ab-tests')->group(function () {
+            // Meta routes
+            Route::get('/types', [AbTestController::class, 'types']);
+            Route::get('/entity-types', [AbTestController::class, 'entityTypes']);
+            Route::get('/statuses', [AbTestController::class, 'statuses']);
+            Route::get('/goals', [AbTestController::class, 'goals']);
+
+            // CRUD
+            Route::get('/', [AbTestController::class, 'index']);
+            Route::post('/', [AbTestController::class, 'store']);
+            Route::get('/{id}', [AbTestController::class, 'show']);
+            Route::put('/{id}', [AbTestController::class, 'update']);
+            Route::delete('/{id}', [AbTestController::class, 'destroy']);
+
+            // Test controls
+            Route::post('/{id}/start', [AbTestController::class, 'start']);
+            Route::post('/{id}/pause', [AbTestController::class, 'pause']);
+            Route::post('/{id}/resume', [AbTestController::class, 'resume']);
+            Route::post('/{id}/complete', [AbTestController::class, 'complete']);
+            Route::get('/{id}/statistics', [AbTestController::class, 'statistics']);
+
+            // Variant management
+            Route::get('/{id}/variants', [AbTestController::class, 'variants']);
+            Route::post('/{id}/variants', [AbTestController::class, 'createVariant']);
+            Route::put('/{id}/variants/{variantId}', [AbTestController::class, 'updateVariant']);
+            Route::delete('/{id}/variants/{variantId}', [AbTestController::class, 'deleteVariant']);
+            Route::post('/{id}/variants/{variantId}/declare-winner', [AbTestController::class, 'declareWinner']);
+        });
+
+        // Landing Page Builder Routes
+        Route::prefix('landing-pages')->group(function () {
+            // Meta routes
+            Route::get('/statuses', [LandingPageController::class, 'statuses']);
+            Route::get('/thank-you-types', [LandingPageController::class, 'thankYouTypes']);
+
+            // Template routes
+            Route::get('/templates', [LandingPageController::class, 'templates']);
+            Route::post('/templates', [LandingPageController::class, 'storeTemplate']);
+            Route::get('/templates/categories', [LandingPageController::class, 'templateCategories']);
+            Route::get('/templates/{templateId}', [LandingPageController::class, 'showTemplate']);
+            Route::put('/templates/{templateId}', [LandingPageController::class, 'updateTemplate']);
+            Route::delete('/templates/{templateId}', [LandingPageController::class, 'destroyTemplate']);
+
+            // Page CRUD
+            Route::get('/', [LandingPageController::class, 'index']);
+            Route::post('/', [LandingPageController::class, 'store']);
+            Route::get('/{id}', [LandingPageController::class, 'show']);
+            Route::put('/{id}', [LandingPageController::class, 'update']);
+            Route::delete('/{id}', [LandingPageController::class, 'destroy']);
+
+            // Page actions
+            Route::post('/{id}/duplicate', [LandingPageController::class, 'duplicate']);
+            Route::post('/{id}/publish', [LandingPageController::class, 'publish']);
+            Route::post('/{id}/unpublish', [LandingPageController::class, 'unpublish']);
+            Route::post('/{id}/archive', [LandingPageController::class, 'archive']);
+            Route::post('/{id}/save-as-template', [LandingPageController::class, 'saveAsTemplate']);
+            Route::get('/{id}/analytics', [LandingPageController::class, 'analytics']);
+
+            // Variant management
+            Route::get('/{id}/variants', [LandingPageController::class, 'variants']);
+            Route::post('/{id}/variants', [LandingPageController::class, 'createVariant']);
+            Route::put('/{id}/variants/{variantId}', [LandingPageController::class, 'updateVariant']);
+            Route::delete('/{id}/variants/{variantId}', [LandingPageController::class, 'deleteVariant']);
+            Route::post('/{id}/variants/{variantId}/declare-winner', [LandingPageController::class, 'declareWinner']);
+        });
+
+        // Scenario Planner Routes
+        Route::prefix('scenarios')->group(function () {
+            // Static routes first (must come before parameterized routes)
+            Route::get('/types', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'types']);
+            Route::get('/compare', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'compare']);
+            Route::get('/gap-analysis', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'gapAnalysis']);
+            Route::post('/auto-generate', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'autoGenerate']);
+
+            // CRUD operations
+            Route::get('/', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'destroy']);
+            Route::post('/{id}/duplicate', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'duplicate']);
+
+            // Deal operations within a scenario
+            Route::get('/{id}/deals', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'deals']);
+            Route::put('/{id}/deals/{dealId}', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'updateDeal']);
+            Route::post('/{id}/commit/{dealId}', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'commitDeal']);
+            Route::post('/{id}/reset/{dealId}', [\App\Http\Controllers\Api\Scenario\ScenarioController::class, 'resetDeal']);
+        });
+
+        // Lookalike Audiences Routes
+        Route::prefix('lookalike-audiences')->group(function () {
+            // Meta routes
+            Route::get('/source-types', [LookalikeController::class, 'sourceTypes']);
+            Route::get('/statuses', [LookalikeController::class, 'statuses']);
+            Route::get('/criteria-types', [LookalikeController::class, 'criteriaTypes']);
+            Route::get('/export-destinations', [LookalikeController::class, 'exportDestinations']);
+
+            // CRUD
+            Route::get('/', [LookalikeController::class, 'index']);
+            Route::post('/', [LookalikeController::class, 'store']);
+            Route::get('/{id}', [LookalikeController::class, 'show']);
+            Route::put('/{id}', [LookalikeController::class, 'update']);
+            Route::delete('/{id}', [LookalikeController::class, 'destroy']);
+
+            // Build and export
+            Route::post('/{id}/build', [LookalikeController::class, 'build']);
+            Route::get('/{id}/matches', [LookalikeController::class, 'matches']);
+            Route::post('/{id}/export', [LookalikeController::class, 'export']);
+        });
+
+        // Sales Forecasting Routes
+        Route::prefix('forecasts')->group(function () {
+            // Forecast data
+            Route::get('/', [ForecastController::class, 'summary']);
+            Route::get('/deals', [ForecastController::class, 'deals']);
+            Route::get('/history', [ForecastController::class, 'history']);
+            Route::get('/accuracy', [ForecastController::class, 'accuracy']);
+
+            // Deal forecast management
+            Route::put('/deals/{recordId}', [ForecastController::class, 'updateDeal']);
+            Route::get('/deals/{recordId}/adjustments', [ForecastController::class, 'adjustments']);
+        });
+
+        // Quota & Goal Tracking Routes
+        Route::prefix('quota-periods')->group(function () {
+            Route::get('/', [QuotaPeriodController::class, 'index']);
+            Route::get('/current', [QuotaPeriodController::class, 'current']);
+            Route::get('/{quotaPeriod}', [QuotaPeriodController::class, 'show']);
+            Route::middleware('permission:pipelines.edit')->group(function () {
+                Route::post('/', [QuotaPeriodController::class, 'store']);
+                Route::post('/generate', [QuotaPeriodController::class, 'generate']);
+                Route::put('/{quotaPeriod}', [QuotaPeriodController::class, 'update']);
+                Route::delete('/{quotaPeriod}', [QuotaPeriodController::class, 'destroy']);
+            });
+        });
+
+        Route::prefix('quotas')->group(function () {
+            Route::get('/', [QuotaController::class, 'index']);
+            Route::get('/my-progress', [QuotaController::class, 'myProgress']);
+            Route::get('/team-progress', [QuotaController::class, 'teamProgress']);
+            Route::get('/leaderboard', [QuotaController::class, 'leaderboard']);
+            Route::get('/my-position', [QuotaController::class, 'myPosition']);
+            Route::get('/metric-types', [QuotaController::class, 'metricTypes']);
+            Route::get('/{quota}', [QuotaController::class, 'show']);
+            Route::middleware('permission:pipelines.edit')->group(function () {
+                Route::post('/', [QuotaController::class, 'store']);
+                Route::post('/bulk', [QuotaController::class, 'bulkCreate']);
+                Route::post('/refresh-leaderboard', [QuotaController::class, 'refreshLeaderboard']);
+                Route::post('/recalculate', [QuotaController::class, 'recalculate']);
+                Route::put('/{quota}', [QuotaController::class, 'update']);
+                Route::delete('/{quota}', [QuotaController::class, 'destroy']);
+            });
+        });
+
+        Route::prefix('goals')->group(function () {
+            Route::get('/', [GoalController::class, 'index']);
+            Route::get('/my-goals', [GoalController::class, 'myGoals']);
+            Route::get('/active', [GoalController::class, 'active']);
+            Route::get('/stats', [GoalController::class, 'stats']);
+            Route::get('/types', [GoalController::class, 'types']);
+            Route::get('/{goal}', [GoalController::class, 'show']);
+            Route::get('/{goal}/progress', [GoalController::class, 'progress']);
+            Route::post('/', [GoalController::class, 'store']);
+            Route::put('/{goal}', [GoalController::class, 'update']);
+            Route::put('/{goal}/progress', [GoalController::class, 'updateProgress']);
+            Route::post('/{goal}/pause', [GoalController::class, 'pause']);
+            Route::post('/{goal}/resume', [GoalController::class, 'resume']);
+            Route::delete('/{goal}', [GoalController::class, 'destroy']);
+        });
+
+        // Duplicate Detection Routes
+        Route::prefix('duplicates')->group(function () {
+            // Real-time duplicate check
+            Route::get('/check', [\App\Http\Controllers\Api\DuplicateController::class, 'check']);
+            Route::get('/candidates', [\App\Http\Controllers\Api\DuplicateController::class, 'candidates']);
+            Route::get('/stats', [\App\Http\Controllers\Api\DuplicateController::class, 'stats']);
+            Route::get('/history', [\App\Http\Controllers\Api\DuplicateController::class, 'history']);
+
+            // Merge and dismiss actions
+            Route::post('/merge', [\App\Http\Controllers\Api\DuplicateController::class, 'merge']);
+            Route::post('/preview', [\App\Http\Controllers\Api\DuplicateController::class, 'preview']);
+            Route::post('/dismiss', [\App\Http\Controllers\Api\DuplicateController::class, 'dismiss']);
+            Route::post('/scan', [\App\Http\Controllers\Api\DuplicateController::class, 'scan']);
+
+            // Duplicate rules management (requires permission)
+            Route::get('/rules', [\App\Http\Controllers\Api\DuplicateController::class, 'rules']);
+            Route::middleware('permission:modules.edit')->group(function () {
+                Route::post('/rules', [\App\Http\Controllers\Api\DuplicateController::class, 'createRule']);
+                Route::put('/rules/{id}', [\App\Http\Controllers\Api\DuplicateController::class, 'updateRule']);
+                Route::delete('/rules/{id}', [\App\Http\Controllers\Api\DuplicateController::class, 'deleteRule']);
+            });
+        });
+
+        // Web Forms Routes (Authenticated Admin)
+        Route::prefix('web-forms')->group(function () {
+            // Meta endpoints
+            Route::get('/modules', [WebFormController::class, 'modules']);
+            Route::get('/field-types', [WebFormController::class, 'fieldTypes']);
+
+            // CRUD operations
+            Route::get('/', [WebFormController::class, 'index']);
+            Route::post('/', [WebFormController::class, 'store']);
+            Route::get('/{id}', [WebFormController::class, 'show']);
+            Route::put('/{id}', [WebFormController::class, 'update']);
+            Route::delete('/{id}', [WebFormController::class, 'destroy']);
+
+            // Form actions
+            Route::post('/{id}/duplicate', [WebFormController::class, 'duplicate']);
+            Route::post('/{id}/toggle-active', [WebFormController::class, 'toggleActive']);
+
+            // Submissions and analytics
+            Route::get('/{id}/submissions', [WebFormController::class, 'submissions']);
+            Route::get('/{id}/analytics', [WebFormController::class, 'analytics']);
+            Route::get('/{id}/embed', [WebFormController::class, 'embedCode']);
+        });
+
+        // Meeting Scheduler Routes
+        Route::prefix('scheduling')->group(function () {
+            // Scheduling Pages
+            Route::get('/pages', [SchedulingPageController::class, 'index']);
+            Route::post('/pages', [SchedulingPageController::class, 'store']);
+            Route::get('/pages/check-slug', [SchedulingPageController::class, 'checkSlug']);
+            Route::get('/pages/{schedulingPage}', [SchedulingPageController::class, 'show']);
+            Route::put('/pages/{schedulingPage}', [SchedulingPageController::class, 'update']);
+            Route::delete('/pages/{schedulingPage}', [SchedulingPageController::class, 'destroy']);
+
+            // Meeting Types (nested under pages)
+            Route::get('/pages/{schedulingPage}/meeting-types', [MeetingTypeController::class, 'index']);
+            Route::post('/pages/{schedulingPage}/meeting-types', [MeetingTypeController::class, 'store']);
+            Route::post('/pages/{schedulingPage}/meeting-types/reorder', [MeetingTypeController::class, 'reorder']);
+            Route::get('/pages/{schedulingPage}/meeting-types/{meetingType}', [MeetingTypeController::class, 'show']);
+            Route::put('/pages/{schedulingPage}/meeting-types/{meetingType}', [MeetingTypeController::class, 'update']);
+            Route::delete('/pages/{schedulingPage}/meeting-types/{meetingType}', [MeetingTypeController::class, 'destroy']);
+
+            // Availability
+            Route::get('/availability', [AvailabilityController::class, 'index']);
+            Route::put('/availability', [AvailabilityController::class, 'update']);
+            Route::get('/availability/overrides', [AvailabilityController::class, 'getOverrides']);
+            Route::post('/availability/overrides', [AvailabilityController::class, 'storeOverride']);
+            Route::delete('/availability/overrides/{override}', [AvailabilityController::class, 'destroyOverride']);
+
+            // Scheduled Meetings (for host)
+            Route::get('/meetings', [ScheduledMeetingController::class, 'index']);
+            Route::get('/meetings/stats', [ScheduledMeetingController::class, 'stats']);
+            Route::get('/meetings/{scheduledMeeting}', [ScheduledMeetingController::class, 'show']);
+            Route::put('/meetings/{scheduledMeeting}', [ScheduledMeetingController::class, 'update']);
+            Route::post('/meetings/{scheduledMeeting}/cancel', [ScheduledMeetingController::class, 'cancel']);
+            Route::post('/meetings/{scheduledMeeting}/complete', [ScheduledMeetingController::class, 'markCompleted']);
+            Route::post('/meetings/{scheduledMeeting}/no-show', [ScheduledMeetingController::class, 'markNoShow']);
+        });
+
+        // Billing - Products Routes
+        Route::prefix('products')->group(function () {
+            Route::get('/', [ProductController::class, 'index']);
+            Route::post('/', [ProductController::class, 'store']);
+            Route::get('/categories', [ProductController::class, 'categories']);
+            Route::post('/categories', [ProductController::class, 'storeCategory']);
+            Route::put('/categories/{category}', [ProductController::class, 'updateCategory']);
+            Route::delete('/categories/{category}', [ProductController::class, 'destroyCategory']);
+            Route::get('/{product}', [ProductController::class, 'show']);
+            Route::put('/{product}', [ProductController::class, 'update']);
+            Route::delete('/{product}', [ProductController::class, 'destroy']);
+        });
+
+        // Billing - Quotes Routes
+        Route::prefix('quotes')->group(function () {
+            Route::get('/', [QuoteController::class, 'index']);
+            Route::post('/', [QuoteController::class, 'store']);
+            Route::get('/stats', [QuoteController::class, 'stats']);
+            Route::get('/templates', [QuoteController::class, 'templates']);
+            Route::post('/templates', [QuoteController::class, 'storeTemplate']);
+            Route::put('/templates/{template}', [QuoteController::class, 'updateTemplate']);
+            Route::delete('/templates/{template}', [QuoteController::class, 'destroyTemplate']);
+            Route::get('/{quote}', [QuoteController::class, 'show']);
+            Route::put('/{quote}', [QuoteController::class, 'update']);
+            Route::delete('/{quote}', [QuoteController::class, 'destroy']);
+            Route::post('/{quote}/send', [QuoteController::class, 'send']);
+            Route::post('/{quote}/duplicate', [QuoteController::class, 'duplicate']);
+            Route::get('/{quote}/pdf', [QuoteController::class, 'pdf']);
+            Route::get('/{quote}/download', [QuoteController::class, 'downloadPdf']);
+            Route::post('/{quote}/convert-to-invoice', [QuoteController::class, 'convertToInvoice']);
+        });
+
+        // Billing - Invoices Routes
+        Route::prefix('invoices')->group(function () {
+            Route::get('/', [InvoiceController::class, 'index']);
+            Route::post('/', [InvoiceController::class, 'store']);
+            Route::get('/stats', [InvoiceController::class, 'stats']);
+            Route::get('/{invoice}', [InvoiceController::class, 'show']);
+            Route::put('/{invoice}', [InvoiceController::class, 'update']);
+            Route::delete('/{invoice}', [InvoiceController::class, 'destroy']);
+            Route::post('/{invoice}/send', [InvoiceController::class, 'send']);
+            Route::get('/{invoice}/pdf', [InvoiceController::class, 'pdf']);
+            Route::get('/{invoice}/download', [InvoiceController::class, 'downloadPdf']);
+            Route::post('/{invoice}/cancel', [InvoiceController::class, 'cancel']);
+            Route::post('/{invoice}/payments', [InvoiceController::class, 'recordPayment']);
+            Route::delete('/{invoice}/payments/{paymentId}', [InvoiceController::class, 'deletePayment']);
+        });
+
+        // Meeting Intelligence Routes
+        Route::prefix('meetings')->group(function () {
+            // Quick access endpoints
+            Route::get('/upcoming', [MeetingController::class, 'upcoming']);
+            Route::get('/today', [MeetingController::class, 'today']);
+
+            // Analytics endpoints
+            Route::get('/analytics/overview', [MeetingController::class, 'analyticsOverview']);
+            Route::get('/analytics/heatmap', [MeetingController::class, 'analyticsHeatmap']);
+            Route::get('/analytics/by-deal/{dealId}', [MeetingController::class, 'analyticsByDeal']);
+            Route::get('/analytics/by-company/{companyId}', [MeetingController::class, 'analyticsByCompany']);
+            Route::get('/analytics/stakeholder-coverage/{companyId}', [MeetingController::class, 'stakeholderCoverage']);
+
+            // Insights endpoints
+            Route::get('/insights/deal/{dealId}', [MeetingController::class, 'dealInsights']);
+
+            // Meeting CRUD
+            Route::get('/', [MeetingController::class, 'index']);
+            Route::post('/', [MeetingController::class, 'store']);
+            Route::get('/{id}', [MeetingController::class, 'show']);
+            Route::put('/{id}', [MeetingController::class, 'update']);
+            Route::delete('/{id}', [MeetingController::class, 'destroy']);
+
+            // Meeting actions
+            Route::post('/{id}/link-deal', [MeetingController::class, 'linkToDeal']);
+            Route::post('/{id}/log-outcome', [MeetingController::class, 'logOutcome']);
+        });
+
+        // Live Chat Widget Routes
+        Route::prefix('chat')->group(function () {
+            // Widget management
+            Route::prefix('widgets')->group(function () {
+                Route::get('/', [ChatWidgetController::class, 'index']);
+                Route::post('/', [ChatWidgetController::class, 'store']);
+                Route::get('/{id}', [ChatWidgetController::class, 'show']);
+                Route::put('/{id}', [ChatWidgetController::class, 'update']);
+                Route::delete('/{id}', [ChatWidgetController::class, 'destroy']);
+                Route::get('/{id}/embed', [ChatWidgetController::class, 'embedCode']);
+                Route::get('/{id}/analytics', [ChatWidgetController::class, 'analytics']);
+            });
+
+            // Conversation management
+            Route::prefix('conversations')->group(function () {
+                Route::get('/', [ChatConversationController::class, 'index']);
+                Route::get('/{id}', [ChatConversationController::class, 'show']);
+                Route::put('/{id}', [ChatConversationController::class, 'update']);
+                Route::post('/{id}/assign', [ChatConversationController::class, 'assign']);
+                Route::post('/{id}/close', [ChatConversationController::class, 'close']);
+                Route::post('/{id}/reopen', [ChatConversationController::class, 'reopen']);
+                Route::get('/{id}/messages', [ChatConversationController::class, 'messages']);
+                Route::post('/{id}/messages', [ChatConversationController::class, 'sendMessage']);
+            });
+
+            // Agent management
+            Route::prefix('agents')->group(function () {
+                Route::get('/status', [ChatAgentController::class, 'getStatus']);
+                Route::put('/status', [ChatAgentController::class, 'updateStatus']);
+                Route::get('/', [ChatAgentController::class, 'listAgents']);
+                Route::get('/performance', [ChatAgentController::class, 'agentPerformance']);
+            });
+
+            // Canned responses
+            Route::prefix('canned-responses')->group(function () {
+                Route::get('/', [ChatAgentController::class, 'listCannedResponses']);
+                Route::get('/search', [ChatAgentController::class, 'searchCannedResponses']);
+                Route::post('/', [ChatAgentController::class, 'storeCannedResponse']);
+                Route::put('/{id}', [ChatAgentController::class, 'updateCannedResponse']);
+                Route::delete('/{id}', [ChatAgentController::class, 'destroyCannedResponse']);
+                Route::post('/{id}/use', [ChatAgentController::class, 'useCannedResponse']);
+            });
+        });
+
+        // WhatsApp Integration Routes
+        Route::prefix('whatsapp')->group(function () {
+            // Connection management
+            Route::prefix('connections')->group(function () {
+                Route::get('/', [WhatsappConnectionController::class, 'index']);
+                Route::post('/', [WhatsappConnectionController::class, 'store']);
+                Route::get('/{connection}', [WhatsappConnectionController::class, 'show']);
+                Route::put('/{connection}', [WhatsappConnectionController::class, 'update']);
+                Route::delete('/{connection}', [WhatsappConnectionController::class, 'destroy']);
+                Route::post('/{connection}/verify', [WhatsappConnectionController::class, 'verify']);
+                Route::get('/{connection}/webhook-config', [WhatsappConnectionController::class, 'getWebhookConfig']);
+            });
+
+            // Template management
+            Route::prefix('templates')->group(function () {
+                Route::get('/', [WhatsappTemplateController::class, 'index']);
+                Route::post('/', [WhatsappTemplateController::class, 'store']);
+                Route::get('/{template}', [WhatsappTemplateController::class, 'show']);
+                Route::put('/{template}', [WhatsappTemplateController::class, 'update']);
+                Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy']);
+                Route::post('/{template}/submit', [WhatsappTemplateController::class, 'submit']);
+                Route::post('/{template}/sync-status', [WhatsappTemplateController::class, 'syncStatus']);
+                Route::post('/{template}/preview', [WhatsappTemplateController::class, 'preview']);
+            });
+
+            // Conversation management
+            Route::prefix('conversations')->group(function () {
+                Route::get('/', [WhatsappConversationController::class, 'index']);
+                Route::get('/by-phone', [WhatsappConversationController::class, 'findByPhone']);
+                Route::post('/start', [WhatsappConversationController::class, 'startConversation']);
+                Route::get('/{conversation}', [WhatsappConversationController::class, 'show']);
+                Route::get('/{conversation}/messages', [WhatsappConversationController::class, 'messages']);
+                Route::post('/{conversation}/messages', [WhatsappConversationController::class, 'sendMessage']);
+                Route::post('/{conversation}/assign', [WhatsappConversationController::class, 'assign']);
+                Route::post('/{conversation}/close', [WhatsappConversationController::class, 'close']);
+                Route::post('/{conversation}/reopen', [WhatsappConversationController::class, 'reopen']);
+                Route::post('/{conversation}/link-record', [WhatsappConversationController::class, 'linkToRecord']);
+            });
+        });
+
+        // SMS Automation Routes
+        Route::prefix('sms')->group(function () {
+            // Connection management
+            Route::prefix('connections')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Sms\SmsConnectionController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Sms\SmsConnectionController::class, 'store']);
+                Route::get('/{smsConnection}', [\App\Http\Controllers\Api\Sms\SmsConnectionController::class, 'show']);
+                Route::put('/{smsConnection}', [\App\Http\Controllers\Api\Sms\SmsConnectionController::class, 'update']);
+                Route::delete('/{smsConnection}', [\App\Http\Controllers\Api\Sms\SmsConnectionController::class, 'destroy']);
+                Route::post('/{smsConnection}/verify', [\App\Http\Controllers\Api\Sms\SmsConnectionController::class, 'verify']);
+                Route::get('/{smsConnection}/stats', [\App\Http\Controllers\Api\Sms\SmsConnectionController::class, 'stats']);
+            });
+
+            // Template management
+            Route::prefix('templates')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Sms\SmsTemplateController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Sms\SmsTemplateController::class, 'store']);
+                Route::get('/{smsTemplate}', [\App\Http\Controllers\Api\Sms\SmsTemplateController::class, 'show']);
+                Route::put('/{smsTemplate}', [\App\Http\Controllers\Api\Sms\SmsTemplateController::class, 'update']);
+                Route::delete('/{smsTemplate}', [\App\Http\Controllers\Api\Sms\SmsTemplateController::class, 'destroy']);
+                Route::post('/{smsTemplate}/preview', [\App\Http\Controllers\Api\Sms\SmsTemplateController::class, 'preview']);
+                Route::post('/{smsTemplate}/duplicate', [\App\Http\Controllers\Api\Sms\SmsTemplateController::class, 'duplicate']);
+            });
+
+            // Message management
+            Route::prefix('messages')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Sms\SmsMessageController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Sms\SmsMessageController::class, 'store']);
+                Route::get('/conversation', [\App\Http\Controllers\Api\Sms\SmsMessageController::class, 'conversation']);
+                Route::get('/for-record', [\App\Http\Controllers\Api\Sms\SmsMessageController::class, 'forRecord']);
+                Route::get('/{smsMessage}', [\App\Http\Controllers\Api\Sms\SmsMessageController::class, 'show']);
+            });
+
+            // Campaign management
+            Route::prefix('campaigns')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'store']);
+                Route::get('/{smsCampaign}', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'show']);
+                Route::put('/{smsCampaign}', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'update']);
+                Route::delete('/{smsCampaign}', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'destroy']);
+                Route::post('/{smsCampaign}/schedule', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'schedule']);
+                Route::post('/{smsCampaign}/send-now', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'sendNow']);
+                Route::post('/{smsCampaign}/pause', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'pause']);
+                Route::post('/{smsCampaign}/cancel', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'cancel']);
+                Route::get('/{smsCampaign}/preview', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'preview']);
+                Route::get('/{smsCampaign}/recipients', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'recipients']);
+                Route::get('/{smsCampaign}/stats', [\App\Http\Controllers\Api\Sms\SmsCampaignController::class, 'stats']);
+            });
+
+            // Opt-out management
+            Route::prefix('opt-outs')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Sms\SmsOptOutController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Sms\SmsOptOutController::class, 'store']);
+                Route::get('/check', [\App\Http\Controllers\Api\Sms\SmsOptOutController::class, 'check']);
+                Route::post('/opt-in', [\App\Http\Controllers\Api\Sms\SmsOptOutController::class, 'optIn']);
+                Route::post('/bulk', [\App\Http\Controllers\Api\Sms\SmsOptOutController::class, 'bulkOptOut']);
+                Route::delete('/{smsOptOut}', [\App\Http\Controllers\Api\Sms\SmsOptOutController::class, 'destroy']);
+            });
+        });
+
+        // Shared Team Inboxes Routes
+        Route::prefix('inboxes')->group(function () {
+            // Inbox management
+            Route::get('/', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'store']);
+            Route::get('/{sharedInbox}', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'show']);
+            Route::put('/{sharedInbox}', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'update']);
+            Route::delete('/{sharedInbox}', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'destroy']);
+            Route::post('/{sharedInbox}/verify', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'verify']);
+            Route::post('/{sharedInbox}/sync', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'sync']);
+            Route::get('/{sharedInbox}/stats', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'stats']);
+
+            // Member management
+            Route::get('/{sharedInbox}/members', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'members']);
+            Route::post('/{sharedInbox}/members', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'addMember']);
+            Route::put('/{sharedInbox}/members/{member}', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'updateMember']);
+            Route::delete('/{sharedInbox}/members/{member}', [\App\Http\Controllers\Api\Inbox\SharedInboxController::class, 'removeMember']);
+
+            // Rules management
+            Route::get('/{sharedInbox}/rules', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'index']);
+            Route::post('/{sharedInbox}/rules', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'store']);
+            Route::get('/{sharedInbox}/rules/{rule}', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'show']);
+            Route::put('/{sharedInbox}/rules/{rule}', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'update']);
+            Route::delete('/{sharedInbox}/rules/{rule}', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'destroy']);
+            Route::post('/{sharedInbox}/rules/reorder', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'reorder']);
+            Route::post('/{sharedInbox}/rules/{rule}/toggle', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'toggle']);
+        });
+
+        // Inbox meta routes
+        Route::get('/inbox-rules/fields', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'availableFields']);
+        Route::get('/inbox-rules/operators', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'availableOperators']);
+        Route::get('/inbox-rules/actions', [\App\Http\Controllers\Api\Inbox\InboxRuleController::class, 'availableActions']);
+
+        // Conversation management
+        Route::prefix('inbox-conversations')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'index']);
+            Route::get('/{inboxConversation}', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'show']);
+            Route::put('/{inboxConversation}', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'update']);
+            Route::post('/{inboxConversation}/reply', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'reply']);
+            Route::post('/{inboxConversation}/note', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'note']);
+            Route::post('/{inboxConversation}/assign', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'assign']);
+            Route::post('/{inboxConversation}/resolve', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'resolve']);
+            Route::post('/{inboxConversation}/reopen', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'reopen']);
+            Route::post('/{inboxConversation}/close', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'close']);
+            Route::post('/{inboxConversation}/spam', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'spam']);
+            Route::post('/{inboxConversation}/star', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'star']);
+            Route::post('/{inboxConversation}/tags', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'addTag']);
+            Route::delete('/{inboxConversation}/tags', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'removeTag']);
+            Route::post('/{inboxConversation}/merge', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'merge']);
+
+            // Bulk operations
+            Route::post('/bulk-assign', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'bulkAssign']);
+            Route::post('/bulk-resolve', [\App\Http\Controllers\Api\Inbox\InboxConversationController::class, 'bulkResolve']);
+        });
+
+        // Canned responses management
+        Route::prefix('inbox-canned-responses')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Inbox\InboxCannedResponseController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Inbox\InboxCannedResponseController::class, 'store']);
+            Route::get('/categories', [\App\Http\Controllers\Api\Inbox\InboxCannedResponseController::class, 'categories']);
+            Route::get('/by-shortcut', [\App\Http\Controllers\Api\Inbox\InboxCannedResponseController::class, 'findByShortcut']);
+            Route::get('/{inboxCannedResponse}', [\App\Http\Controllers\Api\Inbox\InboxCannedResponseController::class, 'show']);
+            Route::put('/{inboxCannedResponse}', [\App\Http\Controllers\Api\Inbox\InboxCannedResponseController::class, 'update']);
+            Route::delete('/{inboxCannedResponse}', [\App\Http\Controllers\Api\Inbox\InboxCannedResponseController::class, 'destroy']);
+            Route::post('/{inboxCannedResponse}/render', [\App\Http\Controllers\Api\Inbox\InboxCannedResponseController::class, 'render']);
+        });
+
+        // Team Chat Integration Routes (Slack/Teams)
+        Route::prefix('team-chat')->group(function () {
+            // Connection management
+            Route::prefix('connections')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'store']);
+                Route::get('/{teamChatConnection}', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'show']);
+                Route::put('/{teamChatConnection}', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'update']);
+                Route::delete('/{teamChatConnection}', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'destroy']);
+                Route::post('/{teamChatConnection}/verify', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'verify']);
+                Route::post('/{teamChatConnection}/sync-channels', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'syncChannels']);
+                Route::post('/{teamChatConnection}/sync-users', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'syncUsers']);
+                Route::get('/{teamChatConnection}/channels', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'channels']);
+                Route::get('/{teamChatConnection}/user-mappings', [\App\Http\Controllers\Api\TeamChat\TeamChatConnectionController::class, 'userMappings']);
+            });
+
+            // Notification management
+            Route::prefix('notifications')->group(function () {
+                Route::get('/events', [\App\Http\Controllers\Api\TeamChat\TeamChatNotificationController::class, 'events']);
+                Route::get('/', [\App\Http\Controllers\Api\TeamChat\TeamChatNotificationController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\TeamChat\TeamChatNotificationController::class, 'store']);
+                Route::get('/{teamChatNotification}', [\App\Http\Controllers\Api\TeamChat\TeamChatNotificationController::class, 'show']);
+                Route::put('/{teamChatNotification}', [\App\Http\Controllers\Api\TeamChat\TeamChatNotificationController::class, 'update']);
+                Route::delete('/{teamChatNotification}', [\App\Http\Controllers\Api\TeamChat\TeamChatNotificationController::class, 'destroy']);
+                Route::post('/{teamChatNotification}/test', [\App\Http\Controllers\Api\TeamChat\TeamChatNotificationController::class, 'test']);
+                Route::post('/{teamChatNotification}/duplicate', [\App\Http\Controllers\Api\TeamChat\TeamChatNotificationController::class, 'duplicate']);
+            });
+
+            // Message management
+            Route::prefix('messages')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\TeamChat\TeamChatMessageController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\TeamChat\TeamChatMessageController::class, 'store']);
+                Route::get('/for-record', [\App\Http\Controllers\Api\TeamChat\TeamChatMessageController::class, 'forRecord']);
+                Route::get('/{teamChatMessage}', [\App\Http\Controllers\Api\TeamChat\TeamChatMessageController::class, 'show']);
+                Route::post('/{teamChatMessage}/retry', [\App\Http\Controllers\Api\TeamChat\TeamChatMessageController::class, 'retry']);
+            });
+        });
+
+        // Marketing Campaign Routes
+        Route::prefix('campaigns')->group(function () {
+            // Meta routes
+            Route::get('/types', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'types']);
+            Route::get('/statuses', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'statuses']);
+
+            // Template management
+            Route::prefix('templates')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'templates']);
+                Route::post('/', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'storeTemplate']);
+                Route::get('/{templateId}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'showTemplate']);
+                Route::put('/{templateId}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'updateTemplate']);
+                Route::delete('/{templateId}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'destroyTemplate']);
+            });
+
+            // Campaign CRUD
+            Route::get('/', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'destroy']);
+
+            // Campaign actions
+            Route::post('/{id}/duplicate', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'duplicate']);
+            Route::post('/{id}/start', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'start']);
+            Route::post('/{id}/pause', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'pause']);
+            Route::post('/{id}/complete', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'complete']);
+            Route::post('/{id}/cancel', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'cancel']);
+
+            // Campaign analytics
+            Route::get('/{id}/analytics', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'analytics']);
+            Route::get('/{id}/metrics', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'metrics']);
+
+            // Campaign audiences
+            Route::post('/{id}/audiences', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'addAudience']);
+            Route::put('/{id}/audiences/{audienceId}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'updateAudience']);
+            Route::delete('/{id}/audiences/{audienceId}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'deleteAudience']);
+            Route::get('/{id}/audiences/{audienceId}/preview', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'previewAudience']);
+            Route::post('/{id}/audiences/{audienceId}/refresh', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'refreshAudience']);
+
+            // Campaign assets
+            Route::post('/{id}/assets', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'addAsset']);
+            Route::put('/{id}/assets/{assetId}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'updateAsset']);
+            Route::delete('/{id}/assets/{assetId}', [\App\Http\Controllers\Api\Campaign\CampaignController::class, 'deleteAsset']);
+        });
+
+        // Landing Page Builder Routes
+        Route::prefix('landing-pages')->group(function () {
+            // Meta routes
+            Route::get('/statuses', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'statuses']);
+            Route::get('/thank-you-types', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'thankYouTypes']);
+
+            // Template management
+            Route::prefix('templates')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'templates']);
+                Route::get('/categories', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'templateCategories']);
+                Route::post('/', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'storeTemplate']);
+                Route::get('/{templateId}', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'showTemplate']);
+                Route::put('/{templateId}', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'updateTemplate']);
+                Route::delete('/{templateId}', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'destroyTemplate']);
+            });
+
+            // Page CRUD
+            Route::get('/', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'destroy']);
+
+            // Page actions
+            Route::post('/{id}/duplicate', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'duplicate']);
+            Route::post('/{id}/publish', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'publish']);
+            Route::post('/{id}/unpublish', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'unpublish']);
+            Route::post('/{id}/archive', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'archive']);
+            Route::post('/{id}/save-as-template', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'saveAsTemplate']);
+
+            // Page analytics
+            Route::get('/{id}/analytics', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'analytics']);
+
+            // Page variants (A/B testing)
+            Route::get('/{id}/variants', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'variants']);
+            Route::post('/{id}/variants', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'createVariant']);
+            Route::put('/{id}/variants/{variantId}', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'updateVariant']);
+            Route::delete('/{id}/variants/{variantId}', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'deleteVariant']);
+            Route::post('/{id}/variants/{variantId}/declare-winner', [\App\Http\Controllers\Api\LandingPage\LandingPageController::class, 'declareWinner']);
+        });
+
+        // Call Recording & Telephony Routes
+        Route::prefix('calls')->group(function () {
+            // Provider management
+            Route::prefix('providers')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'store']);
+                Route::get('/{callProvider}', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'show']);
+                Route::put('/{callProvider}', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'update']);
+                Route::delete('/{callProvider}', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'destroy']);
+                Route::post('/{callProvider}/verify', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'verify']);
+                Route::post('/{callProvider}/toggle-active', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'toggleActive']);
+                Route::get('/{callProvider}/phone-numbers', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'listPhoneNumbers']);
+                Route::post('/{callProvider}/sync-phone-number', [\App\Http\Controllers\Api\Call\CallProviderController::class, 'syncPhoneNumber']);
+            });
+
+            // Call queues
+            Route::prefix('queues')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'store']);
+                Route::get('/my-status', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'myStatus']);
+                Route::put('/my-status', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'setMyStatus']);
+                Route::get('/{callQueue}', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'show']);
+                Route::put('/{callQueue}', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'update']);
+                Route::delete('/{callQueue}', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'destroy']);
+                Route::post('/{callQueue}/toggle-active', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'toggleActive']);
+                Route::get('/{callQueue}/stats', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'stats']);
+                Route::post('/{callQueue}/reset-daily-stats', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'resetDailyStats']);
+
+                // Queue members
+                Route::post('/{callQueue}/members', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'addMember']);
+                Route::delete('/{callQueue}/members/{userId}', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'removeMember']);
+                Route::put('/{callQueue}/members/{userId}', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'updateMember']);
+                Route::put('/{callQueue}/members/{userId}/status', [\App\Http\Controllers\Api\Call\CallQueueController::class, 'setMemberStatus']);
+            });
+
+            // Call management
+            Route::get('/', [\App\Http\Controllers\Api\Call\CallController::class, 'index']);
+            Route::post('/initiate', [\App\Http\Controllers\Api\Call\CallController::class, 'initiate']);
+            Route::get('/stats', [\App\Http\Controllers\Api\Call\CallController::class, 'stats']);
+            Route::get('/{call}', [\App\Http\Controllers\Api\Call\CallController::class, 'show']);
+            Route::delete('/{call}', [\App\Http\Controllers\Api\Call\CallController::class, 'destroy']);
+            Route::post('/{call}/end', [\App\Http\Controllers\Api\Call\CallController::class, 'end']);
+            Route::post('/{call}/transfer', [\App\Http\Controllers\Api\Call\CallController::class, 'transfer']);
+            Route::post('/{call}/hold', [\App\Http\Controllers\Api\Call\CallController::class, 'hold']);
+            Route::post('/{call}/mute', [\App\Http\Controllers\Api\Call\CallController::class, 'mute']);
+            Route::post('/{call}/log-outcome', [\App\Http\Controllers\Api\Call\CallController::class, 'logOutcome']);
+            Route::post('/{call}/link-contact', [\App\Http\Controllers\Api\Call\CallController::class, 'linkContact']);
+
+            // Transcription
+            Route::post('/{call}/transcribe', [\App\Http\Controllers\Api\Call\CallController::class, 'transcribe']);
+            Route::get('/{call}/transcription', [\App\Http\Controllers\Api\Call\CallController::class, 'getTranscription']);
+        });
+
+        // Smart Cadences Routes
+        Route::prefix('cadences')->group(function () {
+            // Meta routes
+            Route::get('/statuses', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'statuses']);
+            Route::get('/channels', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'channels']);
+
+            // Template management
+            Route::get('/templates', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'templates']);
+            Route::post('/from-template', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'createFromTemplate']);
+
+            // Cadence CRUD
+            Route::get('/', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'destroy']);
+
+            // Cadence actions
+            Route::post('/{id}/activate', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'activate']);
+            Route::post('/{id}/pause', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'pause']);
+            Route::post('/{id}/archive', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'archive']);
+            Route::post('/{id}/duplicate', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'duplicate']);
+            Route::post('/{id}/save-as-template', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'saveAsTemplate']);
+
+            // Cadence analytics
+            Route::get('/{id}/analytics', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'analytics']);
+
+            // Cadence steps
+            Route::post('/{cadenceId}/steps', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'addStep']);
+            Route::put('/{cadenceId}/steps/{stepId}', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'updateStep']);
+            Route::delete('/{cadenceId}/steps/{stepId}', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'deleteStep']);
+            Route::post('/{cadenceId}/steps/reorder', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'reorderSteps']);
+
+            // Cadence enrollments
+            Route::get('/{cadenceId}/enrollments', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'enrollments']);
+            Route::post('/{cadenceId}/enroll', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'enroll']);
+            Route::post('/{cadenceId}/bulk-enroll', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'bulkEnroll']);
+            Route::post('/{cadenceId}/enrollments/{enrollmentId}/unenroll', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'unenroll']);
+            Route::post('/{cadenceId}/enrollments/{enrollmentId}/pause', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'pauseEnrollment']);
+            Route::post('/{cadenceId}/enrollments/{enrollmentId}/resume', [\App\Http\Controllers\Api\Cadence\CadenceController::class, 'resumeEnrollment']);
+        });
+
+        // Video Conferencing Routes
+        Route::prefix('video')->group(function () {
+            // Provider management
+            Route::prefix('providers')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Video\VideoProviderController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Video\VideoProviderController::class, 'store']);
+                Route::get('/{videoProvider}', [\App\Http\Controllers\Api\Video\VideoProviderController::class, 'show']);
+                Route::put('/{videoProvider}', [\App\Http\Controllers\Api\Video\VideoProviderController::class, 'update']);
+                Route::delete('/{videoProvider}', [\App\Http\Controllers\Api\Video\VideoProviderController::class, 'destroy']);
+                Route::post('/{videoProvider}/verify', [\App\Http\Controllers\Api\Video\VideoProviderController::class, 'verify']);
+                Route::post('/{videoProvider}/toggle-active', [\App\Http\Controllers\Api\Video\VideoProviderController::class, 'toggleActive']);
+                Route::get('/{videoProvider}/oauth-url', [\App\Http\Controllers\Api\Video\VideoProviderController::class, 'getOAuthUrl']);
+            });
+
+            // Meeting management
+            Route::prefix('meetings')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'store']);
+                Route::get('/upcoming', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'upcoming']);
+                Route::get('/stats', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'stats']);
+                Route::get('/{videoMeeting}', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'show']);
+                Route::put('/{videoMeeting}', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'update']);
+                Route::post('/{videoMeeting}/cancel', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'cancel']);
+                Route::post('/{videoMeeting}/end', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'end']);
+                Route::post('/{videoMeeting}/sync-recordings', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'syncRecordings']);
+                Route::post('/{videoMeeting}/sync-participants', [\App\Http\Controllers\Api\Video\VideoMeetingController::class, 'syncParticipants']);
+
+                // Participants
+                Route::get('/{videoMeeting}/participants', [\App\Http\Controllers\Api\Video\VideoParticipantController::class, 'index']);
+                Route::post('/{videoMeeting}/participants', [\App\Http\Controllers\Api\Video\VideoParticipantController::class, 'store']);
+                Route::post('/{videoMeeting}/participants/bulk', [\App\Http\Controllers\Api\Video\VideoParticipantController::class, 'bulkAdd']);
+                Route::delete('/{videoMeeting}/participants/{participant}', [\App\Http\Controllers\Api\Video\VideoParticipantController::class, 'destroy']);
+
+                // Recordings
+                Route::get('/{videoMeeting}/recordings', [\App\Http\Controllers\Api\Video\VideoRecordingController::class, 'index']);
+                Route::get('/{videoMeeting}/recordings/{recording}', [\App\Http\Controllers\Api\Video\VideoRecordingController::class, 'show']);
+                Route::delete('/{videoMeeting}/recordings/{recording}', [\App\Http\Controllers\Api\Video\VideoRecordingController::class, 'destroy']);
+                Route::get('/{videoMeeting}/recordings/{recording}/transcript', [\App\Http\Controllers\Api\Video\VideoRecordingController::class, 'getTranscript']);
+            });
+
+            // All recordings list
+            Route::get('/recordings', [\App\Http\Controllers\Api\Video\VideoRecordingController::class, 'listAll']);
+        });
+
+        // Plugin License & Billing Routes
+        Route::prefix('billing')->group(function () {
+            // License state
+            Route::get('/license', [LicenseController::class, 'show']);
+            Route::get('/license/plugin/{pluginSlug}', [LicenseController::class, 'checkPlugin']);
+            Route::get('/license/feature/{featureKey}', [LicenseController::class, 'checkFeature']);
+
+            // Usage tracking
+            Route::get('/usage', [LicenseController::class, 'usage']);
+            Route::get('/usage/{metric}', [LicenseController::class, 'usageMetric']);
+
+            // Subscription management
+            Route::get('/subscription', [SubscriptionController::class, 'show']);
+            Route::get('/plans', [SubscriptionController::class, 'plans']);
+            Route::put('/subscription', [SubscriptionController::class, 'update']);
+            Route::delete('/subscription', [SubscriptionController::class, 'cancel']);
+
+            // Plugin management
+            Route::get('/plugins', [BillingPluginController::class, 'index']);
+            Route::get('/plugins/licenses', [BillingPluginController::class, 'licenses']);
+            Route::get('/plugins/{slug}', [BillingPluginController::class, 'show']);
+            Route::post('/plugins/{slug}/activate', [BillingPluginController::class, 'activate']);
+            Route::delete('/plugins/{slug}', [BillingPluginController::class, 'deactivate']);
+
+            // Bundle management
+            Route::get('/bundles', [BundleController::class, 'index']);
+            Route::get('/bundles/{slug}', [BundleController::class, 'show']);
+            Route::post('/bundles/{slug}/activate', [BundleController::class, 'activate']);
+            Route::delete('/bundles/{slug}', [BundleController::class, 'deactivate']);
+        });
+
+        // Support Ticketing Routes
+        Route::prefix('support')->group(function () {
+            // Ticket Categories
+            Route::prefix('categories')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Support\TicketCategoryController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Support\TicketCategoryController::class, 'store']);
+                Route::get('/{id}', [\App\Http\Controllers\Api\Support\TicketCategoryController::class, 'show']);
+                Route::put('/{id}', [\App\Http\Controllers\Api\Support\TicketCategoryController::class, 'update']);
+                Route::delete('/{id}', [\App\Http\Controllers\Api\Support\TicketCategoryController::class, 'destroy']);
+                Route::post('/reorder', [\App\Http\Controllers\Api\Support\TicketCategoryController::class, 'reorder']);
+            });
+
+            // Tickets
+            Route::prefix('tickets')->group(function () {
+                // Meta routes
+                Route::get('/statuses', [\App\Http\Controllers\Api\Support\TicketController::class, 'statuses']);
+                Route::get('/priorities', [\App\Http\Controllers\Api\Support\TicketController::class, 'priorities']);
+                Route::get('/channels', [\App\Http\Controllers\Api\Support\TicketController::class, 'channels']);
+                Route::get('/stats', [\App\Http\Controllers\Api\Support\TicketController::class, 'stats']);
+
+                // CRUD
+                Route::get('/', [\App\Http\Controllers\Api\Support\TicketController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Support\TicketController::class, 'store']);
+                Route::get('/{id}', [\App\Http\Controllers\Api\Support\TicketController::class, 'show']);
+                Route::put('/{id}', [\App\Http\Controllers\Api\Support\TicketController::class, 'update']);
+                Route::delete('/{id}', [\App\Http\Controllers\Api\Support\TicketController::class, 'destroy']);
+
+                // Actions
+                Route::post('/{id}/reply', [\App\Http\Controllers\Api\Support\TicketController::class, 'reply']);
+                Route::post('/{id}/assign', [\App\Http\Controllers\Api\Support\TicketController::class, 'assign']);
+                Route::post('/{id}/resolve', [\App\Http\Controllers\Api\Support\TicketController::class, 'resolve']);
+                Route::post('/{id}/close', [\App\Http\Controllers\Api\Support\TicketController::class, 'close']);
+                Route::post('/{id}/reopen', [\App\Http\Controllers\Api\Support\TicketController::class, 'reopen']);
+                Route::post('/{id}/escalate', [\App\Http\Controllers\Api\Support\TicketController::class, 'escalate']);
+                Route::post('/{id}/merge', [\App\Http\Controllers\Api\Support\TicketController::class, 'merge']);
+            });
+
+            // Knowledge Base
+            Route::prefix('kb')->group(function () {
+                // Search
+                Route::get('/search', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'search']);
+
+                // Categories
+                Route::get('/categories', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'categories']);
+                Route::post('/categories', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'storeCategory']);
+                Route::get('/categories/{slug}', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'category']);
+                Route::put('/categories/{id}', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'updateCategory']);
+                Route::delete('/categories/{id}', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'destroyCategory']);
+
+                // Articles
+                Route::get('/articles', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'articles']);
+                Route::post('/articles', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'storeArticle']);
+                Route::get('/articles/{slug}', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'article']);
+                Route::put('/articles/{id}', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'updateArticle']);
+                Route::delete('/articles/{id}', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'destroyArticle']);
+                Route::post('/articles/{id}/publish', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'publishArticle']);
+                Route::post('/articles/{id}/unpublish', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'unpublishArticle']);
+                Route::post('/articles/{id}/feedback', [\App\Http\Controllers\Api\Support\KnowledgeBaseController::class, 'articleFeedback']);
+            });
+        });
+
+        // Customer Portal Admin Routes
+        Route::prefix('portal-admin')->group(function () {
+            // Portal Users
+            Route::get('/users', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'users']);
+            Route::get('/users/{id}', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'user']);
+            Route::put('/users/{id}', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'updateUser']);
+            Route::post('/users/{id}/deactivate', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'deactivateUser']);
+            Route::post('/users/{id}/activate', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'activateUser']);
+
+            // Invitations
+            Route::get('/invitations', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'invitations']);
+            Route::post('/invitations', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'createInvitation']);
+            Route::post('/invitations/{id}/resend', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'resendInvitation']);
+            Route::post('/invitations/{id}/cancel', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'cancelInvitation']);
+
+            // Announcements
+            Route::get('/announcements', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'announcements']);
+            Route::post('/announcements', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'createAnnouncement']);
+            Route::put('/announcements/{id}', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'updateAnnouncement']);
+            Route::delete('/announcements/{id}', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'deleteAnnouncement']);
+
+            // Document Sharing
+            Route::post('/share-document', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'shareDocument']);
+
+            // Analytics
+            Route::get('/analytics', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'activityAnalytics']);
+        });
     });
 
     // Public email tracking routes (no auth required)
@@ -431,7 +1832,194 @@ Route::middleware([
     Route::get('/track/click/{trackingId}/{url}', [EmailTrackingController::class, 'trackClick'])
         ->name('email.track.click');
 
-    // Public incoming webhook endpoint (no auth required - uses token)
+    // Public incoming webhook endpoint (no auth required - uses token, rate limited)
     Route::post('/webhooks/incoming/{token}', [IncomingWebhookController::class, 'receive'])
+        ->middleware('throttle:webhooks')
         ->name('webhooks.incoming.receive');
+
+    // Public Web Forms Routes (no auth required, rate limited)
+    Route::prefix('forms')->group(function () {
+        Route::get('/{slug}', [WebFormPublicController::class, 'show']);
+        Route::get('/{slug}/render', [WebFormPublicController::class, 'render']);
+        Route::post('/{slug}/submit', [WebFormPublicController::class, 'submit'])->middleware('throttle:public-forms');
+        Route::get('/{slug}/embed.js', [WebFormPublicController::class, 'embedScript']);
+    });
+
+    // Public Landing Page Routes (no auth required, rate limited)
+    Route::prefix('p')->middleware('throttle:public-forms')->group(function () {
+        Route::get('/{slug}', [\App\Http\Controllers\Api\LandingPage\PublicLandingPageController::class, 'show']);
+        Route::get('/{slug}/thank-you', [\App\Http\Controllers\Api\LandingPage\PublicLandingPageController::class, 'thankYou']);
+        Route::post('/{slug}/engagement', [\App\Http\Controllers\Api\LandingPage\PublicLandingPageController::class, 'trackEngagement']);
+        Route::post('/{slug}/conversion', [\App\Http\Controllers\Api\LandingPage\PublicLandingPageController::class, 'trackConversion']);
+    });
+
+    // Public Scheduling Routes (no auth required, rate limited)
+    Route::prefix('schedule')->group(function () {
+        // Get scheduling page info
+        Route::get('/{slug}', [PublicBookingController::class, 'getPage']);
+        Route::get('/{slug}/{type}', [PublicBookingController::class, 'getMeetingType']);
+
+        // Get availability
+        Route::get('/{slug}/{type}/dates', [PublicBookingController::class, 'getAvailableDates']);
+        Route::get('/{slug}/{type}/slots', [PublicBookingController::class, 'getAvailableSlots']);
+
+        // Book meeting (rate limited)
+        Route::post('/{slug}/{type}/book', [PublicBookingController::class, 'book'])
+            ->middleware('throttle:public-forms');
+
+        // Manage booking by token
+        Route::get('/manage/{token}', [PublicBookingController::class, 'getMeetingByToken']);
+        Route::post('/cancel/{token}', [PublicBookingController::class, 'cancelByToken'])
+            ->middleware('throttle:public-forms');
+        Route::post('/reschedule/{token}', [PublicBookingController::class, 'rescheduleByToken'])
+            ->middleware('throttle:public-forms');
+    });
+
+    // Public Quote Routes (no auth required, rate limited)
+    Route::prefix('quote')->middleware('throttle:public-forms')->group(function () {
+        Route::get('/{token}', [PublicQuoteController::class, 'show']);
+        Route::post('/{token}/accept', [PublicQuoteController::class, 'accept']);
+        Route::post('/{token}/reject', [PublicQuoteController::class, 'reject']);
+        Route::get('/{token}/pdf', [PublicQuoteController::class, 'pdf']);
+    });
+
+    // Public Signature Routes (no auth required, rate limited)
+    Route::prefix('sign')->middleware('throttle:public-forms')->group(function () {
+        Route::get('/{uuid}', [PublicSignatureController::class, 'show']);
+        Route::post('/{uuid}/sign', [PublicSignatureController::class, 'sign']);
+        Route::post('/{uuid}/decline', [PublicSignatureController::class, 'decline']);
+        Route::get('/{uuid}/download', [PublicSignatureController::class, 'downloadDocument']);
+    });
+
+    // Public Proposal Routes (no auth required, rate limited)
+    Route::prefix('proposal')->middleware('throttle:public-forms')->group(function () {
+        Route::get('/{uuid}', [PublicProposalController::class, 'show']);
+        Route::post('/{uuid}/track-view', [PublicProposalController::class, 'trackView']);
+        Route::post('/{uuid}/update-session', [PublicProposalController::class, 'updateViewSession']);
+        Route::post('/{uuid}/items/{itemId}/toggle', [PublicProposalController::class, 'toggleItem']);
+        Route::post('/{uuid}/accept', [PublicProposalController::class, 'accept']);
+        Route::post('/{uuid}/reject', [PublicProposalController::class, 'reject']);
+        Route::get('/{uuid}/comments', [PublicProposalController::class, 'comments']);
+        Route::post('/{uuid}/comments', [PublicProposalController::class, 'addComment']);
+    });
+
+    // Public Deal Rooms Routes (token-based, rate limited)
+    Route::prefix('rooms')->middleware('throttle:public-forms')->group(function () {
+        Route::get('/{slug}', [\App\Http\Controllers\Api\DealRoom\PublicDealRoomController::class, 'show']);
+        Route::get('/{slug}/messages', [\App\Http\Controllers\Api\DealRoom\PublicDealRoomController::class, 'messages']);
+        Route::post('/{slug}/messages', [\App\Http\Controllers\Api\DealRoom\PublicDealRoomController::class, 'sendMessage']);
+        Route::post('/{slug}/actions/{actionId}/complete', [\App\Http\Controllers\Api\DealRoom\PublicDealRoomController::class, 'completeAction']);
+        Route::post('/{slug}/documents/{docId}/view', [\App\Http\Controllers\Api\DealRoom\PublicDealRoomController::class, 'recordDocumentView']);
+    });
+
+    // Public Landing Pages Routes (no auth required, rate limited)
+    Route::prefix('p')->middleware('throttle:public-forms')->group(function () {
+        Route::get('/{slug}', [PublicLandingPageController::class, 'show']);
+        Route::get('/{slug}/thank-you', [PublicLandingPageController::class, 'thankYou']);
+        Route::post('/{slug}/engagement', [PublicLandingPageController::class, 'trackEngagement']);
+        Route::post('/{slug}/conversion', [PublicLandingPageController::class, 'trackConversion']);
+    });
+
+    // WhatsApp Webhook Routes (no auth required - uses verify token)
+    Route::prefix('whatsapp/webhook')->group(function () {
+        Route::get('/{connectionId}', [WhatsappWebhookController::class, 'verify']);
+        Route::post('/{connectionId}', [WhatsappWebhookController::class, 'handle']);
+    });
+
+    // SMS Webhook Routes (no auth required - uses provider signature verification)
+    Route::prefix('sms/webhook')->group(function () {
+        Route::post('/twilio', [\App\Http\Controllers\Api\Sms\SmsWebhookController::class, 'twilio']);
+        Route::post('/vonage', [\App\Http\Controllers\Api\Sms\SmsWebhookController::class, 'vonage']);
+        Route::post('/vonage/dlr', [\App\Http\Controllers\Api\Sms\SmsWebhookController::class, 'vonageDeliveryReceipt']);
+        Route::post('/messagebird', [\App\Http\Controllers\Api\Sms\SmsWebhookController::class, 'messagebird']);
+        Route::post('/plivo', [\App\Http\Controllers\Api\Sms\SmsWebhookController::class, 'plivo']);
+        Route::post('/plivo/dlr', [\App\Http\Controllers\Api\Sms\SmsWebhookController::class, 'plivoDeliveryReport']);
+    });
+
+    // Public Live Chat Widget Routes (no auth required, rate limited)
+    Route::prefix('chat-widget')->middleware('throttle:public-forms')->group(function () {
+        // Get widget config
+        Route::get('/{widgetKey}/config', [PublicChatController::class, 'getConfig']);
+
+        // Visitor session management
+        Route::post('/{widgetKey}/init', [PublicChatController::class, 'initSession']);
+        Route::post('/{widgetKey}/identify', [PublicChatController::class, 'identify']);
+        Route::post('/{widgetKey}/track-page', [PublicChatController::class, 'trackPageView']);
+
+        // Conversation
+        Route::post('/{widgetKey}/start', [PublicChatController::class, 'startConversation']);
+        Route::post('/{widgetKey}/conversations/{conversationId}/messages', [PublicChatController::class, 'sendMessage']);
+        Route::get('/{widgetKey}/conversations/{conversationId}/messages', [PublicChatController::class, 'getMessages']);
+        Route::post('/{widgetKey}/conversations/{conversationId}/rate', [PublicChatController::class, 'rateConversation']);
+    });
+
+    // Call Recording Webhook Routes (no auth required - uses provider signature verification)
+    Route::prefix('calls/webhook')->group(function () {
+        Route::post('/inbound', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'inbound'])->name('api.calls.webhook.inbound');
+        Route::post('/status', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'status'])->name('api.calls.webhook.status');
+        Route::post('/recording', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'recording'])->name('api.calls.webhook.recording');
+        Route::post('/transcription', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'transcription'])->name('api.calls.webhook.transcription');
+        Route::post('/outbound-twiml', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'outboundTwiml'])->name('api.calls.twiml.outbound');
+        Route::post('/menu', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'menu'])->name('api.calls.twiml.menu');
+        Route::post('/voicemail', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'voicemailComplete'])->name('api.calls.webhook.voicemail');
+        Route::post('/dial-result', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'dialResult'])->name('api.calls.webhook.dial-result');
+        Route::any('/fallback', [\App\Http\Controllers\Api\Call\CallWebhookController::class, 'fallback'])->name('api.calls.webhook.fallback');
+    });
+
+    // Video Conferencing Webhook Routes (no auth required - uses provider signature verification)
+    Route::prefix('video/webhook')->group(function () {
+        Route::post('/zoom', [\App\Http\Controllers\Api\Video\VideoWebhookController::class, 'zoom'])->name('api.video.webhook.zoom');
+    });
+
+    // Video OAuth Callback (no auth required)
+    Route::get('/video/oauth/callback', [\App\Http\Controllers\Api\Video\VideoWebhookController::class, 'oauthCallback'])->name('api.video.oauth.callback');
+
+    // Customer Portal Public Routes (no internal auth required)
+    Route::prefix('portal')->group(function () {
+        // Auth routes (no auth required)
+        Route::post('/login', [\App\Http\Controllers\Api\Portal\PortalAuthController::class, 'login'])->middleware('throttle:portal-auth');
+        Route::post('/register', [\App\Http\Controllers\Api\Portal\PortalAuthController::class, 'register'])->middleware('throttle:portal-auth');
+        Route::post('/verify-invitation', [\App\Http\Controllers\Api\Portal\PortalAuthController::class, 'verifyInvitation']);
+
+        // Authenticated portal routes (using portal token)
+        Route::middleware(\App\Http\Middleware\PortalAuthenticate::class)->group(function () {
+            // Auth
+            Route::post('/logout', [\App\Http\Controllers\Api\Portal\PortalAuthController::class, 'logout']);
+            Route::get('/me', [\App\Http\Controllers\Api\Portal\PortalAuthController::class, 'me']);
+            Route::put('/profile', [\App\Http\Controllers\Api\Portal\PortalAuthController::class, 'updateProfile']);
+            Route::post('/change-password', [\App\Http\Controllers\Api\Portal\PortalAuthController::class, 'changePassword']);
+
+            // Dashboard
+            Route::get('/dashboard', [\App\Http\Controllers\Api\Portal\PortalController::class, 'dashboard']);
+
+            // Deals
+            Route::get('/deals', [\App\Http\Controllers\Api\Portal\PortalController::class, 'deals']);
+            Route::get('/deals/{id}', [\App\Http\Controllers\Api\Portal\PortalController::class, 'deal']);
+
+            // Invoices
+            Route::get('/invoices', [\App\Http\Controllers\Api\Portal\PortalController::class, 'invoices']);
+            Route::get('/invoices/{id}', [\App\Http\Controllers\Api\Portal\PortalController::class, 'invoice']);
+
+            // Quotes
+            Route::get('/quotes', [\App\Http\Controllers\Api\Portal\PortalController::class, 'quotes']);
+            Route::get('/quotes/{id}', [\App\Http\Controllers\Api\Portal\PortalController::class, 'quote']);
+            Route::post('/quotes/{id}/accept', [\App\Http\Controllers\Api\Portal\PortalController::class, 'acceptQuote']);
+
+            // Documents
+            Route::get('/documents', [\App\Http\Controllers\Api\Portal\PortalController::class, 'documents']);
+            Route::get('/documents/{id}', [\App\Http\Controllers\Api\Portal\PortalController::class, 'viewDocument']);
+            Route::post('/documents/{id}/sign', [\App\Http\Controllers\Api\Portal\PortalController::class, 'signDocument']);
+
+            // Notifications
+            Route::get('/notifications', [\App\Http\Controllers\Api\Portal\PortalController::class, 'notifications']);
+            Route::post('/notifications/{id}/read', [\App\Http\Controllers\Api\Portal\PortalController::class, 'markNotificationRead']);
+            Route::post('/notifications/read-all', [\App\Http\Controllers\Api\Portal\PortalController::class, 'markAllNotificationsRead']);
+
+            // Announcements
+            Route::get('/announcements', [\App\Http\Controllers\Api\Portal\PortalController::class, 'announcements']);
+
+            // Activity Log
+            Route::get('/activity', [\App\Http\Controllers\Api\Portal\PortalController::class, 'activityLog']);
+        });
+    });
 });

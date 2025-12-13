@@ -221,17 +221,17 @@
 						{#if (column?.type === 'select' || column?.type === 'multiselect' || column?.type === 'radio') && selectOptions.length > 0}
 							<Select.Root
 								type="single"
-								value={condition.value || undefined}
+								value={condition.value !== undefined && condition.value !== '' ? String(condition.value) : undefined}
 								onValueChange={(value) => {
 									handleValueChange(condition, index, value);
 								}}
 							>
 								<Select.Trigger class="flex-1">
-									{selectOptions.find((opt) => opt.value === condition.value)?.label || 'Select value'}
+									{selectOptions.find((opt) => String(opt.value) === String(condition.value))?.label || 'Select value'}
 								</Select.Trigger>
 								<Select.Content>
 									{#each selectOptions as option}
-										<Select.Item value={option.value}>{option.label}</Select.Item>
+										<Select.Item value={String(option.value)}>{option.label}</Select.Item>
 									{/each}
 								</Select.Content>
 							</Select.Root>

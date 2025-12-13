@@ -191,8 +191,9 @@
 				<div class="space-y-2">
 					<Label for="field-width">Width</Label>
 					<Select.Root
+						type="single"
 						value={field.width?.toString() || '100'}
-						onValueChange={(val: string | undefined) => {
+						onValueChange={(val) => {
 							if (val) updateField({ width: parseInt(val) });
 						}}
 					>
@@ -466,7 +467,7 @@
 
 		<!-- Conditional Visibility (for all field types) -->
 		<ConditionalVisibilityBuilder
-			value={field.settings?.conditional_visibility || null}
+			value={field.settings?.conditional_visibility as any || null}
 			{availableFields}
 			onchange={(visibility) => updateSettings({ conditional_visibility: visibility })}
 		/>

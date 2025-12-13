@@ -83,7 +83,9 @@
 				}
 				value = `${hours24.toString().padStart(2, '0')}:${minute}`;
 			}
-			onchange?.(value);
+			if (value !== undefined) {
+				onchange?.(value);
+			}
 		}
 	}
 

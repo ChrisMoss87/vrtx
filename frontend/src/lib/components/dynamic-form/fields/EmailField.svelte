@@ -9,7 +9,7 @@
 		disabled?: boolean;
 		placeholder?: string;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		onchange: (value: string) => void;
 		id?: string;
 		ariaDescribedBy?: string;

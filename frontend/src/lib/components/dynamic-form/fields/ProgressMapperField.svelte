@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Select from '$lib/components/ui/select';
 	import { Progress } from '$lib/components/ui/progress';
-	import type { FieldSettings, FieldOption, ProgressStage } from '$lib/types/modules';
+	import type { FieldSettings, FieldOption, ProgressMappingStage } from '$lib/api/modules';
 	import { cn } from '$lib/utils';
 
 	interface Props {
@@ -10,7 +10,7 @@
 		disabled?: boolean;
 		placeholder?: string;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		options?: FieldOption[];
 		onchange: (value: string) => void;
 	}
@@ -27,7 +27,7 @@
 	}: Props = $props();
 
 	// Get stages from progress_mapping settings or fall back to options
-	const stages = $derived.by<ProgressStage[]>(() => {
+	const stages = $derived.by<ProgressMappingStage[]>(() => {
 		if (settings?.progress_mapping?.stages) {
 			return settings.progress_mapping.stages;
 		}
@@ -37,7 +37,7 @@
 				value: opt.value,
 				label: opt.label,
 				percentage: Math.round((idx / (options.length - 1)) * 100) || 0,
-				color: opt.metadata?.color
+				color: String(opt.metadata?.color ?? '')
 			}));
 		}
 		return [];

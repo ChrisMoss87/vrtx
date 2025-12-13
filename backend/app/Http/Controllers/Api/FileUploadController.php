@@ -16,8 +16,68 @@ class FileUploadController extends Controller
      */
     public function upload(Request $request): JsonResponse
     {
+        // Whitelist of allowed file extensions (security)
+        $allowedExtensions = [
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'rtf',
+            'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+            'mp4', 'mov', 'avi', 'mp3', 'wav',
+            'zip', 'rar', '7z',
+        ];
+
+        // Dangerous extensions that should never be allowed
+        $dangerousExtensions = [
+            'php', 'phtml', 'php3', 'php4', 'php5', 'phps', 'phar',
+            'exe', 'bat', 'cmd', 'com', 'sh', 'bash', 'zsh',
+            'js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx',
+            'py', 'pyc', 'pyo', 'rb', 'pl', 'cgi',
+            'jar', 'war', 'ear', 'class',
+            'asp', 'aspx', 'jsp', 'jspx',
+            'htaccess', 'htpasswd', 'ini', 'config',
+            'dll', 'so', 'dylib',
+        ];
+
         $validated = $request->validate([
-            'file' => 'required|file|max:51200', // 50MB max
+            'file' => [
+                'required',
+                'file',
+                'max:51200', // 50MB max
+                function ($attribute, $value, $fail) use ($allowedExtensions, $dangerousExtensions) {
+                    $extension = strtolower($value->getClientOriginalExtension());
+
+                    // Block dangerous extensions
+                    if (in_array($extension, $dangerousExtensions)) {
+                        $fail('This file type is not allowed for security reasons.');
+                        return;
+                    }
+
+                    // Check if extension is in allowed list
+                    if (!in_array($extension, $allowedExtensions)) {
+                        $fail('This file type is not supported. Allowed types: ' . implode(', ', $allowedExtensions));
+                        return;
+                    }
+
+                    // Double-check MIME type matches extension
+                    $mimeType = $value->getMimeType();
+                    $expectedMimes = [
+                        'php' => ['text/x-php', 'application/x-httpd-php'],
+                        'js' => ['application/javascript', 'text/javascript'],
+                    ];
+
+                    // Block if MIME type suggests executable
+                    $dangerousMimes = [
+                        'application/x-php',
+                        'text/x-php',
+                        'application/x-httpd-php',
+                        'application/x-executable',
+                        'application/x-sharedlib',
+                        'application/x-shellscript',
+                    ];
+
+                    if (in_array($mimeType, $dangerousMimes)) {
+                        $fail('This file type is not allowed for security reasons.');
+                    }
+                },
+            ],
             'type' => 'nullable|string|in:file,image',
             'module' => 'nullable|string|max:100',
             'field' => 'nullable|string|max:100',

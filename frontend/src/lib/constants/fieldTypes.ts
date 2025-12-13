@@ -75,6 +75,7 @@ export interface FieldTypeMetadata {
 	isNumeric: boolean;
 	isRelationship: boolean;
 	isCalculated: boolean;
+	isAdvanced?: boolean;
 	defaultWidth: number;
 	commonSettings: string[];
 }
@@ -474,11 +475,37 @@ export const FIELD_CATEGORIES: Record<
 	}
 };
 
-export function getFieldTypesByCategory(category: FieldCategory): FieldTypeMetadata[] {
-	return Object.values(FIELD_TYPES).filter((ft) => ft.category === category);
+export function getFieldTypesByCategory(): Record<FieldCategory, FieldTypeMetadata[]>;
+export function getFieldTypesByCategory(category: FieldCategory): FieldTypeMetadata[];
+export function getFieldTypesByCategory(category?: FieldCategory): FieldTypeMetadata[] | Record<FieldCategory, FieldTypeMetadata[]> {
+	if (category) {
+		return Object.values(FIELD_TYPES).filter((ft) => ft.category === category);
+	}
+
+	// Return all field types grouped by category
+	const grouped: Record<FieldCategory, FieldTypeMetadata[]> = {
+		text: [],
+		number: [],
+		choice: [],
+		date: [],
+		relationship: [],
+		calculated: [],
+		media: []
+	};
+
+	Object.values(FIELD_TYPES).forEach((ft) => {
+		grouped[ft.category].push(ft);
+	});
+
+	return grouped;
 }
 
 export function getFieldTypeMetadata(type: FieldType): FieldTypeMetadata {
+	return FIELD_TYPES[type];
+}
+
+// Alias for getFieldTypeMetadata
+export function getFieldType(type: FieldType): FieldTypeMetadata | undefined {
 	return FIELD_TYPES[type];
 }
 
@@ -491,3 +518,16 @@ export function searchFieldTypes(query: string): FieldTypeMetadata[] {
 			ft.value.toLowerCase().includes(lowerQuery)
 	);
 }
+
+/**
+ * Popular field types for quick access
+ */
+export const POPULAR_FIELD_TYPES: FieldType[] = [
+	'text',
+	'email',
+	'number',
+	'date',
+	'select',
+	'checkbox',
+	'lookup'
+];

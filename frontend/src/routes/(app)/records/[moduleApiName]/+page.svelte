@@ -1,21 +1,29 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { modulesApi, type Module, type Field } from '$lib/api/modules';
-	import { getPipelinesForModule, type Pipeline } from '$lib/api/pipelines';
+	import { modulesApi, type Module } from '$lib/api/modules';
 	import { Button } from '$lib/components/ui/button';
-	import { ArrowLeft, Plus, Upload, Download, Kanban } from 'lucide-svelte';
+	import { ArrowLeft, Plus, Upload, Download, Kanban, Table2 } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
 	import DataTable from '$lib/components/datatable/DataTable.svelte';
+	import { ModuleKanbanView } from '$lib/components/kanban';
 	import type { ColumnDef } from '$lib/components/datatable/types';
 
 	const moduleApiName = $derived($page.params.moduleApiName as string);
 
 	let module = $state<Module | null>(null);
 	let columns = $state<ColumnDef[]>([]);
-	let pipelines = $state<Pipeline[]>([]);
+	let viewMode = $state<'table' | 'kanban'>('table');
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+
+	// Check if module has any select/radio fields for kanban
+	const hasKanbanFields = $derived(() => {
+		if (!module?.blocks) return false;
+		return module.blocks.some((block) =>
+			block.fields?.some((field) => field.type === 'select' || field.type === 'radio')
+		);
+	});
 
 	onMount(async () => {
 		await loadModule();
@@ -26,17 +34,7 @@
 		error = null;
 
 		try {
-			// Load module definition and pipelines in parallel
-			const [mod, pips] = await Promise.all([
-				modulesApi.getByApiName(moduleApiName),
-				getPipelinesForModule(moduleApiName).catch((err) => {
-					console.warn('Failed to load pipelines:', err);
-					return [] as Pipeline[];
-				})
-			]);
-
-			module = mod;
-			pipelines = pips;
+			module = await modulesApi.getByApiName(moduleApiName);
 
 			// Build columns from module fields
 			if (module && module.blocks) {
@@ -156,8 +154,12 @@
 		goto(`/records/${moduleApiName}/${row.id}`);
 	}
 
-	function goToPipeline(pipelineId: number) {
-		goto(`/pipelines/${moduleApiName}/${pipelineId}`);
+	function handleKanbanRecordClick(record: { id: number }) {
+		goto(`/records/${moduleApiName}/${record.id}`);
+	}
+
+	function toggleViewMode() {
+		viewMode = viewMode === 'table' ? 'kanban' : 'table';
 	}
 </script>
 
@@ -187,20 +189,19 @@
 				</div>
 			</div>
 			<div class="flex items-center gap-2">
-				{#if pipelines.length > 0}
-					{#if pipelines.length === 1}
-						<Button variant="outline" onclick={() => goToPipeline(pipelines[0].id)}>
+				{#if hasKanbanFields()}
+					<Button
+						variant={viewMode === 'kanban' ? 'secondary' : 'outline'}
+						onclick={toggleViewMode}
+					>
+						{#if viewMode === 'table'}
 							<Kanban class="mr-2 h-4 w-4" />
-							Pipeline View
-						</Button>
-					{:else}
-						<div class="relative">
-							<Button variant="outline" onclick={() => goToPipeline(pipelines[0].id)}>
-								<Kanban class="mr-2 h-4 w-4" />
-								{pipelines[0].name}
-							</Button>
-						</div>
-					{/if}
+							Kanban View
+						{:else}
+							<Table2 class="mr-2 h-4 w-4" />
+							Table View
+						{/if}
+					</Button>
 				{/if}
 				<Button variant="outline" onclick={() => goto(`/records/${moduleApiName}/import`)}>
 					<Upload class="mr-2 h-4 w-4" />
@@ -217,18 +218,27 @@
 			</div>
 		</div>
 
-		<DataTable
-			{columns}
-			{moduleApiName}
-			enableSelection={true}
-			enableFilters={true}
-			enableSearch={true}
-			enableSorting={true}
-			enablePagination={true}
-			enableViews={true}
-			enableExport={true}
-			enableBulkActions={true}
-			onRowClick={handleRowClick}
-		/>
+		{#if viewMode === 'table'}
+			<DataTable
+				{columns}
+				{moduleApiName}
+				enableSelection={true}
+				enableFilters={true}
+				enableSearch={true}
+				enableSorting={true}
+				enablePagination={true}
+				enableViews={true}
+				enableExport={true}
+				enableBulkActions={true}
+				onRowClick={handleRowClick}
+			/>
+		{:else}
+			<div class="h-[calc(100vh-16rem)]">
+				<ModuleKanbanView
+					{moduleApiName}
+					onRecordClick={handleKanbanRecordClick}
+				/>
+			</div>
+		{/if}
 	{/if}
 </div>

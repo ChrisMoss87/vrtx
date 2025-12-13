@@ -657,8 +657,8 @@ class ConditionEvaluator
     }
 
     /**
-     * Evaluate a formula expression.
-     * Supports basic arithmetic and field references.
+     * Evaluate a formula expression safely.
+     * Supports basic arithmetic and field references without using eval().
      */
     protected function evaluateFormula(mixed $formula, array $context): bool
     {
@@ -667,32 +667,10 @@ class ConditionEvaluator
         }
 
         try {
-            // Replace field references with actual values
-            $expression = preg_replace_callback(
-                '/\{([^}]+)\}/',
-                function ($matches) use ($context) {
-                    $value = $this->getValueFromContext($matches[1], $context);
-                    if ($value === null) {
-                        return '0';
-                    }
-                    if (is_string($value)) {
-                        return "'" . addslashes($value) . "'";
-                    }
-                    if (is_bool($value)) {
-                        return $value ? 'true' : 'false';
-                    }
-                    return (string) $value;
-                },
-                $formula
-            );
+            // Use safe expression evaluator instead of eval()
+            $result = SafeExpressionEvaluator::evaluate($formula, $context);
 
-            // Safely evaluate comparison expressions
-            // Supports: ==, !=, <, >, <=, >=, &&, ||
-            if (preg_match('/^[\d\s\+\-\*\/\(\)\.\<\>\=\!\&\|\'\"a-zA-Z_]+$/', $expression)) {
-                return (bool) eval("return {$expression};");
-            }
-
-            return false;
+            return (bool) $result;
         } catch (\Exception) {
             return false;
         }

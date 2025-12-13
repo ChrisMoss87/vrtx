@@ -19,6 +19,7 @@
 	import TagActionConfig from './config/TagActionConfig.svelte';
 	import MoveStageConfig from './config/MoveStageConfig.svelte';
 	import ConditionBranchConfig from './config/ConditionBranchConfig.svelte';
+	import UpdateRelatedRecordConfig from './config/UpdateRelatedRecordConfig.svelte';
 
 	interface Props {
 		step: WorkflowStepInput;
@@ -129,6 +130,12 @@
 			/>
 		{:else if step.action_type === 'condition'}
 			<ConditionBranchConfig
+				config={step.action_config}
+				{moduleFields}
+				onConfigChange={updateConfig}
+			/>
+		{:else if step.action_type === 'update_related_record'}
+			<UpdateRelatedRecordConfig
 				config={step.action_config}
 				{moduleFields}
 				onConfigChange={updateConfig}

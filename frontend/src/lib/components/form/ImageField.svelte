@@ -220,8 +220,7 @@
 			</div>
 
 			<!-- Hidden file input -->
-			<Input
-				{...props}
+			<input
 				bind:this={fileInput}
 				type="file"
 				accept="image/*"

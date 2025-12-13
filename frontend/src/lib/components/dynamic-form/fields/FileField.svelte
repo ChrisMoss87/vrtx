@@ -22,7 +22,7 @@
 		disabled?: boolean;
 		placeholder?: string;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		moduleApiName?: string;
 		fieldApiName?: string;
 		onchange: (value: FileInfo[]) => void;

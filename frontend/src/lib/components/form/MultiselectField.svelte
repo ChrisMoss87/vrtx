@@ -168,9 +168,9 @@
 										<Command.Item
 											value={option.value}
 											onSelect={() => toggleOption(option.value)}
-											disabled={maxSelected &&
+											disabled={!!(maxSelected &&
 												value.length >= maxSelected &&
-												!isSelected(option.value)}
+												!isSelected(option.value))}
 										>
 											<Check
 												class={cn(

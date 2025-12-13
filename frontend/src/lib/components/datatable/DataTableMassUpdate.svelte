@@ -252,7 +252,7 @@
 								</Select.Trigger>
 								<Select.Content>
 									{#each selectedColumn.filterOptions || selectedColumn.options || [] as option}
-										<Select.Item value={option.value}>{option.label}</Select.Item>
+										<Select.Item value={String(option.value)}>{option.label}</Select.Item>
 									{/each}
 								</Select.Content>
 							</Select.Root>

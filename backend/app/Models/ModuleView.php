@@ -17,6 +17,8 @@ class ModuleView extends Model
         'user_id',
         'name',
         'description',
+        'view_type',
+        'kanban_config',
         'filters',
         'sorting',
         'column_visibility',
@@ -28,12 +30,19 @@ class ModuleView extends Model
         'display_order',
     ];
 
+    /**
+     * View type constants
+     */
+    public const TYPE_TABLE = 'table';
+    public const TYPE_KANBAN = 'kanban';
+
     protected $casts = [
         'filters' => 'array',
         'sorting' => 'array',
         'column_visibility' => 'array',
         'column_order' => 'array',
         'column_widths' => 'array',
+        'kanban_config' => 'array',
         'page_size' => 'integer',
         'is_default' => 'boolean',
         'is_shared' => 'boolean',
@@ -43,6 +52,7 @@ class ModuleView extends Model
     ];
 
     protected $attributes = [
+        'view_type' => self::TYPE_TABLE,
         'filters' => '[]',
         'sorting' => '[]',
         'column_visibility' => '{}',
@@ -101,5 +111,45 @@ class ModuleView extends Model
     public function scopeOrdered($query)
     {
         return $query->orderBy('display_order')->orderBy('name');
+    }
+
+    /**
+     * Scope a query to only include table views.
+     */
+    public function scopeTable($query)
+    {
+        return $query->where('view_type', self::TYPE_TABLE);
+    }
+
+    /**
+     * Scope a query to only include kanban views.
+     */
+    public function scopeKanban($query)
+    {
+        return $query->where('view_type', self::TYPE_KANBAN);
+    }
+
+    /**
+     * Check if this is a kanban view.
+     */
+    public function isKanban(): bool
+    {
+        return $this->view_type === self::TYPE_KANBAN;
+    }
+
+    /**
+     * Check if this is a table view.
+     */
+    public function isTable(): bool
+    {
+        return $this->view_type === self::TYPE_TABLE;
+    }
+
+    /**
+     * Get the group by field for kanban views.
+     */
+    public function getKanbanGroupByField(): ?string
+    {
+        return $this->kanban_config['group_by_field'] ?? null;
     }
 }

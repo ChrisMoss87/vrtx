@@ -4,8 +4,9 @@
 		FIELD_CATEGORIES,
 		POPULAR_FIELD_TYPES,
 		getFieldType,
-		type FieldType
-	} from '$lib/constants/field-types';
+		type FieldType,
+		type FieldTypeMetadata
+	} from '$lib/constants/fieldTypes';
 	import { Button } from '$lib/components/ui/button';
 	import * as Popover from '$lib/components/ui/popover';
 	import { Input } from '$lib/components/ui/input';
@@ -25,7 +26,7 @@
 	let open = $state(false);
 	let searchQuery = $state('');
 
-	const fieldTypesByCategory = getFieldTypesByCategory();
+	const fieldTypesByCategory = getFieldTypesByCategory() as Record<string, FieldTypeMetadata[]>;
 	const selectedFieldType = $derived(getFieldType(value));
 
 	// Filter field types based on search
@@ -35,22 +36,22 @@
 		}
 
 		const query = searchQuery.toLowerCase();
-		const filtered: typeof fieldTypesByCategory = {
-			basic: [],
-			numeric: [],
+		const filtered: Record<string, FieldTypeMetadata[]> = {
+			text: [],
+			number: [],
 			choice: [],
-			datetime: [],
+			date: [],
 			relationship: [],
 			calculated: [],
 			media: []
 		};
 
 		Object.entries(fieldTypesByCategory).forEach(([category, types]) => {
-			filtered[category as keyof typeof filtered] = types.filter(
+			filtered[category] = types.filter(
 				(type) =>
 					type.label.toLowerCase().includes(query) ||
 					type.description.toLowerCase().includes(query) ||
-					type.type.toLowerCase().includes(query)
+					type.value.toLowerCase().includes(query)
 			);
 		});
 
@@ -62,9 +63,9 @@
 		POPULAR_FIELD_TYPES.map((type) => getFieldType(type)).filter(Boolean)
 	);
 
-	function selectType(type: FieldType) {
-		value = type;
-		onchange?.(type);
+	function selectType(fieldType: FieldType) {
+		value = fieldType;
+		onchange?.(fieldType);
 		open = false;
 		searchQuery = '';
 	}
@@ -136,10 +137,10 @@
 									{#if fieldType}
 										<button
 											type="button"
-											onclick={() => selectType(fieldType.type)}
+											onclick={() => selectType(fieldType.value)}
 											class={cn(
 												'flex items-start gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
-												value === fieldType.type && 'bg-accent'
+												value === fieldType.value && 'bg-accent'
 											)}
 										>
 											<div class="mt-0.5 shrink-0">
@@ -156,7 +157,7 @@
 													{fieldType.description}
 												</p>
 											</div>
-											{#if value === fieldType.type}
+											{#if value === fieldType.value}
 												<Check class="h-4 w-4 shrink-0 text-primary" />
 											{/if}
 										</button>
@@ -171,16 +172,16 @@
 						{#if types.length > 0}
 							<div class="mb-4">
 								<div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-									{FIELD_CATEGORIES[category].label}
+									{FIELD_CATEGORIES[category as keyof typeof FIELD_CATEGORIES]?.label ?? category}
 								</div>
 								<div class="grid gap-1">
 									{#each types as fieldType}
 										<button
 											type="button"
-											onclick={() => selectType(fieldType.type)}
+											onclick={() => selectType(fieldType.value)}
 											class={cn(
 												'flex items-start gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
-												value === fieldType.type && 'bg-accent'
+												value === fieldType.value && 'bg-accent'
 											)}
 										>
 											<div class="mt-0.5 shrink-0">
@@ -200,7 +201,7 @@
 													{fieldType.description}
 												</p>
 											</div>
-											{#if value === fieldType.type}
+											{#if value === fieldType.value}
 												<Check class="h-4 w-4 shrink-0 text-primary" />
 											{/if}
 										</button>

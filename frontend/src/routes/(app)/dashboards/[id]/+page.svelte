@@ -6,18 +6,18 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as Card from '$lib/components/ui/card';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Select from '$lib/components/ui/select';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Label } from '$lib/components/ui/label';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import {
 		ArrowLeft,
 		Plus,
 		Settings,
 		Save,
 		RefreshCw,
-		MoreVertical,
 		Trash2,
 		Edit2,
 		BarChart2,
@@ -27,10 +27,9 @@
 		CheckSquare,
 		FileText,
 		LayoutDashboard,
-		Maximize2,
-		Minimize2,
 		Star,
-		Users
+		Users,
+		Globe
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -38,9 +37,19 @@
 		type Dashboard,
 		type DashboardWidget,
 		type WidgetType,
+		type WidgetConfig,
 		getDefaultWidgetSize
 	} from '$lib/api/dashboards';
-	import { reportsApi, type Report, type ReportResult } from '$lib/api/reports';
+	import { reportsApi, type Report } from '$lib/api/reports';
+	import {
+		KPIWidget,
+		TableWidget,
+		ChartWidget,
+		TextWidget,
+		ActivityWidget,
+		TasksWidget
+	} from '$lib/components/dashboard/widgets';
+	import KPIConfigForm from '$lib/components/dashboard/KPIConfigForm.svelte';
 
 	let dashboard = $state<Dashboard | null>(null);
 	let widgetData = $state<Record<number, any>>({});
@@ -55,17 +64,20 @@
 	let widgetTitle = $state('');
 	let widgetType = $state<WidgetType>('kpi');
 	let selectedReportId = $state<string>('');
+	let widgetConfig = $state<WidgetConfig>({});
+	let textContent = $state('');
 	let reports = $state<Report[]>([]);
 
 	const dashboardId = $derived(Number($page.params.id));
 
-	const widgetTypes: { value: WidgetType; label: string; icon: typeof BarChart2 }[] = [
-		{ value: 'kpi', label: 'KPI Card', icon: Hash },
-		{ value: 'chart', label: 'Chart', icon: BarChart2 },
-		{ value: 'table', label: 'Data Table', icon: Table },
-		{ value: 'report', label: 'Report', icon: FileText },
-		{ value: 'activity', label: 'Activity Feed', icon: Activity },
-		{ value: 'tasks', label: 'Tasks', icon: CheckSquare }
+	const widgetTypes: { value: WidgetType; label: string; icon: typeof BarChart2; description: string }[] = [
+		{ value: 'kpi', label: 'KPI Card', icon: Hash, description: 'Show a single metric with optional comparison' },
+		{ value: 'chart', label: 'Chart', icon: BarChart2, description: 'Visualize data with charts' },
+		{ value: 'table', label: 'Data Table', icon: Table, description: 'Display data in a table format' },
+		{ value: 'report', label: 'Report', icon: FileText, description: 'Embed a saved report' },
+		{ value: 'activity', label: 'Activity Feed', icon: Activity, description: 'Show recent activity' },
+		{ value: 'tasks', label: 'Tasks', icon: CheckSquare, description: 'Display your tasks' },
+		{ value: 'text', label: 'Text/HTML', icon: FileText, description: 'Add custom text or HTML content' }
 	];
 
 	onMount(async () => {
@@ -130,11 +142,18 @@
 			return;
 		}
 
+		// Build config based on widget type
+		let config: WidgetConfig = { ...widgetConfig };
+		if (widgetType === 'text') {
+			config.content = textContent;
+		}
+
 		try {
 			const widget = await dashboardsApi.widgets.add(dashboard.id, {
 				title: widgetTitle.trim(),
 				type: widgetType,
 				report_id: selectedReportId ? Number(selectedReportId) : undefined,
+				config,
 				size: getDefaultWidgetSize(widgetType)
 			});
 
@@ -163,11 +182,17 @@
 			return;
 		}
 
+		let config: WidgetConfig = { ...widgetConfig };
+		if (widgetType === 'text') {
+			config.content = textContent;
+		}
+
 		try {
 			const updated = await dashboardsApi.widgets.update(dashboard.id, selectedWidget.id, {
 				title: widgetTitle.trim(),
 				type: widgetType,
-				report_id: selectedReportId ? Number(selectedReportId) : undefined
+				report_id: selectedReportId ? Number(selectedReportId) : undefined,
+				config
 			});
 
 			dashboard = {
@@ -213,6 +238,8 @@
 		widgetTitle = widget.title;
 		widgetType = widget.type;
 		selectedReportId = widget.report_id ? String(widget.report_id) : '';
+		widgetConfig = widget.config || {};
+		textContent = widget.config?.content || '';
 		editWidgetDialogOpen = true;
 	}
 
@@ -220,6 +247,8 @@
 		widgetTitle = '';
 		widgetType = 'kpi';
 		selectedReportId = '';
+		widgetConfig = {};
+		textContent = '';
 		selectedWidget = null;
 	}
 
@@ -228,16 +257,24 @@
 		return typeConfig?.icon || LayoutDashboard;
 	}
 
-	function formatValue(value: any): string {
-		if (typeof value === 'number') {
-			if (value >= 1000000) {
-				return (value / 1000000).toFixed(1) + 'M';
-			} else if (value >= 1000) {
-				return (value / 1000).toFixed(1) + 'K';
-			}
-			return value.toLocaleString();
-		}
-		return String(value || '-');
+	function getWidgetColSpan(widget: DashboardWidget): string {
+		const w = widget.size?.w || 1;
+		// Map widget logical width to CSS grid column spans
+		// Grid is: 1 col on mobile, 2 on md, 3 on lg, 4 on xl
+		if (w >= 12) return 'col-span-full'; // Full width at all sizes
+		if (w >= 6) return 'md:col-span-2 lg:col-span-3 xl:col-span-4'; // Full width on xl
+		if (w >= 4) return 'md:col-span-2 lg:col-span-2 xl:col-span-3';
+		if (w >= 3) return 'md:col-span-1 lg:col-span-2 xl:col-span-2';
+		if (w >= 2) return 'md:col-span-1 lg:col-span-1 xl:col-span-2';
+		return ''; // w:1 = single column
+	}
+
+	function getWidgetRowSpan(widget: DashboardWidget): string {
+		const h = widget.size?.h || 1;
+		if (h >= 4) return 'row-span-4';
+		if (h >= 3) return 'row-span-3';
+		if (h >= 2) return 'row-span-2';
+		return '';
 	}
 </script>
 
@@ -252,7 +289,7 @@
 				<Skeleton class="h-8 w-8" />
 				<Skeleton class="h-8 w-64" />
 			</div>
-			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 				{#each [1, 2, 3, 4, 5, 6] as _}
 					<Skeleton class="h-48" />
 				{/each}
@@ -317,31 +354,22 @@
 				<Card.Content class="flex flex-col items-center justify-center py-12">
 					<LayoutDashboard class="mb-4 h-12 w-12 text-muted-foreground" />
 					<h3 class="mb-2 text-lg font-medium">No widgets yet</h3>
-					<p class="mb-4 text-muted-foreground">
-						Add widgets to visualize your data
-					</p>
-					<Button onclick={() => (addWidgetDialogOpen = true)}>
+					<p class="mb-4 text-muted-foreground">Add widgets to visualize your data</p>
+					<Button onclick={() => { editMode = true; addWidgetDialogOpen = true; }}>
 						<Plus class="mr-2 h-4 w-4" />
 						Add Widget
 					</Button>
 				</Card.Content>
 			</Card.Root>
 		{:else}
-			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+			<div class="grid auto-rows-min gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 				{#each dashboard.widgets as widget (widget.id)}
-					{@const WidgetIcon = getWidgetIcon(widget.type)}
 					{@const data = widgetData[widget.id]}
-					<Card.Root
-						class="relative {widget.type === 'kpi'
-							? ''
-							: widget.size.w >= 6
-								? 'md:col-span-2'
-								: ''}"
-					>
+					<div class="relative {getWidgetColSpan(widget)} {getWidgetRowSpan(widget)}">
 						{#if editMode}
 							<div class="absolute right-2 top-2 z-10 flex gap-1">
 								<Button
-									variant="ghost"
+									variant="secondary"
 									size="icon"
 									class="h-7 w-7"
 									onclick={() => openEditWidget(widget)}
@@ -349,9 +377,9 @@
 									<Edit2 class="h-3.5 w-3.5" />
 								</Button>
 								<Button
-									variant="ghost"
+									variant="secondary"
 									size="icon"
-									class="h-7 w-7 text-destructive"
+									class="h-7 w-7 text-destructive hover:text-destructive"
 									onclick={() => handleDeleteWidget(widget)}
 								>
 									<Trash2 class="h-3.5 w-3.5" />
@@ -359,76 +387,35 @@
 							</div>
 						{/if}
 
-						<Card.Header class="pb-2">
-							<div class="flex items-center gap-2">
-								<WidgetIcon class="h-4 w-4 text-muted-foreground" />
-								<Card.Title class="text-sm font-medium">{widget.title}</Card.Title>
-							</div>
-						</Card.Header>
-						<Card.Content>
-							{#if widget.type === 'kpi'}
-								<!-- KPI Widget -->
-								<div class="text-center">
-									<div class="text-3xl font-bold">
-										{formatValue(data?.value ?? 0)}
+						{#if widget.type === 'kpi'}
+							<KPIWidget title={widget.title} {data} />
+						{:else if widget.type === 'table' || widget.type === 'report'}
+							<TableWidget title={widget.title} {data} />
+						{:else if widget.type === 'chart'}
+							<ChartWidget title={widget.title} {data} chartType={data?.chart_type || 'bar'} />
+						{:else if widget.type === 'text'}
+							<TextWidget title={widget.title} content={widget.config?.content || ''} />
+						{:else if widget.type === 'activity'}
+							<ActivityWidget title={widget.title} {data} />
+						{:else if widget.type === 'tasks'}
+							<TasksWidget title={widget.title} {data} />
+						{:else}
+							<Card.Root class="h-full">
+								<Card.Header class="pb-2">
+									{@const WidgetIcon = getWidgetIcon(widget.type)}
+									<div class="flex items-center gap-2">
+										<WidgetIcon class="h-4 w-4 text-muted-foreground" />
+										<Card.Title class="text-sm font-medium">{widget.title}</Card.Title>
 									</div>
-									{#if data?.change_percent !== null && data?.change_percent !== undefined}
-										<div
-											class="mt-1 text-sm {data.change_type === 'increase'
-												? 'text-green-600'
-												: data.change_type === 'decrease'
-													? 'text-red-600'
-													: 'text-muted-foreground'}"
-										>
-											{data.change_percent >= 0 ? '+' : ''}{data.change_percent.toFixed(1)}%
-										</div>
-									{/if}
-								</div>
-							{:else if widget.type === 'table' || widget.type === 'report'}
-								<!-- Table/Report Widget -->
-								{#if data?.data && Array.isArray(data.data)}
-									<div class="max-h-48 overflow-auto">
-										<table class="w-full text-sm">
-											<tbody>
-												{#each data.data.slice(0, 5) as row, i}
-													<tr class="border-b last:border-0">
-														<td class="py-2 font-medium">
-															{Object.values(row)[0] || '-'}
-														</td>
-														<td class="py-2 text-right text-muted-foreground">
-															{formatValue(Object.values(row)[1])}
-														</td>
-													</tr>
-												{/each}
-											</tbody>
-										</table>
-										{#if data.data.length > 5}
-											<p class="mt-2 text-center text-xs text-muted-foreground">
-												+{data.data.length - 5} more
-											</p>
-										{/if}
-									</div>
-								{:else}
-									<p class="py-4 text-center text-muted-foreground">No data</p>
-								{/if}
-							{:else if widget.type === 'activity'}
-								<!-- Activity Feed Widget -->
-								<p class="py-4 text-center text-muted-foreground">
-									Activity feed coming soon
-								</p>
-							{:else if widget.type === 'tasks'}
-								<!-- Tasks Widget -->
-								<p class="py-4 text-center text-muted-foreground">
-									Tasks widget coming soon
-								</p>
-							{:else}
-								<!-- Generic/Chart Widget -->
-								<p class="py-4 text-center text-muted-foreground">
-									{widget.type} widget
-								</p>
-							{/if}
-						</Card.Content>
-					</Card.Root>
+								</Card.Header>
+								<Card.Content>
+									<p class="py-4 text-center text-sm text-muted-foreground">
+										{widget.type} widget
+									</p>
+								</Card.Content>
+							</Card.Root>
+						{/if}
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -437,56 +424,86 @@
 
 <!-- Add Widget Dialog -->
 <Dialog.Root bind:open={addWidgetDialogOpen}>
-	<Dialog.Content>
+	<Dialog.Content class="max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>Add Widget</Dialog.Title>
 			<Dialog.Description>Choose a widget type and configure it</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="space-y-4 py-4">
-			<div class="space-y-2">
-				<Label>Widget Title</Label>
-				<Input placeholder="Enter widget title" bind:value={widgetTitle} />
-			</div>
+		<Tabs.Root value="type" class="w-full">
+			<Tabs.List class="grid w-full grid-cols-2">
+				<Tabs.Trigger value="type">Widget Type</Tabs.Trigger>
+				<Tabs.Trigger value="config">Configuration</Tabs.Trigger>
+			</Tabs.List>
 
-			<div class="space-y-2">
-				<Label>Widget Type</Label>
-				<div class="grid grid-cols-3 gap-2">
-					{#each widgetTypes as type}
-						{@const Icon = type.icon}
-						<button
-							type="button"
-							class="flex flex-col items-center gap-1 rounded-lg border p-3 text-center transition-colors hover:bg-muted {widgetType ===
-							type.value
-								? 'border-primary bg-primary/5'
-								: ''}"
-							onclick={() => (widgetType = type.value)}
-						>
-							<Icon class="h-5 w-5" />
-							<span class="text-xs">{type.label}</span>
-						</button>
-					{/each}
-				</div>
-			</div>
-
-			{#if widgetType === 'report' || widgetType === 'chart' || widgetType === 'table'}
+			<Tabs.Content value="type" class="space-y-4 pt-4">
 				<div class="space-y-2">
-					<Label>Select Report</Label>
-					<Select.Root type="single" bind:value={selectedReportId}>
-						<Select.Trigger>
-							{selectedReportId
-								? reports.find((r) => String(r.id) === selectedReportId)?.name || 'Select report'
-								: 'Select a report'}
-						</Select.Trigger>
-						<Select.Content>
-							{#each reports as report}
-								<Select.Item value={String(report.id)}>{report.name}</Select.Item>
-							{/each}
-						</Select.Content>
-					</Select.Root>
+					<Label>Widget Title</Label>
+					<Input placeholder="Enter widget title" bind:value={widgetTitle} />
 				</div>
-			{/if}
-		</div>
+
+				<div class="space-y-2">
+					<Label>Widget Type</Label>
+					<div class="grid grid-cols-2 gap-2">
+						{#each widgetTypes as type}
+							{@const Icon = type.icon}
+							<button
+								type="button"
+								class="flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted {widgetType === type.value ? 'border-primary bg-primary/5' : ''}"
+								onclick={() => (widgetType = type.value)}
+							>
+								<Icon class="mt-0.5 h-5 w-5 shrink-0" />
+								<div>
+									<div class="text-sm font-medium">{type.label}</div>
+									<div class="text-xs text-muted-foreground">{type.description}</div>
+								</div>
+							</button>
+						{/each}
+					</div>
+				</div>
+			</Tabs.Content>
+
+			<Tabs.Content value="config" class="space-y-4 pt-4">
+				{#if widgetType === 'kpi'}
+					<KPIConfigForm config={widgetConfig} onUpdate={(c) => (widgetConfig = c)} />
+				{:else if widgetType === 'report' || widgetType === 'chart' || widgetType === 'table'}
+					<div class="space-y-2">
+						<Label>Select Report</Label>
+						<Select.Root type="single" bind:value={selectedReportId}>
+							<Select.Trigger class="w-full">
+								{selectedReportId
+									? reports.find((r) => String(r.id) === selectedReportId)?.name || 'Select report'
+									: 'Select a report'}
+							</Select.Trigger>
+							<Select.Content>
+								{#each reports as report}
+									<Select.Item value={String(report.id)}>{report.name}</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+						<p class="text-xs text-muted-foreground">
+							Choose a saved report to display in this widget
+						</p>
+					</div>
+				{:else if widgetType === 'text'}
+					<div class="space-y-2">
+						<Label>Content (HTML supported)</Label>
+						<Textarea
+							placeholder="Enter text or HTML content..."
+							bind:value={textContent}
+							rows={6}
+						/>
+						<p class="text-xs text-muted-foreground">
+							You can use basic HTML for formatting
+						</p>
+					</div>
+				{:else}
+					<p class="py-4 text-center text-sm text-muted-foreground">
+						No additional configuration needed for this widget type
+					</p>
+				{/if}
+			</Tabs.Content>
+		</Tabs.Root>
 
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (addWidgetDialogOpen = false)}>Cancel</Button>
@@ -497,7 +514,7 @@
 
 <!-- Edit Widget Dialog -->
 <Dialog.Root bind:open={editWidgetDialogOpen}>
-	<Dialog.Content>
+	<Dialog.Content class="max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>Edit Widget</Dialog.Title>
 			<Dialog.Description>Modify the widget settings</Dialog.Description>
@@ -516,10 +533,7 @@
 						{@const Icon = type.icon}
 						<button
 							type="button"
-							class="flex flex-col items-center gap-1 rounded-lg border p-3 text-center transition-colors hover:bg-muted {widgetType ===
-							type.value
-								? 'border-primary bg-primary/5'
-								: ''}"
+							class="flex flex-col items-center gap-1 rounded-lg border p-3 text-center transition-colors hover:bg-muted {widgetType === type.value ? 'border-primary bg-primary/5' : ''}"
 							onclick={() => (widgetType = type.value)}
 						>
 							<Icon class="h-5 w-5" />
@@ -529,11 +543,13 @@
 				</div>
 			</div>
 
-			{#if widgetType === 'report' || widgetType === 'chart' || widgetType === 'table'}
+			{#if widgetType === 'kpi'}
+				<KPIConfigForm config={widgetConfig} onUpdate={(c) => (widgetConfig = c)} />
+			{:else if widgetType === 'report' || widgetType === 'chart' || widgetType === 'table'}
 				<div class="space-y-2">
 					<Label>Select Report</Label>
 					<Select.Root type="single" bind:value={selectedReportId}>
-						<Select.Trigger>
+						<Select.Trigger class="w-full">
 							{selectedReportId
 								? reports.find((r) => String(r.id) === selectedReportId)?.name || 'Select report'
 								: 'Select a report'}
@@ -544,6 +560,11 @@
 							{/each}
 						</Select.Content>
 					</Select.Root>
+				</div>
+			{:else if widgetType === 'text'}
+				<div class="space-y-2">
+					<Label>Content (HTML supported)</Label>
+					<Textarea placeholder="Enter text or HTML content..." bind:value={textContent} rows={6} />
 				</div>
 			{/if}
 		</div>

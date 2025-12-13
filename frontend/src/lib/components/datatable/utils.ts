@@ -9,8 +9,10 @@ import type {
 	TableState,
 	DataTableRequest,
 	DataTableResponse,
-	PaginationState
+	PaginationState,
+	BaseRowData
 } from './types';
+import type { RecordData } from '$lib/types/modules';
 
 /**
  * Generate columns from module fields
@@ -179,11 +181,24 @@ export function transformFiltersForApi(filters: FilterConfig[]): Record<string, 
 		const operator = operatorMap[filter.operator] || filter.operator;
 
 		// Handle between filter format
-		if (filter.operator === 'between' && typeof filter.value === 'object') {
+		if (filter.operator === 'between' && filter.value !== null && typeof filter.value === 'object' && !Array.isArray(filter.value)) {
+			const val = filter.value as { min?: number; max?: number; from?: string | number; to?: string | number };
 			filterObj[filter.field] = {
 				operator,
-				min: filter.value.min || filter.value.from,
-				max: filter.value.max || filter.value.to
+				min: val.min ?? val.from,
+				max: val.max ?? val.to
+			};
+		} else if (filter.operator === 'in' || filter.operator === 'not_in') {
+			// Handle 'in' operator with array values
+			filterObj[filter.field] = {
+				operator,
+				value: Array.isArray(filter.value) ? filter.value : [filter.value]
+			};
+		} else if (Array.isArray(filter.value) && filter.value.length > 0) {
+			// If value is an array but operator isn't 'in', use 'in' operator
+			filterObj[filter.field] = {
+				operator: 'in',
+				value: filter.value
 			};
 		} else {
 			filterObj[filter.field] = {
@@ -235,7 +250,7 @@ export function buildApiRequest(state: TableState): DataTableRequest {
 /**
  * Parse API response to update table state
  */
-export function parseApiResponse<TData = any>(
+export function parseApiResponse<TData extends RecordData = RecordData>(
 	response: DataTableResponse<TData>
 ): { data: TData[]; pagination: PaginationState } {
 	return {

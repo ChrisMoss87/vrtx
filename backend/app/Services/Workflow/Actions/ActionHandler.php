@@ -34,6 +34,11 @@ class ActionHandler
         $this->register(WorkflowStep::ACTION_SEND_NOTIFICATION, SendNotificationAction::class);
         $this->register(WorkflowStep::ACTION_DELAY, DelayAction::class);
         $this->register(WorkflowStep::ACTION_MOVE_STAGE, MoveStageAction::class);
+        $this->register(WorkflowStep::ACTION_ADD_TAG, AddTagAction::class);
+        $this->register(WorkflowStep::ACTION_REMOVE_TAG, RemoveTagAction::class);
+        $this->register(WorkflowStep::ACTION_CREATE_TASK, CreateTaskAction::class);
+        $this->register(WorkflowStep::ACTION_CONDITION, ConditionBranchAction::class);
+        $this->register(WorkflowStep::ACTION_UPDATE_RELATED, UpdateRelatedRecordAction::class);
     }
 
     /**
@@ -67,5 +72,50 @@ class ActionHandler
     public function getRegisteredTypes(): array
     {
         return array_keys($this->handlers);
+    }
+
+    /**
+     * Get the configuration schema for an action type.
+     */
+    public function getConfigSchema(string $actionType): array
+    {
+        $handlerClass = $this->handlers[$actionType] ?? null;
+
+        if (!$handlerClass) {
+            throw new \InvalidArgumentException("Unknown action type: {$actionType}");
+        }
+
+        return $handlerClass::getConfigSchema();
+    }
+
+    /**
+     * Get configuration schemas for all action types.
+     */
+    public function getAllConfigSchemas(): array
+    {
+        $schemas = [];
+
+        foreach ($this->handlers as $actionType => $handlerClass) {
+            $schemas[$actionType] = $handlerClass::getConfigSchema();
+        }
+
+        return $schemas;
+    }
+
+    /**
+     * Validate action configuration.
+     */
+    public function validateConfig(string $actionType, array $config): array
+    {
+        $handlerClass = $this->handlers[$actionType] ?? null;
+
+        if (!$handlerClass) {
+            return ['action_type' => "Unknown action type: {$actionType}"];
+        }
+
+        /** @var ActionInterface $handler */
+        $handler = app($handlerClass);
+
+        return $handler->validate($config);
     }
 }

@@ -34,8 +34,8 @@
 	let isSaving = $state(false);
 	let error = $state<string | null>(null);
 	let isHovered = $state(false);
-	let cellRef: HTMLDivElement | undefined;
-	let inputRef: HTMLInputElement | undefined;
+	let cellRef = $state<HTMLDivElement | undefined>(undefined);
+	let inputRef = $state<HTMLInputElement | undefined>(undefined);
 	let selectOpen = $state(false);
 	let searchQuery = $state('');
 
@@ -280,7 +280,7 @@
 			<!-- Select dropdown -->
 			<Select.Root
 				type="single"
-				value={editValue}
+				value={editValue != null ? String(editValue) : ''}
 				onValueChange={handleSelectChange}
 				open={selectOpen}
 				onOpenChange={handleSelectOpenChange}
@@ -295,7 +295,7 @@
 				</Select.Trigger>
 				<Select.Content>
 					{#each options as option (option.value)}
-						<Select.Item value={option.value}>{option.label}</Select.Item>
+						<Select.Item value={String(option.value)}>{option.label}</Select.Item>
 					{/each}
 				</Select.Content>
 			</Select.Root>

@@ -61,7 +61,7 @@
 
 	const assignedFields = $derived(
 		step.fields
-			.map((fieldId) => moduleFields.find((f) => f.id.toString() === fieldId))
+			.map((fieldId) => moduleFields.find((f) => f.id?.toString() === fieldId))
 			.filter((f) => f !== undefined)
 	);
 

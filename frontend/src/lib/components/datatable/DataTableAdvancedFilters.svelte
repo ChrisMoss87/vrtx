@@ -5,15 +5,8 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Plus, Save, Trash2, Copy } from 'lucide-svelte';
-	import type { TableContext, FilterConfig, ColumnDef } from './types';
+	import type { TableContext, FilterConfig, ColumnDef, FilterGroupData } from './types';
 	import FilterGroup from './FilterGroup.svelte';
-
-	export interface FilterGroupData {
-		id: string;
-		logic: 'AND' | 'OR';
-		conditions: FilterConfig[];
-		groups: FilterGroupData[];
-	}
 
 	interface Props {
 		open?: boolean;

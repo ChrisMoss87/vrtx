@@ -130,7 +130,7 @@ class SLAService
         ];
 
         $activeInstances = BlueprintSlaInstance::where('status', BlueprintSlaInstance::STATUS_ACTIVE)
-            ->with(['sla.escalations'])
+            ->with(['sla.escalations', 'sla.state', 'sla.blueprint'])
             ->get();
 
         foreach ($activeInstances as $instance) {
@@ -344,21 +344,24 @@ class SLAService
         }
 
         if (\Illuminate\Support\Facades\Schema::hasTable('notifications')) {
-            foreach ($userIds as $userId) {
-                \Illuminate\Support\Facades\DB::table('notifications')->insert([
-                    'id' => \Illuminate\Support\Str::uuid()->toString(),
-                    'type' => 'App\\Notifications\\SLAEscalationNotification',
-                    'notifiable_type' => 'App\\Models\\User',
-                    'notifiable_id' => $userId,
-                    'data' => json_encode([
-                        'title' => $config['title'] ?? 'SLA Escalation',
-                        'message' => $config['message'] ?? 'An SLA is approaching or breached',
-                        'context' => $context,
-                    ]),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
+            $now = now();
+            $notificationData = json_encode([
+                'title' => $config['title'] ?? 'SLA Escalation',
+                'message' => $config['message'] ?? 'An SLA is approaching or breached',
+                'context' => $context,
+            ]);
+
+            $notifications = array_map(fn($userId) => [
+                'id' => \Illuminate\Support\Str::uuid()->toString(),
+                'type' => 'App\\Notifications\\SLAEscalationNotification',
+                'notifiable_type' => 'App\\Models\\User',
+                'notifiable_id' => $userId,
+                'data' => $notificationData,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ], $userIds);
+
+            \Illuminate\Support\Facades\DB::table('notifications')->insert($notifications);
 
             return ['sent' => true, 'user_count' => count($userIds)];
         }

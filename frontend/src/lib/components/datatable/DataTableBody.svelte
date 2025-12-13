@@ -126,17 +126,17 @@
 		<Table.Row>
 			<Table.Cell
 				colspan={enableSelection ? columns.length + 1 : columns.length}
-				class="h-48 text-center"
+				class="py-16 text-center"
 			>
 				<div class="flex flex-col items-center justify-center gap-4">
 					{#if hasFiltersOrSearch}
 						<!-- No results due to filters/search -->
-						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-							<SearchX class="h-8 w-8 text-muted-foreground" />
+						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-sky-50 dark:bg-sky-950/30">
+							<SearchX class="h-8 w-8 text-sky-500 dark:text-sky-400" />
 						</div>
-						<div class="space-y-1">
-							<p class="font-medium">No matching records</p>
-							<p class="max-w-md text-sm text-muted-foreground">
+						<div class="space-y-2">
+							<p class="text-lg font-semibold text-slate-900 dark:text-slate-100">No matching records</p>
+							<p class="max-w-md text-sm text-slate-500 dark:text-slate-400">
 								{#if hasSearch && hasFilters}
 									No records match your search and filters.
 								{:else if hasSearch}
@@ -146,25 +146,23 @@
 								{/if}
 							</p>
 						</div>
-						<div class="flex gap-2">
-							<Button variant="outline" size="sm" onclick={handleClearFilters}>
-								<FilterX class="mr-2 h-4 w-4" />
-								Clear {hasSearch && hasFilters ? 'all' : hasSearch ? 'search' : 'filters'}
-							</Button>
-						</div>
+						<Button variant="outline" size="default" onclick={handleClearFilters} class="mt-2">
+							<FilterX class="mr-2 h-4 w-4" />
+							Clear {hasSearch && hasFilters ? 'all' : hasSearch ? 'search' : 'filters'}
+						</Button>
 					{:else}
 						<!-- No records exist yet -->
-						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-							<FileX2 class="h-8 w-8 text-muted-foreground" />
+						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+							<FileX2 class="h-8 w-8 text-slate-400 dark:text-slate-500" />
 						</div>
-						<div class="space-y-1">
-							<p class="font-medium">No records yet</p>
-							<p class="max-w-md text-sm text-muted-foreground">
+						<div class="space-y-2">
+							<p class="text-lg font-semibold text-slate-900 dark:text-slate-100">No records yet</p>
+							<p class="max-w-md text-sm text-slate-500 dark:text-slate-400">
 								Get started by creating your first record in this module.
 							</p>
 						</div>
 						{#if onCreateNew}
-							<Button size="sm" onclick={onCreateNew}>
+							<Button size="default" onclick={onCreateNew} class="mt-2">
 								<Plus class="mr-2 h-4 w-4" />
 								Create first record
 							</Button>

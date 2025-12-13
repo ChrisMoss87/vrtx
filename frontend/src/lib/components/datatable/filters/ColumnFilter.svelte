@@ -46,9 +46,10 @@
 			return column.options;
 		}
 		// Check if options are in the meta.field object (from module fields)
-		if (column.meta?.field?.options && Array.isArray(column.meta.field.options)) {
-			return column.meta.field.options.map((opt: any) => ({
-				label: opt.label || opt.value,
+		const fieldMeta = column.meta?.field;
+		if (fieldMeta && typeof fieldMeta === 'object' && 'options' in fieldMeta && Array.isArray(fieldMeta.options)) {
+			return fieldMeta.options.map((opt: { label?: string; value: string | number | boolean }) => ({
+				label: String(opt.label ?? opt.value),
 				value: opt.value
 			}));
 		}
@@ -166,12 +167,12 @@
 			{:else if filterType === 'date'}
 				<DateFilter
 					field={column.id}
-					value={currentFilter ? { operator: currentFilter.operator, value: currentFilter.value } : undefined}
+					value={currentFilter ? { operator: currentFilter.operator, value: currentFilter.value as string | string[] } : undefined}
 					onApply={(filter) => {
 						if (filter) {
 							handleApply({
 								field: column.id,
-								operator: filter.operator as any,
+								operator: filter.operator as FilterConfig['operator'],
 								value: filter.value
 							});
 						} else {

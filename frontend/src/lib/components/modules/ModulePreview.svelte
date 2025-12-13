@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Monitor, Tablet, Smartphone } from 'lucide-svelte';
 	import DynamicForm from '$lib/components/modules/DynamicForm.svelte';
+	import type { Module as ApiModule } from '$lib/api/modules';
 
 	interface Block {
 		id?: number;
@@ -51,6 +52,9 @@
 		is_system: boolean;
 		settings: Record<string, any>;
 		blocks: Block[];
+		display_order?: number;
+		created_at?: string;
+		updated_at?: string;
 	}
 
 	interface Props {
@@ -136,7 +140,7 @@
 		{:else}
 			<div class="mx-auto transition-all duration-200 {viewportClass}">
 				<DynamicForm
-					module={previewModule}
+					module={previewModule as unknown as ApiModule}
 					onSubmit={handlePreviewSubmit}
 					onCancel={handlePreviewCancel}
 					isSubmitting={false}

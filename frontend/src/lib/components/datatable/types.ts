@@ -5,11 +5,17 @@
  */
 
 import type { Component } from 'svelte';
+import type { RecordData, RecordFieldValue } from '$lib/types/modules';
+
+/**
+ * Base row data type for tables - defaults to RecordData but can be customized
+ */
+export type BaseRowData = RecordData;
 
 /**
  * Column Definition
  */
-export interface ColumnDef<TData = any> {
+export interface ColumnDef<TData extends BaseRowData = BaseRowData> {
 	/** Unique identifier for the column */
 	id: string;
 
@@ -62,13 +68,36 @@ export interface ColumnDef<TData = any> {
 	filterOptions?: FilterOption[];
 
 	/** Format function for cell display */
-	format?: (value: any, row: TData) => string;
+	format?: (value: RecordFieldValue, row: TData) => string;
 
 	/** Cell class name function */
-	cellClass?: (value: any, row: TData) => string;
+	cellClass?: (value: RecordFieldValue, row: TData) => string;
 
 	/** Column-specific metadata */
-	meta?: Record<string, any>;
+	meta?: ColumnMetadata;
+}
+
+/**
+ * Column metadata for additional column configuration
+ */
+export interface ColumnMetadata {
+	/** Related module for lookup columns */
+	relatedModule?: string;
+	/** Display field for lookup columns */
+	displayField?: string;
+	/** Currency code for currency columns */
+	currencyCode?: string;
+	/** Whether this is a system field */
+	isSystem?: boolean;
+	/** Custom render mode */
+	renderMode?: 'default' | 'inline' | 'badge' | 'avatar';
+	/** Field definition from module (includes options for select/multiselect) */
+	field?: {
+		options?: Array<{ label?: string; value: string | number | boolean }>;
+		[key: string]: unknown;
+	};
+	/** Any additional metadata */
+	[key: string]: unknown;
 }
 
 /**
@@ -94,6 +123,7 @@ export type ColumnType =
 	| 'phone'
 	| 'url'
 	| 'lookup'
+	| 'user'
 	| 'tags'
 	| 'actions';
 
@@ -142,12 +172,27 @@ export type FilterOperator =
 	| 'after';
 
 /**
+ * Filter value type - supports primitive values, arrays, and range objects
+ */
+export type DataTableFilterValue =
+	| string
+	| number
+	| boolean
+	| null
+	| string[]
+	| number[]
+	| DateRangeValue
+	| NumberRangeValue
+	| { from: string; to: string }
+	| { from: number; to: number };
+
+/**
  * Filter Configuration
  */
 export interface FilterConfig {
 	field: string;
 	operator: FilterOperator;
-	value: any;
+	value: DataTableFilterValue;
 }
 
 /**
@@ -155,7 +200,7 @@ export interface FilterConfig {
  */
 export interface FilterOption {
 	label: string;
-	value: any;
+	value: string | number | boolean;
 	count?: number;
 }
 
@@ -215,7 +260,7 @@ export interface TableViewConfig {
 /**
  * Table State
  */
-export interface TableState<TData = any> {
+export interface TableState<TData extends BaseRowData = BaseRowData> {
 	data: TData[];
 	loading: boolean;
 	error: string | null;
@@ -228,13 +273,13 @@ export interface TableState<TData = any> {
 	columnWidths: Record<string, number>;
 	columnPinning: Record<string, 'left' | 'right' | false>;
 	rowSelection: RowSelection;
-	currentView: TableViewConfig | null;
+	currentView: TableViewConfig | ModuleView | null;
 }
 
 /**
  * Data Table Props
  */
-export interface DataTableProps<TData = any> {
+export interface DataTableProps<TData extends BaseRowData = BaseRowData> {
 	/** Module API name to fetch data from */
 	moduleApiName: string;
 
@@ -305,7 +350,7 @@ export interface DataTableRequest {
 /**
  * API Response Format
  */
-export interface DataTableResponse<TData = any> {
+export interface DataTableResponse<TData extends BaseRowData = BaseRowData> {
 	data: TData[];
 	meta: {
 		current_page: number;
@@ -329,17 +374,10 @@ export interface BulkAction {
 		title: string;
 		description: string;
 	};
-	handler: (rows: any[]) => void | Promise<void>;
+	handler: (rows: BaseRowData[]) => void | Promise<void>;
 }
 
-/**
- * Filter Option
- */
-export interface FilterOption {
-	label: string;
-	value: any;
-	count?: number;
-}
+// Note: FilterOption is defined above (lines 191-198) - no duplicate needed here
 
 /**
  * Date Range Filter Value
@@ -360,10 +398,10 @@ export interface NumberRangeValue {
 /**
  * Column Context
  */
-export interface ColumnContext<TData = any> {
+export interface ColumnContext<TData extends BaseRowData = BaseRowData> {
 	column: ColumnDef<TData>;
 	row: TData;
-	value: any;
+	value: RecordFieldValue;
 	index: number;
 }
 
@@ -402,13 +440,14 @@ export interface ModuleView {
 /**
  * Table Context (for Svelte context API)
  */
-export interface TableContext<TData = any> {
+export interface TableContext<TData extends BaseRowData = BaseRowData> {
 	state: TableState<TData>;
 	columns: ColumnDef<TData>[];
 	updateSort: (field: string, shiftKey?: boolean) => void;
 	updateFilter: (filter: FilterConfig) => void;
 	removeFilter: (field: string) => void;
 	clearFilters: () => void;
+	setFilters: (filters: FilterConfig[]) => void;
 	updateGlobalFilter: (value: string) => void;
 	goToPage: (page: number) => void;
 	setPageSize: (size: number) => void;
@@ -420,7 +459,7 @@ export interface TableContext<TData = any> {
 	setColumnOrder: (order: ColumnOrder) => void;
 	resizeColumn: (columnId: string, width: number) => void;
 	pinColumn: (columnId: string, position: 'left' | 'right' | false) => void;
-	loadView: (view: TableViewConfig | ModuleView | any) => void;
+	loadView: (view: TableViewConfig | ModuleView) => void;
 	saveView: (view: CreateViewRequest) => Promise<ModuleView | null>;
 	deleteView: (viewId: number) => Promise<boolean>;
 	updateCurrentView: () => Promise<ModuleView | null>;

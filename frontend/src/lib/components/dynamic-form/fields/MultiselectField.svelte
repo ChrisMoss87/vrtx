@@ -13,7 +13,7 @@
 		disabled?: boolean;
 		placeholder?: string;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		options?: FieldOption[];
 		onchange: (value: string[]) => void;
 	}

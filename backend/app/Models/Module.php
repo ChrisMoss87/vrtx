@@ -97,10 +97,64 @@ class Module extends Model
     }
 
     /**
+     * Scope a query to filter by API name.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param string $apiName
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeByApiName($query, string $apiName)
+    {
+        return $query->where('api_name', $apiName);
+    }
+
+    /**
      * Find a module by its API name.
      */
     public static function findByApiName(string $apiName): ?self
     {
-        return static::where('api_name', $apiName)->first();
+        return static::byApiName($apiName)->first();
+    }
+
+    /**
+     * Find a module by its API name or throw 404.
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException
+     */
+    public static function findByApiNameOrFail(string $apiName): self
+    {
+        return static::byApiName($apiName)->firstOrFail();
+    }
+
+    /**
+     * Get module with all relationships needed for display.
+     * Uses efficient eager loading.
+     */
+    public static function findByApiNameWithDetails(string $apiName): ?self
+    {
+        return static::byApiName($apiName)
+            ->with([
+                'blocks' => fn ($q) => $q->orderBy('display_order'),
+                'blocks.fields' => fn ($q) => $q->orderBy('display_order'),
+                'blocks.fields.options' => fn ($q) => $q->orderBy('display_order'),
+            ])
+            ->first();
+    }
+
+    /**
+     * Get module with all relationships needed for display or throw 404.
+     * Uses efficient eager loading.
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException
+     */
+    public static function findByApiNameWithDetailsOrFail(string $apiName): self
+    {
+        return static::byApiName($apiName)
+            ->with([
+                'blocks' => fn ($q) => $q->orderBy('display_order'),
+                'blocks.fields' => fn ($q) => $q->orderBy('display_order'),
+                'blocks.fields.options' => fn ($q) => $q->orderBy('display_order'),
+            ])
+            ->firstOrFail();
     }
 }

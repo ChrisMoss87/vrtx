@@ -390,11 +390,12 @@ class EmailMessageController extends Controller
 
         if (!$emailMessage->thread_id) {
             return response()->json([
-                'data' => [$emailMessage],
+                'data' => [$emailMessage->load('account:id,name,email_address')],
             ]);
         }
 
         $thread = EmailMessage::where('thread_id', $emailMessage->thread_id)
+            ->with(['account:id,name,email_address'])
             ->orderBy('received_at')
             ->orderBy('sent_at')
             ->orderBy('created_at')

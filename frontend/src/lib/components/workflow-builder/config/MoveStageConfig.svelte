@@ -13,45 +13,26 @@
 	let { config = {}, moduleFields = [], onConfigChange }: Props = $props();
 
 	// Local state
-	let pipelineId = $state<number | null>((config.pipeline_id as number) || null);
-	let stageId = $state<number | null>((config.stage_id as number) || null);
+	let fieldApiName = $state<string | null>((config.field_api_name as string) || null);
+	let targetValue = $state<string | null>((config.target_value as string) || null);
 	let moveType = $state<string>((config.move_type as string) || 'specific');
 
 	function emitChange() {
 		onConfigChange?.({
-			pipeline_id: pipelineId,
-			stage_id: stageId,
+			field_api_name: fieldApiName,
+			target_value: targetValue,
 			move_type: moveType
 		});
 	}
 
-	// Mock pipelines/stages - in real app would fetch from API
-	const mockPipelines = [
-		{
-			id: 1,
-			name: 'Sales Pipeline',
-			stages: [
-				{ id: 1, name: 'Lead' },
-				{ id: 2, name: 'Qualified' },
-				{ id: 3, name: 'Proposal' },
-				{ id: 4, name: 'Negotiation' },
-				{ id: 5, name: 'Closed Won' },
-				{ id: 6, name: 'Closed Lost' }
-			]
-		},
-		{
-			id: 2,
-			name: 'Support Pipeline',
-			stages: [
-				{ id: 7, name: 'New' },
-				{ id: 8, name: 'In Progress' },
-				{ id: 9, name: 'Resolved' },
-				{ id: 10, name: 'Closed' }
-			]
-		}
-	];
+	// Get fields that can be used for stage movement (select, radio with options)
+	const stageFields = $derived(
+		moduleFields.filter(
+			(f) => (f.type === 'select' || f.type === 'radio') && f.options && f.options.length > 0
+		)
+	);
 
-	const selectedPipeline = $derived(mockPipelines.find((p) => p.id === pipelineId));
+	const selectedField = $derived(stageFields.find((f) => f.api_name === fieldApiName));
 </script>
 
 <div class="space-y-4">
@@ -72,68 +53,72 @@
 		>
 			<Select.Trigger>
 				{moveType === 'specific'
-					? 'To Specific Stage'
+					? 'To Specific Value'
 					: moveType === 'next'
-						? 'To Next Stage'
+						? 'To Next Option'
 						: moveType === 'previous'
-							? 'To Previous Stage'
+							? 'To Previous Option'
 							: 'Select move type'}
 			</Select.Trigger>
 			<Select.Content>
-				<Select.Item value="specific">To Specific Stage</Select.Item>
-				<Select.Item value="next">To Next Stage</Select.Item>
-				<Select.Item value="previous">To Previous Stage</Select.Item>
+				<Select.Item value="specific">To Specific Value</Select.Item>
+				<Select.Item value="next">To Next Option</Select.Item>
+				<Select.Item value="previous">To Previous Option</Select.Item>
 			</Select.Content>
 		</Select.Root>
 	</div>
 
-	{#if moveType === 'specific'}
-		<!-- Pipeline Selection -->
-		<div class="space-y-2">
-			<Label>Pipeline</Label>
+	<!-- Field Selection -->
+	<div class="space-y-2">
+		<Label>Stage Field</Label>
+		{#if stageFields.length === 0}
+			<p class="text-sm text-muted-foreground">
+				No select or radio fields available in this module.
+			</p>
+		{:else}
 			<Select.Root
 				type="single"
-				value={pipelineId ? String(pipelineId) : ''}
+				value={fieldApiName || ''}
 				onValueChange={(v) => {
-					pipelineId = v ? parseInt(v) : null;
-					stageId = null; // Reset stage when pipeline changes
+					fieldApiName = v || null;
+					targetValue = null; // Reset value when field changes
 					emitChange();
 				}}
 			>
 				<Select.Trigger>
-					{selectedPipeline?.name || 'Select pipeline'}
+					{selectedField?.label || 'Select field'}
 				</Select.Trigger>
 				<Select.Content>
-					{#each mockPipelines as pipeline}
-						<Select.Item value={String(pipeline.id)}>{pipeline.name}</Select.Item>
+					{#each stageFields as field}
+						<Select.Item value={field.api_name}>{field.label}</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
+		{/if}
+	</div>
+
+	{#if moveType === 'specific' && selectedField}
+		<!-- Target Value Selection -->
+		<div class="space-y-2">
+			<Label>Target Value</Label>
+			<Select.Root
+				type="single"
+				value={targetValue || ''}
+				onValueChange={(v) => {
+					targetValue = v || null;
+					emitChange();
+				}}
+			>
+				<Select.Trigger>
+					{selectedField.options?.find((o) => o.value === targetValue)?.label || 'Select value'}
+				</Select.Trigger>
+				<Select.Content>
+					{#each selectedField.options || [] as option}
+						<Select.Item value={option.value}>{option.label}</Select.Item>
 					{/each}
 				</Select.Content>
 			</Select.Root>
 		</div>
-
-		<!-- Stage Selection -->
-		{#if selectedPipeline}
-			<div class="space-y-2">
-				<Label>Target Stage</Label>
-				<Select.Root
-					type="single"
-					value={stageId ? String(stageId) : ''}
-					onValueChange={(v) => {
-						stageId = v ? parseInt(v) : null;
-						emitChange();
-					}}
-				>
-					<Select.Trigger>
-						{selectedPipeline.stages.find((s) => s.id === stageId)?.name || 'Select stage'}
-					</Select.Trigger>
-					<Select.Content>
-						{#each selectedPipeline.stages as stage}
-							<Select.Item value={String(stage.id)}>{stage.name}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
-			</div>
-		{/if}
 	{/if}
 
 	<!-- Info based on move type -->
@@ -141,24 +126,24 @@
 		<div class="flex items-start gap-2 rounded-lg bg-muted/50 p-3">
 			<Info class="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
 			<p class="text-xs text-muted-foreground">
-				The record will be moved to the next stage in its current pipeline.
-				If the record is already in the last stage, no action will be taken.
+				The record will be moved to the next option in the field's option list.
+				If the record is already at the last option, no action will be taken.
 			</p>
 		</div>
 	{:else if moveType === 'previous'}
 		<div class="flex items-start gap-2 rounded-lg bg-muted/50 p-3">
 			<Info class="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
 			<p class="text-xs text-muted-foreground">
-				The record will be moved to the previous stage in its current pipeline.
-				If the record is already in the first stage, no action will be taken.
+				The record will be moved to the previous option in the field's option list.
+				If the record is already at the first option, no action will be taken.
 			</p>
 		</div>
 	{:else}
 		<div class="flex items-start gap-2 rounded-lg bg-muted/50 p-3">
 			<Info class="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
 			<p class="text-xs text-muted-foreground">
-				Select a pipeline and stage to move the record to.
-				The record must be in a module that supports pipelines.
+				Select a field and target value to update the record.
+				The field must be a select or radio type with defined options.
 			</p>
 		</div>
 	{/if}

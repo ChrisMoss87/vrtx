@@ -30,16 +30,9 @@ class ModuleController extends Controller
         try {
             $modules = $this->moduleRepository->all();
 
-            return response()->json([
-                'success' => true,
-                'modules' => $modules->toArray(),
-            ]);
+            return $this->listResponse($modules->toArray(), 'modules');
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch modules',
-                'error' => $e->getMessage(),
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->handleException($e, 'Failed to fetch modules', 'ModuleController@index');
         }
     }
 
@@ -51,16 +44,9 @@ class ModuleController extends Controller
         try {
             $modules = $this->moduleRepository->all(activeOnly: true);
 
-            return response()->json([
-                'success' => true,
-                'modules' => $modules->toArray(),
-            ]);
+            return $this->listResponse($modules->toArray(), 'modules');
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch active modules',
-                'error' => $e->getMessage(),
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->handleException($e, 'Failed to fetch active modules', 'ModuleController@active');
         }
     }
 
@@ -258,6 +244,7 @@ class ModuleController extends Controller
                 'blocks.*.fields.*.is_searchable' => 'nullable|boolean',
                 'blocks.*.fields.*.is_filterable' => 'nullable|boolean',
                 'blocks.*.fields.*.is_sortable' => 'nullable|boolean',
+                'blocks.*.fields.*.is_mass_updatable' => 'nullable|boolean',
                 'blocks.*.fields.*.description' => 'nullable|string',
                 'blocks.*.fields.*.help_text' => 'nullable|string',
                 'blocks.*.fields.*.placeholder' => 'nullable|string',
@@ -437,6 +424,7 @@ class ModuleController extends Controller
                 'is_searchable' => $fieldData['is_searchable'] ?? true,
                 'is_filterable' => $fieldData['is_filterable'] ?? true,
                 'is_sortable' => $fieldData['is_sortable'] ?? true,
+                'is_mass_updatable' => $fieldData['is_mass_updatable'] ?? true,
                 'default_value' => $fieldData['default_value'] ?? null,
                 'display_order' => $fieldData['display_order'],
                 'width' => $fieldData['width'] ?? 100,

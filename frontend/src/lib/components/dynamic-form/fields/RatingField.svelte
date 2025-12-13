@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Star, Heart, Circle } from 'lucide-svelte';
-	import type { FieldSettings } from '$lib/types/modules';
+	import type { FieldSettings } from '$lib/api/modules';
 	import { cn } from '$lib/utils';
 
 	interface Props {
@@ -9,7 +9,7 @@
 		disabled?: boolean;
 		placeholder?: string;
 		required?: boolean;
-		settings?: Partial<FieldSettings>;
+		settings?: FieldSettings;
 		onchange: (value: number | null) => void;
 	}
 

@@ -22,13 +22,23 @@
 
 	let { field, initialValue, onApply, onClose }: Props = $props();
 
-	// Parse initial dates if available
-	let fromDate = $state<DateValue | undefined>(
-		initialValue?.value?.from ? parseDate(initialValue.value.from) : undefined
-	);
-	let toDate = $state<DateValue | undefined>(
-		initialValue?.value?.to ? parseDate(initialValue.value.to) : undefined
-	);
+	// Parse initial dates if available - handle object with from/to properties
+	function getFromValue(): DateValue | undefined {
+		if (initialValue?.value && typeof initialValue.value === 'object' && !Array.isArray(initialValue.value) && 'from' in initialValue.value) {
+			const val = initialValue.value as { from?: string | number; to?: string | number };
+			return val.from ? parseDate(String(val.from)) : undefined;
+		}
+		return undefined;
+	}
+	function getToValue(): DateValue | undefined {
+		if (initialValue?.value && typeof initialValue.value === 'object' && !Array.isArray(initialValue.value) && 'to' in initialValue.value) {
+			const val = initialValue.value as { from?: string | number; to?: string | number };
+			return val.to ? parseDate(String(val.to)) : undefined;
+		}
+		return undefined;
+	}
+	let fromDate = $state<DateValue | undefined>(getFromValue());
+	let toDate = $state<DateValue | undefined>(getToValue());
 
 	const presets = [
 		{

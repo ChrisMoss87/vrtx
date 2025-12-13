@@ -233,6 +233,7 @@
 					<div class="space-y-2">
 						<Label>Formula Type</Label>
 						<Select.Root
+							type="single"
 							value={value?.formula_type || 'calculation'}
 							onValueChange={(val) => {
 								if (val) updateFormulaType(val);
@@ -255,6 +256,7 @@
 					<div class="space-y-2">
 						<Label>Return Type</Label>
 						<Select.Root
+							type="single"
 							value={value?.return_type || 'number'}
 							onValueChange={(val) => {
 								if (val) updateReturnType(val);
@@ -281,7 +283,7 @@
 					<Textarea
 						bind:value={value.formula}
 						oninput={(e) => updateFormula(e.currentTarget.value)}
-						placeholder="Enter your formula, e.g., {unit_price} * {quantity}"
+						placeholder={"Enter your formula, e.g., {unit_price} * {quantity}"}
 						class="min-h-[120px] font-mono text-sm"
 					/>
 					<p class="flex items-center gap-1 text-xs text-muted-foreground">

@@ -28,6 +28,7 @@ class WorkflowStep extends Model
     public const ACTION_UPDATE_FIELD = 'update_field';
     public const ACTION_CREATE_TASK = 'create_task';
     public const ACTION_MOVE_STAGE = 'move_stage';
+    public const ACTION_UPDATE_RELATED = 'update_related_record';
 
     protected $table = 'workflow_steps';
 
@@ -154,6 +155,12 @@ class WorkflowStep extends Model
                 'icon' => 'arrow-right',
                 'description' => 'Move record to a different pipeline stage',
                 'category' => 'pipeline',
+            ],
+            self::ACTION_UPDATE_RELATED => [
+                'label' => 'Update Related Record',
+                'icon' => 'link',
+                'description' => 'Update fields on related parent or child records',
+                'category' => 'records',
             ],
         ];
     }

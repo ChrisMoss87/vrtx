@@ -76,7 +76,7 @@
 						{#each blockFields as field (field.id)}
 							<div
 								class="col-span-1"
-								class:md:col-span-2={field.width === 100 && columns > 1}
+								class:md:col-span-2={field.width === 100 && typeof columns === 'number' && columns > 1}
 								class:md:col-span-1={field.width !== 100}
 							>
 								<FieldRenderer
