@@ -25,14 +25,14 @@
   }
 
   // Calculate section engagement
-  $: sectionEngagement = views.reduce((acc, view) => {
+  const sectionEngagement = $derived(views.reduce((acc, view) => {
     if (view.sections_viewed) {
       for (const [sectionId, time] of Object.entries(view.sections_viewed)) {
         acc[sectionId] = (acc[sectionId] || 0) + (time as number);
       }
     }
     return acc;
-  }, {} as Record<string, number>);
+  }, {} as Record<string, number>));
 </script>
 
 <div class="space-y-6">

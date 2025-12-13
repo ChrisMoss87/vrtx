@@ -155,7 +155,7 @@
 							Rebuild
 						{/if}
 					</Button>
-					<Button variant="outline" onclick={() => goto(`/lookalike-audiences/${audience.id}/edit`)}>
+					<Button variant="outline" onclick={() => goto(`/lookalike-audiences/${audience!.id}/edit`)}>
 						<Edit class="mr-2 h-4 w-4" />
 						Edit
 					</Button>

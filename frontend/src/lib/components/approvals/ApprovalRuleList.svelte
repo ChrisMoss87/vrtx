@@ -19,7 +19,7 @@
     toggle: number;
   }>();
 
-  let search = '';
+  let search = $state('');
 
   const entityLabels: Record<string, string> = {
     quote: 'Quote',
@@ -30,11 +30,11 @@
     custom: 'Custom',
   };
 
-  $: filteredRules = rules.filter(r => {
+  const filteredRules = $derived(rules.filter(r => {
     return !search ||
       r.name.toLowerCase().includes(search.toLowerCase()) ||
       r.description?.toLowerCase().includes(search.toLowerCase());
-  });
+  }));
 
   function formatConditions(rule: ApprovalRule): string {
     if (!rule.conditions || rule.conditions.length === 0) {
@@ -51,7 +51,7 @@
       placeholder="Search rules..."
       class="w-64"
     />
-    <Button on:click={() => dispatch('create')}>
+    <Button onclick={() => dispatch('create')}>
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
@@ -71,7 +71,7 @@
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         </svg>
         <p class="text-muted-foreground">No approval rules configured</p>
-        <Button variant="outline" class="mt-4" on:click={() => dispatch('create')}>
+        <Button variant="outline" class="mt-4" onclick={() => dispatch('create')}>
           Create your first rule
         </Button>
       </Card.Content>
@@ -129,8 +129,8 @@
               </Table.Cell>
               <Table.Cell>
                 <DropdownMenu.Root>
-                  <DropdownMenu.Trigger asChild let:builder>
-                    <Button variant="ghost" size="sm" builders={[builder]}>
+                  <DropdownMenu.Trigger>
+                    <Button variant="ghost" size="sm">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="1" />
                         <circle cx="12" cy="5" r="1" />
@@ -139,17 +139,17 @@
                     </Button>
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Content align="end">
-                    <DropdownMenu.Item on:click={() => dispatch('edit', rule.id)}>
+                    <DropdownMenu.Item onclick={() => dispatch('edit', rule.id)}>
                       Edit
                     </DropdownMenu.Item>
-                    <DropdownMenu.Item on:click={() => dispatch('duplicate', rule.id)}>
+                    <DropdownMenu.Item onclick={() => dispatch('duplicate', rule.id)}>
                       Duplicate
                     </DropdownMenu.Item>
-                    <DropdownMenu.Item on:click={() => dispatch('toggle', rule.id)}>
+                    <DropdownMenu.Item onclick={() => dispatch('toggle', rule.id)}>
                       {rule.is_active ? 'Deactivate' : 'Activate'}
                     </DropdownMenu.Item>
                     <DropdownMenu.Separator />
-                    <DropdownMenu.Item class="text-destructive" on:click={() => dispatch('delete', rule.id)}>
+                    <DropdownMenu.Item class="text-destructive" onclick={() => dispatch('delete', rule.id)}>
                       Delete
                     </DropdownMenu.Item>
                   </DropdownMenu.Content>

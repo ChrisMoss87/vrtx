@@ -30,23 +30,34 @@
   }
 
   function removeSigner(index: number) {
-    signers = signers.filter((_, i) => i !== index);
+    signers = signers.filter((_: Partial<SignatureSigner>, i: number) => i !== index);
     // Reorder remaining signers
-    signers = signers.map((s, i) => ({ ...s, order: i + 1 }));
+    signers = signers.map((s: Partial<SignatureSigner>, i: number) => ({ ...s, order: i + 1 }));
   }
 
   function moveUp(index: number) {
     if (index === 0) return;
     const newSigners = [...signers];
     [newSigners[index - 1], newSigners[index]] = [newSigners[index], newSigners[index - 1]];
-    signers = newSigners.map((s, i) => ({ ...s, order: i + 1 }));
+    signers = newSigners.map((s: Partial<SignatureSigner>, i: number) => ({ ...s, order: i + 1 }));
   }
 
   function moveDown(index: number) {
     if (index === signers.length - 1) return;
     const newSigners = [...signers];
     [newSigners[index], newSigners[index + 1]] = [newSigners[index + 1], newSigners[index]];
-    signers = newSigners.map((s, i) => ({ ...s, order: i + 1 }));
+    signers = newSigners.map((s: Partial<SignatureSigner>, i: number) => ({ ...s, order: i + 1 }));
+  }
+
+  function updateSignerRole(index: number, role: string) {
+    signers[index].role = role as 'signer' | 'approver' | 'viewer';
+    signers = signers;
+  }
+
+  function getRoleLabel(role: string | undefined): string {
+    if (role === 'approver') return 'Approver';
+    if (role === 'viewer') return 'Viewer (CC)';
+    return 'Signer';
   }
 </script>
 
@@ -56,7 +67,7 @@
       <h4 class="font-medium">Signers</h4>
       <p class="text-sm text-muted-foreground">Add people who need to sign this document</p>
     </div>
-    <Button variant="outline" on:click={addSigner}>
+    <Button variant="outline" onclick={addSigner}>
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
@@ -75,7 +86,7 @@
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
         <p class="text-muted-foreground">No signers added yet</p>
-        <Button variant="outline" class="mt-4" on:click={addSigner}>
+        <Button variant="outline" class="mt-4" onclick={addSigner}>
           Add your first signer
         </Button>
       </Card.Content>
@@ -94,7 +105,7 @@
                   type="button"
                   class="p-0.5 hover:bg-muted rounded disabled:opacity-30"
                   disabled={index === 0}
-                  on:click={() => moveUp(index)}
+                  onclick={() => moveUp(index)}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="18 15 12 9 6 15" />
@@ -104,7 +115,7 @@
                   type="button"
                   class="p-0.5 hover:bg-muted rounded disabled:opacity-30"
                   disabled={index === signers.length - 1}
-                  on:click={() => moveDown(index)}
+                  onclick={() => moveDown(index)}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9" />
@@ -124,23 +135,20 @@
               </div>
               <div class="space-y-1">
                 <Label class="text-xs text-muted-foreground">Role</Label>
-                <Select.Root
-                  selected={{ value: signer.role || 'signer', label: signer.role === 'approver' ? 'Approver' : signer.role === 'viewer' ? 'Viewer' : 'Signer' }}
-                  onSelectedChange={(v) => signer.role = v?.value || 'signer'}
-                >
+                <Select.Root type="single" value={signer.role || 'signer'} onValueChange={(v) => updateSignerRole(index, v)}>
                   <Select.Trigger>
-                    <Select.Value placeholder="Role" />
+                    {getRoleLabel(signer.role)}
                   </Select.Trigger>
                   <Select.Content>
-                    <Select.Item value="signer">Signer</Select.Item>
-                    <Select.Item value="approver">Approver</Select.Item>
-                    <Select.Item value="viewer">Viewer (CC)</Select.Item>
+                    <Select.Item value="signer" label="Signer">Signer</Select.Item>
+                    <Select.Item value="approver" label="Approver">Approver</Select.Item>
+                    <Select.Item value="viewer" label="Viewer (CC)">Viewer (CC)</Select.Item>
                   </Select.Content>
                 </Select.Root>
               </div>
             </div>
 
-            <Button variant="ghost" size="sm" on:click={() => removeSigner(index)}>
+            <Button variant="ghost" size="sm" onclick={() => removeSigner(index)}>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-destructive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />

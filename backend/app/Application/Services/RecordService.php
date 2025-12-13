@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Application\Services;
 
+use App\Application\Services\Workflow\WorkflowApplicationService;
 use App\Domain\Modules\Entities\ModuleRecord;
 use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
 use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
-use App\Models\Workflow;
-use App\Services\Workflow\WorkflowEngine;
+use App\Domain\Workflow\Services\ConditionEvaluationService;
 use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 final class RecordService
@@ -18,7 +19,8 @@ final class RecordService
     public function __construct(
         private readonly ModuleRecordRepositoryInterface $recordRepository,
         private readonly ModuleRepositoryInterface $moduleRepository,
-        private readonly ?WorkflowEngine $workflowEngine = null,
+        private readonly ?WorkflowApplicationService $workflowService = null,
+        private readonly ?ConditionEvaluationService $conditionEvaluator = null,
     ) {}
 
     /**
@@ -56,7 +58,7 @@ final class RecordService
             DB::commit();
 
             // Trigger workflows for record creation (after commit)
-            $this->triggerWorkflows(Workflow::TRIGGER_RECORD_CREATED, $savedRecord, null, $createdBy);
+            $this->triggerWorkflows('record_created', $savedRecord, null, $createdBy);
 
             return $savedRecord;
         } catch (Exception $e) {
@@ -107,7 +109,7 @@ final class RecordService
             DB::commit();
 
             // Trigger workflows for record update (after commit)
-            $this->triggerWorkflows(Workflow::TRIGGER_RECORD_UPDATED, $updatedRecord, $oldData, $updatedBy);
+            $this->triggerWorkflows('record_updated', $updatedRecord, $oldData, $updatedBy);
 
             // Also trigger field change detection
             $this->triggerFieldChangeWorkflows($updatedRecord, $oldData, $updatedBy);
@@ -148,7 +150,6 @@ final class RecordService
             DB::commit();
 
             // Trigger workflows for record deletion (after commit)
-            // Note: We pass the old data since the record is now deleted
             $this->triggerDeleteWorkflows($moduleId, $recordId, $recordData, $deletedBy);
 
             return $success;
@@ -312,7 +313,7 @@ final class RecordService
     }
 
     /**
-     * Trigger workflows for a record event.
+     * Trigger workflows for a record event using DDD services.
      */
     protected function triggerWorkflows(
         string $eventType,
@@ -320,15 +321,44 @@ final class RecordService
         ?array $oldData = null,
         ?int $userId = null
     ): void {
-        if (!$this->workflowEngine) {
+        if (!$this->workflowService) {
             return;
         }
 
         try {
-            $this->workflowEngine->triggerForDomainRecord($eventType, $record, $oldData, $userId);
+            // Find workflows that should trigger
+            $triggeredWorkflows = $this->workflowService->findTriggeredWorkflows(
+                moduleId: $record->moduleId(),
+                eventType: $eventType,
+                recordData: $record->data(),
+                oldData: $oldData,
+                isCreate: $eventType === 'record_created',
+            );
+
+            // Build context for workflow execution
+            $context = $this->buildWorkflowContext($record, $oldData, $userId);
+
+            foreach ($triggeredWorkflows as $workflow) {
+                // Create execution which will dispatch the job
+                $this->workflowService->createExecution(
+                    workflowId: $workflow->getId(),
+                    triggerType: $eventType,
+                    recordId: $record->id(),
+                    recordType: 'ModuleRecord',
+                    contextData: $context,
+                    triggeredByUserId: $userId,
+                    dispatchJob: true,
+                    delaySeconds: $workflow->delaySeconds(),
+                );
+
+                // Check stop on first match
+                if ($workflow->stopOnFirstMatch()) {
+                    break;
+                }
+            }
         } catch (Exception $e) {
             // Log but don't throw - workflow failures shouldn't break the main operation
-            \Illuminate\Support\Facades\Log::error('Workflow trigger failed', [
+            Log::error('Workflow trigger failed', [
                 'event_type' => $eventType,
                 'record_id' => $record->id(),
                 'module_id' => $record->moduleId(),
@@ -345,15 +375,41 @@ final class RecordService
         array $oldData,
         ?int $userId = null
     ): void {
-        if (!$this->workflowEngine) {
+        if (!$this->workflowService) {
             return;
         }
 
         try {
-            $this->workflowEngine->triggerForFieldChanges($record, $oldData, $userId);
+            // Find field change workflows
+            $triggeredWorkflows = $this->workflowService->findTriggeredWorkflows(
+                moduleId: $record->moduleId(),
+                eventType: 'field_changed',
+                recordData: $record->data(),
+                oldData: $oldData,
+                isCreate: false,
+            );
+
+            // Build context with change information
+            $context = $this->buildWorkflowContext($record, $oldData, $userId);
+
+            foreach ($triggeredWorkflows as $workflow) {
+                $this->workflowService->createExecution(
+                    workflowId: $workflow->getId(),
+                    triggerType: 'field_changed',
+                    recordId: $record->id(),
+                    recordType: 'ModuleRecord',
+                    contextData: $context,
+                    triggeredByUserId: $userId,
+                    dispatchJob: true,
+                    delaySeconds: $workflow->delaySeconds(),
+                );
+
+                if ($workflow->stopOnFirstMatch()) {
+                    break;
+                }
+            }
         } catch (Exception $e) {
-            // Log but don't throw - workflow failures shouldn't break the main operation
-            \Illuminate\Support\Facades\Log::error('Field change workflow trigger failed', [
+            Log::error('Field change workflow trigger failed', [
                 'record_id' => $record->id(),
                 'module_id' => $record->moduleId(),
                 'error' => $e->getMessage(),
@@ -370,69 +426,118 @@ final class RecordService
         array $recordData,
         ?int $userId = null
     ): void {
-        if (!$this->workflowEngine) {
+        if (!$this->workflowService) {
             return;
         }
 
         try {
-            // Find and execute delete workflows
-            $workflows = Workflow::active()
-                ->forModule($moduleId)
-                ->forTrigger(Workflow::TRIGGER_RECORD_DELETED)
-                ->orderBy('priority', 'desc')
-                ->get();
+            // Build context for deleted record
+            $context = [
+                'record' => array_merge(['id' => $recordId, 'module_id' => $moduleId], $recordData),
+                'record_id' => $recordId,
+                'module_id' => $moduleId,
+                'old_data' => $recordData,
+                'changes' => [],
+                'changed_fields' => [],
+                'user_id' => $userId,
+                'current_user' => $userId,
+                'timestamp' => now()->toISOString(),
+                'now' => [
+                    'date' => now()->toDateString(),
+                    'time' => now()->toTimeString(),
+                    'datetime' => now()->toDateTimeString(),
+                    'timestamp' => now()->timestamp,
+                ],
+                'is_deleted' => true,
+                'step_outputs' => [],
+            ];
 
-            foreach ($workflows as $workflow) {
-                // Check rate limiting
-                if (!$workflow->canExecuteToday()) {
-                    continue;
+            // Find delete workflows (using dummy record data since record is deleted)
+            $triggeredWorkflows = $this->workflowService->findTriggeredWorkflows(
+                moduleId: $moduleId,
+                eventType: 'record_deleted',
+                recordData: $recordData,
+                oldData: null,
+                isCreate: false,
+            );
+
+            foreach ($triggeredWorkflows as $workflow) {
+                // Check conditions using the domain service
+                if ($this->conditionEvaluator) {
+                    $conditions = $workflow->conditions();
+                    if (!empty($conditions) && !$this->conditionEvaluator->evaluate($conditions, $context)) {
+                        continue;
+                    }
                 }
 
-                // Build minimal context for deleted record
-                $context = [
-                    'record' => array_merge(['id' => $recordId, 'module_id' => $moduleId], $recordData),
-                    'record_id' => $recordId,
-                    'module_id' => $moduleId,
-                    'old_data' => $recordData,
-                    'user_id' => $userId,
-                    'current_user' => $userId,
-                    'timestamp' => now()->toISOString(),
-                    'is_deleted' => true,
-                ];
+                $this->workflowService->createExecution(
+                    workflowId: $workflow->getId(),
+                    triggerType: 'record_deleted',
+                    recordId: $recordId,
+                    recordType: 'ModuleRecord',
+                    contextData: $context,
+                    triggeredByUserId: $userId,
+                    dispatchJob: true,
+                    delaySeconds: $workflow->delaySeconds(),
+                );
 
-                // Check workflow conditions
-                $conditionEvaluator = app(\App\Services\Workflow\ConditionEvaluator::class);
-                if (!$conditionEvaluator->evaluate($workflow->conditions ?? [], $context)) {
-                    continue;
-                }
-
-                // Create and execute workflow
-                $execution = \App\Models\WorkflowExecution::create([
-                    'workflow_id' => $workflow->id,
-                    'trigger_type' => Workflow::TRIGGER_RECORD_DELETED,
-                    'trigger_record_id' => $recordId,
-                    'trigger_record_type' => 'ModuleRecord',
-                    'status' => \App\Models\WorkflowExecution::STATUS_PENDING,
-                    'context_data' => $context,
-                    'triggered_by' => $userId,
-                ]);
-
-                $workflow->incrementTodayExecutions();
-
-                // Execute the workflow
-                $this->workflowEngine->execute($execution, $context);
-
-                if ($workflow->stop_on_first_match) {
+                if ($workflow->stopOnFirstMatch()) {
                     break;
                 }
             }
         } catch (Exception $e) {
-            // Log but don't throw - workflow failures shouldn't break the main operation
-            \Illuminate\Support\Facades\Log::error('Delete workflow trigger failed', [
+            Log::error('Delete workflow trigger failed', [
                 'record_id' => $recordId,
                 'module_id' => $moduleId,
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Build workflow execution context from a record.
+     */
+    private function buildWorkflowContext(ModuleRecord $record, ?array $oldData, ?int $userId): array
+    {
+        $newData = $record->data();
+        $changes = [];
+        $changedFields = [];
+
+        if ($oldData !== null) {
+            foreach ($newData as $key => $newValue) {
+                $oldValue = $oldData[$key] ?? null;
+                if ($oldValue !== $newValue) {
+                    $changes[$key] = ['old' => $oldValue, 'new' => $newValue];
+                    $changedFields[] = $key;
+                }
+            }
+
+            // Check for removed fields
+            foreach ($oldData as $key => $oldValue) {
+                if (!array_key_exists($key, $newData)) {
+                    $changes[$key] = ['old' => $oldValue, 'new' => null];
+                    $changedFields[] = $key;
+                }
+            }
+        }
+
+        return [
+            'record' => array_merge(['id' => $record->id(), 'module_id' => $record->moduleId()], $newData),
+            'record_id' => $record->id(),
+            'module_id' => $record->moduleId(),
+            'old_data' => $oldData,
+            'changes' => $changes,
+            'changed_fields' => $changedFields,
+            'user_id' => $userId,
+            'current_user' => $userId,
+            'timestamp' => now()->toISOString(),
+            'now' => [
+                'date' => now()->toDateString(),
+                'time' => now()->toTimeString(),
+                'datetime' => now()->toDateTimeString(),
+                'timestamp' => now()->timestamp,
+            ],
+            'step_outputs' => [],
+        ];
     }
 }

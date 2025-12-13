@@ -18,9 +18,9 @@
     view: number;
   }>();
 
-  let search = '';
-  let statusFilter = 'pending';
-  let entityFilter = '';
+  let search = $state('');
+  let statusFilter = $state('pending');
+  let entityFilter = $state('');
 
   const entityTypes = [
     { value: '', label: 'All Types' },
@@ -30,18 +30,18 @@
     { value: 'deal', label: 'Deals' },
   ];
 
-  $: pendingCount = requests.filter(r => r.status === 'pending').length;
-  $: approvedCount = requests.filter(r => r.status === 'approved').length;
-  $: rejectedCount = requests.filter(r => r.status === 'rejected').length;
+  const pendingCount = $derived(requests.filter(r => r.status === 'pending').length);
+  const approvedCount = $derived(requests.filter(r => r.status === 'approved').length);
+  const rejectedCount = $derived(requests.filter(r => r.status === 'rejected').length);
 
-  $: filteredRequests = requests.filter(r => {
+  const filteredRequests = $derived(requests.filter(r => {
     const matchesSearch = !search ||
       r.title?.toLowerCase().includes(search.toLowerCase()) ||
       r.requester?.name?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !statusFilter || r.status === statusFilter;
     const matchesEntity = !entityFilter || r.entity_type === entityFilter;
     return matchesSearch && matchesStatus && matchesEntity;
-  });
+  }));
 </script>
 
 <div class="space-y-4">
@@ -68,16 +68,13 @@
       placeholder="Search approvals..."
       class="w-64"
     />
-    <Select.Root
-      selected={{ value: entityFilter, label: entityTypes.find(e => e.value === entityFilter)?.label || 'All Types' }}
-      onSelectedChange={(v) => entityFilter = v?.value || ''}
-    >
+    <Select.Root type="single" bind:value={entityFilter}>
       <Select.Trigger class="w-40">
-        <Select.Value placeholder="Type" />
+        {entityTypes.find(e => e.value === entityFilter)?.label || 'All Types'}
       </Select.Trigger>
       <Select.Content>
         {#each entityTypes as type}
-          <Select.Item value={type.value}>{type.label}</Select.Item>
+          <Select.Item value={type.value} label={type.label}>{type.label}</Select.Item>
         {/each}
       </Select.Content>
     </Select.Root>

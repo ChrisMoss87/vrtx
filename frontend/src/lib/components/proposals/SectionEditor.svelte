@@ -17,7 +17,7 @@
     moveDown: void;
   }>();
 
-  let isOpen = true;
+  let isOpen = $state(true);
 </script>
 
 <Card.Root class="border-l-4 {section.is_visible ? 'border-l-primary' : 'border-l-muted'}">
@@ -29,7 +29,7 @@
             type="button"
             class="p-0.5 hover:bg-muted rounded disabled:opacity-30"
             disabled={index === 0}
-            on:click={() => dispatch('moveUp')}
+            onclick={() => dispatch('moveUp')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="18 15 12 9 6 15" />
@@ -39,7 +39,7 @@
             type="button"
             class="p-0.5 hover:bg-muted rounded disabled:opacity-30"
             disabled={index === total - 1}
-            on:click={() => dispatch('moveDown')}
+            onclick={() => dispatch('moveDown')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9" />
@@ -65,7 +65,7 @@
           <input type="checkbox" bind:checked={section.is_visible} class="rounded" />
           Visible
         </label>
-        <Button variant="ghost" size="sm" on:click={() => dispatch('remove')}>
+        <Button variant="ghost" size="sm" onclick={() => dispatch('remove')}>
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-destructive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6" />
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -97,7 +97,7 @@
                   <button
                     type="button"
                     class="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-destructive-foreground rounded-full hidden group-hover:flex items-center justify-center text-xs"
-                    on:click={() => {
+                    onclick={() => {
                       section.media_urls = section.media_urls?.filter(u => u !== url);
                     }}
                   >

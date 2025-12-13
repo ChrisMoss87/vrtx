@@ -5,7 +5,6 @@
   import { Label } from '$lib/components/ui/label';
   import { Textarea } from '$lib/components/ui/textarea';
   import * as Card from '$lib/components/ui/card';
-  import * as Select from '$lib/components/ui/select';
   import type { SignatureRequest, SignatureSigner } from '$lib/api/signatures';
   import SignerManager from './SignerManager.svelte';
   import FieldPlacer from './FieldPlacer.svelte';
@@ -20,14 +19,14 @@
     uploadDocument: void;
   }>();
 
-  let title = request.title || '';
-  let message = request.message || '';
-  let expiresAt = request.expires_at ? request.expires_at.split('T')[0] : '';
-  let reminderDays = request.settings?.reminder_days || 3;
-  let allowDecline = request.settings?.allow_decline ?? true;
-  let requireReason = request.settings?.require_reason ?? false;
-  let signers: Partial<SignatureSigner>[] = request.signers || [];
-  let fields: Array<{
+  let title = $state(request.title || '');
+  let message = $state(request.message || '');
+  let expiresAt = $state(request.expires_at ? request.expires_at.split('T')[0] : '');
+  let reminderDays = $state(request.settings?.reminder_days || 3);
+  let allowDecline = $state(request.settings?.allow_decline ?? true);
+  let requireReason = $state(request.settings?.require_reason ?? false);
+  let signers = $state<Partial<SignatureSigner>[]>(request.signers || []);
+  let fields = $state<Array<{
     signer_index: number;
     type: string;
     page: number;
@@ -37,9 +36,9 @@
     height: number;
     required: boolean;
     label?: string;
-  }> = [];
+  }>>([]);
 
-  let currentStep: 'details' | 'signers' | 'fields' = 'details';
+  let currentStep = $state<'details' | 'signers' | 'fields'>('details');
 
   function handleSave() {
     dispatch('save', {
@@ -140,17 +139,15 @@
                   <p class="font-medium">Document uploaded</p>
                   <p class="text-sm text-muted-foreground">Ready for signature fields</p>
                 </div>
-                <Button variant="outline" size="sm" on:click={() => dispatch('uploadDocument')}>
+                <Button variant="outline" size="sm" onclick={() => dispatch('uploadDocument')}>
                   Replace
                 </Button>
               </div>
             {:else}
-              <div
-                class="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors"
-                on:click={() => dispatch('uploadDocument')}
-                on:keypress={(e) => e.key === 'Enter' && dispatch('uploadDocument')}
-                role="button"
-                tabindex="0"
+              <button
+                type="button"
+                class="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors w-full"
+                onclick={() => dispatch('uploadDocument')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-muted-foreground mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -159,7 +156,7 @@
                 </svg>
                 <p class="text-muted-foreground">Click to upload a document</p>
                 <p class="text-sm text-muted-foreground">PDF, DOCX up to 10MB</p>
-              </div>
+              </button>
             {/if}
           </div>
 
@@ -194,18 +191,18 @@
     <Card.Footer class="flex justify-between">
       <div>
         {#if currentStep !== 'details'}
-          <Button variant="outline" on:click={prevStep}>Back</Button>
+          <Button variant="outline" onclick={prevStep}>Back</Button>
         {:else}
-          <Button variant="outline" on:click={() => dispatch('cancel')}>Cancel</Button>
+          <Button variant="outline" onclick={() => dispatch('cancel')}>Cancel</Button>
         {/if}
       </div>
       <div class="flex gap-2">
         {#if currentStep !== 'fields'}
-          <Button on:click={nextStep} disabled={!canProceed()}>
+          <Button onclick={nextStep} disabled={!canProceed()}>
             Continue
           </Button>
         {:else}
-          <Button on:click={handleSave} disabled={loading || !canProceed()}>
+          <Button onclick={handleSave} disabled={loading || !canProceed()}>
             {loading ? 'Sending...' : 'Send for Signature'}
           </Button>
         {/if}

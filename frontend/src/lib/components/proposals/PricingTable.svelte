@@ -36,8 +36,8 @@
   }
 
   function removeItem(index: number) {
-    items = items.filter((_, i) => i !== index);
-    items = items.map((item, i) => ({ ...item, order: i }));
+    items = items.filter((_: ProposalPricingItem, i: number) => i !== index);
+    items = items.map((item: ProposalPricingItem, i: number) => ({ ...item, order: i }));
   }
 
   function calculateSubtotal(item: ProposalPricingItem): number {
@@ -49,6 +49,11 @@
   function formatCurrency(amount: number): string {
     return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   }
+
+  function updateItemPricingType(index: number, value: string) {
+    items[index].pricing_type = value as 'one_time' | 'recurring' | 'hourly' | 'optional';
+    items = items;
+  }
 </script>
 
 <div class="space-y-4">
@@ -57,7 +62,7 @@
       <h4 class="font-medium">Pricing Items</h4>
       <p class="text-sm text-muted-foreground">Add products or services to your proposal</p>
     </div>
-    <Button variant="outline" on:click={addItem}>
+    <Button variant="outline" onclick={addItem}>
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
@@ -73,7 +78,7 @@
         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
       </svg>
       <p class="text-muted-foreground">No pricing items yet</p>
-      <Button variant="outline" class="mt-4" on:click={addItem}>
+      <Button variant="outline" class="mt-4" onclick={addItem}>
         Add your first item
       </Button>
     </div>
@@ -109,16 +114,13 @@
                 </div>
               </Table.Cell>
               <Table.Cell>
-                <Select.Root
-                  selected={{ value: item.pricing_type, label: pricingTypes.find(t => t.value === item.pricing_type)?.label || 'One-time' }}
-                  onSelectedChange={(v) => item.pricing_type = v?.value || 'one_time'}
-                >
+                <Select.Root type="single" value={item.pricing_type} onValueChange={(v) => updateItemPricingType(index, v)}>
                   <Select.Trigger class="w-28 h-8">
-                    <Select.Value />
+                    {pricingTypes.find(t => t.value === item.pricing_type)?.label || 'One-time'}
                   </Select.Trigger>
                   <Select.Content>
                     {#each pricingTypes as type}
-                      <Select.Item value={type.value}>{type.label}</Select.Item>
+                      <Select.Item value={type.value} label={type.label}>{type.label}</Select.Item>
                     {/each}
                   </Select.Content>
                 </Select.Root>
@@ -159,7 +161,7 @@
                 {formatCurrency(calculateSubtotal(item))}
               </Table.Cell>
               <Table.Cell>
-                <Button variant="ghost" size="sm" on:click={() => removeItem(index)}>
+                <Button variant="ghost" size="sm" onclick={() => removeItem(index)}>
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
@@ -186,8 +188,8 @@
       <label class="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
-          on:change={(e) => {
-            if (e.currentTarget.checked && items.length > 0) {
+          onchange={(e: Event) => {
+            if ((e.currentTarget as HTMLInputElement).checked && items.length > 0) {
               items[items.length - 1].is_optional = true;
               items = items;
             }

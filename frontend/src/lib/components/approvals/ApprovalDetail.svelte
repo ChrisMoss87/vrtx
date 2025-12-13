@@ -21,11 +21,11 @@
     cancel: void;
   }>();
 
-  let showApproveDialog = false;
-  let showRejectDialog = false;
-  let showDelegateDialog = false;
-  let comment = '';
-  let delegateUserId: number | null = null;
+  let showApproveDialog = $state(false);
+  let showRejectDialog = $state(false);
+  let showDelegateDialog = $state(false);
+  let comment = $state('');
+  let delegateUserId = $state<number | null>(null);
 
   const statusColors: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800',
@@ -70,7 +70,7 @@
     }
   }
 
-  $: currentStep = request.steps?.find(s => s.status === 'pending');
+  const currentStep = $derived(request.steps?.find(s => s.status === 'pending'));
 </script>
 
 <div class="space-y-6">
@@ -107,14 +107,14 @@
     {#if request.status === 'pending' && currentStep}
       <Card.Footer class="flex gap-2 justify-end">
         {#if currentStep.can_delegate}
-          <Button variant="outline" on:click={() => showDelegateDialog = true}>
+          <Button variant="outline" onclick={() => showDelegateDialog = true}>
             Delegate
           </Button>
         {/if}
-        <Button variant="outline" class="text-destructive" on:click={() => showRejectDialog = true}>
+        <Button variant="outline" class="text-destructive" onclick={() => showRejectDialog = true}>
           Reject
         </Button>
-        <Button on:click={() => showApproveDialog = true}>
+        <Button onclick={() => showApproveDialog = true}>
           Approve
         </Button>
       </Card.Footer>
@@ -224,8 +224,8 @@
       />
     </div>
     <Dialog.Footer>
-      <Button variant="outline" on:click={() => showApproveDialog = false}>Cancel</Button>
-      <Button on:click={handleApprove} disabled={loading}>
+      <Button variant="outline" onclick={() => showApproveDialog = false}>Cancel</Button>
+      <Button onclick={handleApprove} disabled={loading}>
         {loading ? 'Approving...' : 'Approve'}
       </Button>
     </Dialog.Footer>
@@ -251,8 +251,8 @@
       />
     </div>
     <Dialog.Footer>
-      <Button variant="outline" on:click={() => showRejectDialog = false}>Cancel</Button>
-      <Button variant="destructive" on:click={handleReject} disabled={loading || !comment}>
+      <Button variant="outline" onclick={() => showRejectDialog = false}>Cancel</Button>
+      <Button variant="destructive" onclick={handleReject} disabled={loading || !comment}>
         {loading ? 'Rejecting...' : 'Reject'}
       </Button>
     </Dialog.Footer>
@@ -271,16 +271,13 @@
     <div class="py-4 space-y-4">
       <div class="space-y-2">
         <Label>Delegate To</Label>
-        <Select.Root
-          selected={delegateUserId ? { value: delegateUserId.toString(), label: users.find(u => u.id === delegateUserId)?.name || 'Select user' } : null}
-          onSelectedChange={(v) => delegateUserId = v ? parseInt(v.value) : null}
-        >
+        <Select.Root type="single" value={delegateUserId?.toString() || ''} onValueChange={(v) => delegateUserId = v ? parseInt(v) : null}>
           <Select.Trigger>
-            <Select.Value placeholder="Select user" />
+            {delegateUserId ? users.find(u => u.id === delegateUserId)?.name : 'Select user'}
           </Select.Trigger>
           <Select.Content>
             {#each users as user}
-              <Select.Item value={user.id.toString()}>{user.name}</Select.Item>
+              <Select.Item value={user.id.toString()} label={user.name}>{user.name}</Select.Item>
             {/each}
           </Select.Content>
         </Select.Root>
@@ -295,8 +292,8 @@
       </div>
     </div>
     <Dialog.Footer>
-      <Button variant="outline" on:click={() => showDelegateDialog = false}>Cancel</Button>
-      <Button on:click={handleDelegate} disabled={loading || !delegateUserId}>
+      <Button variant="outline" onclick={() => showDelegateDialog = false}>Cancel</Button>
+      <Button onclick={handleDelegate} disabled={loading || !delegateUserId}>
         {loading ? 'Delegating...' : 'Delegate'}
       </Button>
     </Dialog.Footer>

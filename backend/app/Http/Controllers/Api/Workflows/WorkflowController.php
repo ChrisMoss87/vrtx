@@ -4,46 +4,50 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Workflows;
 
+use App\Application\Services\Workflow\WorkflowApplicationService;
+use App\Domain\Workflow\DTOs\CreateWorkflowDTO;
+use App\Domain\Workflow\DTOs\CreateWorkflowStepDTO;
+use App\Domain\Workflow\DTOs\UpdateWorkflowDTO;
+use App\Domain\Workflow\ValueObjects\ActionType;
+use App\Domain\Workflow\ValueObjects\TriggerType;
 use App\Http\Controllers\Controller;
-use App\Models\Workflow;
-use App\Models\WorkflowStep;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 
 class WorkflowController extends Controller
 {
+    public function __construct(
+        private readonly WorkflowApplicationService $workflowService,
+    ) {}
+
     /**
      * Get all workflows.
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = Workflow::with(['module', 'steps']);
+            $workflows = $this->workflowService->getAllWorkflows();
 
-            // Filter by module if provided
+            // Apply filters if provided (filtering DTOs)
             if ($request->has('module_id')) {
-                $query->where('module_id', $request->input('module_id'));
+                $moduleId = (int) $request->input('module_id');
+                $workflows = array_filter($workflows, fn($w) => $w->moduleId === $moduleId);
             }
 
-            // Filter by active status
             if ($request->has('active')) {
-                $query->where('is_active', $request->boolean('active'));
+                $active = $request->boolean('active');
+                $workflows = array_filter($workflows, fn($w) => $w->isActive === $active);
             }
 
-            // Filter by trigger type
             if ($request->has('trigger_type')) {
-                $query->where('trigger_type', $request->input('trigger_type'));
+                $triggerType = $request->input('trigger_type');
+                $workflows = array_filter($workflows, fn($w) => $w->triggerType === $triggerType);
             }
-
-            $workflows = $query->orderBy('priority', 'desc')
-                ->orderBy('name')
-                ->get();
 
             return response()->json([
                 'success' => true,
-                'workflows' => $workflows,
+                'workflows' => array_values($workflows),
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -59,9 +63,14 @@ class WorkflowController extends Controller
      */
     public function triggerTypes(): JsonResponse
     {
+        $types = [];
+        foreach (TriggerType::cases() as $type) {
+            $types[$type->value] = $type->label();
+        }
+
         return response()->json([
             'success' => true,
-            'trigger_types' => Workflow::getTriggerTypes(),
+            'trigger_types' => $types,
         ]);
     }
 
@@ -70,9 +79,14 @@ class WorkflowController extends Controller
      */
     public function actionTypes(): JsonResponse
     {
+        $types = [];
+        foreach (ActionType::cases() as $type) {
+            $types[$type->value] = $type->label();
+        }
+
         return response()->json([
             'success' => true,
-            'action_types' => WorkflowStep::getActionTypes(),
+            'action_types' => $types,
         ]);
     }
 
@@ -88,11 +102,15 @@ class WorkflowController extends Controller
                 'module_id' => 'nullable|exists:modules,id',
                 'is_active' => 'nullable|boolean',
                 'priority' => 'nullable|integer',
-                'trigger_type' => 'required|string|in:' . implode(',', array_keys(Workflow::getTriggerTypes())),
+                'trigger_type' => 'required|string|in:' . implode(',', array_column(TriggerType::cases(), 'value')),
                 'trigger_config' => 'nullable|array',
+                'trigger_timing' => 'nullable|string',
+                'watched_fields' => 'nullable|array',
                 'conditions' => 'nullable|array',
                 'run_once_per_record' => 'nullable|boolean',
                 'allow_manual_trigger' => 'nullable|boolean',
+                'stop_on_first_match' => 'nullable|boolean',
+                'max_executions_per_day' => 'nullable|integer|min:1',
                 'delay_seconds' => 'nullable|integer|min:0',
                 'schedule_cron' => 'nullable|string|max:100',
                 'steps' => 'nullable|array',
@@ -100,59 +118,68 @@ class WorkflowController extends Controller
                 'steps.*.action_type' => 'required|string',
                 'steps.*.action_config' => 'required|array',
                 'steps.*.conditions' => 'nullable|array',
+                'steps.*.branch_id' => 'nullable|string',
+                'steps.*.is_parallel' => 'nullable|boolean',
                 'steps.*.continue_on_error' => 'nullable|boolean',
                 'steps.*.retry_count' => 'nullable|integer|min:0|max:10',
                 'steps.*.retry_delay_seconds' => 'nullable|integer|min:0',
             ]);
 
-            $workflow = DB::transaction(function () use ($validated, $request) {
-                $workflow = Workflow::create([
-                    'name' => $validated['name'],
-                    'description' => $validated['description'] ?? null,
-                    'module_id' => $validated['module_id'] ?? null,
-                    'is_active' => $validated['is_active'] ?? false,
-                    'priority' => $validated['priority'] ?? 0,
-                    'trigger_type' => $validated['trigger_type'],
-                    'trigger_config' => $validated['trigger_config'] ?? [],
-                    'conditions' => $validated['conditions'] ?? [],
-                    'run_once_per_record' => $validated['run_once_per_record'] ?? false,
-                    'allow_manual_trigger' => $validated['allow_manual_trigger'] ?? true,
-                    'delay_seconds' => $validated['delay_seconds'] ?? 0,
-                    'schedule_cron' => $validated['schedule_cron'] ?? null,
-                    'created_by' => $request->user()?->id,
-                    'updated_by' => $request->user()?->id,
+            // Build step DTOs
+            $steps = [];
+            foreach (($validated['steps'] ?? []) as $index => $stepData) {
+                $steps[] = CreateWorkflowStepDTO::fromArray([
+                    'order' => $index,
+                    'name' => $stepData['name'] ?? null,
+                    'action_type' => $stepData['action_type'],
+                    'action_config' => $stepData['action_config'],
+                    'conditions' => $stepData['conditions'] ?? [],
+                    'branch_id' => $stepData['branch_id'] ?? null,
+                    'is_parallel' => $stepData['is_parallel'] ?? false,
+                    'continue_on_error' => $stepData['continue_on_error'] ?? false,
+                    'retry_count' => $stepData['retry_count'] ?? 0,
+                    'retry_delay_seconds' => $stepData['retry_delay_seconds'] ?? 60,
                 ]);
+            }
 
-                // Create steps if provided
-                if (!empty($validated['steps'])) {
-                    foreach ($validated['steps'] as $index => $stepData) {
-                        WorkflowStep::create([
-                            'workflow_id' => $workflow->id,
-                            'order' => $index,
-                            'name' => $stepData['name'] ?? null,
-                            'action_type' => $stepData['action_type'],
-                            'action_config' => $stepData['action_config'],
-                            'conditions' => $stepData['conditions'] ?? null,
-                            'continue_on_error' => $stepData['continue_on_error'] ?? false,
-                            'retry_count' => $stepData['retry_count'] ?? 0,
-                            'retry_delay_seconds' => $stepData['retry_delay_seconds'] ?? 60,
-                        ]);
-                    }
-                }
+            $dto = CreateWorkflowDTO::fromArray([
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'module_id' => $validated['module_id'] ?? null,
+                'trigger_type' => $validated['trigger_type'],
+                'trigger_config' => $validated['trigger_config'] ?? [],
+                'trigger_timing' => $validated['trigger_timing'] ?? 'all',
+                'watched_fields' => $validated['watched_fields'] ?? [],
+                'conditions' => $validated['conditions'] ?? [],
+                'priority' => $validated['priority'] ?? 0,
+                'stop_on_first_match' => $validated['stop_on_first_match'] ?? false,
+                'max_executions_per_day' => $validated['max_executions_per_day'] ?? null,
+                'run_once_per_record' => $validated['run_once_per_record'] ?? false,
+                'allow_manual_trigger' => $validated['allow_manual_trigger'] ?? true,
+                'delay_seconds' => $validated['delay_seconds'] ?? 0,
+                'schedule_cron' => $validated['schedule_cron'] ?? null,
+                'created_by' => $request->user()?->id,
+                'steps' => $steps,
+            ]);
 
-                return $workflow;
-            });
+            $workflow = $this->workflowService->createWorkflow($dto);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Workflow created successfully',
-                'workflow' => $workflow->load(['module', 'steps']),
+                'workflow' => $workflow,
             ], Response::HTTP_CREATED);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
                 'errors' => $e->errors(),
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'error' => $e->getMessage(),
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         } catch (\Exception $e) {
             return response()->json([
@@ -169,9 +196,7 @@ class WorkflowController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $workflow = Workflow::with(['module', 'steps', 'executions' => function ($query) {
-                $query->latest()->limit(10);
-            }])->find($id);
+            $workflow = $this->workflowService->getWorkflow($id);
 
             if (!$workflow) {
                 return response()->json([
@@ -180,9 +205,13 @@ class WorkflowController extends Controller
                 ], Response::HTTP_NOT_FOUND);
             }
 
+            // Add statistics
+            $stats = $this->workflowService->getWorkflowStatistics($id, 30);
+
             return response()->json([
                 'success' => true,
                 'workflow' => $workflow,
+                'statistics' => $stats,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -199,26 +228,21 @@ class WorkflowController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         try {
-            $workflow = Workflow::find($id);
-
-            if (!$workflow) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Workflow not found',
-                ], Response::HTTP_NOT_FOUND);
-            }
-
             $validated = $request->validate([
                 'name' => 'sometimes|string|max:255',
                 'description' => 'nullable|string',
                 'module_id' => 'nullable|exists:modules,id',
                 'is_active' => 'nullable|boolean',
                 'priority' => 'nullable|integer',
-                'trigger_type' => 'sometimes|string|in:' . implode(',', array_keys(Workflow::getTriggerTypes())),
+                'trigger_type' => 'sometimes|string|in:' . implode(',', array_column(TriggerType::cases(), 'value')),
                 'trigger_config' => 'nullable|array',
+                'trigger_timing' => 'nullable|string',
+                'watched_fields' => 'nullable|array',
                 'conditions' => 'nullable|array',
                 'run_once_per_record' => 'nullable|boolean',
                 'allow_manual_trigger' => 'nullable|boolean',
+                'stop_on_first_match' => 'nullable|boolean',
+                'max_executions_per_day' => 'nullable|integer|min:1',
                 'delay_seconds' => 'nullable|integer|min:0',
                 'schedule_cron' => 'nullable|string|max:100',
                 'steps' => 'nullable|array',
@@ -227,39 +251,69 @@ class WorkflowController extends Controller
                 'steps.*.action_type' => 'required|string',
                 'steps.*.action_config' => 'required|array',
                 'steps.*.conditions' => 'nullable|array',
+                'steps.*.branch_id' => 'nullable|string',
+                'steps.*.is_parallel' => 'nullable|boolean',
                 'steps.*.continue_on_error' => 'nullable|boolean',
                 'steps.*.retry_count' => 'nullable|integer|min:0|max:10',
                 'steps.*.retry_delay_seconds' => 'nullable|integer|min:0',
             ]);
 
-            DB::transaction(function () use ($workflow, $validated, $request) {
-                // Update workflow fields
-                $workflow->update([
-                    'name' => $validated['name'] ?? $workflow->name,
-                    'description' => $validated['description'] ?? $workflow->description,
-                    'module_id' => array_key_exists('module_id', $validated) ? $validated['module_id'] : $workflow->module_id,
-                    'is_active' => $validated['is_active'] ?? $workflow->is_active,
-                    'priority' => $validated['priority'] ?? $workflow->priority,
-                    'trigger_type' => $validated['trigger_type'] ?? $workflow->trigger_type,
-                    'trigger_config' => $validated['trigger_config'] ?? $workflow->trigger_config,
-                    'conditions' => $validated['conditions'] ?? $workflow->conditions,
-                    'run_once_per_record' => $validated['run_once_per_record'] ?? $workflow->run_once_per_record,
-                    'allow_manual_trigger' => $validated['allow_manual_trigger'] ?? $workflow->allow_manual_trigger,
-                    'delay_seconds' => $validated['delay_seconds'] ?? $workflow->delay_seconds,
-                    'schedule_cron' => $validated['schedule_cron'] ?? $workflow->schedule_cron,
-                    'updated_by' => $request->user()?->id,
-                ]);
+            // Get existing workflow for defaults
+            $existing = $this->workflowService->getWorkflow($id);
+            if (!$existing) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Workflow not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
 
-                // Sync steps if provided
-                if (isset($validated['steps'])) {
-                    $this->syncSteps($workflow, $validated['steps']);
+            // Build step DTOs if provided
+            $steps = null;
+            if (isset($validated['steps'])) {
+                $steps = [];
+                foreach ($validated['steps'] as $index => $stepData) {
+                    $steps[] = CreateWorkflowStepDTO::fromArray([
+                        'order' => $index,
+                        'name' => $stepData['name'] ?? null,
+                        'action_type' => $stepData['action_type'],
+                        'action_config' => $stepData['action_config'],
+                        'conditions' => $stepData['conditions'] ?? [],
+                        'branch_id' => $stepData['branch_id'] ?? null,
+                        'is_parallel' => $stepData['is_parallel'] ?? false,
+                        'continue_on_error' => $stepData['continue_on_error'] ?? false,
+                        'retry_count' => $stepData['retry_count'] ?? 0,
+                        'retry_delay_seconds' => $stepData['retry_delay_seconds'] ?? 60,
+                    ]);
                 }
-            });
+            }
+
+            $dto = UpdateWorkflowDTO::fromArray([
+                'id' => $id,
+                'name' => $validated['name'] ?? $existing->name,
+                'description' => $validated['description'] ?? $existing->description,
+                'trigger_type' => $validated['trigger_type'] ?? $existing->triggerType,
+                'trigger_config' => $validated['trigger_config'] ?? [],
+                'trigger_timing' => $validated['trigger_timing'] ?? 'all',
+                'watched_fields' => $validated['watched_fields'] ?? [],
+                'conditions' => $validated['conditions'] ?? [],
+                'is_active' => $validated['is_active'] ?? null,
+                'priority' => $validated['priority'] ?? $existing->priority,
+                'stop_on_first_match' => $validated['stop_on_first_match'] ?? false,
+                'max_executions_per_day' => $validated['max_executions_per_day'] ?? null,
+                'run_once_per_record' => $validated['run_once_per_record'] ?? false,
+                'allow_manual_trigger' => $validated['allow_manual_trigger'] ?? true,
+                'delay_seconds' => $validated['delay_seconds'] ?? 0,
+                'schedule_cron' => $validated['schedule_cron'] ?? null,
+                'updated_by' => $request->user()?->id,
+                'steps' => $steps,
+            ]);
+
+            $workflow = $this->workflowService->updateWorkflow($dto);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Workflow updated successfully',
-                'workflow' => $workflow->fresh()->load(['module', 'steps']),
+                'workflow' => $workflow,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -267,6 +321,11 @@ class WorkflowController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $e->errors(),
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], Response::HTTP_NOT_FOUND);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -282,16 +341,14 @@ class WorkflowController extends Controller
     public function destroy(int $id): JsonResponse
     {
         try {
-            $workflow = Workflow::find($id);
+            $deleted = $this->workflowService->deleteWorkflow($id);
 
-            if (!$workflow) {
+            if (!$deleted) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Workflow not found',
                 ], Response::HTTP_NOT_FOUND);
             }
-
-            $workflow->delete();
 
             return response()->json([
                 'success' => true,
@@ -312,22 +369,33 @@ class WorkflowController extends Controller
     public function toggleActive(int $id): JsonResponse
     {
         try {
-            $workflow = Workflow::find($id);
+            $existing = $this->workflowService->getWorkflow($id);
 
-            if (!$workflow) {
+            if (!$existing) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Workflow not found',
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            $workflow->update(['is_active' => !$workflow->is_active]);
+            if ($existing->isActive) {
+                $workflow = $this->workflowService->deactivateWorkflow($id);
+                $message = 'Workflow deactivated';
+            } else {
+                $workflow = $this->workflowService->activateWorkflow($id);
+                $message = 'Workflow activated';
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => $workflow->is_active ? 'Workflow activated' : 'Workflow deactivated',
+                'message' => $message,
                 'workflow' => $workflow,
             ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], Response::HTTP_NOT_FOUND);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -343,42 +411,64 @@ class WorkflowController extends Controller
     public function clone(int $id): JsonResponse
     {
         try {
-            $workflow = Workflow::with('steps')->find($id);
+            $existing = $this->workflowService->getWorkflow($id);
 
-            if (!$workflow) {
+            if (!$existing) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Workflow not found',
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            $newWorkflow = DB::transaction(function () use ($workflow) {
-                // Clone workflow
-                $newWorkflow = $workflow->replicate();
-                $newWorkflow->name = $workflow->name . ' (Copy)';
-                $newWorkflow->is_active = false;
-                $newWorkflow->execution_count = 0;
-                $newWorkflow->success_count = 0;
-                $newWorkflow->failure_count = 0;
-                $newWorkflow->last_run_at = null;
-                $newWorkflow->next_run_at = null;
-                $newWorkflow->save();
+            // Create steps DTOs from existing
+            $steps = [];
+            foreach ($existing->steps as $index => $step) {
+                $steps[] = CreateWorkflowStepDTO::fromArray([
+                    'order' => $index,
+                    'name' => $step['name'] ?? null,
+                    'action_type' => $step['actionType'],
+                    'action_config' => $step['actionConfig'] ?? [],
+                    'conditions' => $step['conditions'] ?? [],
+                    'branch_id' => $step['branchId'] ?? null,
+                    'is_parallel' => $step['isParallel'] ?? false,
+                    'continue_on_error' => $step['continueOnError'] ?? false,
+                    'retry_count' => $step['retryCount'] ?? 0,
+                    'retry_delay_seconds' => $step['retryDelaySeconds'] ?? 60,
+                ]);
+            }
 
-                // Clone steps
-                foreach ($workflow->steps as $step) {
-                    $newStep = $step->replicate();
-                    $newStep->workflow_id = $newWorkflow->id;
-                    $newStep->save();
-                }
+            $dto = CreateWorkflowDTO::fromArray([
+                'name' => $existing->name . ' (Copy)',
+                'description' => $existing->description,
+                'module_id' => $existing->moduleId,
+                'trigger_type' => $existing->triggerType,
+                'trigger_config' => [],
+                'trigger_timing' => 'all',
+                'watched_fields' => [],
+                'conditions' => [],
+                'priority' => $existing->priority,
+                'stop_on_first_match' => false,
+                'max_executions_per_day' => null,
+                'run_once_per_record' => false,
+                'allow_manual_trigger' => true,
+                'delay_seconds' => 0,
+                'schedule_cron' => null,
+                'created_by' => null,
+                'steps' => $steps,
+            ]);
 
-                return $newWorkflow;
-            });
+            $workflow = $this->workflowService->createWorkflow($dto);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Workflow cloned successfully',
-                'workflow' => $newWorkflow->load(['module', 'steps']),
+                'workflow' => $workflow,
             ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], Response::HTTP_NOT_FOUND);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -394,16 +484,16 @@ class WorkflowController extends Controller
     public function trigger(Request $request, int $id): JsonResponse
     {
         try {
-            $workflow = Workflow::find($id);
+            $existing = $this->workflowService->getWorkflow($id);
 
-            if (!$workflow) {
+            if (!$existing) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Workflow not found',
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            if (!$workflow->allow_manual_trigger) {
+            if (!$existing->allowManualTrigger) {
                 return response()->json([
                     'success' => false,
                     'message' => 'This workflow does not allow manual triggers',
@@ -415,23 +505,19 @@ class WorkflowController extends Controller
                 'context_data' => 'nullable|array',
             ]);
 
-            // Create execution record
-            $execution = $workflow->executions()->create([
-                'trigger_type' => 'manual',
-                'trigger_record_id' => $validated['record_id'] ?? null,
-                'trigger_record_type' => $validated['record_id'] ? 'App\\Models\\ModuleRecord' : null,
-                'status' => 'pending',
-                'context_data' => $validated['context_data'] ?? [],
-                'triggered_by' => $request->user()?->id,
-            ]);
-
-            // TODO: Dispatch job to execute workflow
-            // dispatch(new ExecuteWorkflowJob($execution));
+            $execution = $this->workflowService->createExecution(
+                workflowId: $id,
+                triggerType: 'manual',
+                recordId: $validated['record_id'] ?? null,
+                recordType: isset($validated['record_id']) ? 'ModuleRecord' : null,
+                contextData: $validated['context_data'] ?? [],
+                triggeredByUserId: $request->user()?->id,
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Workflow execution triggered',
-                'execution' => $execution,
+                'execution_id' => $execution->getId(),
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -439,6 +525,11 @@ class WorkflowController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $e->errors(),
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], Response::HTTP_NOT_FOUND);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -454,29 +545,21 @@ class WorkflowController extends Controller
     public function executions(Request $request, int $id): JsonResponse
     {
         try {
-            $workflow = Workflow::find($id);
+            $existing = $this->workflowService->getWorkflow($id);
 
-            if (!$workflow) {
+            if (!$existing) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Workflow not found',
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            $query = $workflow->executions()->with(['stepLogs.step']);
-
-            // Filter by status
-            if ($request->has('status')) {
-                $query->where('status', $request->input('status'));
-            }
-
-            // Pagination
-            $perPage = $request->input('per_page', 20);
-            $executions = $query->latest()->paginate($perPage);
+            // For now, return statistics - full execution history would need repository method
+            $stats = $this->workflowService->getWorkflowStatistics($id, 30);
 
             return response()->json([
                 'success' => true,
-                'executions' => $executions,
+                'statistics' => $stats,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -488,53 +571,14 @@ class WorkflowController extends Controller
     }
 
     /**
-     * Get a single execution with details.
-     */
-    public function showExecution(int $id, int $executionId): JsonResponse
-    {
-        try {
-            $workflow = Workflow::find($id);
-
-            if (!$workflow) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Workflow not found',
-                ], Response::HTTP_NOT_FOUND);
-            }
-
-            $execution = $workflow->executions()
-                ->with(['stepLogs.step', 'triggeredBy'])
-                ->find($executionId);
-
-            if (!$execution) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Execution not found',
-                ], Response::HTTP_NOT_FOUND);
-            }
-
-            return response()->json([
-                'success' => true,
-                'execution' => $execution,
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch execution',
-                'error' => $e->getMessage(),
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    /**
      * Reorder workflow steps.
      */
     public function reorderSteps(Request $request, int $id): JsonResponse
     {
         try {
-            $workflow = Workflow::find($id);
+            $existing = $this->workflowService->getWorkflow($id);
 
-            if (!$workflow) {
+            if (!$existing) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Workflow not found',
@@ -542,22 +586,60 @@ class WorkflowController extends Controller
             }
 
             $validated = $request->validate([
-                'steps' => 'required|array',
-                'steps.*' => 'required|integer|exists:workflow_steps,id',
+                'step_order' => 'required|array',
+                'step_order.*' => 'required|integer',
             ]);
 
-            DB::transaction(function () use ($validated, $workflow) {
-                foreach ($validated['steps'] as $order => $stepId) {
-                    WorkflowStep::where('id', $stepId)
-                        ->where('workflow_id', $workflow->id)
-                        ->update(['order' => $order]);
+            // Reorder steps based on the new order
+            $stepOrder = $validated['step_order'];
+            $reorderedSteps = [];
+
+            foreach ($stepOrder as $newOrder => $stepId) {
+                foreach ($existing->steps as $step) {
+                    if (($step['id'] ?? null) === $stepId) {
+                        $reorderedSteps[] = CreateWorkflowStepDTO::fromArray([
+                            'order' => $newOrder,
+                            'name' => $step['name'] ?? null,
+                            'action_type' => $step['actionType'],
+                            'action_config' => $step['actionConfig'] ?? [],
+                            'conditions' => $step['conditions'] ?? [],
+                            'branch_id' => $step['branchId'] ?? null,
+                            'is_parallel' => $step['isParallel'] ?? false,
+                            'continue_on_error' => $step['continueOnError'] ?? false,
+                            'retry_count' => $step['retryCount'] ?? 0,
+                            'retry_delay_seconds' => $step['retryDelaySeconds'] ?? 60,
+                        ]);
+                        break;
+                    }
                 }
-            });
+            }
+
+            $dto = UpdateWorkflowDTO::fromArray([
+                'id' => $id,
+                'name' => $existing->name,
+                'description' => $existing->description,
+                'trigger_type' => $existing->triggerType,
+                'trigger_config' => [],
+                'trigger_timing' => 'all',
+                'watched_fields' => [],
+                'conditions' => [],
+                'priority' => $existing->priority,
+                'stop_on_first_match' => false,
+                'max_executions_per_day' => null,
+                'run_once_per_record' => false,
+                'allow_manual_trigger' => true,
+                'delay_seconds' => 0,
+                'schedule_cron' => null,
+                'updated_by' => $request->user()?->id,
+                'steps' => $reorderedSteps,
+            ]);
+
+            $workflow = $this->workflowService->updateWorkflow($dto);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Steps reordered successfully',
-                'workflow' => $workflow->fresh()->load(['steps']),
+                'workflow' => $workflow,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -571,48 +653,6 @@ class WorkflowController extends Controller
                 'message' => 'Failed to reorder steps',
                 'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    /**
-     * Sync steps for a workflow (create, update, delete).
-     */
-    private function syncSteps(Workflow $workflow, array $stepsData): void
-    {
-        $existingStepIds = $workflow->steps->pluck('id')->toArray();
-        $incomingStepIds = [];
-
-        foreach ($stepsData as $index => $stepData) {
-            $stepPayload = [
-                'workflow_id' => $workflow->id,
-                'order' => $index,
-                'name' => $stepData['name'] ?? null,
-                'action_type' => $stepData['action_type'],
-                'action_config' => $stepData['action_config'],
-                'conditions' => $stepData['conditions'] ?? null,
-                'continue_on_error' => $stepData['continue_on_error'] ?? false,
-                'retry_count' => $stepData['retry_count'] ?? 0,
-                'retry_delay_seconds' => $stepData['retry_delay_seconds'] ?? 60,
-            ];
-
-            if (!empty($stepData['id'])) {
-                // Update existing step
-                $step = WorkflowStep::find($stepData['id']);
-                if ($step && $step->workflow_id === $workflow->id) {
-                    $step->update($stepPayload);
-                    $incomingStepIds[] = $step->id;
-                }
-            } else {
-                // Create new step
-                $step = WorkflowStep::create($stepPayload);
-                $incomingStepIds[] = $step->id;
-            }
-        }
-
-        // Delete steps that were removed
-        $stepsToDelete = array_diff($existingStepIds, $incomingStepIds);
-        if (!empty($stepsToDelete)) {
-            WorkflowStep::whereIn('id', $stepsToDelete)->delete();
         }
     }
 }

@@ -37,9 +37,9 @@
     return status.charAt(0).toUpperCase() + status.slice(1);
   }
 
-  $: currentStep = request.steps?.find(s => s.status === 'pending');
-  $: completedSteps = request.steps?.filter(s => s.status === 'approved').length || 0;
-  $: totalSteps = request.steps?.length || 0;
+  const currentStep = $derived(request.steps?.find(s => s.status === 'pending'));
+  const completedSteps = $derived(request.steps?.filter(s => s.status === 'approved').length || 0);
+  const totalSteps = $derived(request.steps?.length || 0);
 </script>
 
 <Card.Root class="hover:shadow-md transition-shadow">
@@ -118,24 +118,24 @@
     <!-- Actions -->
     {#if showActions && request.status === 'pending' && currentStep}
       <div class="flex gap-2 mt-4 pt-4 border-t">
-        <Button variant="outline" class="flex-1" on:click={() => dispatch('view')}>
+        <Button variant="outline" class="flex-1" onclick={() => dispatch('view')}>
           View Details
         </Button>
         {#if currentStep.can_delegate}
-          <Button variant="outline" on:click={() => dispatch('delegate')}>
+          <Button variant="outline" onclick={() => dispatch('delegate')}>
             Delegate
           </Button>
         {/if}
-        <Button variant="outline" class="text-destructive" on:click={() => dispatch('reject')}>
+        <Button variant="outline" class="text-destructive" onclick={() => dispatch('reject')}>
           Reject
         </Button>
-        <Button on:click={() => dispatch('approve')}>
+        <Button onclick={() => dispatch('approve')}>
           Approve
         </Button>
       </div>
     {:else}
       <div class="mt-4 pt-4 border-t">
-        <Button variant="outline" class="w-full" on:click={() => dispatch('view')}>
+        <Button variant="outline" class="w-full" onclick={() => dispatch('view')}>
           View Details
         </Button>
       </div>

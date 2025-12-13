@@ -1,6 +1,5 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import * as Card from '$lib/components/ui/card';
   import * as Accordion from '$lib/components/ui/accordion';
@@ -12,17 +11,17 @@
     insert: string;
   }>();
 
-  let search = '';
+  let search = $state('');
 
-  $: filteredVariables = Object.fromEntries(
+  const filteredVariables = $derived(Object.fromEntries(
     Object.entries(variables).map(([category, vars]) => [
       category,
       vars.filter(v =>
         v.name.toLowerCase().includes(search.toLowerCase()) ||
         v.api_name.toLowerCase().includes(search.toLowerCase())
       ),
-    ]).filter(([_, vars]) => vars.length > 0)
-  );
+    ]).filter(([_, vars]) => (vars as MergeFieldVariable[]).length > 0)
+  ));
 
   const categoryLabels: Record<string, string> = {
     contact: 'Contact Fields',
@@ -69,7 +68,7 @@
           <Accordion.Item value={category}>
             <Accordion.Trigger class="text-sm py-2">
               {categoryLabels[category] || category}
-              <span class="ml-2 text-xs text-muted-foreground">({vars.length})</span>
+              <span class="ml-2 text-xs text-muted-foreground">({(vars as MergeFieldVariable[]).length})</span>
             </Accordion.Trigger>
             <Accordion.Content>
               <div class="space-y-1">
@@ -77,7 +76,7 @@
                   <button
                     type="button"
                     class="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors"
-                    on:click={() => handleInsert(variable.api_name)}
+                    onclick={() => handleInsert(variable.api_name)}
                   >
                     <div class="flex justify-between items-center">
                       <span class="font-medium">{variable.name}</span>

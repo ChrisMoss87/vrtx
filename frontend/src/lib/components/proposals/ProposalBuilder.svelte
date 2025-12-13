@@ -23,20 +23,22 @@
     cancel: void;
   }>();
 
-  let title = proposal.title || '';
-  let clientName = proposal.client_name || '';
-  let clientEmail = proposal.client_email || '';
-  let clientCompany = proposal.client_company || '';
-  let expiresAt = proposal.expires_at ? proposal.expires_at.split('T')[0] : '';
-  let coverLetter = proposal.cover_letter || '';
-  let sections: ProposalSection[] = proposal.sections || [];
-  let pricingItems: ProposalPricingItem[] = proposal.pricing_items || [];
-  let settings = proposal.settings || {
+  let title = $state(proposal.title || '');
+  let clientName = $state(proposal.client_name || '');
+  let clientEmail = $state(proposal.client_email || '');
+  let clientCompany = $state(proposal.client_company || '');
+  let expiresAt = $state(proposal.expires_at ? proposal.expires_at.split('T')[0] : '');
+  let coverLetter = $state(proposal.cover_letter || '');
+  let sections = $state<ProposalSection[]>(proposal.sections || []);
+  let pricingItems = $state<ProposalPricingItem[]>(proposal.pricing_items || []);
+  let settings = $state(proposal.settings || {
     allow_comments: true,
     allow_e_signature: true,
     show_pricing_breakdown: true,
     require_acceptance: true,
-  };
+  });
+
+  let selectedTemplateId = $state('');
 
   function handleSave() {
     dispatch('save', {
@@ -70,8 +72,8 @@
   }
 
   function removeSection(index: number) {
-    sections = sections.filter((_, i) => i !== index);
-    sections = sections.map((s, i) => ({ ...s, order: i }));
+    sections = sections.filter((_: ProposalSection, i: number) => i !== index);
+    sections = sections.map((s: ProposalSection, i: number) => ({ ...s, order: i }));
   }
 
   function moveSection(index: number, direction: 'up' | 'down') {
@@ -80,14 +82,14 @@
     } else if (direction === 'down' && index < sections.length - 1) {
       [sections[index], sections[index + 1]] = [sections[index + 1], sections[index]];
     }
-    sections = sections.map((s, i) => ({ ...s, order: i }));
+    sections = sections.map((s: ProposalSection, i: number) => ({ ...s, order: i }));
   }
 
-  $: totalAmount = pricingItems.reduce((sum, item) => {
+  const totalAmount = $derived(pricingItems.reduce((sum: number, item: ProposalPricingItem) => {
     const subtotal = item.quantity * item.unit_price;
     const discount = item.discount_percent ? subtotal * (item.discount_percent / 100) : 0;
     return sum + (subtotal - discount);
-  }, 0);
+  }, 0));
 </script>
 
 <div class="space-y-6">
@@ -101,9 +103,9 @@
           </Card.Description>
         </div>
         <div class="flex gap-2">
-          <Button variant="outline" on:click={() => dispatch('preview')}>Preview</Button>
+          <Button variant="outline" onclick={() => dispatch('preview')}>Preview</Button>
           {#if proposal.id && proposal.status === 'draft'}
-            <Button on:click={() => dispatch('send')}>Send to Client</Button>
+            <Button onclick={() => dispatch('send')}>Send to Client</Button>
           {/if}
         </div>
       </div>
@@ -157,15 +159,13 @@
           {#if templates.length > 0}
             <div class="p-4 rounded-lg border bg-muted/50">
               <Label class="mb-2 block">Start from Template</Label>
-              <Select.Root onSelectedChange={(v) => {
-                // TODO: Load template content
-              }}>
+              <Select.Root type="single" bind:value={selectedTemplateId}>
                 <Select.Trigger class="w-64">
-                  <Select.Value placeholder="Select a template" />
+                  {templates.find(t => t.id.toString() === selectedTemplateId)?.name || 'Select a template'}
                 </Select.Trigger>
                 <Select.Content>
                   {#each templates as template}
-                    <Select.Item value={template.id.toString()}>{template.name}</Select.Item>
+                    <Select.Item value={template.id.toString()} label={template.name}>{template.name}</Select.Item>
                   {/each}
                 </Select.Content>
               </Select.Root>
@@ -179,7 +179,7 @@
               <h4 class="font-medium">Proposal Sections</h4>
               <p class="text-sm text-muted-foreground">Add and organize your proposal content</p>
             </div>
-            <Button variant="outline" on:click={addSection}>
+            <Button variant="outline" onclick={addSection}>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
@@ -198,7 +198,7 @@
                   <line x1="9" y1="15" x2="15" y2="15" />
                 </svg>
                 <p class="text-muted-foreground">No sections added yet</p>
-                <Button variant="outline" class="mt-4" on:click={addSection}>
+                <Button variant="outline" class="mt-4" onclick={addSection}>
                   Add your first section
                 </Button>
               </Card.Content>
@@ -246,8 +246,8 @@
       </Tabs.Root>
     </Card.Content>
     <Card.Footer class="flex justify-between">
-      <Button variant="outline" on:click={() => dispatch('cancel')}>Cancel</Button>
-      <Button on:click={handleSave} disabled={loading || !title || !clientName || !clientEmail}>
+      <Button variant="outline" onclick={() => dispatch('cancel')}>Cancel</Button>
+      <Button onclick={handleSave} disabled={loading || !title || !clientName || !clientEmail}>
         {loading ? 'Saving...' : 'Save Proposal'}
       </Button>
     </Card.Footer>

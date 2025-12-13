@@ -208,7 +208,7 @@
 					</Button>
 				{/if}
 				{#if test.status === 'draft' || test.status === 'paused'}
-					<Button variant="outline" onclick={() => goto(`/ab-tests/${test.id}/edit`)}>
+					<Button variant="outline" onclick={() => goto(`/ab-tests/${test!.id}/edit`)}>
 						<Edit class="mr-2 h-4 w-4" />
 						Edit
 					</Button>

@@ -98,10 +98,21 @@ final class WorkflowStepLog implements Entity
     /**
      * Mark as started.
      */
-    public function markAsStarted(): void
+    public function markAsStarted(array $inputData = []): void
     {
         $this->status = 'running';
         $this->startedAt = Timestamp::now();
+        if (!empty($inputData)) {
+            $this->inputData = $inputData;
+        }
+    }
+
+    /**
+     * Set the attempt number (for retries).
+     */
+    public function setAttemptNumber(int $attemptNumber): void
+    {
+        $this->attemptNumber = $attemptNumber;
     }
 
     /**

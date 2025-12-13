@@ -787,6 +787,63 @@ Route::middleware([
             Route::post('/{id}/generate-workflow', [RecordingController::class, 'generateWorkflow']);
         });
 
+        // AI & Machine Learning Routes (Phase H)
+        Route::prefix('ai')->group(function () {
+            // AI Settings
+            Route::get('/settings', [\App\Http\Controllers\Api\AI\AiSettingsController::class, 'index']);
+            Route::put('/settings', [\App\Http\Controllers\Api\AI\AiSettingsController::class, 'update']);
+            Route::get('/usage', [\App\Http\Controllers\Api\AI\AiSettingsController::class, 'usage']);
+            Route::post('/test-connection', [\App\Http\Controllers\Api\AI\AiSettingsController::class, 'testConnection']);
+
+            // AI Prompts
+            Route::get('/prompts', [\App\Http\Controllers\Api\AI\AiSettingsController::class, 'prompts']);
+            Route::post('/prompts', [\App\Http\Controllers\Api\AI\AiSettingsController::class, 'savePrompt']);
+            Route::delete('/prompts/{id}', [\App\Http\Controllers\Api\AI\AiSettingsController::class, 'deletePrompt']);
+
+            // Email Composition
+            Route::prefix('email')->group(function () {
+                Route::post('/compose', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'compose']);
+                Route::post('/reply', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'reply']);
+                Route::post('/improve', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'improve']);
+                Route::post('/suggest-subjects', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'suggestSubjects']);
+                Route::post('/analyze-tone', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'analyzeTone']);
+                Route::get('/drafts', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'drafts']);
+                Route::get('/drafts/{id}', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'getDraft']);
+                Route::delete('/drafts/{id}', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'deleteDraft']);
+                Route::post('/drafts/{id}/mark-used', [\App\Http\Controllers\Api\AI\EmailCompositionController::class, 'markUsed']);
+            });
+
+            // Lead Scoring
+            Route::prefix('scoring')->group(function () {
+                Route::get('/models', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'models']);
+                Route::get('/models/{id}', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'getModel']);
+                Route::post('/models', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'saveModel']);
+                Route::delete('/models/{id}', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'deleteModel']);
+                Route::post('/score-record', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'scoreRecord']);
+                Route::post('/batch-score', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'batchScore']);
+                Route::get('/records/{module}/{recordId}', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'getRecordScore']);
+                Route::get('/records/{module}/{recordId}/history', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'getScoreHistory']);
+                Route::get('/stats/{module}', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'statistics']);
+                Route::get('/top/{module}', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'topScored']);
+                Route::get('/grade/{module}/{grade}', [\App\Http\Controllers\Api\AI\LeadScoringController::class, 'byGrade']);
+            });
+
+            // Sentiment Analysis
+            Route::prefix('sentiment')->group(function () {
+                Route::post('/analyze', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'analyze']);
+                Route::post('/analyze-email/{emailId}', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'analyzeEmail']);
+                Route::get('/summary/{module}/{recordId}', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'getRecordSummary']);
+                Route::get('/timeline/{module}/{recordId}', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'getTimeline']);
+                Route::get('/alerts', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'alerts']);
+                Route::post('/alerts/{id}/read', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'markAlertRead']);
+                Route::post('/alerts/{id}/dismiss', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'dismissAlert']);
+                Route::get('/declining/{module}', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'declining']);
+                Route::get('/negative/{module}', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'negative']);
+                Route::get('/distribution/{module}', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'distribution']);
+                Route::post('/batch-analyze-emails', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'batchAnalyzeEmails']);
+            });
+        });
+
         // Document Templates Routes (Phase F)
         Route::prefix('document-templates')->group(function () {
             Route::get('/variables', [DocumentTemplateController::class, 'variables']);
@@ -1823,6 +1880,84 @@ Route::middleware([
 
             // Analytics
             Route::get('/analytics', [\App\Http\Controllers\Api\Portal\PortalAdminController::class, 'activityAnalytics']);
+        });
+
+        // Renewal Management - Contracts
+        Route::prefix('contracts')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Renewal\ContractController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Renewal\ContractController::class, 'store']);
+            Route::get('/expiring', [\App\Http\Controllers\Api\Renewal\ContractController::class, 'expiring']);
+            Route::get('/for-record', [\App\Http\Controllers\Api\Renewal\ContractController::class, 'forRecord']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\Renewal\ContractController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\Renewal\ContractController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\Renewal\ContractController::class, 'destroy']);
+        });
+
+        // Renewal Management - Renewals
+        Route::prefix('renewals')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'store']);
+            Route::get('/pipeline', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'pipeline']);
+            Route::get('/forecast', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'forecast']);
+            Route::post('/generate', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'generate']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'show']);
+            Route::post('/{id}/start', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'start']);
+            Route::post('/{id}/win', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'win']);
+            Route::post('/{id}/lose', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'lose']);
+            Route::post('/{id}/activities', [\App\Http\Controllers\Api\Renewal\RenewalController::class, 'addActivity']);
+        });
+
+        // Renewal Management - Health Scores
+        Route::prefix('health-scores')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Renewal\HealthScoreController::class, 'index']);
+            Route::get('/summary', [\App\Http\Controllers\Api\Renewal\HealthScoreController::class, 'summary']);
+            Route::get('/at-risk', [\App\Http\Controllers\Api\Renewal\HealthScoreController::class, 'atRisk']);
+            Route::post('/calculate', [\App\Http\Controllers\Api\Renewal\HealthScoreController::class, 'calculate']);
+            Route::post('/recalculate-all', [\App\Http\Controllers\Api\Renewal\HealthScoreController::class, 'recalculateAll']);
+            Route::get('/{module}/{recordId}', [\App\Http\Controllers\Api\Renewal\HealthScoreController::class, 'show']);
+            Route::put('/{id}/notes', [\App\Http\Controllers\Api\Renewal\HealthScoreController::class, 'updateNotes']);
+        });
+
+        // Onboarding Playbooks
+        Route::prefix('playbooks')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'destroy']);
+            Route::post('/{id}/duplicate', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'duplicate']);
+
+            // Phases
+            Route::post('/{playbookId}/phases', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'addPhase']);
+            Route::put('/{playbookId}/phases/{phaseId}', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'updatePhase']);
+            Route::delete('/{playbookId}/phases/{phaseId}', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'deletePhase']);
+
+            // Tasks
+            Route::post('/{playbookId}/tasks', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'addTask']);
+            Route::put('/{playbookId}/tasks/{taskId}', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'updateTask']);
+            Route::delete('/{playbookId}/tasks/{taskId}', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'deleteTask']);
+            Route::post('/{playbookId}/tasks/reorder', [\App\Http\Controllers\Api\Playbook\PlaybookController::class, 'reorderTasks']);
+        });
+
+        // Playbook Instances
+        Route::prefix('playbook-instances')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'index']);
+            Route::post('/start', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'start']);
+            Route::get('/for-record', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'forRecord']);
+            Route::get('/my-tasks', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'myTasks']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'show']);
+            Route::post('/{id}/pause', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'pause']);
+            Route::post('/{id}/resume', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'resume']);
+            Route::post('/{id}/cancel', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'cancel']);
+            Route::get('/{id}/tasks', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'tasks']);
+            Route::get('/{id}/activities', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'activities']);
+
+            // Task operations
+            Route::post('/{instanceId}/tasks/{taskInstanceId}/start', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'startTask']);
+            Route::post('/{instanceId}/tasks/{taskInstanceId}/complete', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'completeTask']);
+            Route::post('/{instanceId}/tasks/{taskInstanceId}/skip', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'skipTask']);
+            Route::post('/{instanceId}/tasks/{taskInstanceId}/reassign', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'reassignTask']);
+            Route::post('/{instanceId}/tasks/{taskInstanceId}/checklist', [\App\Http\Controllers\Api\Playbook\PlaybookInstanceController::class, 'updateTaskChecklist']);
         });
     });
 

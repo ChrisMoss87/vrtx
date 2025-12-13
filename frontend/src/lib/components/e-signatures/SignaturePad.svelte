@@ -14,12 +14,12 @@
 
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
-  let isDrawing = false;
-  let lastX = 0;
-  let lastY = 0;
-  let signatureMode: 'draw' | 'type' | 'upload' = 'draw';
-  let typedName = '';
-  let uploadedImage = '';
+  let isDrawing = $state(false);
+  let lastX = $state(0);
+  let lastY = $state(0);
+  let signatureMode = $state<'draw' | 'type' | 'upload'>('draw');
+  let typedName = $state('');
+  let uploadedImage = $state('');
 
   const fonts = [
     { name: 'Script', font: "'Dancing Script', cursive" },
@@ -27,7 +27,7 @@
     { name: 'Simple', font: "'Caveat', cursive" },
     { name: 'Classic', font: "'Pacifico', cursive" },
   ];
-  let selectedFont = fonts[0];
+  let selectedFont = $state(fonts[0]);
 
   onMount(() => {
     ctx = canvas.getContext('2d');
@@ -127,11 +127,6 @@
     }
   }
 
-  $: hasSignature =
-    (signatureMode === 'draw' && ctx && !isCanvasEmpty()) ||
-    (signatureMode === 'type' && typedName.length > 0) ||
-    (signatureMode === 'upload' && uploadedImage);
-
   function isCanvasEmpty(): boolean {
     if (!ctx) return true;
     const imageData = ctx.getImageData(0, 0, width, height);
@@ -140,6 +135,12 @@
       return index % 4 === 3 && channel !== 0;
     });
   }
+
+  const hasSignature = $derived(
+    (signatureMode === 'draw' && ctx && !isCanvasEmpty()) ||
+    (signatureMode === 'type' && typedName.length > 0) ||
+    (signatureMode === 'upload' && uploadedImage)
+  );
 </script>
 
 <svelte:head>
@@ -161,13 +162,13 @@
           {width}
           {height}
           class="touch-none cursor-crosshair"
-          on:mousedown={startDrawing}
-          on:mousemove={draw}
-          on:mouseup={stopDrawing}
-          on:mouseleave={stopDrawing}
-          on:touchstart={startDrawing}
-          on:touchmove={draw}
-          on:touchend={stopDrawing}
+          onmousedown={startDrawing}
+          onmousemove={draw}
+          onmouseup={stopDrawing}
+          onmouseleave={stopDrawing}
+          ontouchstart={startDrawing}
+          ontouchmove={draw}
+          ontouchend={stopDrawing}
         ></canvas>
       </div>
       <p class="text-xs text-muted-foreground mt-2 text-center">
@@ -190,7 +191,7 @@
               type="button"
               class="p-3 border rounded-lg text-center transition-colors {selectedFont.name === font.name ? 'border-primary bg-primary/5' : 'hover:border-primary/50'}"
               style="font-family: {font.font}; font-size: 24px;"
-              on:click={() => selectedFont = font}
+              onclick={() => selectedFont = font}
             >
               {typedName || 'Your Name'}
             </button>
@@ -212,7 +213,7 @@
         <div class="border rounded-lg p-4 bg-white">
           <img src={uploadedImage} alt="Uploaded signature" class="max-h-32 mx-auto" />
         </div>
-        <Button variant="outline" class="w-full mt-2" on:click={() => uploadedImage = ''}>
+        <Button variant="outline" class="w-full mt-2" onclick={() => uploadedImage = ''}>
           Remove Image
         </Button>
       {:else}
@@ -225,17 +226,17 @@
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <span class="text-sm text-muted-foreground">Upload signature image</span>
-          <input type="file" accept="image/*" class="hidden" on:change={handleFileUpload} />
+          <input type="file" accept="image/*" class="hidden" onchange={handleFileUpload} />
         </label>
       {/if}
     </Tabs.Content>
   </Tabs.Root>
 
   <div class="flex justify-between">
-    <Button variant="outline" on:click={clearCanvas}>Clear</Button>
+    <Button variant="outline" onclick={clearCanvas}>Clear</Button>
     <div class="flex gap-2">
-      <Button variant="outline" on:click={() => dispatch('cancel')}>Cancel</Button>
-      <Button on:click={handleSign} disabled={!hasSignature}>
+      <Button variant="outline" onclick={() => dispatch('cancel')}>Cancel</Button>
+      <Button onclick={handleSign} disabled={!hasSignature}>
         Apply Signature
       </Button>
     </div>

@@ -28,7 +28,12 @@
 	import PlugIcon from '@lucide/svelte/icons/plug';
 	import HistoryIcon from '@lucide/svelte/icons/history';
 	import PanelsTopLeftIcon from '@lucide/svelte/icons/panels-top-left';
+	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import FlaskConicalIcon from '@lucide/svelte/icons/flask-conical';
+	import FileSignatureIcon from '@lucide/svelte/icons/file-signature';
+	import PenToolIcon from '@lucide/svelte/icons/pen-tool';
+	import PresentationIcon from '@lucide/svelte/icons/presentation';
+	import FileCheckIcon from '@lucide/svelte/icons/file-check';
 
 	// Static navigation items (non-module based)
 	const staticNavItems = [
@@ -105,6 +110,55 @@
 					url: '/admin/web-forms/create'
 				}
 			]
+		},
+		{
+			title: 'Document Templates',
+			url: '/admin/document-templates',
+			icon: FileSignatureIcon,
+			items: [
+				{
+					title: 'All Templates',
+					url: '/admin/document-templates'
+				},
+				{
+					title: 'Create Template',
+					url: '/admin/document-templates/create'
+				}
+			]
+		},
+		{
+			title: 'Approval Rules',
+			url: '/admin/approval-rules',
+			icon: FileCheckIcon,
+			items: [
+				{
+					title: 'All Rules',
+					url: '/admin/approval-rules'
+				},
+				{
+					title: 'Create Rule',
+					url: '/admin/approval-rules/create'
+				}
+			]
+		},
+		{
+			title: 'AI & Machine Learning',
+			url: '/admin/ai',
+			icon: SparklesIcon,
+			items: [
+				{
+					title: 'Settings',
+					url: '/admin/ai'
+				},
+				{
+					title: 'Lead Scoring',
+					url: '/admin/ai?tab=scoring'
+				},
+				{
+					title: 'Prompts',
+					url: '/admin/ai?tab=prompts'
+				}
+			]
 		}
 	];
 
@@ -156,6 +210,36 @@
 				{
 					title: 'Invoices',
 					url: '/invoices'
+				}
+			]
+		},
+		{
+			title: 'Proposals',
+			url: '/proposals',
+			icon: PresentationIcon,
+			items: [
+				{
+					title: 'All Proposals',
+					url: '/proposals'
+				},
+				{
+					title: 'Create Proposal',
+					url: '/proposals/create'
+				}
+			]
+		},
+		{
+			title: 'E-Signatures',
+			url: '/signatures',
+			icon: PenToolIcon,
+			items: [
+				{
+					title: 'All Requests',
+					url: '/signatures'
+				},
+				{
+					title: 'New Request',
+					url: '/signatures/create'
 				}
 			]
 		},
@@ -438,6 +522,8 @@
 	import GlobeIcon from '@lucide/svelte/icons/globe';
 	import HeadphonesIcon from '@lucide/svelte/icons/headphones';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
+	import ListChecksIcon from '@lucide/svelte/icons/list-checks';
+	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 
 	const customerSuccessNavItems = [
 		{
@@ -467,6 +553,48 @@
 				{
 					title: 'Settings',
 					url: '/admin/support'
+				}
+			]
+		},
+		{
+			title: 'Playbooks',
+			url: '/playbooks',
+			icon: ListChecksIcon,
+			items: [
+				{
+					title: 'All Playbooks',
+					url: '/playbooks'
+				},
+				{
+					title: 'Create Playbook',
+					url: '/playbooks/create'
+				},
+				{
+					title: 'Active Instances',
+					url: '/playbooks/instances'
+				}
+			]
+		},
+		{
+			title: 'Renewals',
+			url: '/renewals',
+			icon: RefreshCwIcon,
+			items: [
+				{
+					title: 'Pipeline',
+					url: '/renewals'
+				},
+				{
+					title: 'Contracts',
+					url: '/renewals?tab=contracts'
+				},
+				{
+					title: 'Health Scores',
+					url: '/renewals?tab=health'
+				},
+				{
+					title: 'Forecast',
+					url: '/renewals?tab=forecast'
 				}
 			]
 		}

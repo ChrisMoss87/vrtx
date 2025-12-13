@@ -333,7 +333,7 @@
 		{#if invoice && !editMode}
 			<div class="flex items-center gap-2">
 				{#if invoice.status === 'draft'}
-					<Button variant="outline" onclick={() => goto(`/invoices/${invoice.id}?edit=true`)}>
+					<Button variant="outline" onclick={() => goto(`/invoices/${invoice!.id}?edit=true`)}>
 						<FileText class="mr-2 h-4 w-4" />
 						Edit
 					</Button>

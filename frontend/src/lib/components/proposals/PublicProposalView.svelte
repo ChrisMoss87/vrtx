@@ -21,18 +21,18 @@
     togglePricingItem: number;
   }>();
 
-  let showDeclineDialog = false;
-  let declineReason = '';
-  let newComment = '';
-  let activeSectionId: number | null = null;
+  let showDeclineDialog = $state(false);
+  let declineReason = $state('');
+  let newComment = $state('');
+  let activeSectionId = $state<number | null>(null);
 
-  $: visibleSections = sections.filter(s => s.is_visible);
-  $: selectedItems = pricingItems.filter(item => !item.is_optional || item.is_selected);
-  $: totalAmount = selectedItems.reduce((sum, item) => {
+  const visibleSections = $derived(sections.filter(s => s.is_visible));
+  const selectedItems = $derived(pricingItems.filter(item => !item.is_optional || item.is_selected));
+  const totalAmount = $derived(selectedItems.reduce((sum, item) => {
     const subtotal = item.quantity * item.unit_price;
     const discount = item.discount_percent ? subtotal * (item.discount_percent / 100) : 0;
     return sum + (subtotal - discount);
-  }, 0);
+  }, 0));
 
   function formatCurrency(amount: number): string {
     return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -81,10 +81,10 @@
         </div>
         {#if proposal.status === 'sent' || proposal.status === 'viewed'}
           <div class="flex gap-2">
-            <Button variant="outline" on:click={() => showDeclineDialog = true}>
+            <Button variant="outline" onclick={() => showDeclineDialog = true}>
               Decline
             </Button>
-            <Button on:click={() => dispatch('accept')} disabled={loading} style="background-color: var(--primary);">
+            <Button onclick={() => dispatch('accept')} disabled={loading} style="background-color: var(--primary);">
               {loading ? 'Processing...' : 'Accept Proposal'}
             </Button>
           </div>
@@ -148,9 +148,9 @@
                 bind:value={newComment}
                 placeholder="Add a comment..."
                 class="flex-1 min-h-[60px]"
-                on:focus={() => activeSectionId = section.id}
+                onfocus={() => activeSectionId = section.id}
               />
-              <Button variant="outline" size="sm" on:click={handleAddComment}>
+              <Button variant="outline" size="sm" onclick={handleAddComment}>
                 Comment
               </Button>
             </div>
@@ -184,7 +184,7 @@
                         <input
                           type="checkbox"
                           checked={item.is_selected}
-                          on:change={() => toggleOptionalItem(item.id)}
+                          onchange={() => toggleOptionalItem(item.id)}
                           class="rounded"
                         />
                       {/if}
@@ -293,8 +293,8 @@
       />
     </div>
     <Dialog.Footer>
-      <Button variant="outline" on:click={() => showDeclineDialog = false}>Cancel</Button>
-      <Button variant="destructive" on:click={handleDecline}>
+      <Button variant="outline" onclick={() => showDeclineDialog = false}>Cancel</Button>
+      <Button variant="destructive" onclick={handleDecline}>
         Decline Proposal
       </Button>
     </Dialog.Footer>

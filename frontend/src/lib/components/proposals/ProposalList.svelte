@@ -20,8 +20,8 @@
     send: number;
   }>();
 
-  let search = '';
-  let statusFilter = '';
+  let search = $state('');
+  let statusFilter = $state('');
 
   const statuses = [
     { value: '', label: 'All Statuses' },
@@ -42,14 +42,14 @@
     expired: 'bg-orange-100 text-orange-800',
   };
 
-  $: filteredProposals = proposals.filter(p => {
+  const filteredProposals = $derived(proposals.filter(p => {
     const matchesSearch = !search ||
       p.title.toLowerCase().includes(search.toLowerCase()) ||
       p.client_name.toLowerCase().includes(search.toLowerCase()) ||
       p.client_email.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !statusFilter || p.status === statusFilter;
     return matchesSearch && matchesStatus;
-  });
+  }));
 
   function formatDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -76,22 +76,19 @@
         placeholder="Search proposals..."
         class="w-64"
       />
-      <Select.Root
-        selected={{ value: statusFilter, label: statuses.find(s => s.value === statusFilter)?.label || 'All Statuses' }}
-        onSelectedChange={(v) => statusFilter = v?.value || ''}
-      >
+      <Select.Root type="single" bind:value={statusFilter}>
         <Select.Trigger class="w-40">
-          <Select.Value placeholder="Status" />
+          {statuses.find(s => s.value === statusFilter)?.label || 'All Statuses'}
         </Select.Trigger>
         <Select.Content>
           {#each statuses as status}
-            <Select.Item value={status.value}>{status.label}</Select.Item>
+            <Select.Item value={status.value} label={status.label}>{status.label}</Select.Item>
           {/each}
         </Select.Content>
       </Select.Root>
     </div>
 
-    <Button on:click={() => dispatch('create')}>
+    <Button onclick={() => dispatch('create')}>
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
@@ -118,7 +115,7 @@
         {#if search || statusFilter}
           <p class="text-sm text-muted-foreground mt-2">Try adjusting your filters</p>
         {:else}
-          <Button variant="outline" class="mt-4" on:click={() => dispatch('create')}>
+          <Button variant="outline" class="mt-4" onclick={() => dispatch('create')}>
             Create your first proposal
           </Button>
         {/if}
@@ -127,7 +124,7 @@
   {:else}
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {#each filteredProposals as proposal}
-        <Card.Root class="hover:shadow-md transition-shadow cursor-pointer" on:click={() => dispatch('view', proposal.id)}>
+        <Card.Root class="hover:shadow-md transition-shadow cursor-pointer" onclick={() => dispatch('view', proposal.id)}>
           <Card.Header class="pb-2">
             <div class="flex justify-between items-start">
               <div class="space-y-1">
@@ -140,8 +137,8 @@
                 </Card.Description>
               </div>
               <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild let:builder>
-                  <Button variant="ghost" size="sm" builders={[builder]} on:click|stopPropagation>
+                <DropdownMenu.Trigger>
+                  <Button variant="ghost" size="sm" onclick={(e: MouseEvent) => e.stopPropagation()}>
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <circle cx="12" cy="12" r="1" />
                       <circle cx="12" cy="5" r="1" />
@@ -150,23 +147,23 @@
                   </Button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content align="end">
-                  <DropdownMenu.Item on:click={() => dispatch('view', proposal.id)}>
+                  <DropdownMenu.Item onclick={() => dispatch('view', proposal.id)}>
                     View
                   </DropdownMenu.Item>
-                  <DropdownMenu.Item on:click={() => dispatch('edit', proposal.id)}>
+                  <DropdownMenu.Item onclick={() => dispatch('edit', proposal.id)}>
                     Edit
                   </DropdownMenu.Item>
-                  <DropdownMenu.Item on:click={() => dispatch('duplicate', proposal.id)}>
+                  <DropdownMenu.Item onclick={() => dispatch('duplicate', proposal.id)}>
                     Duplicate
                   </DropdownMenu.Item>
                   {#if proposal.status === 'draft'}
                     <DropdownMenu.Separator />
-                    <DropdownMenu.Item on:click={() => dispatch('send', proposal.id)}>
+                    <DropdownMenu.Item onclick={() => dispatch('send', proposal.id)}>
                       Send to Client
                     </DropdownMenu.Item>
                   {/if}
                   <DropdownMenu.Separator />
-                  <DropdownMenu.Item class="text-destructive" on:click={() => dispatch('delete', proposal.id)}>
+                  <DropdownMenu.Item class="text-destructive" onclick={() => dispatch('delete', proposal.id)}>
                     Delete
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>

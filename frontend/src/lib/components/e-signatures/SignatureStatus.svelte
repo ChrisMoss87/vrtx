@@ -3,7 +3,7 @@
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
   import * as Progress from '$lib/components/ui/progress';
-  import type { SignatureRequest, SignatureSigner } from '$lib/api/signatures';
+  import type { SignatureRequest } from '$lib/api/signatures';
   import { createEventDispatcher } from 'svelte';
 
   export let request: SignatureRequest;
@@ -33,9 +33,9 @@
     declined: 'text-red-600 bg-red-50',
   };
 
-  $: signedCount = request.signers?.filter(s => s.status === 'signed').length || 0;
-  $: totalSigners = request.signers?.length || 0;
-  $: progress = totalSigners > 0 ? (signedCount / totalSigners) * 100 : 0;
+  const signedCount = $derived(request.signers?.filter(s => s.status === 'signed').length || 0);
+  const totalSigners = $derived(request.signers?.length || 0);
+  const progress = $derived(totalSigners > 0 ? (signedCount / totalSigners) * 100 : 0);
 
   function formatDate(dateString: string | null): string {
     if (!dateString) return '-';
@@ -96,7 +96,7 @@
               {getStatusLabel(signer.status)}
             </Badge>
             {#if signer.status === 'pending' || signer.status === 'sent'}
-              <Button variant="ghost" size="sm" on:click={() => dispatch('remind', signer.id)}>
+              <Button variant="ghost" size="sm" onclick={() => dispatch('remind', signer.id)}>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                   <polyline points="22,6 12,13 2,6" />
@@ -133,7 +133,7 @@
   </Card.Content>
   <Card.Footer class="flex justify-between">
     <div class="flex gap-2">
-      <Button variant="outline" size="sm" on:click={() => dispatch('viewAuditLog')}>
+      <Button variant="outline" size="sm" onclick={() => dispatch('viewAuditLog')}>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
@@ -144,13 +144,13 @@
         Audit Log
       </Button>
       {#if request.status === 'pending' || request.status === 'in_progress'}
-        <Button variant="outline" size="sm" class="text-destructive" on:click={() => dispatch('void')}>
+        <Button variant="outline" size="sm" class="text-destructive" onclick={() => dispatch('void')}>
           Void Request
         </Button>
       {/if}
     </div>
     {#if request.status === 'completed'}
-      <Button on:click={() => dispatch('download')}>
+      <Button onclick={() => dispatch('download')}>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <polyline points="7 10 12 15 17 10" />

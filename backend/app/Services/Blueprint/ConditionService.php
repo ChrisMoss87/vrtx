@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace App\Services\Blueprint;
 
+use App\Domain\Workflow\Services\ConditionEvaluationService;
 use App\Models\BlueprintTransition;
 use App\Models\BlueprintTransitionCondition;
-use App\Services\Workflow\ConditionEvaluator;
 use Illuminate\Support\Collection;
 
 /**
  * Evaluates before-phase conditions for blueprint transitions.
- * Reuses the workflow ConditionEvaluator for actual evaluation.
+ * Reuses the workflow ConditionEvaluationService for actual evaluation.
  */
 class ConditionService
 {
     public function __construct(
-        protected ConditionEvaluator $evaluator
+        protected ConditionEvaluationService $evaluator
     ) {}
 
     /**
@@ -138,7 +138,7 @@ class ConditionService
      */
     public function getOperatorsWithMetadata(): array
     {
-        return ConditionEvaluator::getOperatorsWithMetadata();
+        return ConditionEvaluationService::getOperatorsWithMetadata();
     }
 
     /**
@@ -146,6 +146,6 @@ class ConditionService
      */
     public function getOperatorsForFieldType(string $fieldType): array
     {
-        return ConditionEvaluator::getOperatorsForFieldType($fieldType);
+        return ConditionEvaluationService::getOperatorsForFieldType($fieldType);
     }
 }

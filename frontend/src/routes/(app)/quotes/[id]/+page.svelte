@@ -296,7 +296,7 @@
 		{#if quote && !editMode}
 			<div class="flex items-center gap-2">
 				{#if quote.status === 'draft'}
-					<Button variant="outline" onclick={() => goto(`/quotes/${quote.id}?edit=true`)}>
+					<Button variant="outline" onclick={() => goto(`/quotes/${quote!.id}?edit=true`)}>
 						<FileText class="mr-2 h-4 w-4" />
 						Edit
 					</Button>
@@ -322,7 +322,7 @@
 				{#if quote.view_token}
 					<Button
 						variant="outline"
-						onclick={() => window.open(`/quote/${quote.view_token}`, '_blank')}
+						onclick={() => window.open(`/quote/${quote!.view_token}`, '_blank')}
 					>
 						<ExternalLink class="mr-2 h-4 w-4" />
 						Public Link
@@ -637,7 +637,7 @@
 							<Card.Title>Linked Invoice</Card.Title>
 						</Card.Header>
 						<Card.Content>
-							<Button variant="outline" class="w-full" onclick={() => goto(`/invoices/${quote.invoice?.id}`)}>
+							<Button variant="outline" class="w-full" onclick={() => goto(`/invoices/${quote!.invoice?.id}`)}>
 								<Receipt class="mr-2 h-4 w-4" />
 								{quote.invoice.invoice_number}
 							</Button>

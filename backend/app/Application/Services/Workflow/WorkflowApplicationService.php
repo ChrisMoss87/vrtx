@@ -21,6 +21,7 @@ use App\Domain\Workflow\Repositories\WorkflowRepositoryInterface;
 use App\Domain\Workflow\Services\WorkflowTriggerEvaluatorService;
 use App\Domain\Workflow\Services\WorkflowValidationService;
 use App\Domain\Workflow\ValueObjects\TriggerType;
+use App\Jobs\ExecuteWorkflowJob;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
@@ -260,6 +261,9 @@ class WorkflowApplicationService
 
     /**
      * Create an execution for a workflow.
+     *
+     * @param bool $dispatchJob Whether to dispatch the job immediately
+     * @param int $delaySeconds Delay before executing (0 for immediate)
      */
     public function createExecution(
         int $workflowId,
@@ -268,6 +272,8 @@ class WorkflowApplicationService
         ?string $recordType = null,
         array $contextData = [],
         ?int $triggeredByUserId = null,
+        bool $dispatchJob = true,
+        int $delaySeconds = 0,
     ): WorkflowExecution {
         $execution = WorkflowExecution::create(
             workflowId: $workflowId,
@@ -289,6 +295,17 @@ class WorkflowApplicationService
             recordType: $recordType,
             triggeredByUserId: $triggeredByUserId,
         ));
+
+        // Dispatch execution job if requested
+        if ($dispatchJob && $savedExecution->getId() !== null) {
+            $job = new ExecuteWorkflowJob($savedExecution->getId(), $contextData);
+
+            if ($delaySeconds > 0) {
+                $job->delay($delaySeconds);
+            }
+
+            dispatch($job);
+        }
 
         return $savedExecution;
     }

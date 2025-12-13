@@ -20,8 +20,8 @@
     download: number;
   }>();
 
-  let search = '';
-  let statusFilter = '';
+  let search = $state('');
+  let statusFilter = $state('');
 
   const statuses = [
     { value: '', label: 'All Statuses' },
@@ -44,13 +44,13 @@
     expired: 'bg-orange-100 text-orange-800',
   };
 
-  $: filteredRequests = requests.filter(r => {
+  const filteredRequests = $derived(requests.filter(r => {
     const matchesSearch = !search ||
       r.title.toLowerCase().includes(search.toLowerCase()) ||
       r.signers?.some(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase()));
     const matchesStatus = !statusFilter || r.status === statusFilter;
     return matchesSearch && matchesStatus;
-  });
+  }));
 
   function formatDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -80,22 +80,19 @@
         placeholder="Search requests..."
         class="w-64"
       />
-      <Select.Root
-        selected={{ value: statusFilter, label: statuses.find(s => s.value === statusFilter)?.label || 'All Statuses' }}
-        onSelectedChange={(v) => statusFilter = v?.value || ''}
-      >
+      <Select.Root type="single" bind:value={statusFilter}>
         <Select.Trigger class="w-40">
-          <Select.Value placeholder="Status" />
+          {statuses.find(s => s.value === statusFilter)?.label || 'All Statuses'}
         </Select.Trigger>
         <Select.Content>
           {#each statuses as status}
-            <Select.Item value={status.value}>{status.label}</Select.Item>
+            <Select.Item value={status.value} label={status.label}>{status.label}</Select.Item>
           {/each}
         </Select.Content>
       </Select.Root>
     </div>
 
-    <Button on:click={() => dispatch('create')}>
+    <Button onclick={() => dispatch('create')}>
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
@@ -121,7 +118,7 @@
         {#if search || statusFilter}
           <p class="text-sm text-muted-foreground mt-2">Try adjusting your filters</p>
         {:else}
-          <Button variant="outline" class="mt-4" on:click={() => dispatch('create')}>
+          <Button variant="outline" class="mt-4" onclick={() => dispatch('create')}>
             Create your first signature request
           </Button>
         {/if}
@@ -130,100 +127,102 @@
   {:else}
     <div class="space-y-3">
       {#each filteredRequests as request}
-        <Card.Root class="hover:shadow-md transition-shadow cursor-pointer" on:click={() => dispatch('view', request.id)}>
-          <Card.Content class="p-4">
-            <div class="flex items-start justify-between">
-              <div class="flex-1">
-                <div class="flex items-center gap-3 mb-2">
-                  <h3 class="font-medium">{request.title}</h3>
-                  <Badge class={statusColors[request.status]}>
-                    {getStatusLabel(request.status)}
-                  </Badge>
-                </div>
+        <Card.Root class="hover:shadow-md transition-shadow cursor-pointer">
+          <button type="button" class="w-full text-left" onclick={() => dispatch('view', request.id)}>
+            <Card.Content class="p-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3 mb-2">
+                    <h3 class="font-medium">{request.title}</h3>
+                    <Badge class={statusColors[request.status]}>
+                      {getStatusLabel(request.status)}
+                    </Badge>
+                  </div>
 
-                <div class="flex items-center gap-6 text-sm text-muted-foreground">
-                  <span class="flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                    </svg>
-                    {request.signers?.length || 0} signers
-                  </span>
-                  <span>Created {formatDate(request.created_at)}</span>
-                  {#if request.expires_at}
+                  <div class="flex items-center gap-6 text-sm text-muted-foreground">
                     <span class="flex items-center gap-1">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                       </svg>
-                      Expires {formatDate(request.expires_at)}
+                      {request.signers?.length || 0} signers
                     </span>
+                    <span>Created {formatDate(request.created_at)}</span>
+                    {#if request.expires_at}
+                      <span class="flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        Expires {formatDate(request.expires_at)}
+                      </span>
+                    {/if}
+                  </div>
+
+                  {#if request.signers && request.signers.length > 0}
+                    <div class="mt-3">
+                      <div class="flex items-center gap-2 mb-1">
+                        <Progress.Root value={getSigningProgress(request)} class="h-1.5 flex-1" />
+                        <span class="text-xs text-muted-foreground">
+                          {request.signers.filter(s => s.status === 'signed').length}/{request.signers.length}
+                        </span>
+                      </div>
+                      <div class="flex gap-2 flex-wrap">
+                        {#each request.signers.slice(0, 3) as signer}
+                          <span class="text-xs px-2 py-0.5 rounded-full bg-muted">
+                            {signer.name}
+                            {#if signer.status === 'signed'}
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            {/if}
+                          </span>
+                        {/each}
+                        {#if request.signers.length > 3}
+                          <span class="text-xs px-2 py-0.5 rounded-full bg-muted">
+                            +{request.signers.length - 3} more
+                          </span>
+                        {/if}
+                      </div>
+                    </div>
                   {/if}
                 </div>
 
-                {#if request.signers && request.signers.length > 0}
-                  <div class="mt-3">
-                    <div class="flex items-center gap-2 mb-1">
-                      <Progress.Root value={getSigningProgress(request)} class="h-1.5 flex-1" />
-                      <span class="text-xs text-muted-foreground">
-                        {request.signers.filter(s => s.status === 'signed').length}/{request.signers.length}
-                      </span>
-                    </div>
-                    <div class="flex gap-2 flex-wrap">
-                      {#each request.signers.slice(0, 3) as signer}
-                        <span class="text-xs px-2 py-0.5 rounded-full bg-muted">
-                          {signer.name}
-                          {#if signer.status === 'signed'}
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          {/if}
-                        </span>
-                      {/each}
-                      {#if request.signers.length > 3}
-                        <span class="text-xs px-2 py-0.5 rounded-full bg-muted">
-                          +{request.signers.length - 3} more
-                        </span>
-                      {/if}
-                    </div>
-                  </div>
-                {/if}
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger>
+                    <Button variant="ghost" size="sm" onclick={(e: MouseEvent) => e.stopPropagation()}>
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="1" />
+                        <circle cx="12" cy="5" r="1" />
+                        <circle cx="12" cy="19" r="1" />
+                      </svg>
+                    </Button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Content align="end">
+                    <DropdownMenu.Item onclick={() => dispatch('view', request.id)}>
+                      View Details
+                    </DropdownMenu.Item>
+                    {#if request.status === 'pending' || request.status === 'in_progress'}
+                      <DropdownMenu.Item onclick={() => dispatch('remind', request.id)}>
+                        Send Reminder
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Separator />
+                      <DropdownMenu.Item class="text-destructive" onclick={() => dispatch('void', request.id)}>
+                        Void Request
+                      </DropdownMenu.Item>
+                    {/if}
+                    {#if request.status === 'completed'}
+                      <DropdownMenu.Item onclick={() => dispatch('download', request.id)}>
+                        Download Document
+                      </DropdownMenu.Item>
+                    {/if}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Root>
               </div>
-
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild let:builder>
-                  <Button variant="ghost" size="sm" builders={[builder]} on:click|stopPropagation>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="1" />
-                      <circle cx="12" cy="5" r="1" />
-                      <circle cx="12" cy="19" r="1" />
-                    </svg>
-                  </Button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Content align="end">
-                  <DropdownMenu.Item on:click={() => dispatch('view', request.id)}>
-                    View Details
-                  </DropdownMenu.Item>
-                  {#if request.status === 'pending' || request.status === 'in_progress'}
-                    <DropdownMenu.Item on:click={() => dispatch('remind', request.id)}>
-                      Send Reminder
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Separator />
-                    <DropdownMenu.Item class="text-destructive" on:click={() => dispatch('void', request.id)}>
-                      Void Request
-                    </DropdownMenu.Item>
-                  {/if}
-                  {#if request.status === 'completed'}
-                    <DropdownMenu.Item on:click={() => dispatch('download', request.id)}>
-                      Download Document
-                    </DropdownMenu.Item>
-                  {/if}
-                </DropdownMenu.Content>
-              </DropdownMenu.Root>
-            </div>
-          </Card.Content>
+            </Card.Content>
+          </button>
         </Card.Root>
       {/each}
     </div>

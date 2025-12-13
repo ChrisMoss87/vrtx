@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Services\Workflow\ConditionEvaluator;
+use App\Domain\Workflow\Services\ConditionEvaluationService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -13,9 +13,9 @@ use Illuminate\Support\Facades\Log;
  */
 class ConditionBranchAction implements ActionInterface
 {
-    protected ConditionEvaluator $conditionEvaluator;
+    protected ConditionEvaluationService $conditionEvaluator;
 
-    public function __construct(ConditionEvaluator $conditionEvaluator)
+    public function __construct(ConditionEvaluationService $conditionEvaluator)
     {
         $this->conditionEvaluator = $conditionEvaluator;
     }

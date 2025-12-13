@@ -160,13 +160,15 @@
 		loadAvailableDates();
 	}
 
-	async function handleTimezoneChange(tz: string) {
-		timezone = tz;
-		selectedDate = null;
-		selectedTime = null;
-		timeSlots = [];
-		await loadAvailableDates();
-	}
+	$effect(() => {
+		// When timezone changes, reload available dates
+		if (timezone && meetingType) {
+			selectedDate = null;
+			selectedTime = null;
+			timeSlots = [];
+			loadAvailableDates();
+		}
+	});
 
 	async function handleSubmit() {
 		if (!selectedDate || !selectedTime || !formData.name || !formData.email || !slug || !meetingTypeSlug) return;
@@ -430,18 +432,14 @@
 
 									<!-- Timezone selector -->
 									<div class="mb-4">
-										<Select.Root
-											type="single"
-											value={timezone}
-											onValueChange={handleTimezoneChange}
-										>
+										<Select.Root type="single" bind:value={timezone}>
 											<Select.Trigger class="w-full">
 												<Globe class="mr-2 h-4 w-4" />
 												{timezone}
 											</Select.Trigger>
 											<Select.Content>
 												{#each commonTimezones as tz}
-													<Select.Item value={tz}>{tz}</Select.Item>
+													<Select.Item value={tz} label={tz}>{tz}</Select.Item>
 												{/each}
 											</Select.Content>
 										</Select.Root>
@@ -614,15 +612,14 @@
 												{:else if question.type === 'select' && question.options}
 													<Select.Root
 														type="single"
-														value={formData.answers[question.id] || ''}
-														onValueChange={(v) => (formData.answers[question.id] = v)}
+														bind:value={formData.answers[question.id]}
 													>
 														<Select.Trigger>
 															{formData.answers[question.id] || 'Select an option'}
 														</Select.Trigger>
 														<Select.Content>
 															{#each question.options as option}
-																<Select.Item value={option}>{option}</Select.Item>
+																<Select.Item value={option} label={option}>{option}</Select.Item>
 															{/each}
 														</Select.Content>
 													</Select.Root>

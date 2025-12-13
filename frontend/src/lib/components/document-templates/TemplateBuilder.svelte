@@ -20,24 +20,24 @@
     cancel: void;
   }>();
 
-  let name = template.name || '';
-  let category = template.category || '';
-  let description = template.description || '';
-  let content = template.content || '';
-  let outputFormat = template.output_format || 'pdf';
-  let isShared = template.is_shared || false;
-  let conditionalBlocks: ConditionalBlock[] = template.conditional_blocks || [];
+  let name = $state(template.name || '');
+  let category = $state(template.category || '');
+  let description = $state(template.description || '');
+  let content = $state(template.content || '');
+  let outputFormat = $state(template.output_format || 'pdf');
+  let isShared = $state(template.is_shared || false);
+  let conditionalBlocks = $state<ConditionalBlock[]>(template.conditional_blocks || []);
 
   // Page settings
-  let marginTop = template.page_settings?.margin_top || '20mm';
-  let marginRight = template.page_settings?.margin_right || '20mm';
-  let marginBottom = template.page_settings?.margin_bottom || '20mm';
-  let marginLeft = template.page_settings?.margin_left || '20mm';
-  let orientation = template.page_settings?.orientation || 'portrait';
+  let marginTop = $state(template.page_settings?.margin_top || '20mm');
+  let marginRight = $state(template.page_settings?.margin_right || '20mm');
+  let marginBottom = $state(template.page_settings?.margin_bottom || '20mm');
+  let marginLeft = $state(template.page_settings?.margin_left || '20mm');
+  let orientation = $state(template.page_settings?.orientation || 'portrait');
 
   // Header/Footer
-  let headerContent = template.header_settings?.content || '';
-  let footerContent = template.footer_settings?.content || '';
+  let headerContent = $state(template.header_settings?.content || '');
+  let footerContent = $state(template.footer_settings?.content || '');
 
   const categories = [
     { value: 'contract', label: 'Contract' },
@@ -53,6 +53,15 @@
     { value: 'pdf', label: 'PDF' },
     { value: 'docx', label: 'Word Document' },
     { value: 'html', label: 'HTML' },
+  ];
+
+  const operators = [
+    { value: '=', label: 'Equals' },
+    { value: '!=', label: 'Not Equals' },
+    { value: '>', label: 'Greater Than' },
+    { value: '<', label: 'Less Than' },
+    { value: 'empty', label: 'Is Empty' },
+    { value: 'not_empty', label: 'Is Not Empty' },
   ];
 
   function insertMergeField(field: string) {
@@ -94,7 +103,12 @@
   }
 
   function removeConditionalBlock(index: number) {
-    conditionalBlocks = conditionalBlocks.filter((_, i) => i !== index);
+    conditionalBlocks = conditionalBlocks.filter((_: ConditionalBlock, i: number) => i !== index);
+  }
+
+  function updateBlockOperator(index: number, value: string) {
+    conditionalBlocks[index].condition.operator = value;
+    conditionalBlocks = conditionalBlocks;
   }
 </script>
 
@@ -124,16 +138,13 @@
 
             <div class="space-y-2">
               <Label for="category">Category</Label>
-              <Select.Root
-                selected={{ value: category, label: categories.find(c => c.value === category)?.label || 'Select category' }}
-                onSelectedChange={(v) => category = v?.value || ''}
-              >
+              <Select.Root type="single" bind:value={category}>
                 <Select.Trigger>
-                  <Select.Value placeholder="Select category" />
+                  {categories.find(c => c.value === category)?.label || 'Select category'}
                 </Select.Trigger>
                 <Select.Content>
                   {#each categories as cat}
-                    <Select.Item value={cat.value}>{cat.label}</Select.Item>
+                    <Select.Item value={cat.value} label={cat.label}>{cat.label}</Select.Item>
                   {/each}
                 </Select.Content>
               </Select.Root>
@@ -164,16 +175,13 @@
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
               <Label for="output">Output Format</Label>
-              <Select.Root
-                selected={{ value: outputFormat, label: outputFormats.find(f => f.value === outputFormat)?.label || 'PDF' }}
-                onSelectedChange={(v) => outputFormat = v?.value || 'pdf'}
-              >
+              <Select.Root type="single" bind:value={outputFormat}>
                 <Select.Trigger>
-                  <Select.Value placeholder="Select format" />
+                  {outputFormats.find(f => f.value === outputFormat)?.label || 'PDF'}
                 </Select.Trigger>
                 <Select.Content>
                   {#each outputFormats as format}
-                    <Select.Item value={format.value}>{format.label}</Select.Item>
+                    <Select.Item value={format.value} label={format.label}>{format.label}</Select.Item>
                   {/each}
                 </Select.Content>
               </Select.Root>
@@ -181,16 +189,13 @@
 
             <div class="space-y-2">
               <Label for="orientation">Orientation</Label>
-              <Select.Root
-                selected={{ value: orientation, label: orientation === 'portrait' ? 'Portrait' : 'Landscape' }}
-                onSelectedChange={(v) => orientation = v?.value || 'portrait'}
-              >
+              <Select.Root type="single" bind:value={orientation}>
                 <Select.Trigger>
-                  <Select.Value placeholder="Select orientation" />
+                  {orientation === 'portrait' ? 'Portrait' : 'Landscape'}
                 </Select.Trigger>
                 <Select.Content>
-                  <Select.Item value="portrait">Portrait</Select.Item>
-                  <Select.Item value="landscape">Landscape</Select.Item>
+                  <Select.Item value="portrait" label="Portrait">Portrait</Select.Item>
+                  <Select.Item value="landscape" label="Landscape">Landscape</Select.Item>
                 </Select.Content>
               </Select.Root>
             </div>
@@ -252,7 +257,7 @@
               <h4 class="font-medium">Conditional Blocks</h4>
               <p class="text-sm text-muted-foreground">Show different content based on record data</p>
             </div>
-            <Button variant="outline" on:click={addConditionalBlock}>Add Condition</Button>
+            <Button variant="outline" onclick={addConditionalBlock}>Add Condition</Button>
           </div>
 
           {#each conditionalBlocks as block, index}
@@ -260,7 +265,7 @@
               <div class="space-y-4">
                 <div class="flex justify-between items-center">
                   <code class="text-sm bg-muted px-2 py-1 rounded">{block.placeholder}</code>
-                  <Button variant="ghost" size="sm" on:click={() => removeConditionalBlock(index)}>
+                  <Button variant="ghost" size="sm" onclick={() => removeConditionalBlock(index)}>
                     Remove
                   </Button>
                 </div>
@@ -270,20 +275,14 @@
                     bind:value={block.condition.field}
                     placeholder="Field (e.g., contact.type)"
                   />
-                  <Select.Root
-                    selected={{ value: block.condition.operator, label: block.condition.operator }}
-                    onSelectedChange={(v) => block.condition.operator = v?.value || '='}
-                  >
+                  <Select.Root type="single" value={block.condition.operator} onValueChange={(v) => updateBlockOperator(index, v)}>
                     <Select.Trigger>
-                      <Select.Value placeholder="Operator" />
+                      {operators.find(o => o.value === block.condition.operator)?.label || 'Equals'}
                     </Select.Trigger>
                     <Select.Content>
-                      <Select.Item value="=">Equals</Select.Item>
-                      <Select.Item value="!=">Not Equals</Select.Item>
-                      <Select.Item value=">">Greater Than</Select.Item>
-                      <Select.Item value="<">Less Than</Select.Item>
-                      <Select.Item value="empty">Is Empty</Select.Item>
-                      <Select.Item value="not_empty">Is Not Empty</Select.Item>
+                      {#each operators as op}
+                        <Select.Item value={op.value} label={op.label}>{op.label}</Select.Item>
+                      {/each}
                     </Select.Content>
                   </Select.Root>
                   <Input
@@ -315,10 +314,10 @@
       </Tabs.Root>
     </Card.Content>
     <Card.Footer class="flex justify-between">
-      <Button variant="outline" on:click={() => dispatch('cancel')}>Cancel</Button>
+      <Button variant="outline" onclick={() => dispatch('cancel')}>Cancel</Button>
       <div class="flex gap-2">
-        <Button variant="outline" on:click={() => dispatch('preview')}>Preview</Button>
-        <Button on:click={handleSave} disabled={loading || !name || !content}>
+        <Button variant="outline" onclick={() => dispatch('preview')}>Preview</Button>
+        <Button onclick={handleSave} disabled={loading || !name || !content}>
           {loading ? 'Saving...' : 'Save Template'}
         </Button>
       </div>

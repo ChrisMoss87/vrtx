@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\WorkflowExecution;
-use App\Services\Workflow\WorkflowEngine;
+use App\Domain\Workflow\Repositories\WorkflowExecutionRepositoryInterface;
+use App\Domain\Workflow\Services\WorkflowExecutionService;
+use App\Domain\Workflow\ValueObjects\ExecutionStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -14,7 +15,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Job to execute a workflow asynchronously.
+ * Job to execute a workflow asynchronously using DDD services.
  */
 class ExecuteWorkflowJob implements ShouldQueue
 {
@@ -39,54 +40,61 @@ class ExecuteWorkflowJob implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        protected WorkflowExecution $execution,
-        protected ?array $context = null
+        protected int $executionId,
+        protected ?array $context = null,
     ) {}
 
     /**
      * Execute the job.
      */
-    public function handle(WorkflowEngine $engine): void
-    {
-        // Check if execution is still pending/queued
-        $this->execution->refresh();
+    public function handle(
+        WorkflowExecutionRepositoryInterface $executionRepository,
+        WorkflowExecutionService $executionService,
+    ): void {
+        // Load the execution from the repository
+        $execution = $executionRepository->findById($this->executionId);
 
-        if (!in_array($this->execution->status, [
-            WorkflowExecution::STATUS_PENDING,
-            WorkflowExecution::STATUS_QUEUED,
+        if (!$execution) {
+            Log::warning('Workflow execution not found', [
+                'execution_id' => $this->executionId,
+            ]);
+            return;
+        }
+
+        // Check if execution is still pending/queued
+        if (!in_array($execution->status(), [
+            ExecutionStatus::PENDING,
+            ExecutionStatus::QUEUED,
         ])) {
             Log::info('Workflow execution skipped - already processed', [
-                'execution_id' => $this->execution->id,
-                'status' => $this->execution->status,
+                'execution_id' => $this->executionId,
+                'status' => $execution->status()->value,
             ]);
             return;
         }
 
         // Mark as queued if still pending
-        if ($this->execution->status === WorkflowExecution::STATUS_PENDING) {
-            $this->execution->update([
-                'status' => WorkflowExecution::STATUS_QUEUED,
-                'queued_at' => now(),
-            ]);
+        if ($execution->status() === ExecutionStatus::PENDING) {
+            $execution->markAsQueued();
+            $executionRepository->save($execution);
         }
 
         try {
-            // Use context from job if provided, otherwise from execution
-            $context = $this->context ?? $this->execution->context_data;
-
-            $engine->execute($this->execution, $context);
+            // Execute the workflow using domain service
+            $executionService->execute($execution, $this->context);
 
         } catch (\Exception $e) {
             Log::error('Workflow execution job failed', [
-                'execution_id' => $this->execution->id,
-                'workflow_id' => $this->execution->workflow_id,
+                'execution_id' => $this->executionId,
+                'workflow_id' => $execution->workflowId(),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
             // Mark as failed if we've exhausted retries
             if ($this->attempts() >= $this->tries) {
-                $this->execution->markAsFailed("Job failed after {$this->tries} attempts: {$e->getMessage()}");
+                $execution->markAsFailed("Job failed after {$this->tries} attempts: {$e->getMessage()}");
+                $executionRepository->save($execution);
             }
 
             throw $e;
@@ -99,12 +107,25 @@ class ExecuteWorkflowJob implements ShouldQueue
     public function failed(\Throwable $exception): void
     {
         Log::error('Workflow execution job permanently failed', [
-            'execution_id' => $this->execution->id,
-            'workflow_id' => $this->execution->workflow_id,
+            'execution_id' => $this->executionId,
             'error' => $exception->getMessage(),
         ]);
 
-        $this->execution->markAsFailed("Job permanently failed: {$exception->getMessage()}");
+        // Try to mark the execution as failed
+        try {
+            $executionRepository = app(WorkflowExecutionRepositoryInterface::class);
+            $execution = $executionRepository->findById($this->executionId);
+
+            if ($execution) {
+                $execution->markAsFailed("Job permanently failed: {$exception->getMessage()}");
+                $executionRepository->save($execution);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to mark execution as failed', [
+                'execution_id' => $this->executionId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -112,7 +133,7 @@ class ExecuteWorkflowJob implements ShouldQueue
      */
     public function uniqueId(): string
     {
-        return 'workflow-execution-' . $this->execution->id;
+        return 'workflow-execution-' . $this->executionId;
     }
 
     /**
@@ -122,8 +143,7 @@ class ExecuteWorkflowJob implements ShouldQueue
     {
         return [
             'workflow',
-            'workflow:' . $this->execution->workflow_id,
-            'execution:' . $this->execution->id,
+            'execution:' . $this->executionId,
         ];
     }
 }
