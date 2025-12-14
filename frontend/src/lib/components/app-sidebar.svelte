@@ -34,6 +34,16 @@
 	import PenToolIcon from '@lucide/svelte/icons/pen-tool';
 	import PresentationIcon from '@lucide/svelte/icons/presentation';
 	import FileCheckIcon from '@lucide/svelte/icons/file-check';
+	import GlobeIcon from '@lucide/svelte/icons/globe';
+	import HeadphonesIcon from '@lucide/svelte/icons/headphones';
+	import BookOpenIcon from '@lucide/svelte/icons/book-open';
+	import ListChecksIcon from '@lucide/svelte/icons/list-checks';
+	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+	import RocketIcon from '@lucide/svelte/icons/rocket';
+
+	// ============================================
+	// CORE FEATURES - Essential CRM functionality
+	// ============================================
 
 	// Static navigation items (non-module based)
 	const staticNavItems = [
@@ -60,7 +70,7 @@
 		}
 	];
 
-	// Core CRM Features - always available
+	// Core CRM Features - always available (automation & configuration)
 	const coreFeatureNavItems = [
 		{
 			title: 'Blueprints',
@@ -140,30 +150,114 @@
 					url: '/admin/approval-rules/create'
 				}
 			]
-		},
+		}
+	];
+
+	// Core Analytics & Reporting
+	const coreAnalyticsNavItems = [
 		{
-			title: 'AI & Machine Learning',
-			url: '/admin/ai',
-			icon: SparklesIcon,
+			title: 'Reports',
+			url: '/reports',
+			icon: BarChart2Icon,
 			items: [
 				{
-					title: 'Settings',
-					url: '/admin/ai'
+					title: 'All Reports',
+					url: '/reports'
 				},
 				{
-					title: 'Lead Scoring',
-					url: '/admin/ai?tab=scoring'
+					title: 'Create Report',
+					url: '/reports/new'
+				}
+			]
+		},
+		{
+			title: 'Dashboards',
+			url: '/dashboards',
+			icon: LayoutGridIcon,
+			items: [
+				{
+					title: 'All Dashboards',
+					url: '/dashboards'
 				},
 				{
-					title: 'Prompts',
-					url: '/admin/ai?tab=prompts'
+					title: 'Create Dashboard',
+					url: '/dashboards/new'
 				}
 			]
 		}
 	];
 
-	// Sales & Revenue Features
-	const salesNavItems = [
+	// Core Communication - Email + Scheduling
+	const coreCommunicationNavItems = [
+		{
+			title: 'Email',
+			url: '/email',
+			icon: MailIcon,
+			items: [
+				{
+					title: 'Inbox',
+					url: '/email'
+				},
+				{
+					title: 'Templates',
+					url: '/email/templates'
+				}
+			]
+		},
+		{
+			title: 'Scheduling',
+			url: '/settings/scheduling',
+			icon: CalendarDaysIcon,
+			items: [
+				{
+					title: 'Scheduling Pages',
+					url: '/settings/scheduling'
+				},
+				{
+					title: 'Availability',
+					url: '/settings/scheduling/availability'
+				},
+				{
+					title: 'Meeting Types',
+					url: '/settings/scheduling/meetings'
+				}
+			]
+		}
+	];
+
+	// Settings
+	const settingsNavItems = [
+		{
+			title: 'Settings',
+			url: '/settings',
+			icon: Settings2Icon,
+			items: [
+				{
+					title: 'Module Order',
+					url: '/settings/modules'
+				},
+				{
+					title: 'Roles & Permissions',
+					url: '/settings/roles'
+				},
+				{
+					title: 'Billing & Plugins',
+					url: '/settings/billing'
+				},
+				{
+					title: 'Integrations',
+					url: '/settings/integrations'
+				}
+			]
+		}
+	];
+
+	// ============================================
+	// ADVANCED FEATURES - Premium/Add-on features
+	// ============================================
+
+	// Sales Intelligence & Forecasting
+	const advancedSalesNavItems = [
 		{
 			title: 'Forecasts',
 			url: '/forecasts',
@@ -198,6 +292,26 @@
 				}
 			]
 		},
+		{
+			title: 'Revenue Graph',
+			url: '/graph',
+			icon: NetworkIcon
+		},
+		{
+			title: 'Competitors',
+			url: '/competitors',
+			icon: SwordsIcon,
+			items: [
+				{
+					title: 'Battlecards',
+					url: '/competitors'
+				}
+			]
+		}
+	];
+
+	// CPQ & Document Management
+	const advancedCPQNavItems = [
 		{
 			title: 'Quotes & Invoices',
 			url: '/quotes',
@@ -253,99 +367,124 @@
 					url: '/deal-rooms'
 				}
 			]
-		},
+		}
+	];
+
+	// AI & Automation
+	const advancedAINavItems = [
 		{
-			title: 'Competitors',
-			url: '/competitors',
-			icon: SwordsIcon,
+			title: 'AI & Machine Learning',
+			url: '/admin/ai',
+			icon: SparklesIcon,
 			items: [
 				{
-					title: 'Battlecards',
-					url: '/competitors'
+					title: 'Settings',
+					url: '/admin/ai'
+				},
+				{
+					title: 'Lead Scoring',
+					url: '/admin/ai?tab=scoring'
+				},
+				{
+					title: 'Prompts',
+					url: '/admin/ai?tab=prompts'
+				}
+			]
+		},
+		{
+			title: 'Process Recorder',
+			url: '/recordings',
+			icon: HistoryIcon,
+			items: [
+				{
+					title: 'Recordings',
+					url: '/recordings'
 				}
 			]
 		}
 	];
 
-	// Analytics & Reporting
-	const analyticsNavItems = [
+	// Customer Success Features
+	const advancedCustomerSuccessNavItems = [
 		{
-			title: 'Reports',
-			url: '/reports',
-			icon: BarChart2Icon,
+			title: 'Customer Portal',
+			url: '/admin/portal',
+			icon: GlobeIcon,
 			items: [
 				{
-					title: 'All Reports',
-					url: '/reports'
-				},
-				{
-					title: 'Create Report',
-					url: '/reports/new'
+					title: 'Manage Portal',
+					url: '/admin/portal'
 				}
 			]
 		},
 		{
-			title: 'Dashboards',
-			url: '/dashboards',
-			icon: LayoutGridIcon,
+			title: 'Support',
+			url: '/support',
+			icon: HeadphonesIcon,
 			items: [
 				{
-					title: 'All Dashboards',
-					url: '/dashboards'
+					title: 'Tickets',
+					url: '/support'
 				},
 				{
-					title: 'Create Dashboard',
-					url: '/dashboards/new'
+					title: 'Knowledge Base',
+					url: '/support/knowledge-base'
+				},
+				{
+					title: 'Settings',
+					url: '/admin/support'
 				}
 			]
 		},
 		{
-			title: 'Revenue Graph',
-			url: '/graph',
-			icon: NetworkIcon
+			title: 'Playbooks',
+			url: '/playbooks',
+			icon: ListChecksIcon,
+			items: [
+				{
+					title: 'All Playbooks',
+					url: '/playbooks'
+				},
+				{
+					title: 'Create Playbook',
+					url: '/playbooks/create'
+				},
+				{
+					title: 'Active Instances',
+					url: '/playbooks/instances'
+				}
+			]
+		},
+		{
+			title: 'Renewals',
+			url: '/renewals',
+			icon: RefreshCwIcon,
+			items: [
+				{
+					title: 'Pipeline',
+					url: '/renewals'
+				},
+				{
+					title: 'Contracts',
+					url: '/renewals?tab=contracts'
+				},
+				{
+					title: 'Health Scores',
+					url: '/renewals?tab=health'
+				},
+				{
+					title: 'Forecast',
+					url: '/renewals?tab=forecast'
+				}
+			]
 		}
 	];
 
-	// Communication Hub - Core Email + Scheduling
-	const communicationNavItems = [
-		{
-			title: 'Email',
-			url: '/email',
-			icon: MailIcon,
-			items: [
-				{
-					title: 'Inbox',
-					url: '/email'
-				},
-				{
-					title: 'Templates',
-					url: '/email/templates'
-				}
-			]
-		},
-		{
-			title: 'Scheduling',
-			url: '/settings/scheduling',
-			icon: CalendarDaysIcon,
-			items: [
-				{
-					title: 'Scheduling Pages',
-					url: '/settings/scheduling'
-				},
-				{
-					title: 'Availability',
-					url: '/settings/scheduling/availability'
-				},
-				{
-					title: 'Meeting Types',
-					url: '/settings/scheduling/meetings'
-				}
-			]
-		}
-	];
+	// ============================================
+	// CHANNELS & INTEGRATIONS (Plugin-based)
+	// ============================================
 
-	// Plugin/Integration Features - These should be conditional based on enabled plugins
-	// TODO: Make these dynamically load based on tenant's enabled plugins
+	// Plugin/Integration Features - conditional based on enabled plugins
 	const pluginNavItems = [
 		{
 			title: 'Marketing',
@@ -503,132 +642,10 @@
 		}
 	];
 
-	// Process Recording / Automation Tools
-	const automationNavItems = [
-		{
-			title: 'Process Recorder',
-			url: '/recordings',
-			icon: HistoryIcon,
-			items: [
-				{
-					title: 'Recordings',
-					url: '/recordings'
-				}
-			]
-		}
-	];
+	// ============================================
+	// DEV TOOLS (Admin only)
+	// ============================================
 
-	// Customer Success Features
-	import GlobeIcon from '@lucide/svelte/icons/globe';
-	import HeadphonesIcon from '@lucide/svelte/icons/headphones';
-	import BookOpenIcon from '@lucide/svelte/icons/book-open';
-	import ListChecksIcon from '@lucide/svelte/icons/list-checks';
-	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
-
-	const customerSuccessNavItems = [
-		{
-			title: 'Customer Portal',
-			url: '/admin/portal',
-			icon: GlobeIcon,
-			items: [
-				{
-					title: 'Manage Portal',
-					url: '/admin/portal'
-				}
-			]
-		},
-		{
-			title: 'Support',
-			url: '/support',
-			icon: HeadphonesIcon,
-			items: [
-				{
-					title: 'Tickets',
-					url: '/support'
-				},
-				{
-					title: 'Knowledge Base',
-					url: '/support/knowledge-base'
-				},
-				{
-					title: 'Settings',
-					url: '/admin/support'
-				}
-			]
-		},
-		{
-			title: 'Playbooks',
-			url: '/playbooks',
-			icon: ListChecksIcon,
-			items: [
-				{
-					title: 'All Playbooks',
-					url: '/playbooks'
-				},
-				{
-					title: 'Create Playbook',
-					url: '/playbooks/create'
-				},
-				{
-					title: 'Active Instances',
-					url: '/playbooks/instances'
-				}
-			]
-		},
-		{
-			title: 'Renewals',
-			url: '/renewals',
-			icon: RefreshCwIcon,
-			items: [
-				{
-					title: 'Pipeline',
-					url: '/renewals'
-				},
-				{
-					title: 'Contracts',
-					url: '/renewals?tab=contracts'
-				},
-				{
-					title: 'Health Scores',
-					url: '/renewals?tab=health'
-				},
-				{
-					title: 'Forecast',
-					url: '/renewals?tab=forecast'
-				}
-			]
-		}
-	];
-
-	// Settings
-	const settingsNavItems = [
-		{
-			title: 'Settings',
-			url: '/settings',
-			icon: Settings2Icon,
-			items: [
-				{
-					title: 'Module Order',
-					url: '/settings/modules'
-				},
-				{
-					title: 'Roles & Permissions',
-					url: '/settings/roles'
-				},
-				{
-					title: 'Billing & Plugins',
-					url: '/settings/billing'
-				},
-				{
-					title: 'Integrations',
-					url: '/settings/integrations'
-				}
-			]
-		}
-	];
-
-	// Developer tools - ADMIN ONLY - should be gated by role
-	// TODO: Move to /admin/dev-tools/ and add permission check
 	const devTools = [
 		{
 			title: 'Dev Tools',
@@ -782,18 +799,25 @@
 		});
 	});
 
-	// Combined navigation (organized by category)
-	const mainNavItems = $derived(() => {
+	// Core navigation (essential CRM features)
+	const coreNavItems = $derived(() => {
 		return [
 			...staticNavItems,
 			...crmNavItems(),
 			...coreFeatureNavItems,
-			...salesNavItems,
-			...analyticsNavItems,
-			...communicationNavItems,
-			...customerSuccessNavItems,
-			...automationNavItems,
+			...coreAnalyticsNavItems,
+			...coreCommunicationNavItems,
 			...settingsNavItems
+		];
+	});
+
+	// Advanced navigation (premium features)
+	const advancedNavItems = $derived(() => {
+		return [
+			...advancedSalesNavItems,
+			...advancedCPQNavItems,
+			...advancedAINavItems,
+			...advancedCustomerSuccessNavItems
 		];
 	});
 
@@ -816,10 +840,13 @@
 	</Sidebar.Header>
 	<Sidebar.Content>
 		<!-- Core Navigation -->
-		<NavMain items={mainNavItems()} />
+		<NavMain items={coreNavItems()} />
 
 		<!-- Module Quick Links -->
 		<NavProjects projects={moduleQuickLinks()} />
+
+		<!-- Advanced Features (Premium/Add-on) -->
+		<NavMain items={advancedNavItems()} label="Advanced" />
 
 		<!-- Plugin/Integration Features (Communication Channels) -->
 		{#if activePluginNavItems().length > 0}

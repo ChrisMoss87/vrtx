@@ -19,6 +19,7 @@ export interface ApprovalRule {
   created_by: number | null;
   created_at: string;
   updated_at: string;
+  steps?: ApprovalStep[];
 }
 
 export interface ApprovalCondition {
@@ -47,19 +48,23 @@ export interface ApprovalRequest {
   entity_id: number;
   title: string;
   description: string | null;
+  details: string | null;
   status: 'pending' | 'in_progress' | 'approved' | 'rejected' | 'cancelled' | 'expired';
   snapshot_data: Record<string, any> | null;
+  entity_data: Record<string, any> | null;
   value: number | null;
   currency: string | null;
   submitted_at: string | null;
   completed_at: string | null;
   expires_at: string | null;
+  due_date: string | null;
   requested_by: number | null;
   final_approver_id: number | null;
   final_comments: string | null;
   created_at: string;
   updated_at: string;
   rule?: ApprovalRule;
+  requester?: { id: number; name: string; email: string };
   requested_by_user?: { id: number; name: string; email: string };
   final_approver?: { id: number; name: string; email: string };
   steps?: ApprovalStep[];
@@ -74,11 +79,14 @@ export interface ApprovalStep {
   step_order: number;
   status: 'pending' | 'approved' | 'rejected' | 'skipped' | 'delegated';
   comments: string | null;
+  comment: string | null;
   notified_at: string | null;
   viewed_at: string | null;
   decided_at: string | null;
+  acted_at: string | null;
   due_at: string | null;
   is_current: boolean;
+  can_delegate: boolean;
   delegated_to_id: number | null;
   delegated_by_id: number | null;
   approver?: { id: number; name: string; email: string };
@@ -108,6 +116,7 @@ export interface ApprovalHistory {
   user_id: number | null;
   action: 'submitted' | 'approved' | 'rejected' | 'delegated' | 'escalated' | 'commented' | 'recalled' | 'cancelled' | 'step_approved' | 'step_rejected' | 'step_skipped';
   comments: string | null;
+  comment: string | null;
   changes: Record<string, any> | null;
   ip_address: string | null;
   created_at: string;

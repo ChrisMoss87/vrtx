@@ -20,7 +20,7 @@ return new class extends Migration
             $table->integer('min_sample_size')->default(100);
             $table->decimal('confidence_level', 5, 2)->default(95.00); // 95% default
             $table->boolean('auto_select_winner')->default(true);
-            $table->foreignId('winner_variant_id')->nullable()->constrained('ab_test_variants')->nullOnDelete();
+            $table->unsignedBigInteger('winner_variant_id')->nullable();
             $table->timestamp('started_at')->nullable();
             $table->timestamp('ended_at')->nullable();
             $table->timestamp('scheduled_end_at')->nullable();
@@ -73,6 +73,11 @@ return new class extends Migration
 
             $table->index(['variant_id', 'event_type', 'created_at']);
             $table->index(['visitor_id', 'variant_id']);
+        });
+
+        // Add foreign key for winner_variant_id after variants table exists
+        Schema::table('ab_tests', function (Blueprint $table) {
+            $table->foreign('winner_variant_id')->references('id')->on('ab_test_variants')->nullOnDelete();
         });
     }
 

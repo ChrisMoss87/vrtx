@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Blueprints;
 
+use App\Application\Services\Blueprint\BlueprintApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Blueprint;
 use App\Models\BlueprintTransitionExecution;
@@ -21,7 +22,8 @@ class BlueprintExecutionController extends Controller
         protected BlueprintEngine $engine,
         protected RequirementService $requirementService,
         protected ApprovalService $approvalService,
-        protected SLAService $slaService
+        protected SLAService $slaService,
+        protected BlueprintApplicationService $blueprintApplicationService
     ) {}
 
     /**

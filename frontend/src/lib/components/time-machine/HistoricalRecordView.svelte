@@ -2,10 +2,19 @@
 	import { Clock, AlertCircle } from 'lucide-svelte';
 	import * as Alert from '$lib/components/ui/alert';
 
-	export let data: Record<string, unknown>;
-	export let fields: Record<string, { label: string; type: string }>;
-	export let timestamp: string;
-	export let currentData: Record<string, unknown> | null = null;
+	interface Props {
+		data: Record<string, unknown>;
+		fields: Record<string, { label: string; type: string }>;
+		timestamp: string;
+		currentData?: Record<string, unknown> | null;
+	}
+
+	let {
+		data,
+		fields,
+		timestamp,
+		currentData = null,
+	}: Props = $props();
 
 	function formatTimestamp(ts: string): string {
 		return new Date(ts).toLocaleString('en-US', {
@@ -52,9 +61,9 @@
 		return oldVal !== newVal;
 	}
 
-	$: sortedFields = Object.entries(fields).sort((a, b) =>
+	const sortedFields = $derived(Object.entries(fields).sort((a, b) =>
 		a[1].label.localeCompare(b[1].label)
-	);
+	));
 </script>
 
 <div class="space-y-4">

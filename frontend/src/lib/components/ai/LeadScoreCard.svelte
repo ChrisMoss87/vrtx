@@ -7,13 +7,17 @@
   import { getRecordScore, scoreRecord, type LeadScore } from '$lib/api/ai';
   import { Loader2, RefreshCw, TrendingUp, Brain, Sparkles } from 'lucide-svelte';
 
-  export let module: string;
-  export let recordId: number;
+  interface Props {
+    module: string;
+    recordId: number;
+  }
 
-  let score: LeadScore | null = null;
-  let loading = true;
-  let scoring = false;
-  let error: string | null = null;
+  let { module, recordId }: Props = $props();
+
+  let score = $state<LeadScore | null>(null);
+  let loading = $state(true);
+  let scoring = $state(false);
+  let error = $state<string | null>(null);
 
   onMount(async () => {
     await loadScore();

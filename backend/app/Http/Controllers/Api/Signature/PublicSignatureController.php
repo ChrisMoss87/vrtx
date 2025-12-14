@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Signature;
 
+use App\Application\Services\Document\DocumentApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\SignatureField;
 use App\Models\SignatureRequest;
@@ -14,7 +15,8 @@ use Illuminate\Http\Request;
 class PublicSignatureController extends Controller
 {
     public function __construct(
-        protected SignatureService $service
+        protected SignatureService $service,
+        protected DocumentApplicationService $appService
     ) {}
 
     public function show(string $uuid, Request $request): JsonResponse

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Application\Services\Duplicate\DuplicateApplicationService;
 use App\Http\Controllers\Controller;
 use App\Jobs\ScanDuplicatesJob;
 use App\Models\DuplicateCandidate;
@@ -17,7 +18,8 @@ class DuplicateController extends Controller
 {
     public function __construct(
         protected DuplicateDetectionService $detectionService,
-        protected DuplicateMergeService $mergeService
+        protected DuplicateMergeService $mergeService,
+        protected DuplicateApplicationService $duplicateApplicationService
     ) {}
 
     /**

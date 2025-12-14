@@ -8,24 +8,28 @@
 	import { previewWorkflow, generateWorkflow, type WorkflowPreview, type Recording } from '$lib/api/recordings';
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
-	import { onMount, createEventDispatcher } from 'svelte';
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 
-	export let recording: Recording;
+	interface Props {
+		recording: Recording;
+		onGenerated?: (data: { workflow_id: number }) => void;
+	}
 
-	const dispatch = createEventDispatcher<{
-		generated: { workflow_id: number };
-	}>();
+	let {
+		recording,
+		onGenerated,
+	}: Props = $props();
 
-	let preview: WorkflowPreview | null = null;
-	let loading = true;
-	let generating = false;
+	let preview = $state<WorkflowPreview | null>(null);
+	let loading = $state(true);
+	let generating = $state(false);
 
 	// Workflow configuration
-	let workflowName = '';
-	let workflowDescription = '';
-	let triggerType = 'manual';
-	let triggerConfig: Record<string, unknown> = {};
+	let workflowName = $state('');
+	let workflowDescription = $state('');
+	let triggerType = $state('manual');
+	let triggerConfig = $state<Record<string, unknown>>({});
 
 	onMount(async () => {
 		await loadPreview();
@@ -75,7 +79,7 @@
 		}
 
 		toast.success('Workflow generated successfully');
-		dispatch('generated', { workflow_id: data.workflow_id });
+		onGenerated?.({ workflow_id: data.workflow_id });
 		goto(`/admin/workflows/${data.workflow_id}`);
 	}
 

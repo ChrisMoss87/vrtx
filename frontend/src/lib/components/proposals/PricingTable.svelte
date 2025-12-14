@@ -5,7 +5,13 @@
   import * as Select from '$lib/components/ui/select';
   import type { ProposalPricingItem } from '$lib/api/proposals';
 
-  export let items: ProposalPricingItem[] = [];
+  interface Props {
+    items?: ProposalPricingItem[];
+  }
+
+  let {
+    items = $bindable([]),
+  }: Props = $props();
 
   const pricingTypes = [
     { value: 'one_time', label: 'One-time' },

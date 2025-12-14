@@ -44,10 +44,10 @@
 		}
 	};
 
-	$: currentPlanDetails = planDetails[$license.plan] || planDetails.free;
-	$: nextBillingDate = $license.current_period_end
+	const currentPlanDetails = $derived(planDetails[$license.plan] || planDetails.free);
+	const nextBillingDate = $derived($license.current_period_end
 		? new Date($license.current_period_end).toLocaleDateString()
-		: null;
+		: null);
 </script>
 
 <svelte:head>

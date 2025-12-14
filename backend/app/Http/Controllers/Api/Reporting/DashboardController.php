@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Reporting;
 
+use App\Application\Services\Reporting\ReportingApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Dashboard;
 use App\Models\DashboardWidget;
-use App\Services\Reporting\ReportService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +18,7 @@ class DashboardController extends Controller
     use AuthorizesRequests;
 
     public function __construct(
-        protected ReportService $reportService
+        protected ReportingApplicationService $reportingService
     ) {}
 
     /**
@@ -302,7 +302,7 @@ class DashboardController extends Controller
 
         // If widget has a report, execute it
         if ($widget->report_id && $widget->report) {
-            $data = $this->reportService->executeReport($widget->report);
+            $data = $this->reportingService->executeReport($widget->report_id);
         } else {
             $data = $widget->getData();
         }
@@ -323,7 +323,7 @@ class DashboardController extends Controller
 
         foreach ($dashboard->widgets as $widget) {
             if ($widget->report_id && $widget->report) {
-                $widgetData[$widget->id] = $this->reportService->executeReport($widget->report);
+                $widgetData[$widget->id] = $this->reportingService->executeReport($widget->report_id);
             } else {
                 $widgetData[$widget->id] = $widget->getData();
             }

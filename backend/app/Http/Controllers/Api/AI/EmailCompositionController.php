@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\AI;
 
+use App\Application\Services\AI\AIApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\AiEmailDraft;
 use App\Services\AI\EmailCompositionService;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 class EmailCompositionController extends Controller
 {
     public function __construct(
+        protected AIApplicationService $aiApplicationService,
         protected EmailCompositionService $emailService
     ) {}
 

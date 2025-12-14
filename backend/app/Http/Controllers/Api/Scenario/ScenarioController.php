@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Scenario;
 
+use App\Application\Services\Forecasting\ForecastingApplicationService;
+use App\Domain\Forecasting\DTOs\CreateForecastScenarioDTO;
+use App\Domain\Forecasting\ValueObjects\ScenarioType;
 use App\Http\Controllers\Controller;
 use App\Models\ForecastScenario;
 use App\Services\Scenario\GapAnalysisService;
 use App\Services\Scenario\ScenarioCalculatorService;
 use App\Services\Scenario\ScenarioService;
+use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ScenarioController extends Controller
 {
     public function __construct(
+        protected ForecastingApplicationService $forecastingService,
         protected ScenarioService $scenarioService,
         protected ScenarioCalculatorService $calculator,
         protected GapAnalysisService $gapAnalysis
@@ -128,6 +133,7 @@ class ScenarioController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'module_id' => 'required|integer|exists:modules,id',
             'period_start' => 'required|date',
             'period_end' => 'required|date|after_or_equal:period_start',
             'scenario_type' => 'nullable|string|in:current,best_case,worst_case,target_hit,custom',
@@ -136,10 +142,35 @@ class ScenarioController extends Controller
             'settings' => 'nullable|array',
         ]);
 
-        $scenario = $this->scenarioService->createScenario($validated, auth()->id());
+        $dto = new CreateForecastScenarioDTO(
+            name: $validated['name'],
+            userId: auth()->id(),
+            moduleId: $validated['module_id'],
+            periodStart: new DateTimeImmutable($validated['period_start']),
+            periodEnd: new DateTimeImmutable($validated['period_end']),
+            scenarioType: isset($validated['scenario_type']) ? ScenarioType::from($validated['scenario_type']) : ScenarioType::CUSTOM,
+            description: $validated['description'] ?? null,
+            targetAmount: isset($validated['target_amount']) ? (float) $validated['target_amount'] : null,
+            isBaseline: false,
+            isShared: $validated['is_shared'] ?? false,
+            settings: $validated['settings'] ?? [],
+        );
+
+        $scenario = $this->forecastingService->createScenario($dto);
 
         return response()->json([
-            'data' => $scenario,
+            'data' => [
+                'id' => $scenario->getId(),
+                'name' => $scenario->name(),
+                'description' => $scenario->description(),
+                'module_id' => $scenario->moduleId(),
+                'scenario_type' => $scenario->scenarioType()->value,
+                'period_start' => $scenario->periodStart()->format('Y-m-d'),
+                'period_end' => $scenario->periodEnd()->format('Y-m-d'),
+                'target_amount' => $scenario->targetAmount(),
+                'is_shared' => $scenario->isShared(),
+                'is_baseline' => $scenario->isBaseline(),
+            ],
             'message' => 'Scenario created successfully',
         ], 201);
     }

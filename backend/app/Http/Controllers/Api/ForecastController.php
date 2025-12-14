@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Application\Services\Forecasting\ForecastingApplicationService;
+use App\Domain\Forecasting\DTOs\CreateQuotaDTO;
+use App\Domain\Forecasting\DTOs\UpdateDealForecastDTO;
+use App\Domain\Forecasting\ValueObjects\ForecastCategory;
+use App\Domain\Forecasting\ValueObjects\ForecastPeriod;
+use App\Domain\Forecasting\ValueObjects\QuotaType;
 use App\Http\Controllers\Controller;
 use App\Models\ForecastAdjustment;
 use App\Models\ModuleRecord;
 use App\Models\SalesQuota;
-use App\Services\Forecast\ForecastService;
-use Carbon\Carbon;
+use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +22,7 @@ use Illuminate\Support\Facades\Auth;
 class ForecastController extends Controller
 {
     public function __construct(
-        protected ForecastService $forecastService
+        protected ForecastingApplicationService $forecastingService
     ) {}
 
     /**
@@ -32,15 +37,15 @@ class ForecastController extends Controller
             'period_start' => 'nullable|date',
         ]);
 
-        $summary = $this->forecastService->getForecastSummary(
-            $validated['pipeline_id'],
-            $validated['user_id'] ?? Auth::id(),
-            $validated['period_type'] ?? 'month',
-            isset($validated['period_start']) ? Carbon::parse($validated['period_start']) : null
+        $forecastDTO = $this->forecastingService->getForecastSummary(
+            pipelineId: $validated['pipeline_id'],
+            userId: $validated['user_id'] ?? Auth::id(),
+            periodType: $validated['period_type'] ?? 'month',
+            periodStart: isset($validated['period_start']) ? new DateTimeImmutable($validated['period_start']) : null
         );
 
         return response()->json([
-            'data' => $summary,
+            'data' => $forecastDTO->toArray(),
         ]);
     }
 
@@ -82,16 +87,16 @@ class ForecastController extends Controller
             'reason' => 'nullable|string|max:500',
         ]);
 
-        $deal = ModuleRecord::findOrFail($recordId);
-
-        $updatedDeal = $this->forecastService->updateDealForecast(
-            $deal,
-            Auth::id(),
-            $validated['forecast_category'] ?? null,
-            isset($validated['forecast_override']) ? (float) $validated['forecast_override'] : null,
-            isset($validated['expected_close_date']) ? Carbon::parse($validated['expected_close_date']) : null,
-            $validated['reason'] ?? null
+        $dto = new UpdateDealForecastDTO(
+            moduleRecordId: $recordId,
+            userId: Auth::id(),
+            category: isset($validated['forecast_category']) ? ForecastCategory::from($validated['forecast_category']) : null,
+            override: isset($validated['forecast_override']) ? (float) $validated['forecast_override'] : null,
+            expectedCloseDate: isset($validated['expected_close_date']) ? new DateTimeImmutable($validated['expected_close_date']) : null,
+            reason: $validated['reason'] ?? null,
         );
+
+        $updatedDeal = $this->forecastingService->updateDealForecast($dto);
 
         return response()->json([
             'data' => [
@@ -140,11 +145,11 @@ class ForecastController extends Controller
             'periods' => 'nullable|integer|min:1|max:12',
         ]);
 
-        $accuracy = $this->forecastService->getForecastAccuracy(
-            $validated['pipeline_id'],
-            $validated['user_id'] ?? Auth::id(),
-            $validated['period_type'] ?? 'month',
-            $validated['periods'] ?? 6
+        $accuracy = $this->forecastingService->getForecastAccuracy(
+            pipelineId: $validated['pipeline_id'],
+            userId: $validated['user_id'] ?? Auth::id(),
+            periodType: $validated['period_type'] ?? 'month',
+            periods: $validated['periods'] ?? 6
         );
 
         return response()->json([
@@ -217,26 +222,41 @@ class ForecastController extends Controller
             'period_start' => 'required|date',
             'period_end' => 'required|date|after:period_start',
             'quota_amount' => 'required|numeric|min:0',
+            'quota_type' => 'nullable|string|in:revenue,deals,activities',
             'currency' => 'nullable|string|size:3',
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        $quota = SalesQuota::create([
-            'user_id' => $validated['user_id'],
-            'pipeline_id' => $validated['pipeline_id'],
-            'team_id' => $validated['team_id'] ?? null,
-            'period_type' => $validated['period_type'],
-            'period_start' => $validated['period_start'],
-            'period_end' => $validated['period_end'],
-            'quota_amount' => $validated['quota_amount'],
-            'currency' => $validated['currency'] ?? 'USD',
-            'notes' => $validated['notes'] ?? null,
-        ]);
+        $period = ForecastPeriod::fromType(
+            $validated['period_type'],
+            new DateTimeImmutable($validated['period_start'])
+        );
 
-        $quota->load(['user:id,name,email', 'pipeline:id,name']);
+        $dto = new CreateQuotaDTO(
+            period: $period,
+            quotaAmount: (float) $validated['quota_amount'],
+            quotaType: isset($validated['quota_type']) ? QuotaType::from($validated['quota_type']) : QuotaType::REVENUE,
+            userId: $validated['user_id'] ?? null,
+            pipelineId: $validated['pipeline_id'] ?? null,
+            teamId: $validated['team_id'] ?? null,
+            currency: $validated['currency'] ?? 'USD',
+            notes: $validated['notes'] ?? null,
+        );
+
+        $quota = $this->forecastingService->saveQuota($dto);
 
         return response()->json([
-            'data' => $quota,
+            'data' => [
+                'id' => $quota->getId(),
+                'user_id' => $quota->userId()?->value(),
+                'pipeline_id' => $quota->pipelineId(),
+                'team_id' => $quota->teamId(),
+                'period' => $quota->period()->toArray(),
+                'quota_amount' => $quota->quotaAmount(),
+                'quota_type' => $quota->quotaType()->value,
+                'currency' => $quota->currency(),
+                'notes' => $quota->notes(),
+            ],
             'message' => 'Quota created successfully',
         ], 201);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Pipelines;
 
+use App\Application\Services\Pipeline\PipelineApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Module;
 use App\Models\ModuleRecord;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 class PipelineController extends Controller
 {
     public function __construct(
+        private PipelineApplicationService $pipelineApplicationService,
         private PipelineFieldSyncService $fieldSyncService
     ) {}
 

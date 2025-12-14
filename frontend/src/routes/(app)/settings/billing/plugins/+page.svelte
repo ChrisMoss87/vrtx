@@ -113,7 +113,7 @@
 	}
 
 	// Filter plugins
-	const filteredPlugins = $derived(() => {
+	const filteredPlugins = $derived.by(() => {
 		let result = plugins;
 
 		if (activeCategory !== 'all') {
@@ -203,7 +203,7 @@
 
 				<!-- Plugins Grid -->
 				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{#each filteredPlugins() as plugin (plugin.id)}
+					{#each filteredPlugins as plugin (plugin.id)}
 						{@const licensed = isLicensed(plugin.slug)}
 						{@const canActivatePlugin = canActivate(plugin)}
 						<Card.Root

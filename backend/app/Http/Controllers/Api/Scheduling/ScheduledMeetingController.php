@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\Scheduling;
 
+use App\Application\Services\Scheduling\SchedulingApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\ScheduledMeeting;
-use App\Services\Scheduling\MeetingBookingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Auth;
 class ScheduledMeetingController extends Controller
 {
     public function __construct(
-        protected MeetingBookingService $bookingService
+        protected SchedulingApplicationService $schedulingService
     ) {}
 
     /**
@@ -104,7 +104,11 @@ class ScheduledMeetingController extends Controller
             'reason' => 'nullable|string|max:500',
         ]);
 
-        $this->bookingService->cancelMeeting($scheduledMeeting, $request->reason);
+        $this->schedulingService->cancelMeeting(
+            $scheduledMeeting->id,
+            $request->reason,
+            Auth::id()
+        );
 
         return response()->json([
             'message' => 'Meeting cancelled successfully',

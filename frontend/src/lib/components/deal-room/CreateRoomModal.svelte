@@ -8,13 +8,21 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let onClose: () => void;
-	export let onCreated: (room: DealRoom) => void;
-	export let dealRecordId: number | null = null;
+	interface Props {
+		onClose: () => void;
+		onCreated: (room: DealRoom) => void;
+		dealRecordId?: number | null;
+	}
 
-	let name = '';
-	let description = '';
-	let loading = false;
+	let {
+		onClose,
+		onCreated,
+		dealRecordId = null,
+	}: Props = $props();
+
+	let name = $state('');
+	let description = $state('');
+	let loading = $state(false);
 
 	async function handleSubmit() {
 		if (!name.trim()) {

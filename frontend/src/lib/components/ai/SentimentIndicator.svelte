@@ -5,12 +5,20 @@
   import { getSentimentSummary, type SentimentSummary } from '$lib/api/ai';
   import { Smile, Meh, Frown, TrendingUp, TrendingDown, Minus } from 'lucide-svelte';
 
-  export let module: string;
-  export let recordId: number;
-  export let compact = false;
+  interface Props {
+    module: string;
+    recordId: number;
+    compact?: boolean;
+  }
 
-  let summary: SentimentSummary | null = null;
-  let loading = true;
+  let {
+    module,
+    recordId,
+    compact = false,
+  }: Props = $props();
+
+  let summary = $state<SentimentSummary | null>(null);
+  let loading = $state(true);
 
   onMount(async () => {
     try {

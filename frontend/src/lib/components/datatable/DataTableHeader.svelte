@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { ArrowUp, ArrowDown, ChevronsUpDown, GripVertical } from 'lucide-svelte';
+	import { ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-svelte';
 	import type { ColumnDef, TableContext, FilterConfig } from './types';
 	import * as Table from '$lib/components/ui/table/index.ts';
 	import ColumnFilter from './filters/ColumnFilter.svelte';
@@ -12,7 +12,6 @@
 		enableSorting?: boolean;
 		enableColumnFilters?: boolean;
 		enableColumnResize?: boolean;
-		enableColumnReorder?: boolean;
 		hasGrouping?: boolean;
 	}
 
@@ -22,7 +21,6 @@
 		enableSorting = true,
 		enableColumnFilters = true,
 		enableColumnResize = false,
-		enableColumnReorder = false,
 		hasGrouping = false
 	}: Props = $props();
 
@@ -33,16 +31,13 @@
 	let resizeStartX = $state(0);
 	let resizeStartWidth = $state(0);
 
-	// Drag reorder state
-	let draggedColumn = $state<string | null>(null);
-	let dragOverColumn = $state<string | null>(null);
-
 	// Check if all rows are selected
 	let allSelected = $derived(
-		table.state.data.length > 0 && table.state.data.every((row) => {
-			const rowId = row.id as string | number;
-			return table.state.rowSelection[rowId];
-		})
+		table.state.data.length > 0 &&
+			table.state.data.every((row) => {
+				const rowId = row.id as string | number;
+				return table.state.rowSelection[rowId];
+			})
 	);
 
 	// Check if some rows are selected
@@ -130,64 +125,6 @@
 		document.body.style.cursor = '';
 		document.body.style.userSelect = '';
 	}
-
-	// ===== Column Reordering =====
-	function handleDragStart(columnId: string, event: DragEvent) {
-		if (!enableColumnReorder) return;
-
-		draggedColumn = columnId;
-		event.dataTransfer!.effectAllowed = 'move';
-		event.dataTransfer!.setData('text/plain', columnId);
-
-		// Add drag image
-		const target = event.target as HTMLElement;
-		if (target) {
-			event.dataTransfer!.setDragImage(target, 0, 0);
-		}
-	}
-
-	function handleDragOver(columnId: string, event: DragEvent) {
-		if (!enableColumnReorder || !draggedColumn || draggedColumn === columnId) return;
-
-		event.preventDefault();
-		event.dataTransfer!.dropEffect = 'move';
-		dragOverColumn = columnId;
-	}
-
-	function handleDragLeave() {
-		dragOverColumn = null;
-	}
-
-	function handleDrop(columnId: string, event: DragEvent) {
-		if (!enableColumnReorder || !draggedColumn || draggedColumn === columnId) return;
-
-		event.preventDefault();
-
-		// Get current column order
-		const currentOrder = table.state.columnOrder.length > 0
-			? [...table.state.columnOrder]
-			: columns.map((c) => c.id);
-
-		// Find indices
-		const draggedIndex = currentOrder.indexOf(draggedColumn);
-		const targetIndex = currentOrder.indexOf(columnId);
-
-		if (draggedIndex !== -1 && targetIndex !== -1) {
-			// Remove dragged column and insert at target position
-			currentOrder.splice(draggedIndex, 1);
-			currentOrder.splice(targetIndex, 0, draggedColumn);
-
-			table.setColumnOrder(currentOrder);
-		}
-
-		draggedColumn = null;
-		dragOverColumn = null;
-	}
-
-	function handleDragEnd() {
-		draggedColumn = null;
-		dragOverColumn = null;
-	}
 </script>
 
 <Table.Header>
@@ -217,11 +154,11 @@
 		{#each columns as column (column.id)}
 			{@const sortInfo = getSortInfo(column.id)}
 			{@const columnWidth = getColumnWidth(column)}
-			{@const isDragging = draggedColumn === column.id}
-			{@const isDragOver = dragOverColumn === column.id}
 			<Table.Head
-				class="relative select-none {isDragging ? 'opacity-50' : ''} {isDragOver ? 'bg-accent' : ''}"
-				style={enableColumnResize ? `width: ${columnWidth}px; min-width: ${column.minWidth || 50}px; max-width: ${column.maxWidth || 500}px;` : ''}
+				class="relative select-none"
+				style={enableColumnResize
+					? `width: ${columnWidth}px; min-width: ${column.minWidth || 50}px; max-width: ${column.maxWidth || 500}px;`
+					: ''}
 				aria-sort={sortInfo.isSorted
 					? sortInfo.direction === 'asc'
 						? 'ascending'
@@ -229,24 +166,12 @@
 					: column.sortable
 						? 'none'
 						: undefined}
-				draggable={enableColumnReorder}
-				ondragstart={(e) => handleDragStart(column.id, e)}
-				ondragover={(e) => handleDragOver(column.id, e)}
-				ondragleave={handleDragLeave}
-				ondrop={(e) => handleDrop(column.id, e)}
-				ondragend={handleDragEnd}
 			>
 				<div class="flex w-full items-center justify-between gap-1">
-					<!-- Drag handle for reordering -->
-					{#if enableColumnReorder}
-						<div class="flex-shrink-0 cursor-grab opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-50">
-							<GripVertical class="h-3 w-3 text-muted-foreground" />
-						</div>
-					{/if}
-
 					<button
 						type="button"
-						class="flex flex-1 items-center gap-2 hover:text-foreground {column.sortable && enableSorting
+						class="flex flex-1 items-center gap-1 hover:text-foreground min-w-0 {column.sortable &&
+						enableSorting
 							? 'cursor-pointer'
 							: 'cursor-default'}"
 						onclick={(e) => handleHeaderClick(column, e)}
@@ -260,7 +185,7 @@
 						<span class="truncate">{column.header}</span>
 
 						{#if column.sortable && enableSorting}
-							<div class="flex h-4 w-4 flex-shrink-0 items-center justify-center">
+							<div class="flex-shrink-0">
 								{#if sortInfo.isSorted}
 									{#if sortInfo.direction === 'asc'}
 										<ArrowUp class="h-3.5 w-3.5" />
@@ -268,10 +193,10 @@
 										<ArrowDown class="h-3.5 w-3.5" />
 									{/if}
 									{#if sortInfo.priority !== null}
-										<span class="ml-1 text-xs">{sortInfo.priority}</span>
+										<span class="ml-0.5 text-xs text-muted-foreground">{sortInfo.priority}</span>
 									{/if}
 								{:else}
-									<ChevronsUpDown class="h-3.5 w-3.5 opacity-50" />
+									<ChevronsUpDown class="h-3.5 w-3.5 opacity-30" />
 								{/if}
 							</div>
 						{/if}
@@ -289,18 +214,22 @@
 
 				<!-- Resize handle -->
 				{#if enableColumnResize}
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<div
-						class="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/50 {resizingColumn === column.id ? 'bg-primary' : ''}"
+						class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors {resizingColumn ===
+						column.id
+							? 'bg-primary'
+							: 'bg-transparent'}"
 						onmousedown={(e) => handleResizeStart(column.id, e)}
 						role="separator"
 						aria-label="Resize column {column.header}"
 						tabindex={0}
 						onkeydown={(e) => {
-							// Allow keyboard resize with arrow keys
 							if (e.key === 'ArrowLeft') {
-								table.resizeColumn(column.id, Math.max((column.minWidth || 50), columnWidth - 10));
+								table.resizeColumn(column.id, Math.max(column.minWidth || 50, columnWidth - 10));
 							} else if (e.key === 'ArrowRight') {
-								table.resizeColumn(column.id, Math.min((column.maxWidth || 500), columnWidth + 10));
+								table.resizeColumn(column.id, Math.min(column.maxWidth || 500, columnWidth + 10));
 							}
 						}}
 					></div>

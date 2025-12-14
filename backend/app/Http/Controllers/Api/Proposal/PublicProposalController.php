@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Proposal;
 
+use App\Application\Services\Proposal\ProposalApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Proposal;
 use App\Models\ProposalPricingItem;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 class PublicProposalController extends Controller
 {
     public function __construct(
+        protected ProposalApplicationService $proposalApplicationService,
         protected ProposalService $service
     ) {}
 

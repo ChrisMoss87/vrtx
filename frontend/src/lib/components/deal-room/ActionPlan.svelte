@@ -12,13 +12,22 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let roomId: number;
-	export let items: DealRoomActionItem[];
-	export let onUpdate: () => void;
-	export let compact = false;
+	interface Props {
+		roomId: number;
+		items: DealRoomActionItem[];
+		onUpdate: () => void;
+		compact?: boolean;
+	}
 
-	let newItemTitle = '';
-	let addingItem = false;
+	let {
+		roomId,
+		items,
+		onUpdate,
+		compact = false,
+	}: Props = $props();
+
+	let newItemTitle = $state('');
+	let addingItem = $state(false);
 
 	async function handleAddItem() {
 		if (!newItemTitle.trim()) return;

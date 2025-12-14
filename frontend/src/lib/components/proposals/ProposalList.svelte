@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Badge } from '$lib/components/ui/badge';
@@ -8,17 +7,27 @@
   import * as Select from '$lib/components/ui/select';
   import type { Proposal } from '$lib/api/proposals';
 
-  export let proposals: Proposal[] = [];
-  export let loading = false;
+  interface Props {
+    proposals?: Proposal[];
+    loading?: boolean;
+    onCreate?: () => void;
+    onView?: (id: number) => void;
+    onEdit?: (id: number) => void;
+    onDuplicate?: (id: number) => void;
+    onDelete?: (id: number) => void;
+    onSend?: (id: number) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    create: void;
-    view: number;
-    edit: number;
-    duplicate: number;
-    delete: number;
-    send: number;
-  }>();
+  let {
+    proposals = [],
+    loading = false,
+    onCreate,
+    onView,
+    onEdit,
+    onDuplicate,
+    onDelete,
+    onSend,
+  }: Props = $props();
 
   let search = $state('');
   let statusFilter = $state('');
@@ -88,7 +97,7 @@
       </Select.Root>
     </div>
 
-    <Button onclick={() => dispatch('create')}>
+    <Button onclick={() => onCreate?.()}>
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
@@ -115,7 +124,7 @@
         {#if search || statusFilter}
           <p class="text-sm text-muted-foreground mt-2">Try adjusting your filters</p>
         {:else}
-          <Button variant="outline" class="mt-4" onclick={() => dispatch('create')}>
+          <Button variant="outline" class="mt-4" onclick={() => onCreate?.()}>
             Create your first proposal
           </Button>
         {/if}
@@ -124,7 +133,7 @@
   {:else}
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {#each filteredProposals as proposal}
-        <Card.Root class="hover:shadow-md transition-shadow cursor-pointer" onclick={() => dispatch('view', proposal.id)}>
+        <Card.Root class="hover:shadow-md transition-shadow cursor-pointer" onclick={() => onView?.(proposal.id)}>
           <Card.Header class="pb-2">
             <div class="flex justify-between items-start">
               <div class="space-y-1">
@@ -147,23 +156,23 @@
                   </Button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content align="end">
-                  <DropdownMenu.Item onclick={() => dispatch('view', proposal.id)}>
+                  <DropdownMenu.Item onclick={() => onView?.(proposal.id)}>
                     View
                   </DropdownMenu.Item>
-                  <DropdownMenu.Item onclick={() => dispatch('edit', proposal.id)}>
+                  <DropdownMenu.Item onclick={() => onEdit?.(proposal.id)}>
                     Edit
                   </DropdownMenu.Item>
-                  <DropdownMenu.Item onclick={() => dispatch('duplicate', proposal.id)}>
+                  <DropdownMenu.Item onclick={() => onDuplicate?.(proposal.id)}>
                     Duplicate
                   </DropdownMenu.Item>
                   {#if proposal.status === 'draft'}
                     <DropdownMenu.Separator />
-                    <DropdownMenu.Item onclick={() => dispatch('send', proposal.id)}>
+                    <DropdownMenu.Item onclick={() => onSend?.(proposal.id)}>
                       Send to Client
                     </DropdownMenu.Item>
                   {/if}
                   <DropdownMenu.Separator />
-                  <DropdownMenu.Item class="text-destructive" onclick={() => dispatch('delete', proposal.id)}>
+                  <DropdownMenu.Item class="text-destructive" onclick={() => onDelete?.(proposal.id)}>
                     Delete
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>

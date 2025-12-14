@@ -4,17 +4,24 @@ export interface Proposal {
   id: number;
   uuid: string;
   name: string;
+  title: string | null;
   proposal_number: string | null;
   template_id: number | null;
   deal_id: number | null;
   contact_id: number | null;
   company_id: number | null;
+  client_name: string | null;
+  client_company: string | null;
+  cover_letter: string | null;
   status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired';
   cover_page: Record<string, any> | null;
   styling: ProposalStyling | null;
+  settings: Record<string, any> | null;
   total_value: number | null;
+  total_amount: number | null;
   currency: string;
   valid_until: string | null;
+  expires_at: string | null;
   sent_at: string | null;
   sent_to_email: string | null;
   first_viewed_at: string | null;
@@ -36,6 +43,7 @@ export interface Proposal {
   sections?: ProposalSection[];
   pricing_items?: ProposalPricingItem[];
   template?: ProposalTemplate;
+  public_url?: string;
 }
 
 export interface ProposalStyling {
@@ -52,6 +60,7 @@ export interface ProposalSection {
   title: string;
   content: string | null;
   settings: Record<string, any> | null;
+  media_urls: string[] | null;
   display_order: number;
   is_visible: boolean;
   is_locked: boolean;
@@ -140,6 +149,7 @@ export interface ProposalView {
   ip_address: string | null;
   user_agent: string | null;
   device_type: string | null;
+  location: string | null;
 }
 
 export interface ProposalAnalytics {

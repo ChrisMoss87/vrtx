@@ -1,19 +1,22 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Input } from '$lib/components/ui/input';
   import * as Card from '$lib/components/ui/card';
   import * as Accordion from '$lib/components/ui/accordion';
   import type { MergeFieldVariable } from '$lib/api/document-templates';
 
-  export let variables: Record<string, MergeFieldVariable[]> = {};
+  interface Props {
+    variables?: Record<string, MergeFieldVariable[]>;
+    onInsert?: (field: string) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    insert: string;
-  }>();
+  let {
+    variables = {},
+    onInsert,
+  }: Props = $props();
 
   let search = $state('');
 
-  const filteredVariables = $derived(Object.fromEntries(
+  const filteredVariables = $derived<Record<string, MergeFieldVariable[]>>(Object.fromEntries(
     Object.entries(variables).map(([category, vars]) => [
       category,
       vars.filter(v =>
@@ -47,7 +50,7 @@
   };
 
   function handleInsert(apiName: string) {
-    dispatch('insert', apiName);
+    onInsert?.(apiName);
   }
 </script>
 

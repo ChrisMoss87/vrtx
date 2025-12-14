@@ -3,8 +3,8 @@
 	import { page } from '$app/stores';
 
 	// Allow opening graph centered on a specific entity
-	$: entityType = $page.url.searchParams.get('type');
-	$: entityId = $page.url.searchParams.get('id');
+	const entityType = $derived($page.url.searchParams.get('type'));
+	const entityId = $derived($page.url.searchParams.get('id'));
 </script>
 
 <svelte:head>

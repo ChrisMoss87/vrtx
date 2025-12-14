@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Textarea } from '$lib/components/ui/textarea';
@@ -9,17 +8,27 @@
   import * as Select from '$lib/components/ui/select';
   import type { ApprovalRequest, ApprovalStep, ApprovalHistory } from '$lib/api/approvals';
 
-  export let request: ApprovalRequest;
-  export let history: ApprovalHistory[] = [];
-  export let users: Array<{ id: number; name: string }> = [];
-  export let loading = false;
+  interface Props {
+    request: ApprovalRequest;
+    history?: ApprovalHistory[];
+    users?: Array<{ id: number; name: string }>;
+    loading?: boolean;
+    onApprove?: (data: { comment?: string }) => void;
+    onReject?: (data: { comment: string }) => void;
+    onDelegate?: (data: { userId: number; comment?: string }) => void;
+    onCancel?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    approve: { comment?: string };
-    reject: { comment: string };
-    delegate: { userId: number; comment?: string };
-    cancel: void;
-  }>();
+  let {
+    request,
+    history = [],
+    users = [],
+    loading = false,
+    onApprove,
+    onReject,
+    onDelegate,
+    onCancel,
+  }: Props = $props();
 
   let showApproveDialog = $state(false);
   let showRejectDialog = $state(false);
@@ -50,20 +59,20 @@
   }
 
   function handleApprove() {
-    dispatch('approve', { comment: comment || undefined });
+    onApprove?.({ comment: comment || undefined });
     showApproveDialog = false;
     comment = '';
   }
 
   function handleReject() {
-    dispatch('reject', { comment });
+    onReject?.({ comment });
     showRejectDialog = false;
     comment = '';
   }
 
   function handleDelegate() {
     if (delegateUserId) {
-      dispatch('delegate', { userId: delegateUserId, comment: comment || undefined });
+      onDelegate?.({ userId: delegateUserId, comment: comment || undefined });
       showDelegateDialog = false;
       comment = '';
       delegateUserId = null;

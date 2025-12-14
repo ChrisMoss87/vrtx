@@ -7,12 +7,19 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let scenarios: Scenario[];
-	export let onClose: () => void;
+	interface Props {
+		scenarios: Scenario[];
+		onClose: () => void;
+	}
 
-	let selectedIds: number[] = [];
-	let comparison: ComparisonData[] = [];
-	let loading = false;
+	let {
+		scenarios,
+		onClose,
+	}: Props = $props();
+
+	let selectedIds = $state<number[]>([]);
+	let comparison = $state<ComparisonData[]>([]);
+	let loading = $state(false);
 
 	// Pre-select first 2 scenarios
 	onMount(() => {

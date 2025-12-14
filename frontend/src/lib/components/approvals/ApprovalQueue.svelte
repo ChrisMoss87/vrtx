@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Badge } from '$lib/components/ui/badge';
@@ -8,15 +7,23 @@
   import type { ApprovalRequest } from '$lib/api/approvals';
   import ApprovalRequestCard from './ApprovalRequestCard.svelte';
 
-  export let requests: ApprovalRequest[] = [];
-  export let loading = false;
+  interface Props {
+    requests?: ApprovalRequest[];
+    loading?: boolean;
+    onApprove?: (id: number) => void;
+    onReject?: (id: number) => void;
+    onDelegate?: (id: number) => void;
+    onView?: (id: number) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    approve: number;
-    reject: number;
-    delegate: number;
-    view: number;
-  }>();
+  let {
+    requests = [],
+    loading = false,
+    onApprove,
+    onReject,
+    onDelegate,
+    onView,
+  }: Props = $props();
 
   let search = $state('');
   let statusFilter = $state('pending');
@@ -120,10 +127,10 @@
         <ApprovalRequestCard
           {request}
           showActions={request.status === 'pending'}
-          on:approve={() => dispatch('approve', request.id)}
-          on:reject={() => dispatch('reject', request.id)}
-          on:delegate={() => dispatch('delegate', request.id)}
-          on:view={() => dispatch('view', request.id)}
+          onApprove={() => onApprove?.(request.id)}
+          onReject={() => onReject?.(request.id)}
+          onDelegate={() => onDelegate?.(request.id)}
+          onView={() => onView?.(request.id)}
         />
       {/each}
     </div>

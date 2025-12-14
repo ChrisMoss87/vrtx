@@ -2,12 +2,19 @@
 	import type { ComparisonField, ComparisonResult } from '$lib/api/time-machine';
 	import { ArrowRight, Plus, Minus, RefreshCw } from 'lucide-svelte';
 
-	export let comparison: ComparisonResult;
-	export let showUnchanged = false;
+	interface Props {
+		comparison: ComparisonResult;
+		showUnchanged?: boolean;
+	}
 
-	$: displayFields = showUnchanged
+	let {
+		comparison,
+		showUnchanged = $bindable(false),
+	}: Props = $props();
+
+	const displayFields = $derived(showUnchanged
 		? comparison.comparison
-		: comparison.comparison.filter((f) => f.has_changed);
+		: comparison.comparison.filter((f) => f.has_changed));
 
 	function formatTimestamp(timestamp: string): string {
 		return new Date(timestamp).toLocaleString('en-US', {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Application\Services\WebForm\WebFormApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\WebForm;
 use App\Models\WebFormField;
@@ -15,7 +16,8 @@ use Illuminate\Support\Facades\Validator;
 class WebFormController extends Controller
 {
     public function __construct(
-        protected WebFormService $webFormService
+        protected WebFormService $webFormService,
+        protected WebFormApplicationService $webFormApplicationService
     ) {}
 
     /**

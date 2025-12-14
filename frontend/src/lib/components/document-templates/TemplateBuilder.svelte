@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
@@ -10,15 +9,23 @@
   import type { DocumentTemplate, MergeFieldVariable, ConditionalBlock } from '$lib/api/document-templates';
   import MergeFieldPicker from './MergeFieldPicker.svelte';
 
-  export let template: Partial<DocumentTemplate> = {};
-  export let variables: Record<string, MergeFieldVariable[]> = {};
-  export let loading = false;
+  interface Props {
+    template?: Partial<DocumentTemplate>;
+    variables?: Record<string, MergeFieldVariable[]>;
+    loading?: boolean;
+    onSave?: (template: Partial<DocumentTemplate>) => void;
+    onPreview?: () => void;
+    onCancel?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    save: Partial<DocumentTemplate>;
-    preview: void;
-    cancel: void;
-  }>();
+  let {
+    template = {},
+    variables = {},
+    loading = false,
+    onSave,
+    onPreview,
+    onCancel,
+  }: Props = $props();
 
   let name = $state(template.name || '');
   let category = $state(template.category || '');
@@ -69,7 +76,7 @@
   }
 
   function handleSave() {
-    dispatch('save', {
+    onSave?.({
       ...template,
       name,
       category: category || null,
@@ -162,12 +169,12 @@
               <Textarea
                 id="content"
                 bind:value={content}
-                placeholder="Enter your template content with merge fields like {{contact.name}}"
+                placeholder="Enter your template content with merge fields like {'{'}contact.name{'}'}"
                 class="min-h-[400px] font-mono text-sm"
               />
             </div>
 
-            <MergeFieldPicker {variables} on:insert={(e) => insertMergeField(e.detail)} />
+            <MergeFieldPicker {variables} onInsert={(field) => insertMergeField(field)} />
           </div>
         </Tabs.Content>
 
@@ -314,9 +321,9 @@
       </Tabs.Root>
     </Card.Content>
     <Card.Footer class="flex justify-between">
-      <Button variant="outline" onclick={() => dispatch('cancel')}>Cancel</Button>
+      <Button variant="outline" onclick={() => onCancel?.()}>Cancel</Button>
       <div class="flex gap-2">
-        <Button variant="outline" onclick={() => dispatch('preview')}>Preview</Button>
+        <Button variant="outline" onclick={() => onPreview?.()}>Preview</Button>
         <Button onclick={handleSave} disabled={loading || !name || !content}>
           {loading ? 'Saving...' : 'Save Template'}
         </Button>

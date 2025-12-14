@@ -18,24 +18,34 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let moduleApiName: string;
-	export let recordId: number;
-	export let recordName: string = 'Record';
-	export let currentData: Record<string, unknown>;
-	export let open = false;
+	interface Props {
+		moduleApiName: string;
+		recordId: number;
+		recordName?: string;
+		currentData: Record<string, unknown>;
+		open?: boolean;
+	}
 
-	let markers: TimelineMarker[] = [];
-	let selectedTimestamp: string | null = null;
-	let historicalData: Record<string, unknown> | null = null;
-	let fields: Record<string, { label: string; type: string }> = {};
-	let loading = false;
-	let activeTab = 'view';
+	let {
+		moduleApiName,
+		recordId,
+		recordName = 'Record',
+		currentData,
+		open = $bindable(false),
+	}: Props = $props();
+
+	let markers = $state<TimelineMarker[]>([]);
+	let selectedTimestamp = $state<string | null>(null);
+	let historicalData = $state<Record<string, unknown> | null>(null);
+	let fields = $state<Record<string, { label: string; type: string }>>({});
+	let loading = $state(false);
+	let activeTab = $state('view');
 
 	// Comparison mode
-	let compareFromTimestamp: string | null = null;
-	let compareToTimestamp: string | null = null;
-	let comparisonResult: ComparisonResult | null = null;
-	let comparingDates = false;
+	let compareFromTimestamp = $state<string | null>(null);
+	let compareToTimestamp = $state<string | null>(null);
+	let comparisonResult = $state<ComparisonResult | null>(null);
+	let comparingDates = $state(false);
 
 	onMount(async () => {
 		if (open) {
@@ -43,9 +53,11 @@
 		}
 	});
 
-	$: if (open && markers.length === 0) {
-		loadMarkers();
-	}
+	$effect(() => {
+		if (open && markers.length === 0) {
+			loadMarkers();
+		}
+	});
 
 	async function loadMarkers() {
 		loading = true;
@@ -60,8 +72,8 @@
 		markers = data;
 	}
 
-	async function handleTimestampSelect(event: CustomEvent<{ timestamp: string; marker: TimelineMarker | null }>) {
-		const { timestamp } = event.detail;
+	async function handleTimestampSelect(eventData: { timestamp: string; marker: TimelineMarker | null }) {
+		const { timestamp } = eventData;
 		selectedTimestamp = timestamp;
 
 		if (comparingDates) {
@@ -175,8 +187,8 @@
 			<div class="px-2">
 				<TimeSlider
 					{markers}
-					{selectedTimestamp}
-					on:select={handleTimestampSelect}
+					bind:selectedTimestamp
+					onSelect={handleTimestampSelect}
 				/>
 			</div>
 

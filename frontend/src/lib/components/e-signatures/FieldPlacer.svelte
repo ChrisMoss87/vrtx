@@ -3,19 +3,27 @@
   import * as Select from '$lib/components/ui/select';
   import type { SignatureSigner } from '$lib/api/signatures';
 
-  export let documentUrl: string | null = null;
-  export let signers: Partial<SignatureSigner>[] = [];
-  export let fields: Array<{
-    signer_index: number;
-    type: string;
-    page: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    required: boolean;
-    label?: string;
-  }> = [];
+  interface Props {
+    documentUrl?: string | null;
+    signers?: Partial<SignatureSigner>[];
+    fields?: Array<{
+      signer_index: number;
+      type: string;
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      required: boolean;
+      label?: string;
+    }>;
+  }
+
+  let {
+    documentUrl = null,
+    signers = [],
+    fields = $bindable([]),
+  }: Props = $props();
 
   let selectedSigner = $state(0);
   let selectedFieldType = $state('signature');

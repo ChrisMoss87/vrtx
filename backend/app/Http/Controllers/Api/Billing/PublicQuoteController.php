@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Billing;
 
+use App\Application\Services\Billing\BillingApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Quote;
 use App\Services\Billing\PdfGeneratorService;
-use App\Services\Billing\QuoteService;
+use App\Services\Billing\QuoteService; // @deprecated - use BillingApplicationService
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PublicQuoteController extends Controller
 {
     public function __construct(
-        protected QuoteService $quoteService,
+        protected BillingApplicationService $billingService,
+        protected QuoteService $quoteService, // @deprecated - use BillingApplicationService
         protected PdfGeneratorService $pdfService
     ) {}
 

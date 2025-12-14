@@ -5,12 +5,12 @@
   import { SignatureStatus, AuditLog } from '$lib/components/e-signatures';
   import { signaturesApi, type SignatureRequest, type SignatureAuditLog } from '$lib/api/signatures';
 
-  let request: SignatureRequest | null = null;
-  let auditLogs: SignatureAuditLog[] = [];
-  let loading = true;
-  let showAuditLog = false;
+  let request = $state<SignatureRequest | null>(null);
+  let auditLogs = $state<SignatureAuditLog[]>([]);
+  let loading = $state(true);
+  let showAuditLog = $state(false);
 
-  $: requestId = parseInt($page.params.id);
+  const requestId = $derived(parseInt($page.params.id));
 
   onMount(async () => {
     await loadRequest();
@@ -28,9 +28,9 @@
     }
   }
 
-  async function handleRemind(event: CustomEvent<number>) {
+  async function handleRemind(signerId: number) {
     try {
-      await signaturesApi.remindSigner(requestId, event.detail);
+      await signaturesApi.remindSigner(requestId, signerId);
       alert('Reminder sent successfully');
     } catch (error) {
       console.error('Failed to send reminder:', error);
@@ -74,7 +74,7 @@
     </div>
   {:else if request}
     <div class="mb-6">
-      <button class="text-sm text-muted-foreground hover:text-foreground" on:click={() => goto('/signatures')}>
+      <button class="text-sm text-muted-foreground hover:text-foreground" onclick={() => goto('/signatures')}>
         ← Back to Signatures
       </button>
     </div>
@@ -82,10 +82,10 @@
     <div class="space-y-6">
       <SignatureStatus
         {request}
-        on:remind={handleRemind}
-        on:void={handleVoid}
-        on:download={handleDownload}
-        on:viewAuditLog={() => showAuditLog = !showAuditLog}
+        onRemind={handleRemind}
+        onVoid={handleVoid}
+        onDownload={handleDownload}
+        onViewAuditLog={() => showAuditLog = !showAuditLog}
       />
 
       {#if showAuditLog}

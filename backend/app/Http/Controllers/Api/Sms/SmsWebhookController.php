@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Sms;
 
+use App\Application\Services\Sms\SmsApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\SmsConnection;
 use App\Services\Sms\SmsService;
@@ -11,12 +12,10 @@ use Illuminate\Support\Facades\Log;
 
 class SmsWebhookController extends Controller
 {
-    protected SmsService $smsService;
-
-    public function __construct(SmsService $smsService)
-    {
-        $this->smsService = $smsService;
-    }
+    public function __construct(
+        protected SmsApplicationService $smsApplicationService,
+        protected SmsService $smsService
+    ) {}
 
     /**
      * Handle Twilio webhook for incoming messages and status updates

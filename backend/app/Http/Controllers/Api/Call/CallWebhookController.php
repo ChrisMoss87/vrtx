@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Call;
 
+use App\Application\Services\Call\CallApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Call;
 use App\Models\CallProvider;
@@ -14,7 +15,10 @@ use Illuminate\Support\Facades\Log;
 
 class CallWebhookController extends Controller
 {
-    public function __construct(protected CallService $callService) {}
+    public function __construct(
+        protected CallApplicationService $callApplicationService,
+        protected CallService $callService
+    ) {}
 
     /**
      * Handle incoming call webhook from Twilio

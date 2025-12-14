@@ -8,14 +8,22 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let roomId: number;
-	export let onClose: () => void;
-	export let onInvited: () => void;
+	interface Props {
+		roomId: number;
+		onClose: () => void;
+		onInvited: () => void;
+	}
 
-	let email = '';
-	let name = '';
-	let role = 'stakeholder';
-	let loading = false;
+	let {
+		roomId,
+		onClose,
+		onInvited,
+	}: Props = $props();
+
+	let email = $state('');
+	let name = $state('');
+	let role = $state('stakeholder');
+	let loading = $state(false);
 
 	async function handleSubmit() {
 		if (!email.trim()) {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Portal;
 
+use App\Application\Services\Portal\PortalApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\PortalUser;
 use App\Models\PortalInvitation;
@@ -13,7 +14,8 @@ use Illuminate\Http\JsonResponse;
 class PortalAdminController extends Controller
 {
     public function __construct(
-        private PortalService $portalService
+        private PortalService $portalService,
+        private PortalApplicationService $appService
     ) {}
 
     // Portal Users Management

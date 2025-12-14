@@ -6,25 +6,32 @@
 	import { getModules, type Module } from '$lib/api/modules';
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { onMount } from 'svelte';
 
-	export let currentRecording: Recording | null = null;
+	interface Props {
+		currentRecording?: Recording | null;
+		onStarted?: (recording: Recording) => void;
+		onStopped?: (recording: Recording) => void;
+		onPaused?: (recording: Recording) => void;
+		onResumed?: (recording: Recording) => void;
+	}
 
-	const dispatch = createEventDispatcher<{
-		started: Recording;
-		stopped: Recording;
-		paused: Recording;
-		resumed: Recording;
-	}>();
+	let {
+		currentRecording = null,
+		onStarted,
+		onStopped,
+		onPaused,
+		onResumed,
+	}: Props = $props();
 
-	let modules: Module[] = [];
-	let selectedModuleId: number | null = null;
-	let loading = false;
-	let loadingModules = true;
+	let modules = $state<Module[]>([]);
+	let selectedModuleId = $state<number | null>(null);
+	let loading = $state(false);
+	let loadingModules = $state(true);
 
-	$: isRecording = currentRecording?.status === 'recording';
-	$: isPaused = currentRecording?.status === 'paused';
-	$: hasActiveSession = currentRecording !== null;
+	const isRecording = $derived(currentRecording?.status === 'recording');
+	const isPaused = $derived(currentRecording?.status === 'paused');
+	const hasActiveSession = $derived(currentRecording !== null);
 
 	onMount(async () => {
 		const { data } = await tryCatch(getModules());
@@ -43,7 +50,7 @@
 		}
 
 		toast.success('Recording started - perform your actions');
-		dispatch('started', data);
+		onStarted?.(data);
 	}
 
 	async function handleStop() {
@@ -59,7 +66,7 @@
 		}
 
 		toast.success('Recording stopped');
-		dispatch('stopped', data);
+		onStopped?.(data);
 	}
 
 	async function handlePause() {
@@ -75,7 +82,7 @@
 		}
 
 		toast.success('Recording paused');
-		dispatch('paused', data);
+		onPaused?.(data);
 	}
 
 	async function handleResume() {
@@ -91,7 +98,7 @@
 		}
 
 		toast.success('Recording resumed');
-		dispatch('resumed', data);
+		onResumed?.(data);
 	}
 </script>
 

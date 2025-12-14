@@ -2,34 +2,42 @@
   import { Label } from '$lib/components/ui/label';
   import { Input } from '$lib/components/ui/input';
   import * as Card from '$lib/components/ui/card';
-  import * as Select from '$lib/components/ui/select';
 
-  export let settings: {
-    allow_comments?: boolean;
-    allow_e_signature?: boolean;
-    show_pricing_breakdown?: boolean;
-    require_acceptance?: boolean;
-    custom_css?: string;
-    branding?: {
-      logo_url?: string;
-      primary_color?: string;
-      accent_color?: string;
+  interface Props {
+    settings?: {
+      allow_comments?: boolean;
+      allow_e_signature?: boolean;
+      show_pricing_breakdown?: boolean;
+      require_acceptance?: boolean;
+      custom_css?: string;
+      branding?: {
+        logo_url?: string;
+        primary_color?: string;
+        accent_color?: string;
+      };
     };
-  } = {};
+  }
+
+  let {
+    settings = $bindable({
+      allow_comments: true,
+      allow_e_signature: true,
+      show_pricing_breakdown: true,
+      require_acceptance: true,
+      branding: {
+        primary_color: '#3b82f6',
+        accent_color: '#10b981',
+      },
+    }),
+  }: Props = $props();
 
   // Initialize defaults
-  settings = {
-    allow_comments: true,
-    allow_e_signature: true,
-    show_pricing_breakdown: true,
-    require_acceptance: true,
-    ...settings,
-    branding: {
+  if (!settings.branding) {
+    settings.branding = {
       primary_color: '#3b82f6',
       accent_color: '#10b981',
-      ...settings.branding,
-    },
-  };
+    };
+  }
 </script>
 
 <div class="space-y-6">

@@ -7,21 +7,27 @@
 	import { removeStep, type Recording, type RecordingStep } from '$lib/api/recordings';
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher } from 'svelte';
 	import ParameterizeModal from './ParameterizeModal.svelte';
 
-	export let recording: Recording;
-	export let steps: RecordingStep[] = [];
+	interface Props {
+		recording: Recording;
+		steps?: RecordingStep[];
+		onStepRemoved?: (stepId: number) => void;
+		onStepParameterized?: (step: RecordingStep) => void;
+		onReorder?: (order: number[]) => void;
+	}
 
-	const dispatch = createEventDispatcher<{
-		stepRemoved: number;
-		stepParameterized: RecordingStep;
-		reorder: number[];
-	}>();
+	let {
+		recording,
+		steps = [],
+		onStepRemoved,
+		onStepParameterized,
+		onReorder,
+	}: Props = $props();
 
-	let showParameterizeModal = false;
-	let selectedStep: RecordingStep | null = null;
-	let deletingStepId: number | null = null;
+	let showParameterizeModal = $state(false);
+	let selectedStep = $state<RecordingStep | null>(null);
+	let deletingStepId = $state<number | null>(null);
 
 	function getActionIcon(actionType: string) {
 		const icons: Record<string, typeof Plus> = {
@@ -50,7 +56,7 @@
 		}
 
 		toast.success('Step removed');
-		dispatch('stepRemoved', stepId);
+		onStepRemoved?.(stepId);
 	}
 
 	function openParameterizeModal(step: RecordingStep) {
@@ -58,8 +64,8 @@
 		showParameterizeModal = true;
 	}
 
-	function handleParameterized(event: CustomEvent<RecordingStep>) {
-		dispatch('stepParameterized', event.detail);
+	function handleParameterized(step: RecordingStep) {
+		onStepParameterized?.(step);
 		showParameterizeModal = false;
 	}
 
@@ -175,6 +181,6 @@
 		recordingId={recording.id}
 		step={selectedStep}
 		onClose={() => (showParameterizeModal = false)}
-		on:parameterized={handleParameterized}
+		onParameterized={handleParameterized}
 	/>
 {/if}

@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { flip } from 'svelte/animate';
-	import { crossfade, fade, scale } from 'svelte/transition';
+	import { fade, slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
-	import { Plus, Settings, Trash2, GripVertical, ArrowDownToLine } from 'lucide-svelte';
+	import { Plus, Settings, Trash2, GripVertical, ChevronDown, ChevronRight } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
-	import * as Card from '$lib/components/ui/card';
 	import { getFieldTypeMetadata, type FieldType } from '$lib/constants/fieldTypes';
 	import type { CreateBlockRequest, CreateFieldRequest } from '$lib/api/modules';
 	import { droppable } from '$lib/utils/dnd.svelte';
@@ -27,26 +26,43 @@
 		selectedFieldIndex = -1
 	}: Props = $props();
 
-	// Create crossfade transition for smooth field movement
-	const [send, receive] = crossfade({
-		duration: 250,
-		easing: quintOut,
-		fallback(node) {
-			return scale(node, { start: 0.95, duration: 200 });
-		}
-	});
+	// Collapsed blocks state
+	let collapsedBlocks = $state<Set<number>>(new Set());
+
+	// Section (block) reordering state
+	let draggedBlockIndex = $state<number | null>(null);
+	let dragOverBlockIndex = $state<number | null>(null);
+	let dragOverBlockPosition = $state<'before' | 'after' | null>(null);
 
 	// Field reordering state
 	let draggedField = $state<{ blockIndex: number; fieldIndex: number } | null>(null);
-	let dragOverField = $state<{ blockIndex: number; fieldIndex: number } | null>(null);
+	let dragOverField = $state<{
+		blockIndex: number;
+		fieldIndex: number;
+		position: 'before' | 'after';
+	} | null>(null);
 
-	// Track when dragging from palette to show insert zones
+	// Palette drag state
 	let isDraggingFromPalette = $state(false);
 	let insertAtBlockIndex = $state<number | null>(null);
 
+	// Track if any drag is active
+	let isDragging = $derived(draggedField !== null || isDraggingFromPalette);
+	let isDraggingBlock = $derived(draggedBlockIndex !== null);
+
+	function toggleBlockCollapse(blockIndex: number) {
+		const newCollapsed = new Set(collapsedBlocks);
+		if (newCollapsed.has(blockIndex)) {
+			newCollapsed.delete(blockIndex);
+		} else {
+			newCollapsed.add(blockIndex);
+		}
+		collapsedBlocks = newCollapsed;
+	}
+
 	function addBlock() {
 		const newBlock: CreateBlockRequest = {
-			name: `Block ${blocks.length + 1}`,
+			name: `Section ${blocks.length + 1}`,
 			type: 'section',
 			display_order: blocks.length,
 			settings: { columns: 2, collapsible: false },
@@ -57,6 +73,74 @@
 
 	function removeBlock(blockIndex: number) {
 		onBlocksChange(blocks.filter((_, i) => i !== blockIndex));
+	}
+
+	// Section drag handlers
+	function handleBlockDragStart(event: DragEvent, blockIndex: number) {
+		draggedBlockIndex = blockIndex;
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', `block-${blockIndex}`);
+		}
+	}
+
+	function handleBlockDragOver(event: DragEvent, targetBlockIndex: number) {
+		event.preventDefault();
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = 'move';
+		}
+
+		if (draggedBlockIndex === null || draggedBlockIndex === targetBlockIndex) return;
+
+		const target = event.currentTarget as HTMLElement;
+		const rect = target.getBoundingClientRect();
+		const midY = rect.top + rect.height / 2;
+		const position: 'before' | 'after' = event.clientY < midY ? 'before' : 'after';
+
+		if (dragOverBlockIndex !== targetBlockIndex || dragOverBlockPosition !== position) {
+			dragOverBlockIndex = targetBlockIndex;
+			dragOverBlockPosition = position;
+		}
+	}
+
+	function handleBlockDrop(event: DragEvent, targetBlockIndex: number) {
+		event.preventDefault();
+		event.stopPropagation();
+
+		if (draggedBlockIndex === null || draggedBlockIndex === targetBlockIndex) {
+			resetBlockDragState();
+			return;
+		}
+
+		const position = dragOverBlockPosition || 'after';
+		let actualTargetIndex = position === 'after' ? targetBlockIndex + 1 : targetBlockIndex;
+
+		// Adjust target index if moving down
+		if (draggedBlockIndex < actualTargetIndex) {
+			actualTargetIndex--;
+		}
+
+		const updatedBlocks = [...blocks];
+		const [movedBlock] = updatedBlocks.splice(draggedBlockIndex, 1);
+		updatedBlocks.splice(actualTargetIndex, 0, movedBlock);
+
+		// Update display_order for all blocks
+		updatedBlocks.forEach((block, idx) => {
+			block.display_order = idx;
+		});
+
+		onBlocksChange(updatedBlocks);
+		resetBlockDragState();
+	}
+
+	function handleBlockDragEnd() {
+		resetBlockDragState();
+	}
+
+	function resetBlockDragState() {
+		draggedBlockIndex = null;
+		dragOverBlockIndex = null;
+		dragOverBlockPosition = null;
 	}
 
 	function handlePaletteDrop(blockIndex: number, data: { fieldType?: FieldType }) {
@@ -73,9 +157,7 @@
 	}
 
 	function handlePaletteDragLeave() {
-		// Small delay to prevent flicker when moving between elements
 		setTimeout(() => {
-			// Only reset if we're not over another valid target
 			if (insertAtBlockIndex !== null) {
 				insertAtBlockIndex = null;
 			}
@@ -108,14 +190,10 @@
 			is_searchable: true,
 			is_filterable: true,
 			is_sortable: true,
-			// Formula fields cannot be mass updated - they're calculated
 			is_mass_updatable: fieldType !== 'formula',
-			settings: {
-				additional_settings: {}
-			}
+			settings: { additional_settings: {} }
 		};
 
-		// Add options for fields that require them
 		if (metadata.requiresOptions) {
 			newField.options = [
 				{ label: 'Option 1', value: 'option_1', display_order: 0 },
@@ -130,7 +208,6 @@
 		};
 		onBlocksChange(updatedBlocks);
 
-		// Auto-select the new field
 		if (onFieldSelect) {
 			onFieldSelect(blockIndex, fieldCount);
 		}
@@ -145,14 +222,12 @@
 		onBlocksChange(updatedBlocks);
 	}
 
-	// Field reordering with Svelte transitions
 	function handleFieldDragStart(event: DragEvent, blockIndex: number, fieldIndex: number) {
 		draggedField = { blockIndex, fieldIndex };
 		if (event.dataTransfer) {
 			event.dataTransfer.effectAllowed = 'move';
 			event.dataTransfer.setData('text/plain', `field-${blockIndex}-${fieldIndex}`);
 		}
-		// Add dragging class after a tick to allow browser to capture drag image
 		requestAnimationFrame(() => {
 			const target = event.target as HTMLElement;
 			target.classList.add('is-dragging');
@@ -168,12 +243,23 @@
 		if (event.dataTransfer) {
 			event.dataTransfer.dropEffect = 'move';
 		}
-		// Only update if position changed
+
+		if (!draggedField) {
+			isDraggingFromPalette = true;
+			insertAtBlockIndex = targetBlockIndex;
+		}
+
+		const target = event.currentTarget as HTMLElement;
+		const rect = target.getBoundingClientRect();
+		const midY = rect.top + rect.height / 2;
+		const position: 'before' | 'after' = event.clientY < midY ? 'before' : 'after';
+
 		if (
 			dragOverField?.blockIndex !== targetBlockIndex ||
-			dragOverField?.fieldIndex !== targetFieldIndex
+			dragOverField?.fieldIndex !== targetFieldIndex ||
+			dragOverField?.position !== position
 		) {
-			dragOverField = { blockIndex: targetBlockIndex, fieldIndex: targetFieldIndex };
+			dragOverField = { blockIndex: targetBlockIndex, fieldIndex: targetFieldIndex, position };
 		}
 	}
 
@@ -181,14 +267,33 @@
 		event.preventDefault();
 		event.stopPropagation();
 
+		if (event.dataTransfer) {
+			try {
+				const rawData = event.dataTransfer.getData('application/json');
+				if (rawData) {
+					const parsed = JSON.parse(rawData);
+					if (parsed.sourceId === 'field-palette' && parsed.data?.fieldType) {
+						addFieldToBlock(targetBlockIndex, parsed.data.fieldType);
+						resetDragState();
+						return;
+					}
+				}
+			} catch {
+				// Continue with field reorder
+			}
+		}
+
 		if (!draggedField) return;
 
 		const { blockIndex: sourceBlockIndex, fieldIndex: sourceFieldIndex } = draggedField;
+		const dropPosition = dragOverField?.position || 'after';
+		let actualTargetIndex = dropPosition === 'after' ? targetFieldIndex + 1 : targetFieldIndex;
 
-		// Don't do anything if dropping in same position
-		if (sourceBlockIndex === targetBlockIndex && sourceFieldIndex === targetFieldIndex) {
-			resetDragState();
-			return;
+		if (sourceBlockIndex === targetBlockIndex) {
+			if (sourceFieldIndex === actualTargetIndex || sourceFieldIndex === actualTargetIndex - 1) {
+				resetDragState();
+				return;
+			}
 		}
 
 		const updatedBlocks = [...blocks];
@@ -200,21 +305,14 @@
 			return;
 		}
 
-		// Remove from source
 		const [movedField] = sourceBlock.fields.splice(sourceFieldIndex, 1);
 
-		// Insert at target
-		if (sourceBlockIndex === targetBlockIndex) {
-			// Same block - adjust index if needed
-			const adjustedIndex =
-				sourceFieldIndex < targetFieldIndex ? targetFieldIndex - 1 : targetFieldIndex;
-			targetBlock.fields.splice(adjustedIndex, 0, movedField);
-		} else {
-			// Different block
-			targetBlock.fields.splice(targetFieldIndex, 0, movedField);
+		if (sourceBlockIndex === targetBlockIndex && sourceFieldIndex < actualTargetIndex) {
+			actualTargetIndex--;
 		}
 
-		// Update display orders
+		targetBlock.fields.splice(actualTargetIndex, 0, movedField);
+
 		sourceBlock.fields.forEach((field, idx) => {
 			field.display_order = idx;
 		});
@@ -234,13 +332,20 @@
 		resetDragState();
 	}
 
-	function handleFieldDragLeave() {
-		dragOverField = null;
+	function handleFieldDragLeave(event: DragEvent) {
+		const relatedTarget = event.relatedTarget as HTMLElement | null;
+		const currentTarget = event.currentTarget as HTMLElement;
+
+		if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+			dragOverField = null;
+		}
 	}
 
 	function resetDragState() {
 		draggedField = null;
 		dragOverField = null;
+		isDraggingFromPalette = false;
+		insertAtBlockIndex = null;
 	}
 
 	function getFieldIcon(fieldType: string) {
@@ -248,268 +353,279 @@
 		return metadata?.icon;
 	}
 
+	// Max 3 columns using 6-column grid
 	function getWidthClass(width: number = 100): string {
-		// Use flex-basis with calc to account for gap spacing
-		// Gap is 12px (gap-3), so we subtract half gap from each side
-		if (width <= 25) return 'basis-[calc(25%-9px)]';
-		if (width <= 33) return 'basis-[calc(33.333%-8px)]';
-		if (width <= 50) return 'basis-[calc(50%-6px)]';
-		if (width <= 66) return 'basis-[calc(66.666%-4px)]';
-		if (width <= 75) return 'basis-[calc(75%-3px)]';
-		return 'basis-full';
+		if (width <= 33) return 'col-span-2'; // 1/3
+		if (width <= 50) return 'col-span-3'; // 1/2
+		if (width <= 66) return 'col-span-4'; // 2/3
+		return 'col-span-6'; // full
 	}
 
-	// Generate unique key for field based on its properties
 	function getFieldKey(field: CreateFieldRequest, blockIndex: number, fieldIndex: number): string {
 		return `${blockIndex}-${field.api_name || fieldIndex}`;
 	}
 </script>
 
-<div
-	class="form-canvas scrollbar-thin flex-1 overflow-y-auto bg-gradient-to-br from-background via-muted/20 to-background p-4 md:p-6"
->
-	<div class="mx-auto max-w-5xl space-y-6">
-		<!-- Blocks -->
+<div class="form-canvas flex-1 overflow-y-auto bg-muted/30 p-4 md:p-6">
+	<div class="mx-auto max-w-3xl space-y-4">
 		{#each blocks as block, blockIndex (blockIndex)}
-			<Card.Root
-				class="border-2 shadow-sm {selectedBlockIndex === blockIndex
-					? 'border-primary shadow-primary/10'
-					: 'border-border'} transition-all hover:shadow-md"
-			>
-				<Card.Header class="bg-card/50 pb-3">
-					<div class="flex items-center justify-between gap-4">
-						<div class="flex min-w-0 flex-1 items-center gap-3">
-							<button
-								class="shrink-0 cursor-grab rounded p-1.5 transition-colors hover:bg-accent"
-								title="Drag to reorder"
-							>
-								<GripVertical class="h-4 w-4 text-muted-foreground" />
-							</button>
-							<div class="min-w-0 flex-1">
-								<input
-									type="text"
-									bind:value={block.name}
-									class="-mx-2 w-full rounded border-none bg-transparent px-2 py-1 text-lg font-semibold focus:ring-2 focus:ring-primary/20 focus:outline-none"
-									placeholder="Block Name"
-									data-testid="block-name-{blockIndex}"
-								/>
-								<p class="mt-0.5 px-2 text-sm text-muted-foreground">
-									{block.type} • {block.fields?.length || 0}
-									{block.fields?.length === 1 ? 'field' : 'fields'}
-								</p>
-							</div>
-						</div>
-						<div class="flex shrink-0 items-center gap-1">
-							<Button
-								variant="ghost"
-								size="icon"
-								onclick={() => onBlockSelect?.(blockIndex)}
-								data-testid="block-settings-{blockIndex}"
-								class="transition-colors hover:bg-primary/10"
-							>
-								<Settings class="h-4 w-4" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon"
-								onclick={() => removeBlock(blockIndex)}
-								data-testid="block-delete-{blockIndex}"
-								class="transition-colors hover:bg-destructive/10 hover:text-destructive"
-							>
-								<Trash2 class="h-4 w-4" />
-							</Button>
-						</div>
-					</div>
-				</Card.Header>
+			{@const isCollapsed = collapsedBlocks.has(blockIndex)}
+			{@const isDropTarget = insertAtBlockIndex === blockIndex}
+			{@const isSelected = selectedBlockIndex === blockIndex}
+			{@const isBlockDragging = draggedBlockIndex === blockIndex}
+			{@const isBlockDropBefore = dragOverBlockIndex === blockIndex && dragOverBlockPosition === 'before'}
+			{@const isBlockDropAfter = dragOverBlockIndex === blockIndex && dragOverBlockPosition === 'after'}
 
-				<Card.Content class="pt-4">
-					{@const isDropTarget = insertAtBlockIndex === blockIndex}
-					<!-- Drop Zone with droppable action -->
+			<!-- Drop indicator before block -->
+			{#if isBlockDropBefore && !isBlockDragging}
+				<div class="block-drop-indicator"></div>
+			{/if}
+
+			<div
+				class="block-container rounded-lg border bg-card shadow-sm transition-all duration-200
+					{isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
+					{isDropTarget ? 'ring-2 ring-primary border-primary' : ''}
+					{isBlockDragging ? 'opacity-50 scale-[0.98]' : ''}"
+				draggable="true"
+				ondragstart={(e) => handleBlockDragStart(e, blockIndex)}
+				ondragover={(e) => handleBlockDragOver(e, blockIndex)}
+				ondrop={(e) => handleBlockDrop(e, blockIndex)}
+				ondragend={handleBlockDragEnd}
+				role="listitem"
+			>
+				<!-- Block Header -->
+				<div class="flex items-center gap-2 border-b px-4 py-3">
+					<!-- Drag Handle -->
+					<div class="cursor-grab active:cursor-grabbing shrink-0 rounded p-1 hover:bg-accent">
+						<GripVertical class="h-4 w-4 text-muted-foreground" />
+					</div>
+
+					<button
+						type="button"
+						class="shrink-0 rounded p-1 hover:bg-accent"
+						onclick={() => toggleBlockCollapse(blockIndex)}
+					>
+						{#if isCollapsed}
+							<ChevronRight class="h-4 w-4 text-muted-foreground" />
+						{:else}
+							<ChevronDown class="h-4 w-4 text-muted-foreground" />
+						{/if}
+					</button>
+
+					<input
+						type="text"
+						bind:value={block.name}
+						class="flex-1 bg-transparent text-base font-semibold focus:outline-none"
+						placeholder="Section Name"
+						ondragstart={(e) => e.stopPropagation()}
+						draggable="false"
+					/>
+
+					<span class="text-xs text-muted-foreground">
+						{block.fields?.length || 0} fields
+					</span>
+
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-8 w-8"
+						onclick={() => onBlockSelect?.(blockIndex)}
+					>
+						<Settings class="h-4 w-4" />
+					</Button>
+
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+						onclick={() => removeBlock(blockIndex)}
+					>
+						<Trash2 class="h-4 w-4" />
+					</Button>
+				</div>
+
+				<!-- Block Content -->
+				{#if !isCollapsed}
 					<div
-						class="drop-zone min-h-32 rounded-lg border-2 border-dashed p-4 transition-all
-							{isDropTarget
-							? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-							: block.fields?.length
-								? 'border-border bg-background'
-								: 'border-muted-foreground/30 bg-muted/20 hover:border-muted-foreground/50 hover:bg-muted/30'}"
+						class="p-4 transition-all duration-200 min-h-[80px]
+							{isDropTarget ? 'bg-primary/5' : ''}"
 						use:droppable={{
 							accepts: ['field-palette'],
 							onDragEnter: () => handlePaletteDragEnter(blockIndex),
 							onDragLeave: handlePaletteDragLeave,
-							onDrop: (item) => handlePaletteDrop(blockIndex, item.data as { fieldType?: FieldType })
+							onDrop: (item) =>
+								handlePaletteDrop(blockIndex, item.data as { fieldType?: FieldType })
 						}}
-						data-testid="drop-zone-{blockIndex}"
+						transition:slide={{ duration: 150 }}
 					>
 						{#if !block.fields || block.fields.length === 0}
+							<!-- Empty State -->
 							<div
-								class="py-10 text-center text-muted-foreground {isDropTarget
-									? 'scale-105'
-									: ''} transition-transform"
-								in:fade={{ duration: 150 }}
+								class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-10 text-center transition-all duration-200
+									{isDropTarget ? 'border-primary bg-primary/10 scale-[1.02]' : 'border-muted-foreground/30'}"
 							>
-								<div class="relative mb-3">
-									<div
-										class="mx-auto flex h-16 w-16 items-center justify-center rounded-full {isDropTarget
-											? 'bg-primary/20'
-											: 'bg-muted/50'} transition-colors"
-									>
-										{#if isDropTarget}
-											<ArrowDownToLine class="h-8 w-8 text-primary animate-pulse" />
-										{:else}
-											<Plus class="h-8 w-8 opacity-50" />
-										{/if}
-									</div>
+								<div class="rounded-full p-3 mb-2 {isDropTarget ? 'bg-primary/20' : 'bg-muted'}">
+									<Plus
+										class="h-6 w-6 {isDropTarget ? 'text-primary' : 'text-muted-foreground'}"
+									/>
 								</div>
-								<p class="mb-1 text-base font-medium">
-									{isDropTarget ? 'Release to add field' : 'Drop fields here'}
-								</p>
-								<p class="text-sm">
-									{isDropTarget
-										? 'The field will be added to this block'
-										: 'Drag field types from the palette to get started'}
+								<p class="text-sm font-medium {isDropTarget ? 'text-primary' : 'text-muted-foreground'}">
+									{isDropTarget ? 'Release to add field' : 'Drag fields here'}
 								</p>
 							</div>
 						{:else}
-							<!-- Fields Grid with animations -->
-							<div class="flex flex-wrap gap-3">
+							<!-- Fields Grid - Max 3 columns -->
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div
+								class="grid grid-cols-6 gap-3"
+								role="list"
+								ondragover={(e) => {
+									e.preventDefault();
+									if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+									isDraggingFromPalette = true;
+									insertAtBlockIndex = blockIndex;
+								}}
+								ondrop={(e) => {
+									if (e.dataTransfer) {
+										try {
+											const rawData = e.dataTransfer.getData('application/json');
+											if (rawData) {
+												const parsed = JSON.parse(rawData);
+												if (parsed.sourceId === 'field-palette' && parsed.data?.fieldType) {
+													e.preventDefault();
+													e.stopPropagation();
+													addFieldToBlock(blockIndex, parsed.data.fieldType);
+													resetDragState();
+												}
+											}
+										} catch {
+											// Ignore
+										}
+									}
+								}}
+							>
 								{#each block.fields as field, fieldIndex (getFieldKey(field, blockIndex, fieldIndex))}
 									{@const FieldIcon = getFieldIcon(field.type)}
-									{@const isDragging =
+									{@const isFieldDragging =
 										draggedField?.blockIndex === blockIndex &&
 										draggedField?.fieldIndex === fieldIndex}
-									{@const isDragOver =
+									{@const isFieldSelected =
+										selectedBlockIndex === blockIndex && selectedFieldIndex === fieldIndex}
+									{@const isDropBefore =
 										dragOverField?.blockIndex === blockIndex &&
-										dragOverField?.fieldIndex === fieldIndex}
+										dragOverField?.fieldIndex === fieldIndex &&
+										dragOverField?.position === 'before' &&
+										!isFieldDragging}
+									{@const isDropAfter =
+										dragOverField?.blockIndex === blockIndex &&
+										dragOverField?.fieldIndex === fieldIndex &&
+										dragOverField?.position === 'after' &&
+										!isFieldDragging}
+
 									<div
-										class="field-preview {getWidthClass(field.width)}"
+										class="field-item relative {getWidthClass(field.width)}
+											{isFieldDragging ? 'opacity-30 scale-95' : ''}
+											{isDropBefore ? 'drop-before' : ''}
+											{isDropAfter ? 'drop-after' : ''}"
 										draggable="true"
 										ondragstart={(e) => handleFieldDragStart(e, blockIndex, fieldIndex)}
 										ondragover={(e) => handleFieldDragOver(e, blockIndex, fieldIndex)}
 										ondrop={(e) => handleFieldDrop(e, blockIndex, fieldIndex)}
 										ondragend={handleFieldDragEnd}
-										ondragleave={handleFieldDragLeave}
-										role="button"
-										tabindex="0"
-										animate:flip={{ duration: 250, easing: quintOut }}
-										in:receive={{ key: getFieldKey(field, blockIndex, fieldIndex) }}
-										out:send={{ key: getFieldKey(field, blockIndex, fieldIndex) }}
+										ondragleave={(e) => handleFieldDragLeave(e)}
+										role="listitem"
+										animate:flip={{ duration: 200, easing: quintOut }}
 									>
-										<button
-											class="group w-full rounded-lg border-2 p-3.5 text-left transition-all duration-200
-												{selectedBlockIndex === blockIndex && selectedFieldIndex === fieldIndex
-												? 'border-primary bg-primary/5 shadow-sm'
-												: 'border-border hover:border-primary/50 hover:shadow-sm'}
-												{isDragging ? 'scale-95 opacity-40 shadow-lg' : ''}
-												{isDragOver && !isDragging
-												? 'border-primary/70 bg-primary/5 ring-2 ring-primary/20'
-												: ''}"
+										<!-- svelte-ignore a11y_click_events_have_key_events -->
+										<div
+											class="group flex w-full items-center gap-2 rounded-md border bg-background p-2.5 text-left transition-all duration-150 cursor-pointer
+												{isFieldSelected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-primary/50 hover:shadow-sm'}"
 											onclick={() => onFieldSelect?.(blockIndex, fieldIndex)}
-											data-testid="field-{blockIndex}-{fieldIndex}"
+											role="button"
+											tabindex="0"
 										>
-											<div class="flex items-start gap-3">
-												<div
-													class="shrink-0 cursor-grab rounded p-1 transition-colors hover:bg-accent"
-													onclick={(e) => e.stopPropagation()}
-													title="Drag to reorder"
-													role="button"
-													tabindex="0"
-												>
-													<GripVertical
-														class="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground"
-													/>
-												</div>
-												<div
-													class="shrink-0 rounded bg-primary/10 p-1.5 text-primary transition-all group-hover:bg-primary group-hover:text-primary-foreground"
-												>
-													{#if FieldIcon}
-														<FieldIcon class="h-4 w-4" />
-													{/if}
-												</div>
+											<div class="cursor-grab active:cursor-grabbing" onclick={(e) => e.stopPropagation()}>
+												<GripVertical class="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground" />
+											</div>
+
+											<div class="flex min-w-0 flex-1 items-center gap-2">
+												{#if FieldIcon}
+													<FieldIcon class="h-4 w-4 shrink-0 text-primary" />
+												{/if}
 												<div class="min-w-0 flex-1">
-													<div class="mb-1 flex items-center gap-2">
+													<div class="flex items-center gap-1">
 														<span class="truncate text-sm font-medium">{field.label}</span>
 														{#if field.is_required}
-															<span class="text-xs font-bold text-destructive">*</span>
+															<span class="text-destructive">*</span>
 														{/if}
 													</div>
-													<p class="text-xs text-muted-foreground">
+													<span class="text-xs text-muted-foreground">
 														{getFieldTypeMetadata(field.type as FieldType).label}
-														{#if field.width}• {field.width}% width{/if}
-													</p>
+													</span>
 												</div>
-												<Button
-													variant="ghost"
-													size="icon"
-													class="h-7 w-7 shrink-0 transition-colors hover:bg-destructive/10 hover:text-destructive"
-													onclick={(e) => {
-														e.stopPropagation();
-														removeField(blockIndex, fieldIndex);
-													}}
-													data-testid="field-delete-{blockIndex}-{fieldIndex}"
-												>
-													<Trash2 class="h-3.5 w-3.5" />
-												</Button>
 											</div>
-										</button>
+
+											<button
+												type="button"
+												class="shrink-0 rounded p-1 opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+												onclick={(e) => {
+													e.stopPropagation();
+													removeField(blockIndex, fieldIndex);
+												}}
+											>
+												<Trash2 class="h-3.5 w-3.5" />
+											</button>
+										</div>
 									</div>
 								{/each}
 							</div>
 
-							<!-- Always-visible add field drop zone at the bottom when block has fields -->
-							<div
-								class="add-field-zone mt-4 flex items-center justify-center rounded-lg border-2 border-dashed py-4 transition-all
-									{isDropTarget
-									? 'border-primary bg-primary/10'
-									: 'border-border/50 hover:border-primary/50 hover:bg-accent/30'}"
-							>
-								<div class="flex items-center gap-2 text-muted-foreground">
-									{#if isDropTarget}
-										<ArrowDownToLine class="h-4 w-4 text-primary animate-pulse" />
-										<span class="text-sm font-medium text-primary">Drop here to add field</span>
-									{:else}
-										<Plus class="h-4 w-4" />
-										<span class="text-sm">Drag field here to add</span>
-									{/if}
+							<!-- Always show drop zone at bottom when dragging -->
+							{#if isDragging}
+								<div
+									class="mt-3 flex items-center justify-center gap-2 rounded-lg border-2 border-dashed py-4 transition-all duration-200
+										{isDropTarget ? 'border-primary bg-primary/10' : 'border-muted-foreground/30'}"
+									transition:fade={{ duration: 100 }}
+								>
+									<Plus class="h-4 w-4 {isDropTarget ? 'text-primary' : 'text-muted-foreground'}" />
+									<span class="text-sm {isDropTarget ? 'text-primary font-medium' : 'text-muted-foreground'}">
+										Drop here to add
+									</span>
 								</div>
-							</div>
+							{/if}
 						{/if}
 					</div>
-				</Card.Content>
-			</Card.Root>
+				{/if}
+			</div>
+
+			<!-- Drop indicator after block -->
+			{#if isBlockDropAfter && !isBlockDragging}
+				<div class="block-drop-indicator"></div>
+			{/if}
 		{/each}
 
-		<!-- Add Block Button -->
-		<Button
-			variant="outline"
-			class="group h-20 w-full border-2 border-dashed transition-all hover:border-primary hover:bg-primary/5"
+		<!-- Add Block -->
+		<button
+			type="button"
+			class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 py-6 text-muted-foreground transition-all hover:border-primary hover:bg-primary/5 hover:text-primary"
 			onclick={addBlock}
-			data-testid="add-block"
 		>
-			<Plus class="mr-2 h-5 w-5 transition-transform group-hover:scale-110" />
-			<span class="font-medium">Add Block</span>
-		</Button>
+			<Plus class="h-5 w-5" />
+			<span class="font-medium">Add Section</span>
+		</button>
 
 		{#if blocks.length === 0}
-			<div class="px-4 py-20 text-center">
-				<div class="relative mb-6">
-					<div
-						class="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/5"
-					>
-						<Plus class="h-12 w-12 text-primary opacity-50" />
-					</div>
-					<div
-						class="absolute inset-0 mx-auto h-24 w-24 animate-ping rounded-full bg-primary/5"
-						style="animation-duration: 3s;"
-					></div>
+			<div class="py-12 text-center">
+				<div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+					<Plus class="h-8 w-8 text-muted-foreground" />
 				</div>
-				<h3 class="mb-2 text-xl font-bold">Start building your form</h3>
-				<p class="mx-auto mb-8 max-w-md text-muted-foreground">
-					Add a block to organize your fields into logical sections. Each block can contain multiple
-					fields.
+				<h3 class="mb-2 text-lg font-semibold">Start building your form</h3>
+				<p class="mb-6 text-sm text-muted-foreground">
+					Add a section to organize your fields
 				</p>
-				<Button onclick={addBlock} data-testid="add-first-block" size="lg" class="shadow-lg">
-					<Plus class="mr-2 h-5 w-5" />
-					Create First Block
+				<Button onclick={addBlock}>
+					<Plus class="mr-2 h-4 w-4" />
+					Create First Section
 				</Button>
 			</div>
 		{/if}
@@ -517,36 +633,73 @@
 </div>
 
 <style>
-	.drop-zone.drag-over {
-		border-color: hsl(var(--primary));
-		background-color: hsl(var(--primary) / 0.05);
+	.field-item {
+		min-width: 0;
+		transition: transform 0.2s ease, opacity 0.2s ease, margin 0.2s ease;
 	}
 
-	.field-preview {
-		min-width: 200px;
-		flex-shrink: 0;
-		flex-grow: 0;
+	/* Fields move apart to show drop zone */
+	.field-item.drop-before {
+		margin-top: 52px;
 	}
 
-	/* Allow full-width fields to actually be full width */
-	.field-preview.basis-full {
-		min-width: 100%;
+	.field-item.drop-after {
+		margin-bottom: 52px;
 	}
 
-	/* Dragging state styles */
-	.field-preview.is-dragging,
-	.field-preview:has(.is-dragging) {
-		opacity: 0.4;
-		transform: scale(0.95);
+	/* Drop indicator placeholder - shows where field will go */
+	.field-item.drop-before::before,
+	.field-item.drop-after::after {
+		content: 'Drop here';
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: 48px;
+		background: hsl(var(--primary) / 0.1);
+		border: 2px dashed hsl(var(--primary) / 0.5);
+		border-radius: 6px;
+		z-index: 10;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 12px;
+		font-weight: 500;
+		color: hsl(var(--primary));
 	}
 
-	/* Smooth transitions for field items */
-	.field-preview {
-		transition: transform 0.2s ease, opacity 0.2s ease;
+	.field-item.drop-before::before {
+		top: -54px;
 	}
 
-	/* Add field zone - needs pointer-events for better UX */
-	.add-field-zone {
-		min-height: 48px;
+	.field-item.drop-after::after {
+		bottom: -54px;
+	}
+
+	/* Block drop indicator - shows where section will go */
+	.block-drop-indicator {
+		height: 4px;
+		border-radius: 2px;
+		background: hsl(var(--primary));
+		margin: -2px 0;
+		animation: pulse 0.8s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 0.7; }
+		50% { opacity: 1; }
+	}
+
+	/* Dragging states */
+	.field-item.is-dragging {
+		opacity: 0.3;
+	}
+
+	/* Responsive - stack on mobile */
+	@media (max-width: 640px) {
+		.col-span-2,
+		.col-span-3,
+		.col-span-4 {
+			grid-column: span 6;
+		}
 	}
 </style>

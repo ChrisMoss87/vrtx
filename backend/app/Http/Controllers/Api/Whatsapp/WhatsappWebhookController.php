@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Whatsapp;
 
+use App\Application\Services\WhatsApp\WhatsAppApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\WhatsappConnection;
 use App\Services\Whatsapp\WhatsappService;
@@ -13,7 +14,8 @@ use Illuminate\Support\Facades\Log;
 class WhatsappWebhookController extends Controller
 {
     public function __construct(
-        private WhatsappService $whatsappService
+        protected WhatsAppApplicationService $whatsAppApplicationService,
+        protected WhatsappService $whatsappService
     ) {}
 
     /**

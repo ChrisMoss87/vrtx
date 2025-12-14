@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Playbook;
 
+use App\Application\Services\Playbook\PlaybookApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Playbook;
 use App\Models\PlaybookInstance;
@@ -16,6 +17,7 @@ use Illuminate\Support\Str;
 class PlaybookController extends Controller
 {
     public function __construct(
+        protected PlaybookApplicationService $playbookApplicationService,
         protected PlaybookService $playbookService
     ) {}
 

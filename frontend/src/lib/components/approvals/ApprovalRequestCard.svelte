@@ -1,19 +1,26 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import * as Card from '$lib/components/ui/card';
   import type { ApprovalRequest, ApprovalStep } from '$lib/api/approvals';
 
-  export let request: ApprovalRequest;
-  export let showActions = true;
+  interface Props {
+    request: ApprovalRequest;
+    showActions?: boolean;
+    onApprove?: () => void;
+    onReject?: () => void;
+    onDelegate?: () => void;
+    onView?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    approve: void;
-    reject: void;
-    delegate: void;
-    view: void;
-  }>();
+  let {
+    request,
+    showActions = true,
+    onApprove,
+    onReject,
+    onDelegate,
+    onView,
+  }: Props = $props();
 
   const statusColors: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800',
@@ -118,24 +125,24 @@
     <!-- Actions -->
     {#if showActions && request.status === 'pending' && currentStep}
       <div class="flex gap-2 mt-4 pt-4 border-t">
-        <Button variant="outline" class="flex-1" onclick={() => dispatch('view')}>
+        <Button variant="outline" class="flex-1" onclick={() => onView?.()}>
           View Details
         </Button>
         {#if currentStep.can_delegate}
-          <Button variant="outline" onclick={() => dispatch('delegate')}>
+          <Button variant="outline" onclick={() => onDelegate?.()}>
             Delegate
           </Button>
         {/if}
-        <Button variant="outline" class="text-destructive" onclick={() => dispatch('reject')}>
+        <Button variant="outline" class="text-destructive" onclick={() => onReject?.()}>
           Reject
         </Button>
-        <Button onclick={() => dispatch('approve')}>
+        <Button onclick={() => onApprove?.()}>
           Approve
         </Button>
       </div>
     {:else}
       <div class="mt-4 pt-4 border-t">
-        <Button variant="outline" class="w-full" onclick={() => dispatch('view')}>
+        <Button variant="outline" class="w-full" onclick={() => onView?.()}>
           View Details
         </Button>
       </div>

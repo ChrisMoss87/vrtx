@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\DealRoom;
 
+use App\Application\Services\DealRoom\DealRoomApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\DealRoom;
 use App\Models\DealRoomActionItem;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 class DealRoomController extends Controller
 {
     public function __construct(
+        protected DealRoomApplicationService $dealRoomApplicationService,
         protected DealRoomService $service
     ) {}
 

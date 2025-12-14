@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
@@ -9,15 +8,23 @@
   import SignerManager from './SignerManager.svelte';
   import FieldPlacer from './FieldPlacer.svelte';
 
-  export let request: Partial<SignatureRequest> = {};
-  export let documentUrl: string | null = null;
-  export let loading = false;
+  interface Props {
+    request?: Partial<SignatureRequest>;
+    documentUrl?: string | null;
+    loading?: boolean;
+    onSave?: (data: Partial<SignatureRequest>) => void;
+    onCancel?: () => void;
+    onUploadDocument?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    save: Partial<SignatureRequest>;
-    cancel: void;
-    uploadDocument: void;
-  }>();
+  let {
+    request = {},
+    documentUrl = null,
+    loading = false,
+    onSave,
+    onCancel,
+    onUploadDocument,
+  }: Props = $props();
 
   let title = $state(request.title || '');
   let message = $state(request.message || '');
@@ -41,7 +48,7 @@
   let currentStep = $state<'details' | 'signers' | 'fields'>('details');
 
   function handleSave() {
-    dispatch('save', {
+    onSave?.({
       ...request,
       title,
       message: message || null,
@@ -139,7 +146,7 @@
                   <p class="font-medium">Document uploaded</p>
                   <p class="text-sm text-muted-foreground">Ready for signature fields</p>
                 </div>
-                <Button variant="outline" size="sm" onclick={() => dispatch('uploadDocument')}>
+                <Button variant="outline" size="sm" onclick={() => onUploadDocument?.()}>
                   Replace
                 </Button>
               </div>
@@ -147,7 +154,7 @@
               <button
                 type="button"
                 class="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors w-full"
-                onclick={() => dispatch('uploadDocument')}
+                onclick={() => onUploadDocument?.()}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-muted-foreground mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -193,7 +200,7 @@
         {#if currentStep !== 'details'}
           <Button variant="outline" onclick={prevStep}>Back</Button>
         {:else}
-          <Button variant="outline" onclick={() => dispatch('cancel')}>Cancel</Button>
+          <Button variant="outline" onclick={() => onCancel?.()}>Cancel</Button>
         {/if}
       </div>
       <div class="flex gap-2">

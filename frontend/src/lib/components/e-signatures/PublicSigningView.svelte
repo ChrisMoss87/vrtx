@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -8,29 +7,39 @@
   import type { SignatureRequest, SignatureSigner, SignatureField } from '$lib/api/signatures';
   import SignaturePad from './SignaturePad.svelte';
 
-  export let request: SignatureRequest;
-  export let signer: SignatureSigner;
-  export let fields: SignatureField[] = [];
-  export let documentUrl: string;
-  export let loading = false;
+  interface Props {
+    request: SignatureRequest;
+    signer: SignatureSigner;
+    fields?: SignatureField[];
+    documentUrl: string;
+    loading?: boolean;
+    onSign?: (data: { fieldId: number; signature: string }) => void;
+    onComplete?: () => void;
+    onDecline?: (reason: string) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    sign: { fieldId: number; signature: string };
-    complete: void;
-    decline: string;
-  }>();
+  let {
+    request,
+    signer,
+    fields = [],
+    documentUrl,
+    loading = false,
+    onSign,
+    onComplete,
+    onDecline,
+  }: Props = $props();
 
-  let currentPage = 1;
-  let totalPages = 1;
-  let showSignaturePad = false;
-  let activeFieldId: number | null = null;
-  let showDeclineDialog = false;
-  let declineReason = '';
-  let signedFields: Set<number> = new Set();
+  let currentPage = $state(1);
+  let totalPages = $state(1);
+  let showSignaturePad = $state(false);
+  let activeFieldId = $state<number | null>(null);
+  let showDeclineDialog = $state(false);
+  let declineReason = $state('');
+  let signedFields = $state<Set<number>>(new Set());
 
-  $: pageFields = fields.filter(f => f.page === currentPage && f.signer_id === signer.id);
-  $: allFieldsSigned = fields.filter(f => f.signer_id === signer.id && f.required).every(f => signedFields.has(f.id));
-  $: pendingRequiredFields = fields.filter(f => f.signer_id === signer.id && f.required && !signedFields.has(f.id)).length;
+  const pageFields = $derived(fields.filter(f => f.page === currentPage && f.signer_id === signer.id));
+  const allFieldsSigned = $derived(fields.filter(f => f.signer_id === signer.id && f.required).every(f => signedFields.has(f.id)));
+  const pendingRequiredFields = $derived(fields.filter(f => f.signer_id === signer.id && f.required && !signedFields.has(f.id)).length);
 
   function openSignaturePad(fieldId: number) {
     activeFieldId = fieldId;
@@ -39,16 +48,16 @@
 
   function handleSignature(signature: string) {
     if (activeFieldId) {
-      dispatch('sign', { fieldId: activeFieldId, signature });
+      onSign?.({ fieldId: activeFieldId, signature });
       signedFields.add(activeFieldId);
-      signedFields = signedFields;
+      signedFields = new Set(signedFields);
     }
     showSignaturePad = false;
     activeFieldId = null;
   }
 
   function handleDecline() {
-    dispatch('decline', declineReason);
+    onDecline?.(declineReason);
     showDeclineDialog = false;
   }
 
@@ -86,11 +95,11 @@
             </span>
           {/if}
           {#if request.settings?.allow_decline}
-            <Button variant="outline" on:click={() => showDeclineDialog = true}>
+            <Button variant="outline" onclick={() => showDeclineDialog = true}>
               Decline to Sign
             </Button>
           {/if}
-          <Button on:click={() => dispatch('complete')} disabled={!allFieldsSigned || loading}>
+          <Button onclick={() => onComplete?.()} disabled={!allFieldsSigned || loading}>
             {loading ? 'Submitting...' : 'Finish Signing'}
           </Button>
         </div>
@@ -107,11 +116,11 @@
           <Card.Content class="p-0">
             <!-- Page Navigation -->
             <div class="flex items-center justify-between p-3 bg-muted border-b">
-              <Button variant="outline" size="sm" disabled={currentPage === 1} on:click={() => currentPage--}>
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onclick={() => currentPage--}>
                 Previous
               </Button>
               <span class="text-sm">Page {currentPage} of {totalPages}</span>
-              <Button variant="outline" size="sm" disabled={currentPage === totalPages} on:click={() => currentPage++}>
+              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onclick={() => currentPage++}>
                 Next
               </Button>
             </div>
@@ -126,7 +135,7 @@
                   type="button"
                   class="absolute border-2 rounded transition-all {signedFields.has(field.id) ? 'border-green-500 bg-green-50' : 'border-primary bg-primary/5 hover:bg-primary/10 animate-pulse'}"
                   style="left: {field.x}px; top: {field.y}px; width: {field.width}px; height: {field.height}px;"
-                  on:click={() => openSignaturePad(field.id)}
+                  onclick={() => openSignaturePad(field.id)}
                   disabled={signedFields.has(field.id)}
                 >
                   {#if signedFields.has(field.id)}
@@ -191,8 +200,8 @@
       </Dialog.Description>
     </Dialog.Header>
     <SignaturePad
-      on:sign={(e) => handleSignature(e.detail)}
-      on:cancel={() => showSignaturePad = false}
+      onSign={(signature) => handleSignature(signature)}
+      onCancel={() => showSignaturePad = false}
     />
   </Dialog.Content>
 </Dialog.Root>
@@ -219,10 +228,10 @@
       {/if}
     </div>
     <Dialog.Footer>
-      <Button variant="outline" on:click={() => showDeclineDialog = false}>Cancel</Button>
+      <Button variant="outline" onclick={() => showDeclineDialog = false}>Cancel</Button>
       <Button
         variant="destructive"
-        on:click={handleDecline}
+        onclick={handleDecline}
         disabled={request.settings?.require_reason && !declineReason}
       >
         Decline to Sign

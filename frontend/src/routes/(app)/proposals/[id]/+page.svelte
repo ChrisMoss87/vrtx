@@ -9,11 +9,11 @@
   import { ProposalAnalytics } from '$lib/components/proposals';
   import { proposalsApi, type Proposal, type ProposalView } from '$lib/api/proposals';
 
-  let proposal: Proposal | null = null;
-  let views: ProposalView[] = [];
-  let loading = true;
+  let proposal = $state<Proposal | null>(null);
+  let views = $state<ProposalView[]>([]);
+  let loading = $state(true);
 
-  $: proposalId = parseInt($page.params.id);
+  const proposalId = $derived(parseInt($page.params.id));
 
   onMount(async () => {
     await loadProposal();
@@ -75,7 +75,7 @@
   {:else if proposal}
     <div class="mb-6 flex justify-between items-start">
       <div>
-        <button class="text-sm text-muted-foreground hover:text-foreground mb-2" on:click={() => goto('/proposals')}>
+        <button class="text-sm text-muted-foreground hover:text-foreground mb-2" onclick={() => goto('/proposals')}>
           ← Back to Proposals
         </button>
         <h1 class="text-2xl font-bold">{proposal.title}</h1>
@@ -92,13 +92,13 @@
         </div>
       </div>
       <div class="flex gap-2">
-        <Button variant="outline" on:click={() => goto(`/proposals/${proposalId}/edit`)}>
+        <Button variant="outline" onclick={() => goto(`/proposals/${proposalId}/edit`)}>
           Edit
         </Button>
         {#if proposal.status === 'draft'}
-          <Button on:click={handleSend}>Send to Client</Button>
+          <Button onclick={handleSend}>Send to Client</Button>
         {:else if proposal.public_url}
-          <Button variant="outline" on:click={() => window.open(proposal?.public_url, '_blank')}>
+          <Button variant="outline" onclick={() => window.open(proposal?.public_url, '_blank')}>
             View Public Page
           </Button>
         {/if}

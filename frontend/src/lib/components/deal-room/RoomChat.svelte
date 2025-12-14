@@ -8,14 +8,18 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let roomId: number;
+	interface Props {
+		roomId: number;
+	}
 
-	let messages: DealRoomMessage[] = [];
-	let loading = true;
-	let newMessage = '';
-	let isInternal = false;
-	let sending = false;
-	let showInternal = true;
+	let { roomId }: Props = $props();
+
+	let messages = $state<DealRoomMessage[]>([]);
+	let loading = $state(true);
+	let newMessage = $state('');
+	let isInternal = $state(false);
+	let sending = $state(false);
+	let showInternal = $state(true);
 
 	onMount(async () => {
 		await loadMessages();

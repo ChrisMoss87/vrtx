@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Whatsapp;
 
+use App\Application\Services\WhatsApp\WhatsAppApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\WhatsappConnection;
 use App\Services\Whatsapp\WhatsappApiService;
@@ -10,6 +11,9 @@ use Illuminate\Http\Request;
 
 class WhatsappConnectionController extends Controller
 {
+    public function __construct(
+        protected WhatsAppApplicationService $whatsAppApplicationService
+    ) {}
     public function index(): JsonResponse
     {
         $connections = WhatsappConnection::withCount(['conversations', 'templates'])

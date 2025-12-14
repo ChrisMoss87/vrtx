@@ -5,12 +5,20 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let roomId: number;
-	export let documents: DealRoomDocument[];
-	export let onUpdate: () => void;
+	interface Props {
+		roomId: number;
+		documents: DealRoomDocument[];
+		onUpdate: () => void;
+	}
 
-	let uploading = false;
-	let fileInput: HTMLInputElement;
+	let {
+		roomId,
+		documents,
+		onUpdate,
+	}: Props = $props();
+
+	let uploading = $state(false);
+	let fileInput = $state<HTMLInputElement>(null!);
 
 	async function handleFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;

@@ -16,46 +16,53 @@
 	import { toast } from 'svelte-sonner';
 	import NodeDetailsPanel from './NodeDetailsPanel.svelte';
 
-	export let initialEntityType: string | null = null;
-	export let initialEntityId: number | null = null;
+	interface Props {
+		initialEntityType?: string | null;
+		initialEntityId?: number | null;
+	}
 
-	let container: HTMLDivElement;
-	let canvas: HTMLCanvasElement;
-	let ctx: CanvasRenderingContext2D | null = null;
+	let {
+		initialEntityType = null,
+		initialEntityId = null,
+	}: Props = $props();
 
-	let nodes: GraphNode[] = [];
-	let edges: GraphEdge[] = [];
-	let loading = true;
+	let container = $state<HTMLDivElement>(null!);
+	let canvas = $state<HTMLCanvasElement>(null!);
+	let ctx = $state<CanvasRenderingContext2D | null>(null);
+
+	let nodes = $state<GraphNode[]>([]);
+	let edges = $state<GraphEdge[]>([]);
+	let loading = $state(true);
 
 	// Viewport state
-	let scale = 1;
-	let offsetX = 0;
-	let offsetY = 0;
-	let isDragging = false;
-	let dragStartX = 0;
-	let dragStartY = 0;
-	let lastOffsetX = 0;
-	let lastOffsetY = 0;
+	let scale = $state(1);
+	let offsetX = $state(0);
+	let offsetY = $state(0);
+	let isDragging = $state(false);
+	let dragStartX = $state(0);
+	let dragStartY = $state(0);
+	let lastOffsetX = $state(0);
+	let lastOffsetY = $state(0);
 
 	// Node positions (computed by force simulation)
-	let nodePositions: Map<string, { x: number; y: number }> = new Map();
+	let nodePositions = $state<Map<string, { x: number; y: number }>>(new Map());
 
 	// Selection state
-	let selectedNode: GraphNode | null = null;
-	let hoveredNode: GraphNode | null = null;
+	let selectedNode = $state<GraphNode | null>(null);
+	let hoveredNode = $state<GraphNode | null>(null);
 
 	// Filters
-	let showContacts = true;
-	let showCompanies = true;
-	let showDeals = true;
-	let showUsers = false;
-	let searchQuery = '';
+	let showContacts = $state(true);
+	let showCompanies = $state(true);
+	let showDeals = $state(true);
+	let showUsers = $state(false);
+	let searchQuery = $state('');
 
 	// Path finding
-	let pathFindingMode = false;
-	let pathStart: GraphNode | null = null;
-	let pathEnd: GraphNode | null = null;
-	let pathResult: string[] | null = null;
+	let pathFindingMode = $state(false);
+	let pathStart = $state<GraphNode | null>(null);
+	let pathEnd = $state<GraphNode | null>(null);
+	let pathResult = $state<string[] | null>(null);
 
 	onMount(async () => {
 		ctx = canvas.getContext('2d');

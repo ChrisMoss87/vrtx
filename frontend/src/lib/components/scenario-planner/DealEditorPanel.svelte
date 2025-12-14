@@ -7,14 +7,22 @@
 	import { X, RotateCcw, CheckCircle2, TrendingUp, ArrowRight } from 'lucide-svelte';
 	import type { ScenarioDeal } from '$lib/api/scenarios';
 
-	export let deal: ScenarioDeal;
-	export let onUpdate: (changes: Partial<ScenarioDeal>) => void;
-	export let onClose: () => void;
+	interface Props {
+		deal: ScenarioDeal;
+		onUpdate: (changes: Partial<ScenarioDeal>) => void;
+		onClose: () => void;
+	}
 
-	let amount = deal.amount;
-	let probability = deal.probability;
-	let closeDate = deal.close_date ?? '';
-	let isCommitted = deal.is_committed;
+	let {
+		deal,
+		onUpdate,
+		onClose,
+	}: Props = $props();
+
+	let amount = $state(deal.amount);
+	let probability = $state(deal.probability);
+	let closeDate = $state(deal.close_date ?? '');
+	let isCommitted = $state(deal.is_committed);
 
 	function formatCurrency(value: number): string {
 		return new Intl.NumberFormat('en-US', {
@@ -53,9 +61,9 @@
 		onUpdate({ is_committed: true, probability: 100 });
 	}
 
-	$: weightedAmount = amount * (probability / 100);
-	$: originalWeighted = (deal.original_data?.amount ?? 0) * ((deal.original_data?.probability ?? 50) / 100);
-	$: impactDelta = weightedAmount - originalWeighted;
+	const weightedAmount = $derived(amount * (probability / 100));
+	const originalWeighted = $derived((deal.original_data?.amount ?? 0) * ((deal.original_data?.probability ?? 50) / 100));
+	const impactDelta = $derived(weightedAmount - originalWeighted);
 </script>
 
 <div class="flex h-full flex-col">

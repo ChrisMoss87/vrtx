@@ -2,8 +2,15 @@
 	import { BarChart3, Target, TrendingUp, Users, DollarSign } from 'lucide-svelte';
 	import type { ScenarioMetrics } from '$lib/api/scenarios';
 
-	export let metrics: ScenarioMetrics;
-	export let targetAmount: number | null;
+	interface Props {
+		metrics: ScenarioMetrics;
+		targetAmount?: number | null;
+	}
+
+	let {
+		metrics,
+		targetAmount = null,
+	}: Props = $props();
 
 	function formatCurrency(value: number): string {
 		return new Intl.NumberFormat('en-US', {

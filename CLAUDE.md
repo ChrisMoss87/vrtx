@@ -1,1 +1,2 @@
 - Domain-Driven Design (DDD) with Clean Architecture
+- never use $: in svelte use runes

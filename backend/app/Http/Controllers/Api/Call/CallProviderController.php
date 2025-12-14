@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Call;
 
+use App\Application\Services\Call\CallApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\CallProvider;
 use App\Services\Call\TwilioCallService;
@@ -11,6 +12,9 @@ use Illuminate\Support\Facades\Validator;
 
 class CallProviderController extends Controller
 {
+    public function __construct(
+        protected CallApplicationService $callApplicationService
+    ) {}
     public function index(): JsonResponse
     {
         $providers = CallProvider::all();

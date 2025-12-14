@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Chat;
 
+use App\Application\Services\Chat\ChatApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\ChatWidget;
 use App\Models\ChatConversation;
@@ -13,7 +14,8 @@ use Illuminate\Http\Request;
 class PublicChatController extends Controller
 {
     public function __construct(
-        private ChatService $chatService
+        protected ChatApplicationService $chatApplicationService,
+        protected ChatService $chatService
     ) {}
 
     /**

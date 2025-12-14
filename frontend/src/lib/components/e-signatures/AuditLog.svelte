@@ -3,7 +3,13 @@
   import { Badge } from '$lib/components/ui/badge';
   import type { SignatureAuditLog } from '$lib/api/signatures';
 
-  export let logs: SignatureAuditLog[] = [];
+  interface Props {
+    logs?: SignatureAuditLog[];
+  }
+
+  let {
+    logs = [],
+  }: Props = $props();
 
   const actionLabels: Record<string, string> = {
     created: 'Request Created',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Portal;
 
+use App\Application\Services\Portal\PortalApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\PortalUser;
 use App\Models\PortalInvitation;
@@ -14,7 +15,8 @@ use Illuminate\Validation\Rules\Password;
 class PortalAuthController extends Controller
 {
     public function __construct(
-        private PortalService $portalService
+        private PortalService $portalService,
+        private PortalApplicationService $appService
     ) {}
 
     public function login(Request $request): JsonResponse

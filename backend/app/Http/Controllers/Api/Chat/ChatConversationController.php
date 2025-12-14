@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Chat;
 
+use App\Application\Services\Chat\ChatApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
@@ -12,7 +13,8 @@ use Illuminate\Http\Request;
 class ChatConversationController extends Controller
 {
     public function __construct(
-        private ChatService $chatService
+        protected ChatApplicationService $chatApplicationService,
+        protected ChatService $chatService
     ) {}
 
     public function index(Request $request): JsonResponse

@@ -2,22 +2,31 @@
 	import { DollarSign, GripVertical, CheckCircle2 } from 'lucide-svelte';
 	import type { ScenarioDeal } from '$lib/api/scenarios';
 
-	export let deals: ScenarioDeal[];
-	export let stageBreakdown: Array<{
-		stage_id: number | null;
-		stage_name: string;
-		deal_count: number;
-		total_amount: number;
-		weighted_amount: number;
-	}>;
-	export let onDealSelect: (deal: ScenarioDeal) => void;
-	export let onDealMove: (deal: ScenarioDeal, newStageId: number) => void;
+	interface Props {
+		deals: ScenarioDeal[];
+		stageBreakdown: Array<{
+			stage_id: number | null;
+			stage_name: string;
+			deal_count: number;
+			total_amount: number;
+			weighted_amount: number;
+		}>;
+		onDealSelect: (deal: ScenarioDeal) => void;
+		onDealMove: (deal: ScenarioDeal, newStageId: number) => void;
+	}
 
-	let draggedDeal: ScenarioDeal | null = null;
-	let dragOverStageId: number | null = null;
+	let {
+		deals,
+		stageBreakdown,
+		onDealSelect,
+		onDealMove,
+	}: Props = $props();
+
+	let draggedDeal = $state<ScenarioDeal | null>(null);
+	let dragOverStageId = $state<number | null>(null);
 
 	// Group deals by stage
-	$: dealsByStage = deals.reduce(
+	const dealsByStage = $derived(deals.reduce(
 		(acc, deal) => {
 			const stageId = deal.stage_id ?? 0;
 			if (!acc[stageId]) {
@@ -27,16 +36,16 @@
 			return acc;
 		},
 		{} as Record<number, ScenarioDeal[]>
-	);
+	));
 
 	// Create stage columns from breakdown, ensuring all stages are shown
-	$: stages = stageBreakdown.map((s) => ({
+	const stages = $derived(stageBreakdown.map((s) => ({
 		id: s.stage_id ?? 0,
 		name: s.stage_name,
 		deals: dealsByStage[s.stage_id ?? 0] ?? [],
 		totalAmount: s.total_amount,
 		weightedAmount: s.weighted_amount
-	}));
+	})));
 
 	function formatCurrency(value: number): string {
 		if (value >= 1000000) {

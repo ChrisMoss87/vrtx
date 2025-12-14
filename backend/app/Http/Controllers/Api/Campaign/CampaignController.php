@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Campaign;
 
+use App\Application\Services\Campaign\CampaignApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\CampaignAudience;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Auth;
 class CampaignController extends Controller
 {
     public function __construct(
+        protected CampaignApplicationService $campaignApplicationService,
         protected CampaignService $campaignService
     ) {}
 

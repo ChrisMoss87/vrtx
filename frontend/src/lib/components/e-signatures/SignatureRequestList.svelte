@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Badge } from '$lib/components/ui/badge';
@@ -9,16 +8,25 @@
   import * as Progress from '$lib/components/ui/progress';
   import type { SignatureRequest } from '$lib/api/signatures';
 
-  export let requests: SignatureRequest[] = [];
-  export let loading = false;
+  interface Props {
+    requests?: SignatureRequest[];
+    loading?: boolean;
+    onCreate?: () => void;
+    onView?: (id: number) => void;
+    onVoid?: (id: number) => void;
+    onRemind?: (id: number) => void;
+    onDownload?: (id: number) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    create: void;
-    view: number;
-    void: number;
-    remind: number;
-    download: number;
-  }>();
+  let {
+    requests = [],
+    loading = false,
+    onCreate,
+    onView,
+    onVoid,
+    onRemind,
+    onDownload,
+  }: Props = $props();
 
   let search = $state('');
   let statusFilter = $state('');
@@ -92,7 +100,7 @@
       </Select.Root>
     </div>
 
-    <Button onclick={() => dispatch('create')}>
+    <Button onclick={() => onCreate?.()}>
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
@@ -118,7 +126,7 @@
         {#if search || statusFilter}
           <p class="text-sm text-muted-foreground mt-2">Try adjusting your filters</p>
         {:else}
-          <Button variant="outline" class="mt-4" onclick={() => dispatch('create')}>
+          <Button variant="outline" class="mt-4" onclick={() => onCreate?.()}>
             Create your first signature request
           </Button>
         {/if}
@@ -128,7 +136,7 @@
     <div class="space-y-3">
       {#each filteredRequests as request}
         <Card.Root class="hover:shadow-md transition-shadow cursor-pointer">
-          <button type="button" class="w-full text-left" onclick={() => dispatch('view', request.id)}>
+          <button type="button" class="w-full text-left" onclick={() => onView?.(request.id)}>
             <Card.Content class="p-4">
               <div class="flex items-start justify-between">
                 <div class="flex-1">
@@ -201,20 +209,20 @@
                     </Button>
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Content align="end">
-                    <DropdownMenu.Item onclick={() => dispatch('view', request.id)}>
+                    <DropdownMenu.Item onclick={() => onView?.(request.id)}>
                       View Details
                     </DropdownMenu.Item>
                     {#if request.status === 'pending' || request.status === 'in_progress'}
-                      <DropdownMenu.Item onclick={() => dispatch('remind', request.id)}>
+                      <DropdownMenu.Item onclick={() => onRemind?.(request.id)}>
                         Send Reminder
                       </DropdownMenu.Item>
                       <DropdownMenu.Separator />
-                      <DropdownMenu.Item class="text-destructive" onclick={() => dispatch('void', request.id)}>
+                      <DropdownMenu.Item class="text-destructive" onclick={() => onVoid?.(request.id)}>
                         Void Request
                       </DropdownMenu.Item>
                     {/if}
                     {#if request.status === 'completed'}
-                      <DropdownMenu.Item onclick={() => dispatch('download', request.id)}>
+                      <DropdownMenu.Item onclick={() => onDownload?.(request.id)}>
                         Download Document
                       </DropdownMenu.Item>
                     {/if}

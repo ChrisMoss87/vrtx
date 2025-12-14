@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers\Api\Scheduling;
 
+use App\Application\Services\Scheduling\SchedulingApplicationService;
+use App\Domain\Scheduling\DTOs\CreateMeetingDTO;
 use App\Http\Controllers\Controller;
 use App\Models\MeetingType;
 use App\Models\ScheduledMeeting;
 use App\Models\SchedulingPage;
 use App\Services\Scheduling\AvailabilityService;
-use App\Services\Scheduling\MeetingBookingService;
 use Carbon\Carbon;
+use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,7 +18,7 @@ class PublicBookingController extends Controller
 {
     public function __construct(
         protected AvailabilityService $availabilityService,
-        protected MeetingBookingService $bookingService
+        protected SchedulingApplicationService $schedulingService
     ) {}
 
     /**
@@ -239,18 +241,29 @@ class PublicBookingController extends Controller
         }
 
         try {
-            $meeting = $this->bookingService->bookMeeting($meetingType, $validated);
+            $dto = CreateMeetingDTO::fromArray([
+                'meeting_type_id' => $meetingType->id,
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'start_time' => $validated['start_time'],
+                'timezone' => $validated['timezone'],
+                'notes' => $validated['notes'] ?? null,
+                'answers' => $validated['answers'] ?? null,
+            ]);
+
+            $meetingResponse = $this->schedulingService->bookMeeting($dto);
 
             return response()->json([
                 'message' => 'Meeting booked successfully',
                 'meeting' => [
-                    'id' => $meeting->id,
-                    'start_time' => $meeting->start_time->toIso8601String(),
-                    'end_time' => $meeting->end_time->toIso8601String(),
-                    'timezone' => $meeting->timezone,
-                    'location' => $meeting->location,
-                    'manage_url' => $meeting->manage_url,
-                    'cancel_url' => $meeting->cancel_url,
+                    'id' => $meetingResponse->id,
+                    'start_time' => $meetingResponse->startTime->format('c'),
+                    'end_time' => $meetingResponse->endTime->format('c'),
+                    'timezone' => $meetingResponse->timezone,
+                    'location' => $meetingResponse->location,
+                    'manage_url' => $meetingResponse->manageUrl,
+                    'cancel_url' => $meetingResponse->cancelUrl,
                     'host' => [
                         'name' => $page->user->name,
                     ],
@@ -272,34 +285,38 @@ class PublicBookingController extends Controller
      */
     public function getMeetingByToken(string $token): JsonResponse
     {
-        $meeting = $this->bookingService->getMeetingByToken($token);
+        $meetingResponse = $this->schedulingService->getMeetingByToken($token);
 
-        if (!$meeting) {
+        if (!$meetingResponse) {
             return response()->json(['message' => 'Meeting not found'], 404);
         }
 
+        // Load the Eloquent model to get related data
+        $meeting = ScheduledMeeting::with(['host', 'meetingType.schedulingPage'])
+            ->find($meetingResponse->id);
+
         return response()->json([
             'meeting' => [
-                'id' => $meeting->id,
-                'attendee_name' => $meeting->attendee_name,
-                'attendee_email' => $meeting->attendee_email,
-                'start_time' => $meeting->start_time->toIso8601String(),
-                'end_time' => $meeting->end_time->toIso8601String(),
-                'timezone' => $meeting->timezone,
-                'location' => $meeting->location,
-                'status' => $meeting->status,
-                'can_cancel' => $meeting->can_cancel,
-                'can_reschedule' => $meeting->can_reschedule,
+                'id' => $meetingResponse->id,
+                'attendee_name' => $meetingResponse->attendeeName,
+                'attendee_email' => $meetingResponse->attendeeEmail,
+                'start_time' => $meetingResponse->startTime->format('c'),
+                'end_time' => $meetingResponse->endTime->format('c'),
+                'timezone' => $meetingResponse->timezone,
+                'location' => $meetingResponse->location,
+                'status' => $meetingResponse->status,
+                'can_cancel' => $meeting->can_cancel ?? true,
+                'can_reschedule' => $meeting->can_reschedule ?? true,
                 'host' => [
-                    'name' => $meeting->host->name,
+                    'name' => $meeting->host->name ?? 'Unknown',
                 ],
                 'meeting_type' => [
-                    'name' => $meeting->meetingType->name,
-                    'slug' => $meeting->meetingType->slug,
-                    'duration_minutes' => $meeting->meetingType->duration_minutes,
+                    'name' => $meeting->meetingType->name ?? 'Unknown',
+                    'slug' => $meeting->meetingType->slug ?? '',
+                    'duration_minutes' => $meeting->meetingType->duration_minutes ?? 0,
                 ],
                 'page' => [
-                    'slug' => $meeting->meetingType->schedulingPage->slug,
+                    'slug' => $meeting->meetingType->schedulingPage->slug ?? '',
                 ],
             ],
         ]);
@@ -310,13 +327,15 @@ class PublicBookingController extends Controller
      */
     public function cancelByToken(Request $request, string $token): JsonResponse
     {
-        $meeting = $this->bookingService->getMeetingByToken($token);
+        $meetingResponse = $this->schedulingService->getMeetingByToken($token);
 
-        if (!$meeting) {
+        if (!$meetingResponse) {
             return response()->json(['message' => 'Meeting not found'], 404);
         }
 
-        if (!$meeting->can_cancel) {
+        // Check if can cancel via Eloquent model
+        $meeting = ScheduledMeeting::find($meetingResponse->id);
+        if ($meeting && !$meeting->can_cancel) {
             return response()->json(['message' => 'This meeting cannot be cancelled'], 422);
         }
 
@@ -324,7 +343,10 @@ class PublicBookingController extends Controller
             'reason' => 'nullable|string|max:500',
         ]);
 
-        $this->bookingService->cancelMeeting($meeting, $request->reason);
+        $this->schedulingService->cancelMeeting(
+            $meetingResponse->id,
+            $request->reason
+        );
 
         return response()->json([
             'message' => 'Meeting cancelled successfully',
@@ -336,13 +358,15 @@ class PublicBookingController extends Controller
      */
     public function rescheduleByToken(Request $request, string $token): JsonResponse
     {
-        $meeting = $this->bookingService->getMeetingByToken($token);
+        $meetingResponse = $this->schedulingService->getMeetingByToken($token);
 
-        if (!$meeting) {
+        if (!$meetingResponse) {
             return response()->json(['message' => 'Meeting not found'], 404);
         }
 
-        if (!$meeting->can_reschedule) {
+        // Check if can reschedule via Eloquent model
+        $meeting = ScheduledMeeting::find($meetingResponse->id);
+        if ($meeting && !$meeting->can_reschedule) {
             return response()->json(['message' => 'This meeting cannot be rescheduled'], 422);
         }
 
@@ -352,18 +376,25 @@ class PublicBookingController extends Controller
         ]);
 
         try {
-            $meeting = $this->bookingService->rescheduleMeeting(
-                $meeting,
-                Carbon::parse($validated['start_time']),
+            $startTime = new DateTimeImmutable($validated['start_time']);
+
+            // Calculate end time based on meeting type duration
+            $meetingType = MeetingType::find($meetingResponse->meetingTypeId);
+            $endTime = $startTime->modify("+{$meetingType->duration_minutes} minutes");
+
+            $rescheduledMeeting = $this->schedulingService->rescheduleMeeting(
+                $meetingResponse->id,
+                $startTime,
+                $endTime,
                 $validated['timezone']
             );
 
             return response()->json([
                 'message' => 'Meeting rescheduled successfully',
                 'meeting' => [
-                    'start_time' => $meeting->start_time->toIso8601String(),
-                    'end_time' => $meeting->end_time->toIso8601String(),
-                    'timezone' => $meeting->timezone,
+                    'start_time' => $rescheduledMeeting->startTime->format('c'),
+                    'end_time' => $rescheduledMeeting->endTime->format('c'),
+                    'timezone' => $rescheduledMeeting->timezone,
                 ],
             ]);
         } catch (\Exception $e) {

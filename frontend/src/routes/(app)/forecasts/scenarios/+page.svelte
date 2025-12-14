@@ -2,7 +2,7 @@
 	import { ScenarioPlanner } from '$lib/components/scenario-planner';
 	import { page } from '$app/stores';
 
-	$: scenarioId = $page.url.searchParams.get('id');
+	const scenarioId = $derived($page.url.searchParams.get('id'));
 </script>
 
 <svelte:head>

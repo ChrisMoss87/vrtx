@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Chat;
 
+use App\Application\Services\Chat\ChatApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\ChatAgentStatus;
 use App\Models\ChatCannedResponse;
@@ -12,7 +13,8 @@ use Illuminate\Http\Request;
 class ChatAgentController extends Controller
 {
     public function __construct(
-        private ChatAnalyticsService $analyticsService
+        protected ChatApplicationService $chatApplicationService,
+        protected ChatAnalyticsService $analyticsService
     ) {}
 
     // Agent Status Management

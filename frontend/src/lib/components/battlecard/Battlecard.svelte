@@ -5,18 +5,26 @@
 		MessageSquare, ExternalLink, Edit, Building2
 	} from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { getBattlecard, type Battlecard } from '$lib/api/competitors';
+	import { getBattlecard, type Battlecard as BattlecardType } from '$lib/api/competitors';
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 	import ObjectionHandler from './ObjectionHandler.svelte';
 	import CompetitorNotes from './CompetitorNotes.svelte';
 
-	export let competitorId: number;
-	export let compact = false;
-	export let onEdit: (() => void) | undefined = undefined;
+	interface Props {
+		competitorId: number;
+		compact?: boolean;
+		onEdit?: () => void;
+	}
 
-	let battlecard: Battlecard | null = null;
-	let loading = true;
+	let {
+		competitorId,
+		compact = false,
+		onEdit = undefined,
+	}: Props = $props();
+
+	let battlecard = $state<BattlecardType | null>(null);
+	let loading = $state(true);
 
 	onMount(async () => {
 		await loadBattlecard();

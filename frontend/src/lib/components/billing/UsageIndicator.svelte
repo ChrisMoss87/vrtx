@@ -4,18 +4,27 @@
 	import { AlertTriangle, CheckCircle, XCircle } from 'lucide-svelte';
 	import { cn } from '$lib/utils';
 
-	export let metric: string;
-	export let label: string | undefined = undefined;
-	export let showLabel: boolean = true;
-	export let size: 'sm' | 'md' | 'lg' = 'md';
+	interface Props {
+		metric: string;
+		label?: string;
+		showLabel?: boolean;
+		size?: 'sm' | 'md' | 'lg';
+	}
 
-	$: usage = $license.usage[metric];
-	$: percentage = usage?.percentage ?? 0;
-	$: isWarning = percentage >= 80 && percentage < 100;
-	$: isError = percentage >= 100;
-	$: isUnlimited = usage?.limit === null;
+	let {
+		metric,
+		label = undefined,
+		showLabel = true,
+		size = 'md',
+	}: Props = $props();
 
-	$: displayLabel = label ?? formatMetricLabel(metric);
+	const usage = $derived($license.usage[metric]);
+	const percentage = $derived(usage?.percentage ?? 0);
+	const isWarning = $derived(percentage >= 80 && percentage < 100);
+	const isError = $derived(percentage >= 100);
+	const isUnlimited = $derived(usage?.limit === null);
+
+	const displayLabel = $derived(label ?? formatMetricLabel(metric));
 
 	function formatMetricLabel(m: string): string {
 		const labels: Record<string, string> = {

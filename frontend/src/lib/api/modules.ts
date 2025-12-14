@@ -140,6 +140,8 @@ export interface FieldSettings {
 	suffix?: string;
 	start_number?: number;
 	pad_length?: number;
+	// Quick create settings
+	show_in_quick_create?: boolean;
 }
 
 export interface ConditionalVisibility {

@@ -3,10 +3,19 @@
   import * as Table from '$lib/components/ui/table';
   import type { ProposalView } from '$lib/api/proposals';
 
-  export let views: ProposalView[] = [];
-  export let totalViews = 0;
-  export let uniqueViews = 0;
-  export let averageViewTime = 0;
+  interface Props {
+    views?: ProposalView[];
+    totalViews?: number;
+    uniqueViews?: number;
+    averageViewTime?: number;
+  }
+
+  let {
+    views = [],
+    totalViews = 0,
+    uniqueViews = 0,
+    averageViewTime = 0,
+  }: Props = $props();
 
   function formatDate(dateString: string): string {
     return new Date(dateString).toLocaleString('en-US', {

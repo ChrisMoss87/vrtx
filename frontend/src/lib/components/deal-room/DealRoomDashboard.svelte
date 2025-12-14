@@ -9,11 +9,11 @@
 	import { toast } from 'svelte-sonner';
 	import CreateRoomModal from './CreateRoomModal.svelte';
 
-	let rooms: DealRoom[] = [];
-	let loading = true;
-	let searchQuery = '';
-	let statusFilter = 'active';
-	let showCreateModal = false;
+	let rooms = $state<DealRoom[]>([]);
+	let loading = $state(true);
+	let searchQuery = $state('');
+	let statusFilter = $state('active');
+	let showCreateModal = $state(false);
 
 	onMount(async () => {
 		await loadRooms();
@@ -47,9 +47,9 @@
 		}
 	}
 
-	$: filteredRooms = rooms.filter((room) =>
+	const filteredRooms = $derived(rooms.filter((room) =>
 		room.name.toLowerCase().includes(searchQuery.toLowerCase())
-	);
+	));
 </script>
 
 <div class="p-6 space-y-6">

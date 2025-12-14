@@ -5,12 +5,20 @@
   import { getSentimentTimeline, type SentimentScore } from '$lib/api/ai';
   import { Loader2, Smile, Meh, Frown, AlertTriangle, HelpCircle, Mail, FileText } from 'lucide-svelte';
 
-  export let module: string;
-  export let recordId: number;
-  export let limit = 10;
+  interface Props {
+    module: string;
+    recordId: number;
+    limit?: number;
+  }
 
-  let timeline: SentimentScore[] = [];
-  let loading = true;
+  let {
+    module,
+    recordId,
+    limit = 10,
+  }: Props = $props();
+
+  let timeline = $state<SentimentScore[]>([]);
+  let loading = $state(true);
 
   onMount(async () => {
     try {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Quotas;
 
+use App\Application\Services\Goal\GoalApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Goal;
 use App\Services\Quotas\GoalService;
@@ -13,7 +14,8 @@ use Illuminate\Http\Request;
 class GoalController extends Controller
 {
     public function __construct(
-        protected GoalService $goalService
+        protected GoalService $goalService,
+        protected GoalApplicationService $goalApplicationService
     ) {}
 
     /**

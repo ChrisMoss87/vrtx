@@ -9,9 +9,9 @@
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 
-	let recordings: Recording[] = [];
-	let loading = true;
-	let statusFilter: string | null = null;
+	let recordings = $state<Recording[]>([]);
+	let loading = $state(true);
+	let statusFilter = $state<string | null>(null);
 
 	onMount(async () => {
 		await loadRecordings();
@@ -82,9 +82,9 @@
 		});
 	}
 
-	$: filteredRecordings = statusFilter
+	const filteredRecordings = $derived(statusFilter
 		? recordings.filter(r => r.status === statusFilter)
-		: recordings;
+		: recordings);
 </script>
 
 <div class="space-y-4">

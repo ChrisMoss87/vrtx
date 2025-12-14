@@ -6,7 +6,13 @@
   import * as Select from '$lib/components/ui/select';
   import type { SignatureSigner } from '$lib/api/signatures';
 
-  export let signers: Partial<SignatureSigner>[] = [];
+  interface Props {
+    signers?: Partial<SignatureSigner>[];
+  }
+
+  let {
+    signers = $bindable([]),
+  }: Props = $props();
 
   const signerColors = [
     'bg-blue-500',

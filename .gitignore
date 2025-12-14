@@ -30,3 +30,4 @@ tmp/
 temp/
 *.tmp
 /useful/
+/frontend/components/ui/

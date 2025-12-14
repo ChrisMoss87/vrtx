@@ -4,12 +4,20 @@
 	import { getRoomActivities, type DealRoomActivity } from '$lib/api/deal-rooms';
 	import { tryCatch } from '$lib/utils/tryCatch';
 
-	export let roomId: number;
-	export let limit = 20;
-	export let compact = false;
+	interface Props {
+		roomId: number;
+		limit?: number;
+		compact?: boolean;
+	}
 
-	let activities: DealRoomActivity[] = [];
-	let loading = true;
+	let {
+		roomId,
+		limit = 20,
+		compact = false,
+	}: Props = $props();
+
+	let activities = $state<DealRoomActivity[]>([]);
+	let loading = $state(true);
 
 	onMount(async () => {
 		const { data } = await tryCatch(getRoomActivities(roomId));

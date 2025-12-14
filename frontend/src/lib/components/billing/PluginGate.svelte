@@ -3,27 +3,42 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { Lock, Sparkles } from 'lucide-svelte';
+	import type { Snippet } from 'svelte';
 
-	export let plugin: string | undefined = undefined;
-	export let feature: string | undefined = undefined;
-	export let plan: string | undefined = undefined;
-	export let showUpgrade: boolean = true;
-	export let title: string = 'Premium Feature';
-	export let description: string | undefined = undefined;
-	export let compact: boolean = false;
+	interface Props {
+		plugin?: string;
+		feature?: string;
+		plan?: string;
+		showUpgrade?: boolean;
+		title?: string;
+		description?: string;
+		compact?: boolean;
+		children?: Snippet;
+	}
 
-	$: hasAccess = (() => {
+	let {
+		plugin = undefined,
+		feature = undefined,
+		plan = undefined,
+		showUpgrade = true,
+		title = 'Premium Feature',
+		description = undefined,
+		compact = false,
+		children,
+	}: Props = $props();
+
+	const hasAccess = $derived((() => {
 		if (plugin) return $license.plugins.includes(plugin);
 		if (feature) return $license.features.includes(feature);
 		if (plan) return license.hasPlan(plan);
 		return true;
-	})();
+	})());
 
-	$: upgradeLabel = plugin ? `Requires ${plugin}` : plan ? `Requires ${plan} plan` : 'Upgrade to unlock';
+	const upgradeLabel = $derived(plugin ? `Requires ${plugin}` : plan ? `Requires ${plan} plan` : 'Upgrade to unlock');
 </script>
 
 {#if hasAccess}
-	<slot />
+	{@render children?.()}
 {:else if showUpgrade}
 	{#if compact}
 		<div class="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground bg-muted/50 rounded-md border border-dashed">

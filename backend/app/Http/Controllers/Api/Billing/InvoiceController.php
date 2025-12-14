@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Billing;
 
+use App\Application\Services\Billing\BillingApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
-use App\Services\Billing\InvoiceService;
+use App\Services\Billing\InvoiceService; // @deprecated - use BillingApplicationService
 use App\Services\Billing\PdfGeneratorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,7 +15,8 @@ use Illuminate\Http\Request;
 class InvoiceController extends Controller
 {
     public function __construct(
-        protected InvoiceService $invoiceService,
+        protected BillingApplicationService $billingService,
+        protected InvoiceService $invoiceService, // @deprecated - use BillingApplicationService
         protected PdfGeneratorService $pdfService
     ) {}
 

@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Reporting;
 
+use App\Application\Services\Reporting\ReportingApplicationService;
+use App\Domain\Reporting\DTOs\CreateReportDTO;
+use App\Domain\Reporting\ValueObjects\ChartType;
+use App\Domain\Reporting\ValueObjects\DateRange;
+use App\Domain\Reporting\ValueObjects\ReportType;
 use App\Http\Controllers\Controller;
 use App\Models\Report;
 use App\Services\Reporting\ReportService;
@@ -15,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 class ReportController extends Controller
 {
     public function __construct(
+        protected ReportingApplicationService $reportingService,
         protected ReportService $reportService
     ) {}
 
@@ -108,14 +114,25 @@ class ReportController extends Controller
             'date_range' => 'array',
         ]);
 
-        $report = Report::create([
-            ...$validated,
-            'user_id' => Auth::id(),
-        ]);
+        $dto = new CreateReportDTO(
+            name: $validated['name'],
+            moduleId: $validated['module_id'] ?? null,
+            type: ReportType::from($validated['type']),
+            userId: Auth::id(),
+            description: $validated['description'] ?? null,
+            chartType: isset($validated['chart_type']) ? ChartType::from($validated['chart_type']) : null,
+            filters: $validated['filters'] ?? [],
+            grouping: $validated['grouping'] ?? [],
+            aggregations: $validated['aggregations'] ?? [],
+            sorting: $validated['sorting'] ?? [],
+            dateRange: isset($validated['date_range']) ? DateRange::fromArray($validated['date_range']) : null,
+        );
+
+        $reportDTO = $this->reportingService->createReport($dto);
 
         return response()->json([
             'message' => 'Report created successfully',
-            'data' => $report->load('module:id,name,api_name'),
+            'data' => $reportDTO->toArray(),
         ], 201);
     }
 
@@ -126,8 +143,10 @@ class ReportController extends Controller
     {
         $this->authorize('view', $report);
 
+        $reportDTO = $this->reportingService->getReport($report->id);
+
         return response()->json([
-            'data' => $report->load('module:id,name,api_name', 'user:id,name'),
+            'data' => $reportDTO->toArray(),
         ]);
     }
 
@@ -153,14 +172,23 @@ class ReportController extends Controller
             'date_range' => 'array',
         ]);
 
-        $report->update($validated);
-
-        // Clear cache when report is updated
-        $report->clearCache();
+        $reportDTO = $this->reportingService->updateReport(
+            reportId: $report->id,
+            name: $validated['name'] ?? $report->name,
+            description: $validated['description'] ?? $report->description,
+            type: isset($validated['type']) ? ReportType::from($validated['type']) : ReportType::from($report->type),
+            chartType: isset($validated['chart_type']) ? ChartType::from($validated['chart_type']) : ($report->chart_type ? ChartType::from($report->chart_type) : null),
+            filters: $validated['filters'] ?? $report->filters ?? [],
+            grouping: $validated['grouping'] ?? $report->grouping ?? [],
+            aggregations: $validated['aggregations'] ?? $report->aggregations ?? [],
+            sorting: $validated['sorting'] ?? $report->sorting ?? [],
+            dateRange: isset($validated['date_range']) ? DateRange::fromArray($validated['date_range']) : ($report->date_range ? DateRange::fromArray($report->date_range) : null),
+            config: $validated['config'] ?? $report->config ?? [],
+        );
 
         return response()->json([
             'message' => 'Report updated successfully',
-            'data' => $report->fresh()->load('module:id,name,api_name'),
+            'data' => $reportDTO->toArray(),
         ]);
     }
 
@@ -171,7 +199,7 @@ class ReportController extends Controller
     {
         $this->authorize('delete', $report);
 
-        $report->delete();
+        $this->reportingService->deleteReport($report->id);
 
         return response()->json([
             'message' => 'Report deleted successfully',
@@ -187,12 +215,10 @@ class ReportController extends Controller
 
         $useCache = !$request->boolean('refresh');
 
-        $result = $this->reportService->executeReport($report, $useCache);
+        $result = $this->reportingService->executeReport($report->id, $useCache);
 
         return response()->json([
             'data' => $result,
-            'cached' => $report->isCacheValid(),
-            'last_run_at' => $report->last_run_at?->toIso8601String(),
         ]);
     }
 

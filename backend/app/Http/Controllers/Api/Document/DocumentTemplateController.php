@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Document;
 
+use App\Application\Services\Document\DocumentApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\DocumentTemplate;
 use App\Models\GeneratedDocument;
@@ -14,7 +15,8 @@ use Illuminate\Http\Request;
 class DocumentTemplateController extends Controller
 {
     public function __construct(
-        protected DocumentTemplateService $service
+        protected DocumentTemplateService $service,
+        protected DocumentApplicationService $appService
     ) {}
 
     public function index(Request $request): JsonResponse

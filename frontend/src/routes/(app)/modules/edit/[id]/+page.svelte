@@ -22,6 +22,7 @@
 	import FieldPalette from '$lib/components/form-builder/FieldPalette.svelte';
 	import FormCanvas from '$lib/components/form-builder/FormCanvas.svelte';
 	import FieldConfigPanel from '$lib/components/form-builder/FieldConfigPanel.svelte';
+	import IconPicker from '$lib/components/form-builder/IconPicker.svelte';
 	import {
 		ArrowLeft,
 		Save,
@@ -35,8 +36,40 @@
 		EyeOff,
 		ArrowUpDown,
 		ArrowUp,
-		ArrowDown
+		ArrowDown,
+		GripVertical,
+		Columns3,
+		Tag,
+		Users,
+		Building2,
+		Briefcase,
+		DollarSign,
+		ShoppingCart,
+		FileText,
+		Mail,
+		Phone,
+		Calendar,
+		Star,
+		Folder,
+		Target,
+		TrendingUp,
+		BarChart3,
+		Activity,
+		Package,
+		Truck,
+		MapPin,
+		Globe,
+		Bell,
+		Clipboard,
+		Layers,
+		Wallet,
+		CreditCard,
+		Database,
+		Rocket,
+		Home,
+		Store
 	} from 'lucide-svelte';
+	import type { ComponentType } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import * as Select from '$lib/components/ui/select';
 
@@ -69,6 +102,12 @@
 	let defaultColumnVisibility = $state<Record<string, boolean>>({});
 	let defaultSortField = $state<string>('');
 	let defaultSortDirection = $state<'asc' | 'desc'>('asc');
+	let defaultColumnOrder = $state<string[]>([]);
+	let recordNameField = $state<string>('');
+
+	// Dragging state for column reorder
+	let draggedColumnIndex = $state<number | null>(null);
+	let dragOverColumnIndex = $state<number | null>(null);
 
 	let blocks = $state<EditableBlock[]>([]);
 	let selectedBlockIndex = $state(-1);
@@ -106,6 +145,65 @@
 		return fields;
 	});
 
+	// Fields ordered by column order preference
+	let orderedFields = $derived.by(() => {
+		if (defaultColumnOrder.length === 0) {
+			return availableFields;
+		}
+		// Sort fields based on defaultColumnOrder, putting unordered fields at the end
+		const ordered = [...availableFields].sort((a, b) => {
+			const aIndex = defaultColumnOrder.indexOf(a.api_name);
+			const bIndex = defaultColumnOrder.indexOf(b.api_name);
+			if (aIndex === -1 && bIndex === -1) return 0;
+			if (aIndex === -1) return 1;
+			if (bIndex === -1) return -1;
+			return aIndex - bIndex;
+		});
+		return ordered;
+	});
+
+	// Column drag handlers
+	function handleColumnDragStart(index: number) {
+		draggedColumnIndex = index;
+	}
+
+	function handleColumnDragOver(e: DragEvent, index: number) {
+		e.preventDefault();
+		if (draggedColumnIndex !== null && draggedColumnIndex !== index) {
+			dragOverColumnIndex = index;
+		}
+	}
+
+	function handleColumnDrop(targetIndex: number) {
+		if (draggedColumnIndex === null || draggedColumnIndex === targetIndex) {
+			resetColumnDragState();
+			return;
+		}
+
+		const newOrder = [...defaultColumnOrder];
+		const [movedItem] = newOrder.splice(draggedColumnIndex, 1);
+		newOrder.splice(targetIndex, 0, movedItem);
+		defaultColumnOrder = newOrder;
+		resetColumnDragState();
+	}
+
+	function resetColumnDragState() {
+		draggedColumnIndex = null;
+		dragOverColumnIndex = null;
+	}
+
+	// Icon mapping for preview
+	const ICON_MAP: Record<string, ComponentType> = {
+		Box, Users, Building2, Briefcase, DollarSign, ShoppingCart, FileText,
+		Mail, Phone, Calendar, Star, Folder, Settings2, Target, TrendingUp,
+		BarChart3, Activity, Package, Truck, MapPin, Globe, Bell, Clipboard,
+		Layers, Wallet, CreditCard, Database, Rocket, Home, Store
+	};
+
+	function getIconComponent(name: string): ComponentType | null {
+		return ICON_MAP[name] || null;
+	}
+
 	let availableModules = $state([
 		{ id: 1, name: 'Contacts', api_name: 'contacts' },
 		{ id: 2, name: 'Companies', api_name: 'companies' },
@@ -133,6 +231,15 @@
 			if (module.default_sorting && module.default_sorting.length > 0) {
 				defaultSortField = module.default_sorting[0].id || '';
 				defaultSortDirection = module.default_sorting[0].desc ? 'desc' : 'asc';
+			}
+
+			// Load record name field and column order from settings
+			if (module.settings) {
+				recordNameField = (module.settings as any).record_name_field || '';
+				const savedColumnOrder = (module.settings as any).default_column_order;
+				if (savedColumnOrder && Array.isArray(savedColumnOrder)) {
+					defaultColumnOrder = savedColumnOrder;
+				}
 			}
 
 			// Convert module blocks to EditableBlock format (preserving IDs for updates)
@@ -217,16 +324,16 @@
 	}
 
 	function goToStep(step: 'details' | 'builder' | 'settings') {
-		if (step === 'builder' && !isStep1Valid) {
-			toast.error('Please fill in module name and singular name first');
-			return;
-		}
-		if (step === 'settings' && !isStep2Valid) {
-			toast.error('Please add at least one block with fields first');
-			return;
-		}
+		// Allow navigating to any step freely
 		currentStep = step;
 	}
+
+	// Initialize column order when fields change
+	$effect(() => {
+		if (availableFields.length > 0 && defaultColumnOrder.length === 0) {
+			defaultColumnOrder = availableFields.map((f) => f.api_name);
+		}
+	});
 
 	async function handleSubmit() {
 		error = null;
@@ -293,11 +400,25 @@
 				}))
 			}));
 
+			// Build settings with record_name_field and column order
+			const moduleSettings: Record<string, unknown> = {
+				has_import: true,
+				has_export: true,
+				has_mass_actions: true,
+				has_comments: true,
+				has_attachments: true,
+				has_activity_log: true,
+				has_custom_views: true,
+				record_name_field: recordNameField || null,
+				default_column_order: defaultColumnOrder.length > 0 ? defaultColumnOrder : undefined
+			};
+
 			const request: UpdateModuleRequest = {
 				name: moduleName,
 				singular_name: singularName,
 				description: description || undefined,
 				icon: icon || undefined,
+				settings: moduleSettings as any,
 				default_page_size: defaultPageSize,
 				default_sorting: defaultSorting,
 				default_column_visibility: columnVisibility,
@@ -372,79 +493,54 @@
 					</Button>
 				</div>
 
-				<!-- Progress Steps -->
-				<div class="pb-4">
-					<div class="flex items-center gap-2">
+				<!-- Tab Navigation -->
+				<div class="pb-2">
+					<div class="flex items-center gap-1 rounded-lg bg-muted/50 p-1">
 						<button
 							onclick={() => goToStep('details')}
-							class="flex items-center gap-2 rounded-lg px-4 py-2 transition-all {currentStep ===
+							class="relative flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all {currentStep ===
 							'details'
-								? 'bg-primary text-primary-foreground shadow-sm'
-								: 'hover:bg-muted/50'}"
+								? 'bg-background text-foreground shadow-sm'
+								: 'text-muted-foreground hover:text-foreground'}"
 						>
-							<div
-								class="flex h-6 w-6 items-center justify-center rounded-full {currentStep ===
-								'details'
-									? 'bg-primary-foreground/20'
-									: isStep1Valid
-										? 'bg-green-500/20'
-										: 'bg-muted'}"
-							>
-								{#if isStep1Valid && currentStep !== 'details'}
-									<CheckCircle2 class="h-4 w-4 text-green-600" />
-								{:else}
-									<span class="text-xs font-semibold">1</span>
-								{/if}
-							</div>
-							<span class="text-sm font-medium">Module Details</span>
+							{#if isStep1Valid}
+								<CheckCircle2 class="h-4 w-4 text-green-600" />
+							{:else}
+								<Box class="h-4 w-4" />
+							{/if}
+							<span>Details</span>
+							{#if !isStep1Valid}
+								<span class="ml-1 flex h-2 w-2 rounded-full bg-amber-500"></span>
+							{/if}
 						</button>
-
-						<Separator orientation="horizontal" class="w-8" />
 
 						<button
 							onclick={() => goToStep('builder')}
-							class="flex items-center gap-2 rounded-lg px-4 py-2 transition-all {currentStep ===
+							class="relative flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all {currentStep ===
 							'builder'
-								? 'bg-primary text-primary-foreground shadow-sm'
-								: 'hover:bg-muted/50'}"
-							disabled={!isStep1Valid}
+								? 'bg-background text-foreground shadow-sm'
+								: 'text-muted-foreground hover:text-foreground'}"
 						>
-							<div
-								class="flex h-6 w-6 items-center justify-center rounded-full {currentStep ===
-								'builder'
-									? 'bg-primary-foreground/20'
-									: isStep2Valid
-										? 'bg-green-500/20'
-										: 'bg-muted'}"
-							>
-								{#if isStep2Valid && currentStep !== 'builder'}
-									<CheckCircle2 class="h-4 w-4 text-green-600" />
-								{:else}
-									<Box class="h-4 w-4" />
-								{/if}
-							</div>
-							<span class="text-sm font-medium">Build Fields</span>
+							{#if isStep2Valid}
+								<CheckCircle2 class="h-4 w-4 text-green-600" />
+							{:else}
+								<Columns3 class="h-4 w-4" />
+							{/if}
+							<span>Fields</span>
+							{#if availableFields.length > 0}
+								<Badge variant="secondary" class="ml-1 h-5 px-1.5 text-xs">{availableFields.length}</Badge>
+							{/if}
 						</button>
-
-						<Separator orientation="horizontal" class="w-8" />
 
 						<button
 							onclick={() => goToStep('settings')}
-							class="flex items-center gap-2 rounded-lg px-4 py-2 transition-all {currentStep ===
+							class="relative flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all {currentStep ===
 							'settings'
-								? 'bg-primary text-primary-foreground shadow-sm'
-								: 'hover:bg-muted/50'}"
-							disabled={!isStep2Valid}
+								? 'bg-background text-foreground shadow-sm'
+								: 'text-muted-foreground hover:text-foreground'}"
 						>
-							<div
-								class="flex h-6 w-6 items-center justify-center rounded-lg {currentStep ===
-								'settings'
-									? 'bg-primary-foreground/20'
-									: 'bg-muted'}"
-							>
-								<Settings2 class="h-4 w-4" />
-							</div>
-							<span class="text-sm font-medium">Table Settings</span>
+							<Settings2 class="h-4 w-4" />
+							<span>Table Settings</span>
 						</button>
 					</div>
 				</div>
@@ -463,87 +559,129 @@
 		<!-- Step Content -->
 		<div class="flex-1 overflow-hidden">
 			{#if currentStep === 'details'}
-				<!-- Step 1: Module Details -->
-				<div class="container mx-auto h-full max-w-4xl overflow-y-auto px-4 py-8 md:px-6">
-					<Card.Root class="border-2 shadow-lg">
-						<Card.Header class="space-y-2 pb-6">
-							<div class="flex items-center gap-3">
-								<div class="rounded-xl bg-primary/10 p-3">
-									<Box class="h-6 w-6 text-primary" />
-								</div>
-								<div>
-									<Card.Title class="text-2xl">Module Information</Card.Title>
-									<Card.Description class="text-base">
-										Update the basic details and metadata for your module
-									</Card.Description>
-								</div>
-							</div>
-						</Card.Header>
-						<Card.Content class="space-y-6">
-							<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-								<div class="space-y-2 md:col-span-2">
-									<Label for="module-name" class="flex items-center gap-2 text-sm font-semibold">
-										Module Name
-										<Badge variant="destructive" class="text-xs">Required</Badge>
+				<!-- Step 1: Module Details - Two Column Layout -->
+				<div class="h-full overflow-y-auto">
+					<div class="container mx-auto px-4 py-6 md:px-6">
+						<div class="grid gap-6 lg:grid-cols-5">
+							<!-- Left: Form Fields -->
+							<div class="space-y-6 lg:col-span-3">
+								<!-- Module Name - Primary Input -->
+								<div class="space-y-2">
+									<Label for="module-name" class="text-base font-semibold">
+										Module Name <span class="text-destructive">*</span>
 									</Label>
 									<Input
 										id="module-name"
 										bind:value={moduleName}
-										placeholder="e.g., Sales Opportunities, Projects, Invoices"
-										class="h-12 border-2 text-lg focus-visible:ring-2 focus-visible:ring-primary/20"
+										placeholder="e.g., Opportunities, Projects, Invoices"
+										data-testid="module-name"
+										class="h-12 text-lg"
 									/>
+									<p class="text-sm text-muted-foreground">
+										Plural name shown in navigation and list views
+									</p>
 								</div>
 
+								<!-- Two Column Grid for Secondary Fields -->
+								<div class="grid gap-4 sm:grid-cols-2">
+									<div class="space-y-2">
+										<Label for="singular-name" class="font-medium">
+											Singular Name <span class="text-destructive">*</span>
+										</Label>
+										<Input
+											id="singular-name"
+											bind:value={singularName}
+											placeholder="e.g., Opportunity"
+											data-testid="singular-name"
+										/>
+										<p class="text-xs text-muted-foreground">Used for single records</p>
+									</div>
+
+									<div class="space-y-2">
+										<Label for="icon" class="font-medium">Icon</Label>
+										<IconPicker value={icon} onchange={(v) => (icon = v)} />
+									</div>
+								</div>
+
+								<!-- Description -->
 								<div class="space-y-2">
-									<Label for="singular-name" class="flex items-center gap-2 text-sm font-semibold">
-										Singular Name
-										<Badge variant="destructive" class="text-xs">Required</Badge>
-									</Label>
-									<Input
-										id="singular-name"
-										bind:value={singularName}
-										placeholder="e.g., Opportunity, Project, Invoice"
-										class="h-11 border-2 focus-visible:ring-2 focus-visible:ring-primary/20"
-									/>
-								</div>
-
-								<div class="space-y-2">
-									<Label for="icon" class="text-sm font-semibold">Icon (Optional)</Label>
-									<Input
-										id="icon"
-										bind:value={icon}
-										placeholder="e.g., TrendingUp, Folder, FileText"
-										class="h-11 border-2 focus-visible:ring-2 focus-visible:ring-primary/20"
-									/>
-								</div>
-
-								<div class="space-y-2 md:col-span-2">
-									<Label for="description" class="text-sm font-semibold">
-										Description (Optional)
-									</Label>
+									<Label for="description" class="font-medium">Description</Label>
 									<Textarea
 										id="description"
 										bind:value={description}
-										placeholder="Brief description of what this module manages..."
-										rows={3}
-										class="resize-none border-2 focus-visible:ring-2 focus-visible:ring-primary/20"
+										placeholder="What does this module track? (optional)"
+										rows={2}
+										data-testid="module-description"
+										class="resize-none"
 									/>
 								</div>
 							</div>
 
-							<div class="flex justify-end pt-4">
-								<Button
-									onclick={() => goToStep('builder')}
-									disabled={!isStep1Valid}
-									size="lg"
-									class="gap-2"
-								>
-									Continue to Field Builder
-									<ArrowLeft class="h-4 w-4 rotate-180" />
-								</Button>
+							<!-- Right: Live Preview -->
+							<div class="lg:col-span-2">
+								<div class="sticky top-6">
+									<div class="rounded-xl border-2 bg-card p-4">
+										<p class="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Preview</p>
+
+										<!-- Navigation Preview -->
+										<div class="mb-4 rounded-lg bg-muted/50 p-3">
+											<p class="mb-2 text-xs text-muted-foreground">Navigation Menu</p>
+											<div class="flex items-center gap-3 rounded-md bg-background p-2.5 shadow-sm">
+												{#if icon}
+													{@const IconComponent = getIconComponent(icon)}
+													{#if IconComponent}
+														<IconComponent class="h-5 w-5 text-primary" />
+													{:else}
+														<Box class="h-5 w-5 text-muted-foreground" />
+													{/if}
+												{:else}
+													<Box class="h-5 w-5 text-muted-foreground" />
+												{/if}
+												<span class="font-medium">{moduleName || 'Module Name'}</span>
+											</div>
+										</div>
+
+										<!-- Page Header Preview -->
+										<div class="mb-4 rounded-lg bg-muted/50 p-3">
+											<p class="mb-2 text-xs text-muted-foreground">Page Header</p>
+											<div class="space-y-1">
+												<h3 class="text-lg font-semibold">{moduleName || 'Module Name'}</h3>
+												{#if description}
+													<p class="text-sm text-muted-foreground">{description}</p>
+												{/if}
+											</div>
+										</div>
+
+										<!-- Button Preview -->
+										<div class="rounded-lg bg-muted/50 p-3">
+											<p class="mb-2 text-xs text-muted-foreground">Create Button</p>
+											<Button size="sm" class="gap-2">
+												<span class="text-lg">+</span>
+												New {singularName || 'Record'}
+											</Button>
+										</div>
+									</div>
+
+									<!-- Quick Stats -->
+									{#if availableFields.length > 0}
+										<div class="mt-4 rounded-lg border bg-card p-4">
+											<p class="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Module Summary</p>
+											<div class="grid grid-cols-2 gap-3">
+												<div class="rounded-md bg-muted/50 p-2 text-center">
+													<p class="text-2xl font-bold text-primary">{blocks.length}</p>
+													<p class="text-xs text-muted-foreground">Sections</p>
+												</div>
+												<div class="rounded-md bg-muted/50 p-2 text-center">
+													<p class="text-2xl font-bold text-primary">{availableFields.length}</p>
+													<p class="text-xs text-muted-foreground">Fields</p>
+												</div>
+											</div>
+										</div>
+									{/if}
+								</div>
 							</div>
-						</Card.Content>
-					</Card.Root>
+						</div>
+					</div>
 				</div>
 			{:else if currentStep === 'builder'}
 				<!-- Step 2: Form Builder -->
@@ -616,18 +754,28 @@
 													Default Page Size
 												</Label>
 												<div class="flex items-center gap-4">
-													<Input
-														id="page-size"
-														type="number"
-														bind:value={defaultPageSize}
-														min={10}
-														max={200}
-														class="h-12 max-w-xs border-2 text-lg focus-visible:ring-2 focus-visible:ring-primary/20"
-													/>
-													<span class="text-sm text-muted-foreground">records per page</span>
+													<Select.Root
+														type="single"
+														value={defaultPageSize.toString()}
+														onValueChange={(val) => {
+															if (val) defaultPageSize = parseInt(val);
+														}}
+													>
+														<Select.Trigger class="w-[140px]">
+															<span>{defaultPageSize} rows</span>
+														</Select.Trigger>
+														<Select.Content>
+															<Select.Item value="10">10 rows</Select.Item>
+															<Select.Item value="25">25 rows</Select.Item>
+															<Select.Item value="50">50 rows</Select.Item>
+															<Select.Item value="100">100 rows</Select.Item>
+															<Select.Item value="200">200 rows</Select.Item>
+														</Select.Content>
+													</Select.Root>
+													<span class="text-sm text-muted-foreground">per page</span>
 												</div>
 												<p class="mt-2 text-sm text-muted-foreground">
-													Choose between 10-200 records per page. Default is 50.
+													Number of records displayed per page in the datatable.
 												</p>
 											</div>
 										</div>
@@ -695,56 +843,110 @@
 									</div>
 								</div>
 
-								<!-- Column Visibility -->
+								<!-- Record Name Field -->
+								<div
+									class="rounded-xl border-2 border-dashed border-emerald-500/20 bg-emerald-500/5 p-6"
+								>
+									<div class="space-y-4">
+										<div class="flex items-start gap-3">
+											<div class="rounded-lg bg-emerald-500/10 p-2">
+												<Tag class="h-5 w-5 text-emerald-600" />
+											</div>
+											<div class="flex-1">
+												<Label class="mb-2 block text-base font-semibold">Record Name Field</Label>
+												<p class="mb-4 text-sm text-muted-foreground">
+													Choose which field identifies a record. This will be used as the primary display name in lists, links, and search results.
+												</p>
+												<Select.Root type="single" bind:value={recordNameField}>
+													<Select.Trigger class="w-[280px]">
+														{#if recordNameField}
+															{availableFields.find((f) => f.api_name === recordNameField)?.label || 'Select field'}
+														{:else}
+															<span class="text-muted-foreground">Select a field...</span>
+														{/if}
+													</Select.Trigger>
+													<Select.Content>
+														{#each availableFields.filter(f => f.type === 'text' || f.type === 'email' || f.type === 'auto_number') as field}
+															<Select.Item value={field.api_name}>{field.label}</Select.Item>
+														{/each}
+													</Select.Content>
+												</Select.Root>
+												<p class="mt-2 text-xs text-muted-foreground">
+													Only text, email, and auto-number fields can be used as the record name.
+												</p>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<!-- Column Order & Visibility -->
 								<div
 									class="rounded-xl border-2 border-dashed border-purple-500/20 bg-purple-500/5 p-6"
 								>
 									<div class="space-y-4">
 										<div class="flex items-start gap-3">
 											<div class="rounded-lg bg-purple-500/10 p-2">
-												<Eye class="h-5 w-5 text-purple-600" />
+												<Columns3 class="h-5 w-5 text-purple-600" />
 											</div>
 											<div class="flex-1">
 												<Label class="mb-2 block text-base font-semibold">
-													Default Column Visibility
+													Default Column Order & Visibility
 												</Label>
 												<p class="mb-4 text-sm text-muted-foreground">
-													Choose which columns are visible by default. Users can always toggle
-													columns in the datatable.
+													Drag to reorder columns and toggle visibility. This sets the default view for all users.
 												</p>
-												{#if availableFields.length > 0}
-													<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-														{#each availableFields as field}
+												{#if orderedFields.length > 0}
+													<div class="space-y-2">
+														{#each orderedFields as field, index (field.api_name)}
 															{@const isVisible = defaultColumnVisibility[field.api_name] !== false}
-															<button
-																type="button"
-																onclick={() => {
-																	defaultColumnVisibility = {
-																		...defaultColumnVisibility,
-																		[field.api_name]: !isVisible
-																	};
-																}}
-																class="flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all {isVisible
-																	? 'border-purple-500/30 bg-purple-500/10'
-																	: 'border-muted bg-muted/30 opacity-60'}"
+															{@const isDragging = draggedColumnIndex === index}
+															{@const isDragOver = dragOverColumnIndex === index}
+															<div
+																role="listitem"
+																draggable="true"
+																ondragstart={() => handleColumnDragStart(index)}
+																ondragover={(e) => handleColumnDragOver(e, index)}
+																ondrop={() => handleColumnDrop(index)}
+																ondragend={resetColumnDragState}
+																class="flex items-center gap-3 rounded-lg border p-3 transition-all bg-card
+																	{isVisible
+																		? 'border-border'
+																		: 'border-muted opacity-60'}
+																	{isDragging ? 'opacity-50 scale-95' : ''}
+																	{isDragOver ? 'border-primary ring-2 ring-primary/20' : ''}"
 															>
-																{#if isVisible}
-																	<Eye class="h-4 w-4 shrink-0 text-purple-600" />
-																{:else}
-																	<EyeOff class="h-4 w-4 shrink-0 text-muted-foreground" />
-																{/if}
-																<div class="min-w-0">
-																	<span class="block truncate text-sm font-medium"
-																		>{field.label}</span
-																	>
+																<div class="cursor-grab active:cursor-grabbing">
+																	<GripVertical class="h-4 w-4 text-muted-foreground" />
+																</div>
+																<span class="flex h-6 w-6 items-center justify-center rounded bg-muted text-xs font-medium">
+																	{index + 1}
+																</span>
+																<div class="min-w-0 flex-1">
+																	<span class="block truncate text-sm font-medium">{field.label}</span>
 																	<span class="text-xs text-muted-foreground">{field.type}</span>
 																</div>
-															</button>
+																<button
+																	type="button"
+																	onclick={() => {
+																		defaultColumnVisibility = {
+																			...defaultColumnVisibility,
+																			[field.api_name]: !isVisible
+																		};
+																	}}
+																	class="rounded p-1.5 transition-colors hover:bg-background"
+																>
+																	{#if isVisible}
+																		<Eye class="h-4 w-4 text-purple-600" />
+																	{:else}
+																		<EyeOff class="h-4 w-4 text-muted-foreground" />
+																	{/if}
+																</button>
+															</div>
 														{/each}
 													</div>
 												{:else}
 													<p class="text-sm text-muted-foreground italic">
-														Add fields in the previous step to configure visibility
+														Add fields in the previous step to configure columns
 													</p>
 												{/if}
 											</div>

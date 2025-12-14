@@ -3,7 +3,11 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { cn } from '$lib/utils';
 
-	export let showStatus: boolean = true;
+	interface Props {
+		showStatus?: boolean;
+	}
+
+	let { showStatus = true }: Props = $props();
 
 	const planColors: Record<string, string> = {
 		free: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100',
@@ -13,7 +17,7 @@
 		enterprise: 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white'
 	};
 
-	$: planLabel = $license.plan.charAt(0).toUpperCase() + $license.plan.slice(1);
+	const planLabel = $derived($license.plan.charAt(0).toUpperCase() + $license.plan.slice(1));
 </script>
 
 <div class="flex items-center gap-2">

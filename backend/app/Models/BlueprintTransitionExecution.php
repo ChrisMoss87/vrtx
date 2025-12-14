@@ -32,6 +32,7 @@ class BlueprintTransitionExecution extends Model
         'executed_by',
         'status',
         'requirements_data',
+        'action_results',
         'started_at',
         'completed_at',
         'error_message',
@@ -44,6 +45,7 @@ class BlueprintTransitionExecution extends Model
         'to_state_id' => 'integer',
         'executed_by' => 'integer',
         'requirements_data' => 'array',
+        'action_results' => 'array',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
     ];

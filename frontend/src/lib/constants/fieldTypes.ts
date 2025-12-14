@@ -117,7 +117,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: true,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['minValue', 'maxValue', 'step']
 	},
 	decimal: {
@@ -130,7 +130,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: true,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['minValue', 'maxValue', 'precision']
 	},
 	email: {
@@ -156,7 +156,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: false,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['placeholder', 'format']
 	},
 	url: {
@@ -234,7 +234,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: false,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['defaultValue', 'labels']
 	},
 	date: {
@@ -247,7 +247,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: false,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['minDate', 'maxDate', 'format']
 	},
 	datetime: {
@@ -273,7 +273,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: false,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['format', 'step']
 	},
 	currency: {
@@ -286,7 +286,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: true,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['minValue', 'maxValue', 'currencyCode', 'precision']
 	},
 	percent: {
@@ -299,7 +299,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: true,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['minValue', 'maxValue', 'showSlider']
 	},
 	lookup: {
@@ -325,7 +325,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: false,
 		isRelationship: false,
 		isCalculated: true,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['formula', 'returnType', 'dependencies']
 	},
 	file: {
@@ -390,7 +390,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: true,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['maxRating', 'allowHalf', 'ratingIcon']
 	},
 	signature: {
@@ -416,7 +416,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: false,
 		isRelationship: false,
 		isCalculated: false,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['defaultColor', 'showAlpha', 'presetColors']
 	},
 	auto_number: {
@@ -429,7 +429,7 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeMetadata> = {
 		isNumeric: false,
 		isRelationship: false,
 		isCalculated: true,
-		defaultWidth: 33,
+		defaultWidth: 50,
 		commonSettings: ['prefix', 'suffix', 'startNumber', 'padLength']
 	}
 };

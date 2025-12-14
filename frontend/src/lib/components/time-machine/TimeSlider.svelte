@@ -1,23 +1,29 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
 	import type { TimelineMarker } from '$lib/api/time-machine';
 
-	export let markers: TimelineMarker[] = [];
-	export let selectedTimestamp: string | null = null;
-	export let minDate: Date | null = null;
-	export let maxDate: Date | null = null;
+	interface Props {
+		markers?: TimelineMarker[];
+		selectedTimestamp?: string | null;
+		minDate?: Date | null;
+		maxDate?: Date | null;
+		onSelect?: (data: { timestamp: string; marker: TimelineMarker | null }) => void;
+	}
 
-	const dispatch = createEventDispatcher<{
-		select: { timestamp: string; marker: TimelineMarker | null };
-	}>();
+	let {
+		markers = [],
+		selectedTimestamp = $bindable(null),
+		minDate = null,
+		maxDate = null,
+		onSelect,
+	}: Props = $props();
 
-	$: sortedMarkers = [...markers].sort(
+	const sortedMarkers = $derived([...markers].sort(
 		(a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-	);
+	));
 
-	$: effectiveMinDate = minDate ?? (sortedMarkers[0] ? new Date(sortedMarkers[0].timestamp) : new Date());
-	$: effectiveMaxDate = maxDate ?? new Date();
-	$: totalRange = effectiveMaxDate.getTime() - effectiveMinDate.getTime();
+	const effectiveMinDate = $derived(minDate ?? (sortedMarkers[0] ? new Date(sortedMarkers[0].timestamp) : new Date()));
+	const effectiveMaxDate = $derived(maxDate ?? new Date());
+	const totalRange = $derived(effectiveMaxDate.getTime() - effectiveMinDate.getTime());
 
 	function getMarkerPosition(timestamp: string): number {
 		const time = new Date(timestamp).getTime();
@@ -27,7 +33,7 @@
 
 	function handleMarkerClick(marker: TimelineMarker) {
 		selectedTimestamp = marker.timestamp;
-		dispatch('select', { timestamp: marker.timestamp, marker });
+		onSelect?.({ timestamp: marker.timestamp, marker });
 	}
 
 	function handleSliderChange(event: Event) {
@@ -37,12 +43,12 @@
 			effectiveMinDate.getTime() + (percentage / 100) * totalRange
 		).toISOString();
 		selectedTimestamp = timestamp;
-		dispatch('select', { timestamp, marker: null });
+		onSelect?.({ timestamp, marker: null });
 	}
 
-	$: sliderValue = selectedTimestamp
+	const sliderValue = $derived(selectedTimestamp
 		? getMarkerPosition(selectedTimestamp)
-		: 100;
+		: 100);
 
 	function formatDate(timestamp: string): string {
 		return new Date(timestamp).toLocaleDateString('en-US', {

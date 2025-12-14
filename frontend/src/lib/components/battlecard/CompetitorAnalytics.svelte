@@ -5,10 +5,14 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let competitorId: number;
+	interface Props {
+		competitorId: number;
+	}
 
-	let analytics: CompetitorAnalytics | null = null;
-	let loading = true;
+	let { competitorId }: Props = $props();
+
+	let analytics = $state<CompetitorAnalytics | null>(null);
+	let loading = $state(true);
 
 	onMount(async () => {
 		const { data, error } = await tryCatch(getCompetitorAnalytics(competitorId));

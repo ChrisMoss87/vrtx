@@ -1,16 +1,24 @@
 <script lang="ts">
 	import { ChevronDown, ChevronUp, ThumbsUp, ThumbsDown } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { recordObjectionFeedback, type ObjectionHandler } from '$lib/api/competitors';
+	import { recordObjectionFeedback, type ObjectionHandler as ObjectionHandlerType } from '$lib/api/competitors';
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let objection: ObjectionHandler;
-	export let competitorId: number;
-	export let dealId: number | undefined = undefined;
+	interface Props {
+		objection: ObjectionHandlerType;
+		competitorId: number;
+		dealId?: number;
+	}
 
-	let expanded = false;
-	let loading = false;
+	let {
+		objection,
+		competitorId,
+		dealId = undefined,
+	}: Props = $props();
+
+	let expanded = $state(false);
+	let loading = $state(false);
 
 	function getEffectivenessColor(score: number | null): string {
 		if (score === null) return 'text-muted-foreground';

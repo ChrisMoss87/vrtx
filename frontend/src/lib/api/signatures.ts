@@ -5,6 +5,7 @@ export interface SignatureRequest {
   uuid: string;
   title: string;
   description: string | null;
+  message: string | null;
   document_id: number | null;
   source_type: string | null;
   source_id: number | null;
@@ -35,6 +36,7 @@ export interface SignatureSigner {
   name: string;
   role: 'signer' | 'viewer' | 'approver' | 'cc';
   sign_order: number;
+  order: number;
   status: 'pending' | 'viewed' | 'signed' | 'declined';
   access_token: string;
   sent_at: string | null;
@@ -52,10 +54,15 @@ export interface SignatureField {
   id: number;
   request_id: number;
   signer_id: number;
+  signer_index?: number;
   field_type: 'signature' | 'initials' | 'date' | 'text' | 'checkbox';
+  type: 'signature' | 'initials' | 'date' | 'text' | 'checkbox';
   page_number: number;
+  page: number;
   x_position: number;
+  x: number;
   y_position: number;
+  y: number;
   width: number;
   height: number;
   required: boolean;
@@ -69,7 +76,10 @@ export interface SignatureAuditLog {
   request_id: number;
   signer_id: number | null;
   event_type: string;
+  action: string;
   event_description: string | null;
+  actor_name: string | null;
+  actor_email: string | null;
   ip_address: string | null;
   user_agent: string | null;
   metadata: Record<string, any> | null;

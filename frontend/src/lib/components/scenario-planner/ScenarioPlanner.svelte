@@ -21,18 +21,24 @@
 	import ScenarioComparison from './ScenarioComparison.svelte';
 	import GapAnalysis from './GapAnalysis.svelte';
 
-	export let initialScenarioId: number | null = null;
+	interface Props {
+		initialScenarioId?: number | null;
+	}
 
-	let scenarios: Scenario[] = [];
-	let currentScenario: Scenario | null = null;
-	let selectedDeal: ScenarioDeal | null = null;
-	let loading = true;
-	let showComparison = false;
-	let showGapAnalysis = false;
+	let {
+		initialScenarioId = null,
+	}: Props = $props();
+
+	let scenarios = $state<Scenario[]>([]);
+	let currentScenario = $state<Scenario | null>(null);
+	let selectedDeal = $state<ScenarioDeal | null>(null);
+	let loading = $state(true);
+	let showComparison = $state(false);
+	let showGapAnalysis = $state(false);
 
 	// Period selection
-	let periodStart = getQuarterStart();
-	let periodEnd = getQuarterEnd();
+	let periodStart = $state(getQuarterStart());
+	let periodEnd = $state(getQuarterEnd());
 
 	function getQuarterStart(): string {
 		const now = new Date();
@@ -174,9 +180,9 @@
 		}).format(value);
 	}
 
-	$: gapAmount = currentScenario?.metrics?.gap_amount ?? 0;
-	$: progressPercent = currentScenario?.metrics?.progress_percent ?? 0;
-	$: isOnTrack = gapAmount <= 0;
+	const gapAmount = $derived(currentScenario?.metrics?.gap_amount ?? 0);
+	const progressPercent = $derived(currentScenario?.metrics?.progress_percent ?? 0);
+	const isOnTrack = $derived(gapAmount <= 0);
 </script>
 
 <div class="flex h-full flex-col">

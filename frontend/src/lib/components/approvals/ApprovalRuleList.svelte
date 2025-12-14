@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Badge } from '$lib/components/ui/badge';
@@ -8,16 +7,25 @@
   import * as Table from '$lib/components/ui/table';
   import type { ApprovalRule } from '$lib/api/approvals';
 
-  export let rules: ApprovalRule[] = [];
-  export let loading = false;
+  interface Props {
+    rules?: ApprovalRule[];
+    loading?: boolean;
+    onCreate?: () => void;
+    onEdit?: (id: number) => void;
+    onDuplicate?: (id: number) => void;
+    onDelete?: (id: number) => void;
+    onToggle?: (id: number) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    create: void;
-    edit: number;
-    duplicate: number;
-    delete: number;
-    toggle: number;
-  }>();
+  let {
+    rules = [],
+    loading = false,
+    onCreate,
+    onEdit,
+    onDuplicate,
+    onDelete,
+    onToggle,
+  }: Props = $props();
 
   let search = $state('');
 
@@ -51,7 +59,7 @@
       placeholder="Search rules..."
       class="w-64"
     />
-    <Button onclick={() => dispatch('create')}>
+    <Button onclick={() => onCreate?.()}>
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
@@ -71,7 +79,7 @@
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         </svg>
         <p class="text-muted-foreground">No approval rules configured</p>
-        <Button variant="outline" class="mt-4" onclick={() => dispatch('create')}>
+        <Button variant="outline" class="mt-4" onclick={() => onCreate?.()}>
           Create your first rule
         </Button>
       </Card.Content>
@@ -139,17 +147,17 @@
                     </Button>
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Content align="end">
-                    <DropdownMenu.Item onclick={() => dispatch('edit', rule.id)}>
+                    <DropdownMenu.Item onclick={() => onEdit?.(rule.id)}>
                       Edit
                     </DropdownMenu.Item>
-                    <DropdownMenu.Item onclick={() => dispatch('duplicate', rule.id)}>
+                    <DropdownMenu.Item onclick={() => onDuplicate?.(rule.id)}>
                       Duplicate
                     </DropdownMenu.Item>
-                    <DropdownMenu.Item onclick={() => dispatch('toggle', rule.id)}>
+                    <DropdownMenu.Item onclick={() => onToggle?.(rule.id)}>
                       {rule.is_active ? 'Deactivate' : 'Activate'}
                     </DropdownMenu.Item>
                     <DropdownMenu.Separator />
-                    <DropdownMenu.Item class="text-destructive" onclick={() => dispatch('delete', rule.id)}>
+                    <DropdownMenu.Item class="text-destructive" onclick={() => onDelete?.(rule.id)}>
                       Delete
                     </DropdownMenu.Item>
                   </DropdownMenu.Content>

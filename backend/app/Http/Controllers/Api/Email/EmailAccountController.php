@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Email;
 
+use App\Application\Services\Email\EmailApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\EmailAccount;
 use App\Services\Email\EmailService;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 class EmailAccountController extends Controller
 {
     public function __construct(
+        protected EmailApplicationService $emailApplicationService,
         protected EmailService $emailService
     ) {}
 

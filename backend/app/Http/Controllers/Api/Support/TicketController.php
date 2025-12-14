@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Support;
 
+use App\Application\Services\Support\SupportApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\SupportTicket;
 use App\Models\TicketCategory;
@@ -13,7 +14,8 @@ use Illuminate\Http\JsonResponse;
 class TicketController extends Controller
 {
     public function __construct(
-        private TicketService $ticketService
+        private TicketService $ticketService,
+        private SupportApplicationService $appService
     ) {}
 
     public function index(Request $request): JsonResponse

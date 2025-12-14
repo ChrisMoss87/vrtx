@@ -17,13 +17,17 @@ class BlueprintRecordState extends Model
         'record_id',
         'current_state_id',
         'state_entered_at',
+        'sla_instance_id',
+        'metadata',
     ];
 
     protected $casts = [
         'blueprint_id' => 'integer',
         'record_id' => 'integer',
         'current_state_id' => 'integer',
+        'sla_instance_id' => 'integer',
         'state_entered_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     /**

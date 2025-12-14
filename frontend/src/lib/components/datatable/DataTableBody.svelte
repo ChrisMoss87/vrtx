@@ -43,16 +43,16 @@
 
 	const table = getContext<TableContext>('table');
 
-	// Determine empty state type
-	let hasFilters = $derived(table.state.filters.length > 0);
-	let hasSearch = $derived(table.state.globalFilter?.length > 0);
-	let hasFiltersOrSearch = $derived(hasFilters || hasSearch);
-
 	function handleRowClick(row: any) {
 		if (onRowClick) {
 			onRowClick(row);
 		}
 	}
+
+	// Determine empty state type
+	let hasFilters = $derived(table.state.filters.length > 0);
+	let hasSearch = $derived(table.state.globalFilter?.length > 0);
+	let hasFiltersOrSearch = $derived(hasFilters || hasSearch);
 
 	function handleClearFilters() {
 		table.clearFilters();
@@ -89,10 +89,7 @@
 	{#if loading}
 		<!-- Loading state -->
 		<Table.Row>
-			<Table.Cell
-				colspan={enableSelection ? columns.length + 1 : columns.length}
-				class="h-32 text-center"
-			>
+			<Table.Cell colspan={enableSelection ? columns.length + 1 : columns.length} class="h-48">
 				<div class="flex flex-col items-center justify-center gap-3 text-muted-foreground">
 					<Loader2 class="h-8 w-8 animate-spin text-primary/60" />
 					<span class="text-sm">Loading records...</span>
@@ -102,19 +99,16 @@
 	{:else if error}
 		<!-- Error state -->
 		<Table.Row>
-			<Table.Cell
-				colspan={enableSelection ? columns.length + 1 : columns.length}
-				class="h-48 text-center"
-			>
+			<Table.Cell colspan={enableSelection ? columns.length + 1 : columns.length} class="h-48">
 				<div class="flex flex-col items-center justify-center gap-4">
 					<div class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
 						<AlertCircle class="h-8 w-8 text-destructive" />
 					</div>
-					<div class="space-y-1">
+					<div class="space-y-1 text-center">
 						<p class="font-medium text-destructive">Error loading data</p>
 						<p class="max-w-md text-sm text-muted-foreground">{error}</p>
 					</div>
-					<Button variant="outline" size="sm" onclick={handleRetry}>
+					<Button variant="outline" size="default" onclick={handleRetry}>
 						<RefreshCw class="mr-2 h-4 w-4" />
 						Try again
 					</Button>
@@ -122,21 +116,17 @@
 			</Table.Cell>
 		</Table.Row>
 	{:else if data.length === 0}
-		<!-- Empty state - context aware -->
+		<!-- Empty state -->
 		<Table.Row>
-			<Table.Cell
-				colspan={enableSelection ? columns.length + 1 : columns.length}
-				class="py-16 text-center"
-			>
+			<Table.Cell colspan={enableSelection ? columns.length + 1 : columns.length} class="h-48">
 				<div class="flex flex-col items-center justify-center gap-4">
 					{#if hasFiltersOrSearch}
-						<!-- No results due to filters/search -->
-						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-sky-50 dark:bg-sky-950/30">
-							<SearchX class="h-8 w-8 text-sky-500 dark:text-sky-400" />
+						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+							<SearchX class="h-8 w-8 text-muted-foreground" />
 						</div>
-						<div class="space-y-2">
-							<p class="text-lg font-semibold text-slate-900 dark:text-slate-100">No matching records</p>
-							<p class="max-w-md text-sm text-slate-500 dark:text-slate-400">
+						<div class="space-y-1 text-center">
+							<p class="font-medium">No matching records</p>
+							<p class="max-w-md text-sm text-muted-foreground">
 								{#if hasSearch && hasFilters}
 									No records match your search and filters.
 								{:else if hasSearch}
@@ -146,19 +136,18 @@
 								{/if}
 							</p>
 						</div>
-						<Button variant="outline" size="default" onclick={handleClearFilters} class="mt-2">
+						<Button variant="outline" size="default" onclick={handleClearFilters}>
 							<FilterX class="mr-2 h-4 w-4" />
 							Clear {hasSearch && hasFilters ? 'all' : hasSearch ? 'search' : 'filters'}
 						</Button>
 					{:else}
-						<!-- No records exist yet -->
-						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-							<FileX2 class="h-8 w-8 text-slate-400 dark:text-slate-500" />
+						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+							<FileX2 class="h-8 w-8 text-muted-foreground" />
 						</div>
-						<div class="space-y-2">
-							<p class="text-lg font-semibold text-slate-900 dark:text-slate-100">No records yet</p>
-							<p class="max-w-md text-sm text-slate-500 dark:text-slate-400">
-								Get started by creating your first record in this module.
+						<div class="space-y-1 text-center">
+							<p class="font-medium">No records yet</p>
+							<p class="max-w-md text-sm text-muted-foreground">
+								Get started by creating your first record.
 							</p>
 						</div>
 						{#if onCreateNew}
@@ -205,7 +194,9 @@
 
 					<Table.Cell
 						class={cellClass}
-						style={enableColumnResize ? `width: ${columnWidth}px; min-width: ${column.minWidth || 50}px; max-width: ${column.maxWidth || 500}px;` : ''}
+						style={enableColumnResize
+							? `width: ${columnWidth}px; min-width: ${column.minWidth || 50}px; max-width: ${column.maxWidth || 500}px;`
+							: ''}
 					>
 						{#if column.cell}
 							<!-- Custom cell component -->

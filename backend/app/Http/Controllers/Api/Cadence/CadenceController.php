@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Cadence;
 
+use App\Application\Services\Cadence\CadenceApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Cadence;
 use App\Models\CadenceStep;
@@ -13,6 +14,7 @@ use Illuminate\Http\Request;
 class CadenceController extends Controller
 {
     public function __construct(
+        private CadenceApplicationService $cadenceApplicationService,
         private CadenceService $cadenceService
     ) {}
 

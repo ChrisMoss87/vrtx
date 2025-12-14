@@ -628,7 +628,7 @@
 	console.log('tableState', tableState);
 </script>
 
-<div class="space-y-6 {className}">
+<div class="space-y-4 {className}">
 	<!-- Toolbar (search, filters, bulk actions, column toggle, views) -->
 	{#if enableSearch || enableFilters || enableBulkActions || enableExport || enableViews}
 		<DataTableToolbar
@@ -657,7 +657,6 @@
 						{enableSorting}
 						enableColumnFilters={enableFilters}
 						{enableColumnResize}
-						{enableColumnReorder}
 						hasGrouping={true}
 					/>
 					{#if tableState.data.length > 0 && !tableState.loading && !tableState.error}
@@ -686,7 +685,6 @@
 						{enableSorting}
 						enableColumnFilters={enableFilters}
 						{enableColumnResize}
-						{enableColumnReorder}
 					/>
 				</Table.Root>
 				{#if tableState.data.length > 0 && !tableState.loading && !tableState.error}
@@ -714,7 +712,6 @@
 						{enableSorting}
 						enableColumnFilters={enableFilters}
 						{enableColumnResize}
-						{enableColumnReorder}
 					/>
 					{#if tableState.data.length > 0 && !tableState.loading && !tableState.error}
 						<DataTableBody

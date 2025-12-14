@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Video;
 
+use App\Application\Services\Video\VideoApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\VideoProvider;
 use App\Services\Video\ZoomService;
@@ -10,6 +11,10 @@ use Illuminate\Http\JsonResponse;
 
 class VideoProviderController extends Controller
 {
+    public function __construct(
+        protected VideoApplicationService $videoApplicationService
+    ) {}
+
     public function index(): JsonResponse
     {
         $providers = VideoProvider::orderBy('name')->get();

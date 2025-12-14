@@ -6,13 +6,22 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
 
-	export let target: number;
-	export let periodStart: string;
-	export let periodEnd: string;
-	export let onClose: () => void;
+	interface Props {
+		target: number;
+		periodStart: string;
+		periodEnd: string;
+		onClose: () => void;
+	}
 
-	let analysis: GapAnalysisData | null = null;
-	let loading = true;
+	let {
+		target,
+		periodStart,
+		periodEnd,
+		onClose,
+	}: Props = $props();
+
+	let analysis = $state<GapAnalysisData | null>(null);
+	let loading = $state(true);
 
 	onMount(async () => {
 		const { data, error } = await tryCatch(getGapAnalysis(target, periodStart, periodEnd));

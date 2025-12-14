@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Whatsapp;
 
+use App\Application\Services\WhatsApp\WhatsAppApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\WhatsappConnection;
 use App\Models\WhatsappTemplate;
@@ -11,6 +12,9 @@ use Illuminate\Http\Request;
 
 class WhatsappTemplateController extends Controller
 {
+    public function __construct(
+        protected WhatsAppApplicationService $whatsAppApplicationService
+    ) {}
     public function index(Request $request): JsonResponse
     {
         $query = WhatsappTemplate::with(['connection:id,name', 'creator:id,name']);

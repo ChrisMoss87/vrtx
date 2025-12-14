@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
@@ -12,16 +11,25 @@
   import PricingTable from './PricingTable.svelte';
   import ProposalSettings from './ProposalSettings.svelte';
 
-  export let proposal: Partial<Proposal> = {};
-  export let templates: Array<{ id: number; name: string }> = [];
-  export let loading = false;
+  interface Props {
+    proposal?: Partial<Proposal>;
+    templates?: Array<{ id: number; name: string }>;
+    loading?: boolean;
+    onSave?: (data: Partial<Proposal>) => void;
+    onPreview?: () => void;
+    onSend?: () => void;
+    onCancel?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    save: Partial<Proposal>;
-    preview: void;
-    send: void;
-    cancel: void;
-  }>();
+  let {
+    proposal = {},
+    templates = [],
+    loading = false,
+    onSave,
+    onPreview,
+    onSend,
+    onCancel,
+  }: Props = $props();
 
   let title = $state(proposal.title || '');
   let clientName = $state(proposal.client_name || '');
@@ -41,7 +49,7 @@
   let selectedTemplateId = $state('');
 
   function handleSave() {
-    dispatch('save', {
+    onSave?.({
       ...proposal,
       title,
       client_name: clientName,
@@ -103,9 +111,9 @@
           </Card.Description>
         </div>
         <div class="flex gap-2">
-          <Button variant="outline" onclick={() => dispatch('preview')}>Preview</Button>
+          <Button variant="outline" onclick={() => onPreview?.()}>Preview</Button>
           {#if proposal.id && proposal.status === 'draft'}
-            <Button onclick={() => dispatch('send')}>Send to Client</Button>
+            <Button onclick={() => onSend?.()}>Send to Client</Button>
           {/if}
         </div>
       </div>
@@ -210,9 +218,9 @@
                   bind:section={sections[index]}
                   {index}
                   total={sections.length}
-                  on:remove={() => removeSection(index)}
-                  on:moveUp={() => moveSection(index, 'up')}
-                  on:moveDown={() => moveSection(index, 'down')}
+                  onRemove={() => removeSection(index)}
+                  onMoveUp={() => moveSection(index, 'up')}
+                  onMoveDown={() => moveSection(index, 'down')}
                 />
               {/each}
             </div>
@@ -246,7 +254,7 @@
       </Tabs.Root>
     </Card.Content>
     <Card.Footer class="flex justify-between">
-      <Button variant="outline" onclick={() => dispatch('cancel')}>Cancel</Button>
+      <Button variant="outline" onclick={() => onCancel?.()}>Cancel</Button>
       <Button onclick={handleSave} disabled={loading || !title || !clientName || !clientEmail}>
         {loading ? 'Saving...' : 'Save Proposal'}
       </Button>

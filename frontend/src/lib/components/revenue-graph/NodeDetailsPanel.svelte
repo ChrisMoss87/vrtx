@@ -5,11 +5,15 @@
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { onMount } from 'svelte';
 
-	export let node: GraphNode;
-	export let onClose: () => void;
+	interface Props {
+		node: GraphNode;
+		onClose: () => void;
+	}
 
-	let metrics: GraphMetrics | null = null;
-	let loadingMetrics = false;
+	let { node, onClose }: Props = $props();
+
+	let metrics = $state<GraphMetrics | null>(null);
+	let loadingMetrics = $state(false);
 
 	onMount(async () => {
 		loadingMetrics = true;
@@ -74,7 +78,7 @@
 		return `/records/${module}/${node.entity_id}`;
 	}
 
-	$: Icon = getEntityIcon(node.entity_type);
+	const Icon = $derived(getEntityIcon(node.entity_type));
 </script>
 
 <div class="h-full flex flex-col">

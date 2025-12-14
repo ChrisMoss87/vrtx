@@ -6,7 +6,8 @@
 	import * as Select from '$lib/components/ui/select';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
-	import { X } from 'lucide-svelte';
+	import * as Collapsible from '$lib/components/ui/collapsible';
+	import { X, ChevronDown, Settings2 } from 'lucide-svelte';
 	import { getFieldTypeMetadata } from '$lib/constants/fieldTypes';
 	import type { CreateFieldRequest, Module } from '$lib/api/modules';
 	import FieldOptionsEditor from './FieldOptionsEditor.svelte';
@@ -33,6 +34,9 @@
 	}: Props = $props();
 
 	const metadata = $derived(getFieldTypeMetadata(field.type as any));
+
+	// Collapsible states
+	let showAdvanced = $state(false);
 
 	function generateApiName(label: string): string {
 		return (
@@ -80,7 +84,7 @@
 	<!-- Header -->
 	<div class="sticky top-0 z-10 flex items-center justify-between border-b bg-card p-4">
 		<div class="min-w-0 flex-1">
-			<h3 class="truncate text-lg font-semibold">Field Settings</h3>
+			<h3 class="truncate text-lg font-semibold">{field.label || 'New Field'}</h3>
 			<p class="truncate text-sm text-muted-foreground">{metadata?.label || field.type}</p>
 		</div>
 		<Button
@@ -95,382 +99,326 @@
 	</div>
 
 	<!-- Content -->
-	<div class="scrollbar-thin flex-1 space-y-6 overflow-y-auto p-4">
-		<!-- Basic Settings -->
+	<div class="scrollbar-thin flex-1 space-y-4 overflow-y-auto p-4">
+		<!-- Essential Settings (Always Visible) -->
 		<div class="space-y-4">
-			<div class="mb-3 flex items-center gap-2">
-				<div class="h-5 w-1 rounded-full bg-primary"></div>
-				<h4 class="text-base font-semibold">Basic Information</h4>
-			</div>
-
-			<!-- Field Type Selector -->
+			<!-- Field Type -->
 			<div class="space-y-2">
-				<Label class="text-sm font-medium">Field Type *</Label>
+				<Label class="text-sm font-medium">Type</Label>
 				<FieldTypeSelector value={field.type as FieldType} onchange={handleTypeChange} />
 			</div>
 
+			<!-- Label -->
 			<div class="space-y-2">
-				<Label for="field-label" class="text-sm font-medium">Label *</Label>
+				<Label for="field-label" class="text-sm font-medium">Label <span class="text-destructive">*</span></Label>
 				<Input
 					id="field-label"
 					value={field.label}
 					oninput={(e) => updateField({ label: e.currentTarget.value })}
-					placeholder="Field label"
+					placeholder="e.g., Email Address"
 					data-testid="field-label-input"
-					class="transition-all focus:ring-2 focus:ring-primary/20"
 				/>
 			</div>
 
-			<div class="space-y-2">
-				<Label for="field-api-name" class="text-sm font-medium">API Name</Label>
-				<Input
-					id="field-api-name"
-					value={field.api_name || ''}
-					oninput={(e) =>
-						updateField({
-							api_name: e.currentTarget.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
-						})}
-					placeholder="field_name"
-					data-testid="field-api-name-input"
-					class="font-mono text-sm transition-all focus:ring-2 focus:ring-primary/20"
-				/>
-				<p class="text-xs text-muted-foreground">
-					Used for API requests and data storage. Auto-generated from label.
-				</p>
-			</div>
-
-			<div class="space-y-2">
-				<Label for="field-description" class="text-sm font-medium">Description</Label>
-				<Textarea
-					id="field-description"
-					value={field.description || ''}
-					oninput={(e) => updateField({ description: e.currentTarget.value })}
-					placeholder="Brief description"
-					rows={2}
-					data-testid="field-description-input"
-					class="resize-none transition-all focus:ring-2 focus:ring-primary/20"
-				/>
-			</div>
-
-			<div class="space-y-2">
-				<Label for="field-help" class="text-sm font-medium">Help Text</Label>
-				<Input
-					id="field-help"
-					value={field.help_text || ''}
-					oninput={(e) => updateField({ help_text: e.currentTarget.value })}
-					placeholder="Helpful hint for users"
-					data-testid="field-help-input"
-					class="transition-all focus:ring-2 focus:ring-primary/20"
-				/>
-				<p class="text-xs text-muted-foreground">Shows below the field</p>
-			</div>
-
-			<div class="space-y-2">
-				<Label for="field-placeholder" class="text-sm font-medium">Placeholder</Label>
-				<Input
-					id="field-placeholder"
-					value={field.placeholder || ''}
-					oninput={(e) => updateField({ placeholder: e.currentTarget.value })}
-					placeholder="e.g., Enter your email"
-					data-testid="field-placeholder-input"
-					class="transition-all focus:ring-2 focus:ring-primary/20"
-				/>
-				<p class="text-xs text-muted-foreground">Shows inside the empty field</p>
-			</div>
-		</div>
-
-		<!-- Layout -->
-		<Card.Root class="shadow-sm">
-			<Card.Header class="pb-3">
-				<Card.Title class="flex items-center gap-2 text-base">
-					<div class="h-4 w-1 rounded-full bg-blue-500"></div>
-					Layout
-				</Card.Title>
-			</Card.Header>
-			<Card.Content class="space-y-4">
-				<div class="space-y-2">
-					<Label for="field-width">Width</Label>
-					<Select.Root
-						type="single"
-						value={field.width?.toString() || '100'}
-						onValueChange={(val) => {
-							if (val) updateField({ width: parseInt(val) });
-						}}
-					>
-						<Select.Trigger id="field-width" data-testid="field-width-select">
-							<span>{field.width || 100}%</span>
-						</Select.Trigger>
-						<Select.Content>
-							<Select.Item value="25">25% (Quarter)</Select.Item>
-							<Select.Item value="33">33% (Third)</Select.Item>
-							<Select.Item value="50">50% (Half)</Select.Item>
-							<Select.Item value="100">100% (Full)</Select.Item>
-						</Select.Content>
-					</Select.Root>
-				</div>
-			</Card.Content>
-		</Card.Root>
-
-		<!-- Validation -->
-		<Card.Root class="shadow-sm">
-			<Card.Header class="pb-3">
-				<Card.Title class="flex items-center gap-2 text-base">
-					<div class="h-4 w-1 rounded-full bg-orange-500"></div>
-					Validation
-				</Card.Title>
-			</Card.Header>
-			<Card.Content class="space-y-3">
-				<div class="flex items-center space-x-2">
+			<!-- Required & Width in a row -->
+			<div class="grid grid-cols-2 gap-3">
+				<div class="flex items-center gap-2 rounded-lg border p-3">
 					<Checkbox
 						id="field-required"
 						checked={field.is_required}
 						onCheckedChange={(checked) => updateField({ is_required: !!checked })}
 						data-testid="field-required-checkbox"
 					/>
-					<Label for="field-required" class="cursor-pointer font-normal">Required field</Label>
+					<Label for="field-required" class="cursor-pointer text-sm font-normal">Required</Label>
 				</div>
 
-				<div class="flex items-center space-x-2">
-					<Checkbox
-						id="field-unique"
-						checked={field.is_unique}
-						onCheckedChange={(checked) => updateField({ is_unique: !!checked })}
-						data-testid="field-unique-checkbox"
+				<Select.Root
+					type="single"
+					value={field.width?.toString() || '100'}
+					onValueChange={(val) => {
+						if (val) updateField({ width: parseInt(val) });
+					}}
+				>
+					<Select.Trigger data-testid="field-width-select" class="h-full">
+						<span class="text-sm">Width: {field.width || 100}%</span>
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="25">25%</Select.Item>
+						<Select.Item value="33">33%</Select.Item>
+						<Select.Item value="50">50%</Select.Item>
+						<Select.Item value="66">66%</Select.Item>
+						<Select.Item value="75">75%</Select.Item>
+						<Select.Item value="100">100%</Select.Item>
+					</Select.Content>
+				</Select.Root>
+			</div>
+
+			<!-- Options Editor (for select/multiselect/radio - show inline) -->
+			{#if metadata?.requiresOptions}
+				<FieldOptionsEditor
+					options={field.options || []}
+					onOptionsChange={(options) => updateField({ options })}
+				/>
+			{/if}
+
+			<!-- Formula Editor for formula fields -->
+			{#if field.type === 'formula'}
+				<FormulaEditor
+					value={field.settings?.formula_definition || null}
+					{availableFields}
+					onchange={(formula) => updateSettings({ formula_definition: formula })}
+				/>
+			{/if}
+
+			<!-- Lookup Configuration for lookup fields -->
+			{#if field.type === 'lookup'}
+				<LookupFieldConfig
+					value={field.settings?.lookup_configuration || null}
+					{availableModules}
+					onchange={(config) => updateSettings({ lookup_configuration: config })}
+				/>
+			{/if}
+		</div>
+
+		<!-- Advanced Settings (Collapsible) -->
+		<Collapsible.Root bind:open={showAdvanced}>
+			<Collapsible.Trigger asChild>
+				<Button variant="ghost" class="w-full justify-between gap-2 text-muted-foreground hover:text-foreground">
+					<span class="flex items-center gap-2">
+						<Settings2 class="h-4 w-4" />
+						Advanced Settings
+					</span>
+					<ChevronDown class="h-4 w-4 transition-transform {showAdvanced ? 'rotate-180' : ''}" />
+				</Button>
+			</Collapsible.Trigger>
+			<Collapsible.Content class="mt-3 space-y-4">
+				<!-- API Name -->
+				<div class="space-y-2">
+					<Label for="field-api-name" class="text-sm font-medium">API Name</Label>
+					<Input
+						id="field-api-name"
+						value={field.api_name || ''}
+						oninput={(e) =>
+							updateField({
+								api_name: e.currentTarget.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
+							})}
+						placeholder="field_name"
+						data-testid="field-api-name-input"
+						class="font-mono text-sm"
 					/>
-					<Label for="field-unique" class="cursor-pointer font-normal">Unique values only</Label>
-				</div>
-			</Card.Content>
-		</Card.Root>
-
-		<!-- Search & Filter -->
-		<Card.Root class="shadow-sm">
-			<Card.Header class="pb-3">
-				<Card.Title class="flex items-center gap-2 text-base">
-					<div class="h-4 w-1 rounded-full bg-green-500"></div>
-					Search & Filter
-				</Card.Title>
-			</Card.Header>
-			<Card.Content class="space-y-3">
-				<div class="flex items-center space-x-2">
-					<Checkbox
-						id="field-searchable"
-						checked={field.is_searchable}
-						onCheckedChange={(checked) => updateField({ is_searchable: !!checked })}
-						data-testid="field-searchable-checkbox"
-					/>
-					<Label for="field-searchable" class="cursor-pointer font-normal">Searchable</Label>
 				</div>
 
-				<div class="flex items-center space-x-2">
-					<Checkbox
-						id="field-filterable"
-						checked={field.is_filterable}
-						onCheckedChange={(checked) => updateField({ is_filterable: !!checked })}
-						data-testid="field-filterable-checkbox"
-					/>
-					<Label for="field-filterable" class="cursor-pointer font-normal">Filterable</Label>
+				<!-- Placeholder & Help Text -->
+				<div class="grid gap-3">
+					<div class="space-y-2">
+						<Label for="field-placeholder" class="text-sm font-medium">Placeholder</Label>
+						<Input
+							id="field-placeholder"
+							value={field.placeholder || ''}
+							oninput={(e) => updateField({ placeholder: e.currentTarget.value })}
+							placeholder="Shown inside empty field"
+							data-testid="field-placeholder-input"
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="field-help" class="text-sm font-medium">Help Text</Label>
+						<Input
+							id="field-help"
+							value={field.help_text || ''}
+							oninput={(e) => updateField({ help_text: e.currentTarget.value })}
+							placeholder="Hint shown below field"
+							data-testid="field-help-input"
+						/>
+					</div>
 				</div>
 
-				<div class="flex items-center space-x-2">
-					<Checkbox
-						id="field-sortable"
-						checked={field.is_sortable}
-						onCheckedChange={(checked) => updateField({ is_sortable: !!checked })}
-						data-testid="field-sortable-checkbox"
-					/>
-					<Label for="field-sortable" class="cursor-pointer font-normal">Sortable</Label>
-				</div>
-			</Card.Content>
-		</Card.Root>
+				<!-- Default Value (simplified) -->
+				{#if field.type !== 'formula' && field.type !== 'auto_number' && field.type !== 'lookup' && field.type !== 'file' && field.type !== 'image' && field.type !== 'signature'}
+					<div class="space-y-2">
+						<Label for="default-value" class="text-sm font-medium">Default Value</Label>
+						{#if field.type === 'checkbox' || field.type === 'toggle'}
+							<div class="flex items-center gap-2 rounded-lg border p-3">
+								<Checkbox
+									id="default-value-bool"
+									checked={field.default_value === 'true'}
+									onCheckedChange={(checked) => updateField({ default_value: checked ? 'true' : 'false' })}
+								/>
+								<Label for="default-value-bool" class="cursor-pointer text-sm font-normal">Default to on</Label>
+							</div>
+						{:else if field.type === 'select' || field.type === 'radio'}
+							<Select.Root
+								type="single"
+								value={field.default_value || ''}
+								onValueChange={(val) => updateField({ default_value: val || undefined })}
+							>
+								<Select.Trigger><span>{field.default_value || 'None'}</span></Select.Trigger>
+								<Select.Content>
+									<Select.Item value="">None</Select.Item>
+									{#each field.options || [] as option}
+										<Select.Item value={option.value}>{option.label}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						{:else if field.type === 'date' || field.type === 'datetime'}
+							<Select.Root
+								type="single"
+								value={field.default_value || ''}
+								onValueChange={(val) => updateField({ default_value: val || undefined })}
+							>
+								<Select.Trigger><span>{field.default_value === 'today' || field.default_value === 'now' ? 'Current' : field.default_value || 'None'}</span></Select.Trigger>
+								<Select.Content>
+									<Select.Item value="">None</Select.Item>
+									<Select.Item value={field.type === 'date' ? 'today' : 'now'}>{field.type === 'date' ? 'Today' : 'Now'}</Select.Item>
+								</Select.Content>
+							</Select.Root>
+						{:else}
+							<Input
+								id="default-value"
+								type={metadata?.isNumeric ? 'number' : 'text'}
+								value={field.default_value || ''}
+								oninput={(e) => updateField({ default_value: e.currentTarget.value || undefined })}
+								placeholder="Enter default..."
+							/>
+						{/if}
+					</div>
+				{/if}
 
-		<!-- Mass Actions -->
-		<Card.Root class="shadow-sm">
-			<Card.Header class="pb-3">
-				<Card.Title class="flex items-center gap-2 text-base">
-					<div class="h-4 w-1 rounded-full bg-amber-500"></div>
-					Mass Actions
-				</Card.Title>
-			</Card.Header>
-			<Card.Content class="space-y-3">
-				<div class="flex items-center space-x-2">
+				<!-- Validation Options -->
+				<div class="space-y-2">
+					<Label class="text-sm font-medium">Validation</Label>
+					<div class="grid grid-cols-2 gap-2">
+						<div class="flex items-center gap-2 rounded border p-2">
+							<Checkbox
+								id="field-unique"
+								checked={field.is_unique}
+								onCheckedChange={(checked) => updateField({ is_unique: !!checked })}
+							/>
+							<Label for="field-unique" class="cursor-pointer text-xs">Unique</Label>
+						</div>
+						<div class="flex items-center gap-2 rounded border p-2">
+							<Checkbox
+								id="field-quick-create"
+								checked={field.settings?.show_in_quick_create ?? false}
+								onCheckedChange={(checked) => updateSettings({ show_in_quick_create: !!checked })}
+							/>
+							<Label for="field-quick-create" class="cursor-pointer text-xs">Quick Create</Label>
+						</div>
+					</div>
+				</div>
+
+				<!-- Table Options -->
+				<div class="space-y-2">
+					<Label class="text-sm font-medium">Table Behavior</Label>
+					<div class="grid grid-cols-3 gap-2">
+						<div class="flex items-center gap-2 rounded border p-2">
+							<Checkbox
+								id="field-searchable"
+								checked={field.is_searchable}
+								onCheckedChange={(checked) => updateField({ is_searchable: !!checked })}
+							/>
+							<Label for="field-searchable" class="cursor-pointer text-xs">Search</Label>
+						</div>
+						<div class="flex items-center gap-2 rounded border p-2">
+							<Checkbox
+								id="field-filterable"
+								checked={field.is_filterable}
+								onCheckedChange={(checked) => updateField({ is_filterable: !!checked })}
+							/>
+							<Label for="field-filterable" class="cursor-pointer text-xs">Filter</Label>
+						</div>
+						<div class="flex items-center gap-2 rounded border p-2">
+							<Checkbox
+								id="field-sortable"
+								checked={field.is_sortable}
+								onCheckedChange={(checked) => updateField({ is_sortable: !!checked })}
+							/>
+							<Label for="field-sortable" class="cursor-pointer text-xs">Sort</Label>
+						</div>
+					</div>
+				</div>
+
+				<!-- Conditional Visibility -->
+				<ConditionalVisibilityBuilder
+					value={field.settings?.conditional_visibility as any || null}
+					{availableFields}
+					onchange={(visibility) => updateSettings({ conditional_visibility: visibility })}
+				/>
+
+				<!-- Type-specific Settings -->
+				{#if metadata?.isNumeric}
+					<div class="space-y-2">
+						<Label class="text-sm font-medium">Number Limits</Label>
+						<div class="grid grid-cols-2 gap-2">
+							<Input
+								type="number"
+								value={field.settings?.min_value?.toString() || ''}
+								oninput={(e) => updateSettings({ min_value: e.currentTarget.value ? parseFloat(e.currentTarget.value) : null })}
+								placeholder="Min"
+							/>
+							<Input
+								type="number"
+								value={field.settings?.max_value?.toString() || ''}
+								oninput={(e) => updateSettings({ max_value: e.currentTarget.value ? parseFloat(e.currentTarget.value) : null })}
+								placeholder="Max"
+							/>
+						</div>
+					</div>
+				{/if}
+
+				{#if field.type === 'text' || field.type === 'textarea'}
+					<div class="space-y-2">
+						<Label class="text-sm font-medium">Length Limits</Label>
+						<div class="grid grid-cols-2 gap-2">
+							<Input
+								type="number"
+								value={field.settings?.min_length?.toString() || ''}
+								oninput={(e) => updateSettings({ min_length: e.currentTarget.value ? parseInt(e.currentTarget.value) : null })}
+								placeholder="Min chars"
+							/>
+							<Input
+								type="number"
+								value={field.settings?.max_length?.toString() || ''}
+								oninput={(e) => updateSettings({ max_length: e.currentTarget.value ? parseInt(e.currentTarget.value) : null })}
+								placeholder="Max chars"
+							/>
+						</div>
+					</div>
+				{/if}
+
+				{#if field.type === 'currency'}
+					<div class="space-y-2">
+						<Label class="text-sm font-medium">Currency Settings</Label>
+						<div class="grid grid-cols-2 gap-2">
+							<Input
+								value={field.settings?.currency_code || 'USD'}
+								oninput={(e) => updateSettings({ currency_code: e.currentTarget.value })}
+								placeholder="Currency code"
+								maxlength={3}
+							/>
+							<Input
+								type="number"
+								value={field.settings?.precision?.toString() || '2'}
+								oninput={(e) => updateSettings({ precision: parseInt(e.currentTarget.value) })}
+								placeholder="Decimals"
+								min="0"
+								max="4"
+							/>
+						</div>
+					</div>
+				{/if}
+
+				<!-- Mass Update Option -->
+				<div class="flex items-center gap-2 rounded border p-2">
 					<Checkbox
 						id="field-mass-updatable"
 						checked={field.is_mass_updatable ?? true}
 						onCheckedChange={(checked) => updateField({ is_mass_updatable: !!checked })}
 						disabled={field.type === 'formula'}
-						data-testid="field-mass-updatable-checkbox"
 					/>
-					<Label for="field-mass-updatable" class="cursor-pointer font-normal">
-						Allow Mass Update
-					</Label>
+					<Label for="field-mass-updatable" class="cursor-pointer text-xs">Allow Mass Update</Label>
 				</div>
-				{#if field.type === 'formula'}
-					<p class="text-xs text-muted-foreground">
-						Formula fields cannot be mass updated as they are calculated automatically.
-					</p>
-				{:else}
-					<p class="text-xs text-muted-foreground">
-						When enabled, this field can be updated for multiple records at once.
-					</p>
-				{/if}
-			</Card.Content>
-		</Card.Root>
-
-		<!-- Field-specific settings -->
-		{#if metadata?.isNumeric}
-			<Card.Root class="shadow-sm">
-				<Card.Header class="pb-3">
-					<Card.Title class="flex items-center gap-2 text-base">
-						<div class="h-4 w-1 rounded-full bg-purple-500"></div>
-						Number Settings
-					</Card.Title>
-				</Card.Header>
-				<Card.Content class="space-y-4">
-					<div class="grid grid-cols-2 gap-4">
-						<div class="space-y-2">
-							<Label for="min-value">Min Value</Label>
-							<Input
-								id="min-value"
-								type="number"
-								value={field.settings?.min_value?.toString() || ''}
-								oninput={(e) =>
-									updateSettings({
-										min_value: e.currentTarget.value ? parseFloat(e.currentTarget.value) : null
-									})}
-								placeholder="Minimum"
-								data-testid="field-min-value"
-							/>
-						</div>
-						<div class="space-y-2">
-							<Label for="max-value">Max Value</Label>
-							<Input
-								id="max-value"
-								type="number"
-								value={field.settings?.max_value?.toString() || ''}
-								oninput={(e) =>
-									updateSettings({
-										max_value: e.currentTarget.value ? parseFloat(e.currentTarget.value) : null
-									})}
-								placeholder="Maximum"
-								data-testid="field-max-value"
-							/>
-						</div>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		{/if}
-
-		{#if field.type === 'text' || field.type === 'textarea'}
-			<Card.Root class="shadow-sm">
-				<Card.Header class="pb-3">
-					<Card.Title class="flex items-center gap-2 text-base">
-						<div class="h-4 w-1 rounded-full bg-cyan-500"></div>
-						Text Settings
-					</Card.Title>
-				</Card.Header>
-				<Card.Content class="space-y-4">
-					<div class="grid grid-cols-2 gap-4">
-						<div class="space-y-2">
-							<Label for="min-length">Min Length</Label>
-							<Input
-								id="min-length"
-								type="number"
-								value={field.settings?.min_length?.toString() || ''}
-								oninput={(e) =>
-									updateSettings({
-										min_length: e.currentTarget.value ? parseInt(e.currentTarget.value) : null
-									})}
-								placeholder="Minimum"
-								data-testid="field-min-length"
-							/>
-						</div>
-						<div class="space-y-2">
-							<Label for="max-length">Max Length</Label>
-							<Input
-								id="max-length"
-								type="number"
-								value={field.settings?.max_length?.toString() || ''}
-								oninput={(e) =>
-									updateSettings({
-										max_length: e.currentTarget.value ? parseInt(e.currentTarget.value) : null
-									})}
-								placeholder="Maximum"
-								data-testid="field-max-length"
-							/>
-						</div>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		{/if}
-
-		{#if field.type === 'currency'}
-			<Card.Root class="shadow-sm">
-				<Card.Header class="pb-3">
-					<Card.Title class="flex items-center gap-2 text-base">
-						<div class="h-4 w-1 rounded-full bg-emerald-500"></div>
-						Currency Settings
-					</Card.Title>
-				</Card.Header>
-				<Card.Content class="space-y-4">
-					<div class="space-y-2">
-						<Label for="currency-code">Currency Code</Label>
-						<Input
-							id="currency-code"
-							value={field.settings?.currency_code || 'USD'}
-							oninput={(e) => updateSettings({ currency_code: e.currentTarget.value })}
-							placeholder="USD"
-							maxlength={3}
-							data-testid="field-currency-code"
-						/>
-					</div>
-					<div class="space-y-2">
-						<Label for="precision">Decimal Places</Label>
-						<Input
-							id="precision"
-							type="number"
-							value={field.settings?.precision?.toString() || '2'}
-							oninput={(e) => updateSettings({ precision: parseInt(e.currentTarget.value) })}
-							min="0"
-							max="4"
-							data-testid="field-precision"
-						/>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		{/if}
-
-		<!-- Options Editor for select, multiselect, radio -->
-		{#if metadata?.requiresOptions}
-			<FieldOptionsEditor
-				options={field.options || []}
-				onOptionsChange={(options) => updateField({ options })}
-			/>
-		{/if}
-
-		<!-- Formula Editor for formula fields -->
-		{#if field.type === 'formula'}
-			<FormulaEditor
-				value={field.settings?.formula_definition || null}
-				{availableFields}
-				onchange={(formula) => updateSettings({ formula_definition: formula })}
-			/>
-		{/if}
-
-		<!-- Lookup Configuration for lookup fields -->
-		{#if field.type === 'lookup'}
-			<LookupFieldConfig
-				value={field.settings?.lookup_configuration || null}
-				{availableModules}
-				onchange={(config) => updateSettings({ lookup_configuration: config })}
-			/>
-		{/if}
-
-		<!-- Conditional Visibility (for all field types) -->
-		<ConditionalVisibilityBuilder
-			value={field.settings?.conditional_visibility as any || null}
-			{availableFields}
-			onchange={(visibility) => updateSettings({ conditional_visibility: visibility })}
-		/>
+			</Collapsible.Content>
+		</Collapsible.Root>
 	</div>
 </div>
 

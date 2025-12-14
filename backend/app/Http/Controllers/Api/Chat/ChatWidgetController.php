@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Chat;
 
+use App\Application\Services\Chat\ChatApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\ChatWidget;
 use App\Services\Chat\ChatService;
@@ -12,8 +13,9 @@ use Illuminate\Http\Request;
 class ChatWidgetController extends Controller
 {
     public function __construct(
-        private ChatService $chatService,
-        private ChatAnalyticsService $analyticsService
+        protected ChatApplicationService $chatApplicationService,
+        protected ChatService $chatService,
+        protected ChatAnalyticsService $analyticsService
     ) {}
 
     public function index(): JsonResponse

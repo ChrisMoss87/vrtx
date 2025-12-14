@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Application\Services\WebForm\WebFormApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\WebForm;
 use App\Services\WebForms\WebFormService;
@@ -18,7 +19,8 @@ class WebFormPublicController extends Controller
 {
     public function __construct(
         protected WebFormService $webFormService,
-        protected WebFormSubmissionService $submissionService
+        protected WebFormSubmissionService $submissionService,
+        protected WebFormApplicationService $webFormApplicationService
     ) {}
 
     /**

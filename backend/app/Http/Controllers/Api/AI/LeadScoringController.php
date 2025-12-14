@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\AI;
 
+use App\Application\Services\AI\AIApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\LeadScore;
 use App\Models\ModuleRecord;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 class LeadScoringController extends Controller
 {
     public function __construct(
+        protected AIApplicationService $aiApplicationService,
         protected LeadScoringService $scoringService
     ) {}
 

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Badge } from '$lib/components/ui/badge';
@@ -8,16 +7,25 @@
   import * as Select from '$lib/components/ui/select';
   import type { DocumentTemplate } from '$lib/api/document-templates';
 
-  export let templates: DocumentTemplate[] = [];
-  export let loading = false;
+  interface Props {
+    templates?: DocumentTemplate[];
+    loading?: boolean;
+    onCreate?: () => void;
+    onEdit?: (id: number) => void;
+    onDuplicate?: (id: number) => void;
+    onDelete?: (id: number) => void;
+    onGenerate?: (templateId: number) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    create: void;
-    edit: number;
-    duplicate: number;
-    delete: number;
-    generate: { templateId: number };
-  }>();
+  let {
+    templates = [],
+    loading = false,
+    onCreate,
+    onEdit,
+    onDuplicate,
+    onDelete,
+    onGenerate,
+  }: Props = $props();
 
   let search = $state('');
   let categoryFilter = $state('');
@@ -72,7 +80,7 @@
       </Select.Root>
     </div>
 
-    <Button onclick={() => dispatch('create')}>
+    <Button onclick={() => onCreate?.()}>
       Create Template
     </Button>
   </div>
@@ -88,7 +96,7 @@
         {#if search || categoryFilter}
           <p class="text-sm text-muted-foreground mt-2">Try adjusting your filters</p>
         {:else}
-          <Button variant="outline" class="mt-4" onclick={() => dispatch('create')}>
+          <Button variant="outline" class="mt-4" onclick={() => onCreate?.()}>
             Create your first template
           </Button>
         {/if}
@@ -119,17 +127,17 @@
                   </Button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content align="end">
-                  <DropdownMenu.Item onclick={() => dispatch('edit', template.id)}>
+                  <DropdownMenu.Item onclick={() => onEdit?.(template.id)}>
                     Edit
                   </DropdownMenu.Item>
-                  <DropdownMenu.Item onclick={() => dispatch('duplicate', template.id)}>
+                  <DropdownMenu.Item onclick={() => onDuplicate?.(template.id)}>
                     Duplicate
                   </DropdownMenu.Item>
-                  <DropdownMenu.Item onclick={() => dispatch('generate', { templateId: template.id })}>
+                  <DropdownMenu.Item onclick={() => onGenerate?.(template.id)}>
                     Generate Document
                   </DropdownMenu.Item>
                   <DropdownMenu.Separator />
-                  <DropdownMenu.Item class="text-destructive" onclick={() => dispatch('delete', template.id)}>
+                  <DropdownMenu.Item class="text-destructive" onclick={() => onDelete?.(template.id)}>
                     Delete
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
@@ -159,7 +167,7 @@
               variant="outline"
               size="sm"
               class="w-full"
-              onclick={() => dispatch('generate', { templateId: template.id })}
+              onclick={() => onGenerate?.(template.id)}
             >
               Generate Document
             </Button>

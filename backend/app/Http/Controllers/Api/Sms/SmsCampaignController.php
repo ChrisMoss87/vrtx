@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Sms;
 
+use App\Application\Services\Sms\SmsApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\SmsCampaign;
 use App\Services\Sms\SmsCampaignService;
@@ -10,12 +11,10 @@ use Illuminate\Http\JsonResponse;
 
 class SmsCampaignController extends Controller
 {
-    protected SmsCampaignService $campaignService;
-
-    public function __construct(SmsCampaignService $campaignService)
-    {
-        $this->campaignService = $campaignService;
-    }
+    public function __construct(
+        protected SmsApplicationService $smsApplicationService,
+        protected SmsCampaignService $campaignService
+    ) {}
 
     public function index(Request $request): JsonResponse
     {

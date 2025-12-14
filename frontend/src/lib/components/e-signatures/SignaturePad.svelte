@@ -1,16 +1,22 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import * as Tabs from '$lib/components/ui/tabs';
   import { Input } from '$lib/components/ui/input';
 
-  export let width = 400;
-  export let height = 150;
+  interface Props {
+    width?: number;
+    height?: number;
+    onSign?: (signature: string) => void;
+    onCancel?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    sign: string;
-    cancel: void;
-  }>();
+  let {
+    width = 400,
+    height = 150,
+    onSign,
+    onCancel,
+  }: Props = $props();
 
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
@@ -111,7 +117,7 @@
     }
 
     if (signatureData) {
-      dispatch('sign', signatureData);
+      onSign?.(signatureData);
     }
   }
 
@@ -235,7 +241,7 @@
   <div class="flex justify-between">
     <Button variant="outline" onclick={clearCanvas}>Clear</Button>
     <div class="flex gap-2">
-      <Button variant="outline" onclick={() => dispatch('cancel')}>Cancel</Button>
+      <Button variant="outline" onclick={() => onCancel?.()}>Cancel</Button>
       <Button onclick={handleSign} disabled={!hasSignature}>
         Apply Signature
       </Button>

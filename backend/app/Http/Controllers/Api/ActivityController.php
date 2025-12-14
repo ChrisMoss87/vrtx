@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Application\Services\Activity\ActivityApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
 use App\Services\ActivityService;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 class ActivityController extends Controller
 {
     public function __construct(
+        protected ActivityApplicationService $activityApplicationService,
         protected ActivityService $activityService
     ) {}
 

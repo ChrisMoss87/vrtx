@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\DataManagement;
 
+use App\Application\Services\ImportExport\ImportExportApplicationService;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessImportJob;
 use App\Jobs\ValidateImportJob;
@@ -20,7 +21,8 @@ class ImportController extends Controller
 {
     public function __construct(
         protected FileParser $fileParser,
-        protected ImportEngine $importEngine
+        protected ImportEngine $importEngine,
+        protected ImportExportApplicationService $importExportApplicationService
     ) {}
 
     /**

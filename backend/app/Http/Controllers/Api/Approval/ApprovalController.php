@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Approval;
 
+use App\Application\Services\Approval\ApprovalApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\ApprovalDelegation;
 use App\Models\ApprovalQuickAction;
@@ -16,7 +17,8 @@ use Illuminate\Http\Request;
 class ApprovalController extends Controller
 {
     public function __construct(
-        protected ApprovalService $service
+        protected ApprovalService $service,
+        protected ApprovalApplicationService $appService
     ) {}
 
     // Approval Requests

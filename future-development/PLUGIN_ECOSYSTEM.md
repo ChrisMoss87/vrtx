@@ -750,19 +750,31 @@ export const isEnterprise = derived(license, $l => $l.plan === 'enterprise');
     import { Button } from '$lib/components/ui/button';
     import * as Card from '$lib/components/ui/card';
     import { Lock } from 'lucide-svelte';
+    import type { Snippet } from 'svelte';
 
-    export let plugin: string;
-    export let feature: string | undefined = undefined;
-    export let showUpgrade: boolean = true;
-    export let title: string = 'Premium Feature';
+    interface Props {
+        plugin: string;
+        feature?: string;
+        showUpgrade?: boolean;
+        title?: string;
+        children?: Snippet;
+    }
 
-    $: hasAccess = feature
+    let {
+        plugin,
+        feature = undefined,
+        showUpgrade = true,
+        title = 'Premium Feature',
+        children,
+    }: Props = $props();
+
+    const hasAccess = $derived(feature
         ? $license.features.includes(feature)
-        : $license.plugins.includes(plugin);
+        : $license.plugins.includes(plugin));
 </script>
 
 {#if hasAccess}
-    <slot />
+    {@render children?.()}
 {:else if showUpgrade}
     <Card.Root class="border-dashed">
         <Card.Content class="flex flex-col items-center justify-center py-10">

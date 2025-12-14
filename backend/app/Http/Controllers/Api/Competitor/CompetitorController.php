@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Competitor;
 
+use App\Application\Services\Competitor\CompetitorApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Competitor;
 use App\Models\CompetitorObjection;
@@ -15,6 +16,7 @@ use Illuminate\Http\Request;
 class CompetitorController extends Controller
 {
     public function __construct(
+        private CompetitorApplicationService $competitorApplicationService,
         private CompetitorService $competitorService,
         private CompetitorAnalyticsService $analyticsService,
         private ObjectionService $objectionService

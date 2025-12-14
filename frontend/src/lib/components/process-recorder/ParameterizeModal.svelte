@@ -7,23 +7,28 @@
 	import { parameterizeStep, resetStepParameterization, type RecordingStep } from '$lib/api/recordings';
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher } from 'svelte';
 
-	export let recordingId: number;
-	export let step: RecordingStep;
-	export let onClose: () => void;
+	interface Props {
+		recordingId: number;
+		step: RecordingStep;
+		onClose: () => void;
+		onParameterized?: (step: RecordingStep) => void;
+	}
 
-	const dispatch = createEventDispatcher<{
-		parameterized: RecordingStep;
-	}>();
+	let {
+		recordingId,
+		step,
+		onClose,
+		onParameterized,
+	}: Props = $props();
 
 	// Extract parameterizable fields from action_data
-	$: parameterizableFields = getParameterizableFields(step.action_data);
+	const parameterizableFields = $derived(getParameterizableFields(step.action_data));
 
-	let selectedField = '';
-	let referenceType: 'field' | 'current_user' | 'owner' | 'record_email' | 'custom' = 'field';
-	let referenceField = '';
-	let loading = false;
+	let selectedField = $state('');
+	let referenceType = $state<'field' | 'current_user' | 'owner' | 'record_email' | 'custom'>('field');
+	let referenceField = $state('');
+	let loading = $state(false);
 
 	function getParameterizableFields(data: Record<string, unknown>): { key: string; value: unknown; label: string }[] {
 		const fields: { key: string; value: unknown; label: string }[] = [];
@@ -70,7 +75,7 @@
 		}
 
 		toast.success('Step parameterized');
-		dispatch('parameterized', data);
+		onParameterized?.(data);
 		onClose();
 	}
 
@@ -85,7 +90,7 @@
 		}
 
 		toast.success('Parameterization reset');
-		dispatch('parameterized', data);
+		onParameterized?.(data);
 		onClose();
 	}
 </script>

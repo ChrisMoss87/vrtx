@@ -2,8 +2,15 @@
 	import { Check, MessageSquare } from 'lucide-svelte';
 	import type { CompetitorNote } from '$lib/api/competitors';
 
-	export let notes: CompetitorNote[];
-	export let compact = false;
+	interface Props {
+		notes: CompetitorNote[];
+		compact?: boolean;
+	}
+
+	let {
+		notes,
+		compact = false,
+	}: Props = $props();
 
 	function formatDate(dateStr: string): string {
 		const date = new Date(dateStr);

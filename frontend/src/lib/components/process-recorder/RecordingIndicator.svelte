@@ -5,21 +5,26 @@
 	import { stopRecording, pauseRecording, resumeRecording, type Recording } from '$lib/api/recordings';
 	import { tryCatch } from '$lib/utils/tryCatch';
 	import { toast } from 'svelte-sonner';
-	import { createEventDispatcher } from 'svelte';
 	import { goto } from '$app/navigation';
 
-	export let recording: Recording;
+	interface Props {
+		recording: Recording;
+		onStopped?: (recording: Recording) => void;
+		onPaused?: (recording: Recording) => void;
+		onResumed?: (recording: Recording) => void;
+	}
 
-	const dispatch = createEventDispatcher<{
-		stopped: Recording;
-		paused: Recording;
-		resumed: Recording;
-	}>();
+	let {
+		recording,
+		onStopped,
+		onPaused,
+		onResumed,
+	}: Props = $props();
 
-	let loading = false;
+	let loading = $state(false);
 
-	$: isPaused = recording.status === 'paused';
-	$: isRecording = recording.status === 'recording';
+	const isPaused = $derived(recording.status === 'paused');
+	const isRecording = $derived(recording.status === 'recording');
 
 	async function handleStop() {
 		loading = true;
@@ -32,7 +37,7 @@
 		}
 
 		toast.success('Recording stopped');
-		dispatch('stopped', data);
+		onStopped?.(data);
 		goto(`/recordings/${recording.id}`);
 	}
 
@@ -47,7 +52,7 @@
 		}
 
 		toast.success('Recording paused');
-		dispatch('paused', data);
+		onPaused?.(data);
 	}
 
 	async function handleResume() {
@@ -61,7 +66,7 @@
 		}
 
 		toast.success('Recording resumed');
-		dispatch('resumed', data);
+		onResumed?.(data);
 	}
 
 	function formatDuration(): string {

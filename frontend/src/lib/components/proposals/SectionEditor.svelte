@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
@@ -7,15 +6,23 @@
   import * as Collapsible from '$lib/components/ui/collapsible';
   import type { ProposalSection } from '$lib/api/proposals';
 
-  export let section: ProposalSection;
-  export let index: number;
-  export let total: number;
+  interface Props {
+    section: ProposalSection;
+    index: number;
+    total: number;
+    onRemove?: () => void;
+    onMoveUp?: () => void;
+    onMoveDown?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    remove: void;
-    moveUp: void;
-    moveDown: void;
-  }>();
+  let {
+    section = $bindable(),
+    index,
+    total,
+    onRemove,
+    onMoveUp,
+    onMoveDown,
+  }: Props = $props();
 
   let isOpen = $state(true);
 </script>
@@ -29,7 +36,7 @@
             type="button"
             class="p-0.5 hover:bg-muted rounded disabled:opacity-30"
             disabled={index === 0}
-            onclick={() => dispatch('moveUp')}
+            onclick={() => onMoveUp?.()}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="18 15 12 9 6 15" />
@@ -39,7 +46,7 @@
             type="button"
             class="p-0.5 hover:bg-muted rounded disabled:opacity-30"
             disabled={index === total - 1}
-            onclick={() => dispatch('moveDown')}
+            onclick={() => onMoveDown?.()}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9" />
@@ -65,7 +72,7 @@
           <input type="checkbox" bind:checked={section.is_visible} class="rounded" />
           Visible
         </label>
-        <Button variant="ghost" size="sm" onclick={() => dispatch('remove')}>
+        <Button variant="ghost" size="sm" onclick={() => onRemove?.()}>
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-destructive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6" />
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\LandingPage;
 
+use App\Application\Services\LandingPage\LandingPageApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\LandingPage;
 use App\Models\LandingPageVisit;
@@ -12,7 +13,8 @@ use Illuminate\Http\Request;
 class PublicLandingPageController extends Controller
 {
     public function __construct(
-        protected LandingPageService $landingPageService
+        protected LandingPageService $landingPageService,
+        protected LandingPageApplicationService $landingPageApplicationService
     ) {}
 
     public function show(Request $request, string $slug): JsonResponse

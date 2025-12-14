@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Blueprints;
 
+use App\Application\Services\Blueprint\BlueprintApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Blueprint;
 use App\Models\BlueprintState;
@@ -17,7 +18,8 @@ use Illuminate\Support\Facades\DB;
 class BlueprintController extends Controller
 {
     public function __construct(
-        protected BlueprintEngine $engine
+        protected BlueprintEngine $engine,
+        protected BlueprintApplicationService $blueprintApplicationService
     ) {}
 
     /**

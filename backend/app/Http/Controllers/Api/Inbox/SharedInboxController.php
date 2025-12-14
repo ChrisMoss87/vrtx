@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Inbox;
 
+use App\Application\Services\Inbox\InboxApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\SharedInbox;
 use App\Models\SharedInboxMember;
@@ -11,12 +12,10 @@ use Illuminate\Http\JsonResponse;
 
 class SharedInboxController extends Controller
 {
-    protected InboxService $inboxService;
-
-    public function __construct(InboxService $inboxService)
-    {
-        $this->inboxService = $inboxService;
-    }
+    public function __construct(
+        protected InboxApplicationService $inboxApplicationService,
+        protected InboxService $inboxService
+    ) {}
 
     public function index(Request $request): JsonResponse
     {

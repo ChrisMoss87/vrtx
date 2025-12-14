@@ -3,8 +3,15 @@
 	import { fade, fly } from 'svelte/transition';
 	import type { RecordingStep } from '$lib/api/recordings';
 
-	export let step: RecordingStep;
-	export let onDismiss: () => void;
+	interface Props {
+		step: RecordingStep;
+		onDismiss: () => void;
+	}
+
+	let {
+		step,
+		onDismiss,
+	}: Props = $props();
 
 	// Auto-dismiss after 3 seconds
 	setTimeout(() => {

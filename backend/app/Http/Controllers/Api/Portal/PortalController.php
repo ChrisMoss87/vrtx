@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Portal;
 
+use App\Application\Services\Portal\PortalApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\PortalUser;
 use App\Models\PortalNotification;
@@ -15,7 +16,8 @@ use Illuminate\Http\JsonResponse;
 class PortalController extends Controller
 {
     public function __construct(
-        private PortalService $portalService
+        private PortalService $portalService,
+        private PortalApplicationService $appService
     ) {}
 
     public function dashboard(Request $request): JsonResponse

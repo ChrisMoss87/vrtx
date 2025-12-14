@@ -12,12 +12,16 @@
 	import InviteMemberModal from './InviteMemberModal.svelte';
 	import EngagementAnalytics from './EngagementAnalytics.svelte';
 
-	export let roomId: number;
+	interface Props {
+		roomId: number;
+	}
 
-	let room: DealRoomType | null = null;
-	let loading = true;
-	let activeTab: 'overview' | 'actions' | 'documents' | 'messages' | 'analytics' = 'overview';
-	let showInviteModal = false;
+	let { roomId }: Props = $props();
+
+	let room = $state<DealRoomType | null>(null);
+	let loading = $state(true);
+	let activeTab = $state<'overview' | 'actions' | 'documents' | 'messages' | 'analytics'>('overview');
+	let showInviteModal = $state(false);
 
 	onMount(async () => {
 		await loadRoom();

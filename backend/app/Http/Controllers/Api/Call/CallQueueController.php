@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Call;
 
+use App\Application\Services\Call\CallApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\CallQueue;
 use App\Models\CallQueueMember;
@@ -13,7 +14,10 @@ use Illuminate\Support\Facades\Validator;
 
 class CallQueueController extends Controller
 {
-    public function __construct(protected CallService $callService) {}
+    public function __construct(
+        protected CallApplicationService $callApplicationService,
+        protected CallService $callService
+    ) {}
 
     public function index(): JsonResponse
     {

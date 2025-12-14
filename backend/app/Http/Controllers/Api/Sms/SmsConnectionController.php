@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Sms;
 
+use App\Application\Services\Sms\SmsApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\SmsConnection;
 use App\Services\Sms\TwilioService;
@@ -10,6 +11,9 @@ use Illuminate\Http\JsonResponse;
 
 class SmsConnectionController extends Controller
 {
+    public function __construct(
+        protected SmsApplicationService $smsApplicationService
+    ) {}
     public function index(): JsonResponse
     {
         $connections = SmsConnection::withCount(['messages', 'campaigns'])

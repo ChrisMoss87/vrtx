@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Call;
 
+use App\Application\Services\Call\CallApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Call;
 use App\Models\CallProvider;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 class CallController extends Controller
 {
     public function __construct(
+        protected CallApplicationService $callApplicationService,
         protected CallService $callService,
         protected TranscriptionService $transcriptionService
     ) {}

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Textarea } from '$lib/components/ui/textarea';
@@ -8,18 +7,29 @@
   import * as Table from '$lib/components/ui/table';
   import type { Proposal, ProposalSection, ProposalPricingItem, ProposalComment } from '$lib/api/proposals';
 
-  export let proposal: Proposal;
-  export let sections: ProposalSection[] = [];
-  export let pricingItems: ProposalPricingItem[] = [];
-  export let comments: ProposalComment[] = [];
-  export let loading = false;
+  interface Props {
+    proposal: Proposal;
+    sections?: ProposalSection[];
+    pricingItems?: ProposalPricingItem[];
+    comments?: ProposalComment[];
+    loading?: boolean;
+    onAccept?: () => void;
+    onDecline?: (reason: string) => void;
+    onAddComment?: (data: { sectionId: number | null; content: string }) => void;
+    onTogglePricingItem?: (id: number) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    accept: void;
-    decline: string;
-    addComment: { sectionId: number | null; content: string };
-    togglePricingItem: number;
-  }>();
+  let {
+    proposal,
+    sections = [],
+    pricingItems = [],
+    comments = [],
+    loading = false,
+    onAccept,
+    onDecline,
+    onAddComment,
+    onTogglePricingItem,
+  }: Props = $props();
 
   let showDeclineDialog = $state(false);
   let declineReason = $state('');
@@ -48,18 +58,18 @@
 
   function handleAddComment() {
     if (newComment.trim()) {
-      dispatch('addComment', { sectionId: activeSectionId, content: newComment });
+      onAddComment?.({ sectionId: activeSectionId, content: newComment });
       newComment = '';
     }
   }
 
   function handleDecline() {
-    dispatch('decline', declineReason);
+    onDecline?.(declineReason);
     showDeclineDialog = false;
   }
 
   function toggleOptionalItem(itemId: number) {
-    dispatch('togglePricingItem', itemId);
+    onTogglePricingItem?.(itemId);
   }
 </script>
 
@@ -84,7 +94,7 @@
             <Button variant="outline" onclick={() => showDeclineDialog = true}>
               Decline
             </Button>
-            <Button onclick={() => dispatch('accept')} disabled={loading} style="background-color: var(--primary);">
+            <Button onclick={() => onAccept?.()} disabled={loading} style="background-color: var(--primary);">
               {loading ? 'Processing...' : 'Accept Proposal'}
             </Button>
           </div>

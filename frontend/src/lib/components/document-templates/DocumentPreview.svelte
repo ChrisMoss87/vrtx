@@ -1,20 +1,27 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import * as Dialog from '$lib/components/ui/dialog';
 
-  export let open = false;
-  export let html = '';
-  export let title = 'Document Preview';
-  export let loading = false;
+  interface Props {
+    open?: boolean;
+    html?: string;
+    title?: string;
+    loading?: boolean;
+    onClose?: () => void;
+    onDownload?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    close: void;
-    download: void;
-  }>();
+  let {
+    open = $bindable(false),
+    html = '',
+    title = 'Document Preview',
+    loading = false,
+    onClose,
+    onDownload,
+  }: Props = $props();
 </script>
 
-<Dialog.Root bind:open on:close={() => dispatch('close')}>
+<Dialog.Root bind:open onOpenChange={(isOpen) => !isOpen && onClose?.()}>
   <Dialog.Content class="max-w-4xl max-h-[90vh]">
     <Dialog.Header>
       <Dialog.Title>{title}</Dialog.Title>
@@ -40,8 +47,8 @@
     </div>
 
     <Dialog.Footer class="mt-4">
-      <Button variant="outline" on:click={() => dispatch('close')}>Close</Button>
-      <Button on:click={() => dispatch('download')} disabled={loading || !html}>
+      <Button variant="outline" onclick={() => onClose?.()}>Close</Button>
+      <Button onclick={() => onDownload?.()} disabled={loading || !html}>
         Download PDF
       </Button>
     </Dialog.Footer>
