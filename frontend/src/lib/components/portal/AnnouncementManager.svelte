@@ -20,7 +20,7 @@
   // Form state
   let formTitle = $state('');
   let formContent = $state('');
-  let formType = $state<{ value: string; label: string }>({ value: 'info', label: 'Information' });
+  let formType = $state('info');
   let formIsActive = $state(true);
   let formIsDismissible = $state(true);
   let formStartsAt = $state('');
@@ -35,11 +35,13 @@
     { value: 'error', label: 'Error' },
   ];
 
+  const getTypeLabel = (value: string) => announcementTypes.find(t => t.value === value)?.label ?? value;
+
   async function loadAnnouncements() {
     loading = true;
     try {
       const response = await portalAdminApi.getAnnouncements();
-      announcements = response.data.data;
+      announcements = response.data;
     } catch (error) {
       console.error('Failed to load announcements:', error);
     } finally {
@@ -50,7 +52,7 @@
   function resetForm() {
     formTitle = '';
     formContent = '';
-    formType = { value: 'info', label: 'Information' };
+    formType = 'info';
     formIsActive = true;
     formIsDismissible = true;
     formStartsAt = '';
@@ -68,7 +70,7 @@
     editingAnnouncement = announcement;
     formTitle = announcement.title;
     formContent = announcement.content;
-    formType = announcementTypes.find((t) => t.value === announcement.type) || announcementTypes[0];
+    formType = announcement.type;
     formIsActive = announcement.is_active;
     formIsDismissible = announcement.is_dismissible;
     formStartsAt = announcement.starts_at?.split('T')[0] || '';
@@ -89,7 +91,7 @@
       const data = {
         title: formTitle,
         content: formContent,
-        type: formType.value,
+        type: formType,
         is_active: formIsActive,
         is_dismissible: formIsDismissible,
         starts_at: formStartsAt || undefined,
@@ -260,9 +262,9 @@
 
       <div class="space-y-2">
         <Label>Type</Label>
-        <Select.Root bind:selected={formType}>
+        <Select.Root type="single" bind:value={formType}>
           <Select.Trigger>
-            <Select.Value placeholder="Select type" />
+            {getTypeLabel(formType)}
           </Select.Trigger>
           <Select.Content>
             {#each announcementTypes as t}

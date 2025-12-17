@@ -33,7 +33,7 @@
 
   let title = $state(proposal.title || '');
   let clientName = $state(proposal.client_name || '');
-  let clientEmail = $state(proposal.client_email || '');
+  let clientEmail = $state(proposal.sent_to_email || '');
   let clientCompany = $state(proposal.client_company || '');
   let expiresAt = $state(proposal.expires_at ? proposal.expires_at.split('T')[0] : '');
   let coverLetter = $state(proposal.cover_letter || '');
@@ -53,7 +53,7 @@
       ...proposal,
       title,
       client_name: clientName,
-      client_email: clientEmail,
+      sent_to_email: clientEmail || null,
       client_company: clientCompany || null,
       expires_at: expiresAt || null,
       cover_letter: coverLetter || null,
@@ -69,19 +69,23 @@
       {
         id: 0,
         proposal_id: proposal.id || 0,
+        section_type: 'custom',
         title: 'New Section',
         content: '',
-        order: sections.length,
+        settings: null,
+        media_urls: null,
+        display_order: sections.length,
         is_visible: true,
+        is_locked: false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      },
+      } as ProposalSection,
     ];
   }
 
   function removeSection(index: number) {
     sections = sections.filter((_: ProposalSection, i: number) => i !== index);
-    sections = sections.map((s: ProposalSection, i: number) => ({ ...s, order: i }));
+    sections = sections.map((s: ProposalSection, i: number) => ({ ...s, display_order: i }));
   }
 
   function moveSection(index: number, direction: 'up' | 'down') {

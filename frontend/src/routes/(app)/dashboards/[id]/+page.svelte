@@ -18,8 +18,6 @@
 		Settings,
 		Save,
 		RefreshCw,
-		Trash2,
-		Edit2,
 		BarChart2,
 		Hash,
 		Table,
@@ -29,6 +27,14 @@
 		LayoutDashboard,
 		Star,
 		Users,
+		Target,
+		Trophy,
+		Filter,
+		TrendingUp,
+		Clock,
+		PanelRightOpen,
+		Grid3x3,
+		Link,
 		Globe
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
@@ -38,7 +44,7 @@
 		type DashboardWidget,
 		type WidgetType,
 		type WidgetConfig,
-		getDefaultWidgetSize
+		getDefaultGridPosition
 	} from '$lib/api/dashboards';
 	import { reportsApi, type Report } from '$lib/api/reports';
 	import {
@@ -47,8 +53,18 @@
 		ChartWidget,
 		TextWidget,
 		ActivityWidget,
-		TasksWidget
+		TasksWidget,
+		GoalKPIWidget,
+		LeaderboardWidget,
+		FunnelWidget,
+		ProgressWidget,
+		RecentRecordsWidget,
+		HeatmapWidget,
+		QuickLinksWidget,
+		EmbedWidget
 	} from '$lib/components/dashboard/widgets';
+	import DashboardGrid from '$lib/components/dashboard/DashboardGrid.svelte';
+	import WidgetPalette from '$lib/components/dashboard/WidgetPalette.svelte';
 	import KPIConfigForm from '$lib/components/dashboard/KPIConfigForm.svelte';
 
 	let dashboard = $state<Dashboard | null>(null);
@@ -56,9 +72,11 @@
 	let loading = $state(true);
 	let refreshing = $state(false);
 	let editMode = $state(false);
+	let widgetPaletteOpen = $state(false);
 	let addWidgetDialogOpen = $state(false);
 	let editWidgetDialogOpen = $state(false);
 	let selectedWidget = $state<DashboardWidget | null>(null);
+	let savingLayout = $state(false);
 
 	// Widget form state
 	let widgetTitle = $state('');
@@ -70,15 +88,135 @@
 
 	const dashboardId = $derived(Number($page.params.id));
 
-	const widgetTypes: { value: WidgetType; label: string; icon: typeof BarChart2; description: string }[] = [
-		{ value: 'kpi', label: 'KPI Card', icon: Hash, description: 'Show a single metric with optional comparison' },
-		{ value: 'chart', label: 'Chart', icon: BarChart2, description: 'Visualize data with charts' },
-		{ value: 'table', label: 'Data Table', icon: Table, description: 'Display data in a table format' },
-		{ value: 'report', label: 'Report', icon: FileText, description: 'Embed a saved report' },
-		{ value: 'activity', label: 'Activity Feed', icon: Activity, description: 'Show recent activity' },
-		{ value: 'tasks', label: 'Tasks', icon: CheckSquare, description: 'Display your tasks' },
-		{ value: 'text', label: 'Text/HTML', icon: FileText, description: 'Add custom text or HTML content' }
+	const widgetTypes: {
+		value: WidgetType;
+		label: string;
+		icon: typeof BarChart2;
+		description: string;
+		category: string;
+	}[] = [
+		// Analytics
+		{
+			value: 'kpi',
+			label: 'KPI Card',
+			icon: Hash,
+			description: 'Single metric with comparison',
+			category: 'Analytics'
+		},
+		{
+			value: 'goal_kpi',
+			label: 'Goal KPI',
+			icon: Target,
+			description: 'KPI with target & progress',
+			category: 'Analytics'
+		},
+		{
+			value: 'chart',
+			label: 'Chart',
+			icon: BarChart2,
+			description: 'Visualize data with charts',
+			category: 'Analytics'
+		},
+		{
+			value: 'funnel',
+			label: 'Funnel',
+			icon: Filter,
+			description: 'Sales/conversion funnel',
+			category: 'Analytics'
+		},
+		{
+			value: 'table',
+			label: 'Data Table',
+			icon: Table,
+			description: 'Display data in table format',
+			category: 'Analytics'
+		},
+		{
+			value: 'report',
+			label: 'Report',
+			icon: FileText,
+			description: 'Embed a saved report',
+			category: 'Analytics'
+		},
+		// Performance
+		{
+			value: 'leaderboard',
+			label: 'Leaderboard',
+			icon: Trophy,
+			description: 'Ranked list of items',
+			category: 'Performance'
+		},
+		{
+			value: 'progress',
+			label: 'Progress Bar',
+			icon: TrendingUp,
+			description: 'Progress toward a goal',
+			category: 'Performance'
+		},
+		// Activity
+		{
+			value: 'activity',
+			label: 'Activity Feed',
+			icon: Activity,
+			description: 'Recent activity stream',
+			category: 'Activity'
+		},
+		{
+			value: 'tasks',
+			label: 'Tasks',
+			icon: CheckSquare,
+			description: 'Your pending tasks',
+			category: 'Activity'
+		},
+		{
+			value: 'recent_records',
+			label: 'Recent Records',
+			icon: Clock,
+			description: 'Latest module records',
+			category: 'Activity'
+		},
+		// Visualization
+		{
+			value: 'heatmap',
+			label: 'Heatmap',
+			icon: Grid3x3,
+			description: 'Activity density grid',
+			category: 'Visualization'
+		},
+		// Content
+		{
+			value: 'text',
+			label: 'Text/HTML',
+			icon: FileText,
+			description: 'Custom text or HTML',
+			category: 'Content'
+		},
+		{
+			value: 'quick_links',
+			label: 'Quick Links',
+			icon: Link,
+			description: 'Navigation shortcuts',
+			category: 'Content'
+		},
+		{
+			value: 'embed',
+			label: 'Embed',
+			icon: Globe,
+			description: 'External URL, video, or form',
+			category: 'Content'
+		}
 	];
+
+	const widgetCategories = $derived(() => {
+		const categories = new Map<string, typeof widgetTypes>();
+		widgetTypes.forEach((type) => {
+			if (!categories.has(type.category)) {
+				categories.set(type.category, []);
+			}
+			categories.get(type.category)!.push(type);
+		});
+		return categories;
+	});
 
 	onMount(async () => {
 		const urlParams = new URLSearchParams(window.location.search);
@@ -136,6 +274,39 @@
 		}
 	}
 
+	async function handleLayoutChange(
+		positions: { id: number; x: number; y: number; w: number; h: number }[]
+	) {
+		if (!dashboard || savingLayout) return;
+
+		savingLayout = true;
+		try {
+			await dashboardsApi.widgets.updatePositions(dashboard.id, positions);
+
+			// Update local state
+			if (dashboard.widgets) {
+				dashboard = {
+					...dashboard,
+					widgets: dashboard.widgets.map((w) => {
+						const pos = positions.find((p) => p.id === w.id);
+						if (pos) {
+							return {
+								...w,
+								grid_position: { ...w.grid_position, x: pos.x, y: pos.y, w: pos.w, h: pos.h }
+							};
+						}
+						return w;
+					})
+				};
+			}
+		} catch (error) {
+			console.error('Failed to save layout:', error);
+			toast.error('Failed to save widget positions');
+		} finally {
+			savingLayout = false;
+		}
+	}
+
 	async function handleAddWidget() {
 		if (!dashboard || !widgetTitle.trim()) {
 			toast.error('Please enter a widget title');
@@ -154,7 +325,7 @@
 				type: widgetType,
 				report_id: selectedReportId ? Number(selectedReportId) : undefined,
 				config,
-				size: getDefaultWidgetSize(widgetType)
+				grid_position: getDefaultGridPosition(widgetType)
 			});
 
 			dashboard = {
@@ -252,29 +423,18 @@
 		selectedWidget = null;
 	}
 
+	function handleWidgetPaletteSelect(type: WidgetType) {
+		resetWidgetForm();
+		widgetType = type;
+		const typeInfo = widgetTypes.find((t) => t.value === type);
+		widgetTitle = typeInfo?.label || '';
+		widgetPaletteOpen = false;
+		addWidgetDialogOpen = true;
+	}
+
 	function getWidgetIcon(type: WidgetType) {
 		const typeConfig = widgetTypes.find((t) => t.value === type);
 		return typeConfig?.icon || LayoutDashboard;
-	}
-
-	function getWidgetColSpan(widget: DashboardWidget): string {
-		const w = widget.size?.w || 1;
-		// Map widget logical width to CSS grid column spans
-		// Grid is: 1 col on mobile, 2 on md, 3 on lg, 4 on xl
-		if (w >= 12) return 'col-span-full'; // Full width at all sizes
-		if (w >= 6) return 'md:col-span-2 lg:col-span-3 xl:col-span-4'; // Full width on xl
-		if (w >= 4) return 'md:col-span-2 lg:col-span-2 xl:col-span-3';
-		if (w >= 3) return 'md:col-span-1 lg:col-span-2 xl:col-span-2';
-		if (w >= 2) return 'md:col-span-1 lg:col-span-1 xl:col-span-2';
-		return ''; // w:1 = single column
-	}
-
-	function getWidgetRowSpan(widget: DashboardWidget): string {
-		const h = widget.size?.h || 1;
-		if (h >= 4) return 'row-span-4';
-		if (h >= 3) return 'row-span-3';
-		if (h >= 2) return 'row-span-2';
-		return '';
 	}
 </script>
 
@@ -325,12 +485,19 @@
 			</div>
 
 			<div class="flex items-center gap-2">
+				{#if savingLayout}
+					<span class="text-sm text-muted-foreground">Saving...</span>
+				{/if}
 				<Button variant="outline" onclick={handleRefresh} disabled={refreshing}>
 					<RefreshCw class="mr-2 h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
 					Refresh
 				</Button>
 
 				{#if editMode}
+					<Button variant="outline" onclick={() => (widgetPaletteOpen = true)}>
+						<PanelRightOpen class="mr-2 h-4 w-4" />
+						Widget Palette
+					</Button>
 					<Button variant="outline" onclick={() => (addWidgetDialogOpen = true)}>
 						<Plus class="mr-2 h-4 w-4" />
 						Add Widget
@@ -355,76 +522,84 @@
 					<LayoutDashboard class="mb-4 h-12 w-12 text-muted-foreground" />
 					<h3 class="mb-2 text-lg font-medium">No widgets yet</h3>
 					<p class="mb-4 text-muted-foreground">Add widgets to visualize your data</p>
-					<Button onclick={() => { editMode = true; addWidgetDialogOpen = true; }}>
+					<Button
+						onclick={() => {
+							editMode = true;
+							addWidgetDialogOpen = true;
+						}}
+					>
 						<Plus class="mr-2 h-4 w-4" />
 						Add Widget
 					</Button>
 				</Card.Content>
 			</Card.Root>
 		{:else}
-			<div class="grid auto-rows-min gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-				{#each dashboard.widgets as widget (widget.id)}
-					{@const data = widgetData[widget.id]}
-					<div class="relative {getWidgetColSpan(widget)} {getWidgetRowSpan(widget)}">
-						{#if editMode}
-							<div class="absolute right-2 top-2 z-10 flex gap-1">
-								<Button
-									variant="secondary"
-									size="icon"
-									class="h-7 w-7"
-									onclick={() => openEditWidget(widget)}
-								>
-									<Edit2 class="h-3.5 w-3.5" />
-								</Button>
-								<Button
-									variant="secondary"
-									size="icon"
-									class="h-7 w-7 text-destructive hover:text-destructive"
-									onclick={() => handleDeleteWidget(widget)}
-								>
-									<Trash2 class="h-3.5 w-3.5" />
-								</Button>
-							</div>
-						{/if}
-
-						{#if widget.type === 'kpi'}
-							<KPIWidget title={widget.title} {data} />
-						{:else if widget.type === 'table' || widget.type === 'report'}
-							<TableWidget title={widget.title} {data} />
-						{:else if widget.type === 'chart'}
-							<ChartWidget title={widget.title} {data} chartType={data?.chart_type || 'bar'} />
-						{:else if widget.type === 'text'}
-							<TextWidget title={widget.title} content={widget.config?.content || ''} />
-						{:else if widget.type === 'activity'}
-							<ActivityWidget title={widget.title} {data} />
-						{:else if widget.type === 'tasks'}
-							<TasksWidget title={widget.title} {data} />
-						{:else}
-							<Card.Root class="h-full">
-								<Card.Header class="pb-2">
-									{@const WidgetIcon = getWidgetIcon(widget.type)}
-									<div class="flex items-center gap-2">
-										<WidgetIcon class="h-4 w-4 text-muted-foreground" />
-										<Card.Title class="text-sm font-medium">{widget.title}</Card.Title>
-									</div>
-								</Card.Header>
-								<Card.Content>
-									<p class="py-4 text-center text-sm text-muted-foreground">
-										{widget.type} widget
-									</p>
-								</Card.Content>
-							</Card.Root>
-						{/if}
-					</div>
-				{/each}
-			</div>
+			<DashboardGrid
+				widgets={dashboard.widgets}
+				{editMode}
+				onLayoutChange={handleLayoutChange}
+				onWidgetEdit={openEditWidget}
+				onWidgetDelete={handleDeleteWidget}
+			>
+				{#snippet children(widget, data)}
+					{@const widgetDataItem = widgetData[widget.id]}
+					{#if widget.type === 'kpi'}
+						<KPIWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'goal_kpi'}
+						<GoalKPIWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'table' || widget.type === 'report'}
+						<TableWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'chart'}
+						<ChartWidget
+							title={widget.title}
+							data={widgetDataItem}
+							chartType={widgetDataItem?.chart_type || 'bar'}
+						/>
+					{:else if widget.type === 'funnel'}
+						<FunnelWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'leaderboard'}
+						<LeaderboardWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'progress'}
+						<ProgressWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'recent_records'}
+						<RecentRecordsWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'heatmap'}
+						<HeatmapWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'text'}
+						<TextWidget title={widget.title} content={widget.config?.content || ''} />
+					{:else if widget.type === 'quick_links'}
+						<QuickLinksWidget title={widget.title} data={widget.config?.links ? { links: widget.config.links, columns: widget.config.columns } : widgetDataItem} />
+					{:else if widget.type === 'embed'}
+						<EmbedWidget title={widget.title} data={widgetDataItem} config={widget.config} />
+					{:else if widget.type === 'activity'}
+						<ActivityWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'tasks'}
+						<TasksWidget title={widget.title} data={widgetDataItem} />
+					{:else}
+						<Card.Root class="h-full">
+							<Card.Header class="pb-2">
+								{@const WidgetIcon = getWidgetIcon(widget.type)}
+								<div class="flex items-center gap-2">
+									<WidgetIcon class="h-4 w-4 text-muted-foreground" />
+									<Card.Title class="text-sm font-medium">{widget.title}</Card.Title>
+								</div>
+							</Card.Header>
+							<Card.Content>
+								<p class="py-4 text-center text-sm text-muted-foreground">
+									{widget.type} widget
+								</p>
+							</Card.Content>
+						</Card.Root>
+					{/if}
+				{/snippet}
+			</DashboardGrid>
 		{/if}
 	{/if}
 </div>
 
 <!-- Add Widget Dialog -->
 <Dialog.Root bind:open={addWidgetDialogOpen}>
-	<Dialog.Content class="max-w-lg">
+	<Dialog.Content class="max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>Add Widget</Dialog.Title>
 			<Dialog.Description>Choose a widget type and configure it</Dialog.Description>
@@ -442,30 +617,49 @@
 					<Input placeholder="Enter widget title" bind:value={widgetTitle} />
 				</div>
 
-				<div class="space-y-2">
-					<Label>Widget Type</Label>
-					<div class="grid grid-cols-2 gap-2">
-						{#each widgetTypes as type}
-							{@const Icon = type.icon}
-							<button
-								type="button"
-								class="flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted {widgetType === type.value ? 'border-primary bg-primary/5' : ''}"
-								onclick={() => (widgetType = type.value)}
-							>
-								<Icon class="mt-0.5 h-5 w-5 shrink-0" />
-								<div>
-									<div class="text-sm font-medium">{type.label}</div>
-									<div class="text-xs text-muted-foreground">{type.description}</div>
-								</div>
-							</button>
-						{/each}
-					</div>
+				<div class="space-y-4">
+					{#each [...widgetCategories().entries()] as [category, types]}
+						<div class="space-y-2">
+							<Label class="text-xs uppercase text-muted-foreground">{category}</Label>
+							<div class="grid grid-cols-3 gap-2">
+								{#each types as type}
+									{@const Icon = type.icon}
+									<button
+										type="button"
+										class="flex items-start gap-2 rounded-lg border p-3 text-left transition-colors hover:bg-muted {widgetType ===
+										type.value
+											? 'border-primary bg-primary/5'
+											: ''}"
+										onclick={() => (widgetType = type.value)}
+									>
+										<Icon class="mt-0.5 h-4 w-4 shrink-0" />
+										<div>
+											<div class="text-sm font-medium">{type.label}</div>
+											<div class="text-xs text-muted-foreground">{type.description}</div>
+										</div>
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/each}
 				</div>
 			</Tabs.Content>
 
 			<Tabs.Content value="config" class="space-y-4 pt-4">
-				{#if widgetType === 'kpi'}
+				{#if widgetType === 'kpi' || widgetType === 'goal_kpi'}
 					<KPIConfigForm config={widgetConfig} onUpdate={(c) => (widgetConfig = c)} />
+					{#if widgetType === 'goal_kpi'}
+						<div class="space-y-2">
+							<Label>Target Value</Label>
+							<Input
+								type="number"
+								placeholder="Enter target value"
+								value={widgetConfig.target || ''}
+								oninput={(e) =>
+									(widgetConfig = { ...widgetConfig, target: Number(e.currentTarget.value) })}
+							/>
+						</div>
+					{/if}
 				{:else if widgetType === 'report' || widgetType === 'chart' || widgetType === 'table'}
 					<div class="space-y-2">
 						<Label>Select Report</Label>
@@ -493,9 +687,30 @@
 							bind:value={textContent}
 							rows={6}
 						/>
-						<p class="text-xs text-muted-foreground">
-							You can use basic HTML for formatting
-						</p>
+						<p class="text-xs text-muted-foreground">You can use basic HTML for formatting</p>
+					</div>
+				{:else if widgetType === 'progress'}
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div class="space-y-2">
+							<Label>Current Value</Label>
+							<Input
+								type="number"
+								placeholder="0"
+								value={widgetConfig.current_value || ''}
+								oninput={(e) =>
+									(widgetConfig = { ...widgetConfig, current_value: Number(e.currentTarget.value) })}
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label>Goal Value</Label>
+							<Input
+								type="number"
+								placeholder="100"
+								value={widgetConfig.goal_value || ''}
+								oninput={(e) =>
+									(widgetConfig = { ...widgetConfig, goal_value: Number(e.currentTarget.value) })}
+							/>
+						</div>
 					</div>
 				{:else}
 					<p class="py-4 text-center text-sm text-muted-foreground">
@@ -528,22 +743,25 @@
 
 			<div class="space-y-2">
 				<Label>Widget Type</Label>
-				<div class="grid grid-cols-3 gap-2">
+				<div class="grid grid-cols-4 gap-2">
 					{#each widgetTypes as type}
 						{@const Icon = type.icon}
 						<button
 							type="button"
-							class="flex flex-col items-center gap-1 rounded-lg border p-3 text-center transition-colors hover:bg-muted {widgetType === type.value ? 'border-primary bg-primary/5' : ''}"
+							class="flex flex-col items-center gap-1 rounded-lg border p-2 text-center transition-colors hover:bg-muted {widgetType ===
+							type.value
+								? 'border-primary bg-primary/5'
+								: ''}"
 							onclick={() => (widgetType = type.value)}
 						>
-							<Icon class="h-5 w-5" />
-							<span class="text-xs">{type.label}</span>
+							<Icon class="h-4 w-4" />
+							<span class="text-[10px]">{type.label}</span>
 						</button>
 					{/each}
 				</div>
 			</div>
 
-			{#if widgetType === 'kpi'}
+			{#if widgetType === 'kpi' || widgetType === 'goal_kpi'}
 				<KPIConfigForm config={widgetConfig} onUpdate={(c) => (widgetConfig = c)} />
 			{:else if widgetType === 'report' || widgetType === 'chart' || widgetType === 'table'}
 				<div class="space-y-2">
@@ -575,3 +793,10 @@
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
+
+<!-- Widget Palette Sidebar -->
+<WidgetPalette
+	open={widgetPaletteOpen}
+	onClose={() => (widgetPaletteOpen = false)}
+	onWidgetSelect={handleWidgetPaletteSelect}
+/>

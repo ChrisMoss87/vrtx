@@ -2,9 +2,29 @@ import { apiClient } from './client';
 import type { Report, ReportResult } from './reports';
 
 // Types
-export type WidgetType = 'report' | 'kpi' | 'chart' | 'table' | 'activity' | 'pipeline' | 'tasks' | 'calendar' | 'text' | 'iframe';
+export type WidgetType =
+	| 'report'
+	| 'kpi'
+	| 'chart'
+	| 'table'
+	| 'activity'
+	| 'pipeline'
+	| 'tasks'
+	| 'calendar'
+	| 'text'
+	| 'iframe'
+	| 'goal_kpi'
+	| 'leaderboard'
+	| 'funnel'
+	| 'progress'
+	| 'recent_records'
+	| 'heatmap'
+	| 'quick_links'
+	| 'embed';
 
-export interface WidgetSize {
+export interface GridPosition {
+	x: number;
+	y: number;
 	w: number;
 	h: number;
 	minW?: number;
@@ -30,6 +50,39 @@ export interface WidgetConfig {
 	content?: string;
 	// IFrame widget
 	url?: string;
+	// Goal KPI widget
+	target?: number;
+	target_label?: string;
+	// Leaderboard widget
+	rank_field?: string;
+	display_fields?: string[];
+	// Funnel widget
+	stage_field?: string;
+	value_field?: string;
+	// Progress widget
+	current_value?: number;
+	goal_value?: number;
+	// Recent records widget
+	fields_to_display?: string[];
+	// Heatmap widget
+	x_field?: string;
+	y_field?: string;
+	value_aggregation?: string;
+	// Quick links widget
+	links?: {
+		id: string;
+		label: string;
+		url: string;
+		icon?: string;
+		description?: string;
+		external?: boolean;
+		color?: string;
+	}[];
+	columns?: 1 | 2 | 3;
+	// Embed widget
+	embed_type?: 'iframe' | 'video' | 'image';
+	allow_fullscreen?: boolean;
+	aspect_ratio?: '16:9' | '4:3' | '1:1' | 'auto';
 	[key: string]: any;
 }
 
@@ -61,8 +114,7 @@ export interface DashboardWidget {
 	title: string;
 	type: WidgetType;
 	config: WidgetConfig;
-	position: number;
-	size: WidgetSize;
+	grid_position: GridPosition;
 	refresh_interval: number;
 	created_at: string;
 	updated_at: string;
@@ -108,8 +160,7 @@ export interface CreateWidgetRequest {
 	type: WidgetType;
 	report_id?: number;
 	config?: WidgetConfig;
-	size?: WidgetSize;
-	position?: number;
+	grid_position?: GridPosition;
 }
 
 export interface UpdateWidgetRequest extends Partial<CreateWidgetRequest> {
@@ -223,10 +274,13 @@ export const dashboardsApi = {
 		},
 
 		/**
-		 * Reorder widgets
+		 * Update widget positions (batch update for drag/drop/resize)
 		 */
-		async reorder(dashboardId: number, widgets: { id: number; position: number }[]): Promise<void> {
-			await apiClient.post(`/dashboards/${dashboardId}/widgets/reorder`, { widgets });
+		async updatePositions(
+			dashboardId: number,
+			widgets: { id: number; x: number; y: number; w: number; h: number }[]
+		): Promise<void> {
+			await apiClient.post(`/dashboards/${dashboardId}/widgets/positions`, { widgets });
 		},
 
 		/**
@@ -251,27 +305,125 @@ export function getWidgetIcon(type: WidgetType): string {
 		tasks: 'check-square',
 		calendar: 'calendar',
 		text: 'file-text',
-		iframe: 'globe'
+		iframe: 'globe',
+		funnel: 'filter',
+		goal_kpi: 'target',
+		leaderboard: 'trophy',
+		progress: 'trending-up',
+		recent_records: 'list',
+		heatmap: 'grid-3x3',
+		quick_links: 'link',
+		embed: 'globe'
 	};
 	return icons[type] || 'square';
 }
 
-export function getDefaultWidgetSize(type: WidgetType): WidgetSize {
-	const sizes: Record<WidgetType, WidgetSize> = {
-		report: { w: 6, h: 6 },
-		kpi: { w: 3, h: 2, minW: 2, minH: 2 },
-		chart: { w: 6, h: 4, minW: 3, minH: 3 },
-		table: { w: 12, h: 6 },
-		activity: { w: 4, h: 6 },
-		pipeline: { w: 12, h: 4 },
-		tasks: { w: 4, h: 4 },
-		calendar: { w: 4, h: 4 },
-		text: { w: 4, h: 2, minW: 2, minH: 1 },
-		iframe: { w: 6, h: 4, minW: 3, minH: 2 }
+export function getDefaultGridPosition(type: WidgetType): GridPosition {
+	const positions: Record<WidgetType, GridPosition> = {
+		report: { x: 0, y: 0, w: 6, h: 6 },
+		kpi: { x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+		chart: { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+		table: { x: 0, y: 0, w: 12, h: 6, minW: 6, minH: 4 },
+		activity: { x: 0, y: 0, w: 4, h: 6, minW: 3, minH: 4 },
+		pipeline: { x: 0, y: 0, w: 12, h: 4, minW: 6, minH: 3 },
+		tasks: { x: 0, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
+		calendar: { x: 0, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
+		text: { x: 0, y: 0, w: 4, h: 2, minW: 2, minH: 1 },
+		iframe: { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 2 },
+		// Phase 2 widget types
+		goal_kpi: { x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+		leaderboard: { x: 0, y: 0, w: 4, h: 6, minW: 3, minH: 4 },
+		funnel: { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+		progress: { x: 0, y: 0, w: 4, h: 2, minW: 3, minH: 2 },
+		recent_records: { x: 0, y: 0, w: 4, h: 6, minW: 3, minH: 4 },
+		heatmap: { x: 0, y: 0, w: 6, h: 5, minW: 4, minH: 4 },
+		quick_links: { x: 0, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
+		embed: { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 }
 	};
-	return sizes[type] || { w: 4, h: 4 };
+	return positions[type] || { x: 0, y: 0, w: 4, h: 4 };
 }
 
 export function generateWidgetId(): string {
 	return `widget-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
+
+// Dashboard Templates
+
+export interface DashboardTemplateWidget {
+	id: number;
+	title: string;
+	type: WidgetType;
+	config: WidgetConfig;
+	grid_position: GridPosition;
+	refresh_interval: number;
+}
+
+export interface DashboardTemplate {
+	id: number;
+	name: string;
+	slug: string;
+	description: string | null;
+	category: string;
+	thumbnail: string | null;
+	is_active: boolean;
+	sort_order: number;
+	widgets_count: number;
+	widgets?: DashboardTemplateWidget[];
+	created_at: string | null;
+	updated_at: string | null;
+}
+
+export interface DashboardTemplateCategory {
+	value: string;
+	label: string;
+}
+
+export interface CreateDashboardFromTemplateRequest {
+	name: string;
+	description?: string;
+}
+
+export interface CreateDashboardFromTemplateResponse {
+	id: number;
+	name: string;
+	description: string | null;
+	widgets_count: number;
+}
+
+export const dashboardTemplatesApi = {
+	/**
+	 * List all active dashboard templates
+	 */
+	async list(category?: string): Promise<DashboardTemplate[]> {
+		const params = category ? `?category=${encodeURIComponent(category)}` : '';
+		const response = await apiClient.get<{ data: DashboardTemplate[] }>(`/dashboard-templates${params}`);
+		return response.data;
+	},
+
+	/**
+	 * Get template categories
+	 */
+	async getCategories(): Promise<DashboardTemplateCategory[]> {
+		const response = await apiClient.get<{ data: DashboardTemplateCategory[] }>('/dashboard-templates/categories');
+		return response.data;
+	},
+
+	/**
+	 * Get a single template with widgets
+	 */
+	async get(id: number): Promise<DashboardTemplate> {
+		const response = await apiClient.get<{ data: DashboardTemplate }>(`/dashboard-templates/${id}`);
+		return response.data;
+	},
+
+	/**
+	 * Create a dashboard from a template
+	 */
+	async createDashboard(templateId: number, data: CreateDashboardFromTemplateRequest): Promise<CreateDashboardFromTemplateResponse> {
+		const response = await apiClient.post<{ data: CreateDashboardFromTemplateResponse; message: string }>(
+			`/dashboard-templates/${templateId}/create-dashboard`,
+			data
+		);
+		return response.data;
+	}
+};

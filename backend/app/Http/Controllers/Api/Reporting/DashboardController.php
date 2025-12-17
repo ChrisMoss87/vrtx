@@ -194,20 +194,28 @@ class DashboardController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'type' => 'required|string|in:report,kpi,chart,table,activity,pipeline,tasks,calendar,text,iframe',
+            'type' => 'required|string|in:report,kpi,chart,table,activity,pipeline,tasks,calendar,text,iframe,goal_kpi,leaderboard,funnel,progress,recent_records',
             'report_id' => 'nullable|integer|exists:reports,id',
             'config' => 'array',
-            'size' => 'array',
-            'position' => 'integer|min:0',
+            'grid_position' => 'array',
+            'grid_position.x' => 'integer|min:0',
+            'grid_position.y' => 'integer|min:0',
+            'grid_position.w' => 'integer|min:1|max:12',
+            'grid_position.h' => 'integer|min:1',
         ]);
 
-        // Get max position
-        $maxPosition = $dashboard->widgets()->max('position') ?? -1;
+        // Calculate auto-position if not provided (find next available spot)
+        if (!isset($validated['grid_position'])) {
+            $maxY = $dashboard->widgets()->max(\DB::raw("(grid_position->>'y')::int")) ?? -1;
+            $validated['grid_position'] = [
+                'x' => 0,
+                'y' => max(0, $maxY + 4),
+                'w' => 6,
+                'h' => 4,
+            ];
+        }
 
-        $widget = $dashboard->widgets()->create([
-            ...$validated,
-            'position' => $validated['position'] ?? ($maxPosition + 1),
-        ]);
+        $widget = $dashboard->widgets()->create($validated);
 
         return response()->json([
             'message' => 'Widget added successfully',
@@ -229,11 +237,14 @@ class DashboardController extends Controller
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
-            'type' => 'sometimes|required|string|in:report,kpi,chart,table,activity,pipeline,tasks,calendar,text,iframe',
+            'type' => 'sometimes|required|string|in:report,kpi,chart,table,activity,pipeline,tasks,calendar,text,iframe,goal_kpi,leaderboard,funnel,progress,recent_records',
             'report_id' => 'nullable|integer|exists:reports,id',
             'config' => 'array',
-            'size' => 'array',
-            'position' => 'integer|min:0',
+            'grid_position' => 'array',
+            'grid_position.x' => 'integer|min:0',
+            'grid_position.y' => 'integer|min:0',
+            'grid_position.w' => 'integer|min:1|max:12',
+            'grid_position.h' => 'integer|min:1',
             'refresh_interval' => 'integer|min:0',
         ]);
 
@@ -265,26 +276,36 @@ class DashboardController extends Controller
     }
 
     /**
-     * Reorder widgets.
+     * Update widget grid positions (batch update for drag/drop/resize).
      */
-    public function reorderWidgets(Request $request, Dashboard $dashboard): JsonResponse
+    public function updateWidgetPositions(Request $request, Dashboard $dashboard): JsonResponse
     {
         $this->authorize('update', $dashboard);
 
         $validated = $request->validate([
             'widgets' => 'required|array',
             'widgets.*.id' => 'required|integer|exists:dashboard_widgets,id',
-            'widgets.*.position' => 'required|integer|min:0',
+            'widgets.*.x' => 'required|integer|min:0',
+            'widgets.*.y' => 'required|integer|min:0',
+            'widgets.*.w' => 'required|integer|min:1|max:12',
+            'widgets.*.h' => 'required|integer|min:1',
         ]);
 
         foreach ($validated['widgets'] as $item) {
             DashboardWidget::where('id', $item['id'])
                 ->where('dashboard_id', $dashboard->id)
-                ->update(['position' => $item['position']]);
+                ->update([
+                    'grid_position' => [
+                        'x' => $item['x'],
+                        'y' => $item['y'],
+                        'w' => $item['w'],
+                        'h' => $item['h'],
+                    ],
+                ]);
         }
 
         return response()->json([
-            'message' => 'Widgets reordered successfully',
+            'message' => 'Widget positions updated successfully',
         ]);
     }
 

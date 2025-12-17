@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
 	import { Hash, TrendingUp, TrendingDown, Minus } from 'lucide-svelte';
+	import Sparkline from './Sparkline.svelte';
 
 	interface Props {
 		title: string;
@@ -9,11 +10,25 @@
 			label?: string;
 			change_percent?: number | null;
 			change_type?: 'increase' | 'decrease' | 'no_change' | null;
+			trend_data?: number[];
+			comparison_period?: string;
 		} | null;
 		loading?: boolean;
 	}
 
 	let { title, data, loading = false }: Props = $props();
+
+	const sparklineColor = $derived(() => {
+		if (!data?.change_type) return '#6b7280';
+		switch (data.change_type) {
+			case 'increase':
+				return '#16a34a';
+			case 'decrease':
+				return '#dc2626';
+			default:
+				return '#6b7280';
+		}
+	});
 
 	function formatValue(value: number | string): string {
 		if (typeof value === 'number') {
@@ -66,10 +81,23 @@
 				<div class="mt-2 h-4 w-16 rounded bg-muted"></div>
 			</div>
 		{:else}
-			<div class="text-center">
+			<div class="flex flex-col items-center">
 				<div class="text-3xl font-bold">
 					{formatValue(data?.value ?? 0)}
 				</div>
+
+				{#if data?.trend_data && data.trend_data.length >= 2}
+					<div class="mt-2">
+						<Sparkline
+							data={data.trend_data}
+							width={100}
+							height={24}
+							strokeColor={sparklineColor()}
+							showArea={true}
+						/>
+					</div>
+				{/if}
+
 				{#if data?.change_percent !== null && data?.change_percent !== undefined}
 					{@const Icon = changeIcon()}
 					<div class="mt-1 flex items-center justify-center gap-1 text-sm {changeColor()}">
@@ -79,6 +107,9 @@
 						<span>
 							{data.change_percent >= 0 ? '+' : ''}{data.change_percent.toFixed(1)}%
 						</span>
+						{#if data.comparison_period}
+							<span class="text-xs text-muted-foreground">vs {data.comparison_period}</span>
+						{/if}
 					</div>
 				{/if}
 			</div>

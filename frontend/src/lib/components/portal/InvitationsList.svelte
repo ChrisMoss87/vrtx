@@ -21,8 +21,8 @@
         status: statusFilter,
         page: currentPage,
       });
-      invitations = response.data.data;
-      totalPages = response.data.last_page;
+      invitations = response.data;
+      totalPages = response.last_page;
     } catch (error) {
       console.error('Failed to load invitations:', error);
     } finally {

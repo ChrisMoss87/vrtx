@@ -146,7 +146,7 @@
               </div>
               <div>
                 <p class="text-sm text-muted-foreground">Client Email</p>
-                <p class="font-medium">{proposal.client_email}</p>
+                <p class="font-medium">{proposal.sent_to_email || '-'}</p>
               </div>
               {#if proposal.client_company}
                 <div>

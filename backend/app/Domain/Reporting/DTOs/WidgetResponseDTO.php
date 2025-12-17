@@ -19,8 +19,7 @@ final readonly class WidgetResponseDTO implements JsonSerializable
         public string $title,
         public string $type,
         public array $config,
-        public int $position,
-        public array $size,
+        public array $gridPosition,
         public int $refreshInterval,
     ) {}
 
@@ -36,8 +35,7 @@ final readonly class WidgetResponseDTO implements JsonSerializable
             title: $widget->title(),
             type: $widget->type()->value,
             config: $widget->config(),
-            position: $widget->position(),
-            size: $widget->size(),
+            gridPosition: $widget->gridPosition(),
             refreshInterval: $widget->refreshInterval(),
         );
     }
@@ -51,8 +49,7 @@ final readonly class WidgetResponseDTO implements JsonSerializable
             'title' => $this->title,
             'type' => $this->type,
             'config' => $this->config,
-            'position' => $this->position,
-            'size' => $this->size,
+            'grid_position' => $this->gridPosition,
             'refresh_interval' => $this->refreshInterval,
         ];
     }

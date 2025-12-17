@@ -206,7 +206,7 @@ class EloquentReportRepository implements ReportRepositoryInterface
             'grouping' => $report->grouping(),
             'aggregations' => $report->aggregations(),
             'sorting' => $report->sorting(),
-            'date_range' => $report->dateRange()?->toArray(),
+            'date_range' => $report->dateRange()?->toArray() ?? [],
             'schedule' => $report->schedule(),
             'last_run_at' => $report->lastRunAt()?->toDateTimeString(),
             'cached_result' => $report->cachedResult(),

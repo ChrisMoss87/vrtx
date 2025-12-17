@@ -16,7 +16,7 @@
   let { open = $bindable(), onClose, onInvited }: Props = $props();
 
   let email = $state('');
-  let role = $state<{ value: string; label: string }>({ value: 'member', label: 'Member' });
+  let role = $state('member');
   let accountId = $state<number | undefined>();
   let contactId = $state<number | undefined>();
   let loading = $state(false);
@@ -27,6 +27,8 @@
     { value: 'member', label: 'Member' },
     { value: 'viewer', label: 'Viewer' },
   ];
+
+  const getRoleLabel = (value: string) => roles.find(r => r.value === value)?.label ?? value;
 
   async function handleSubmit() {
     if (!email) {
@@ -40,14 +42,14 @@
     try {
       await portalAdminApi.createInvitation({
         email,
-        role: role.value,
+        role: role,
         account_id: accountId,
         contact_id: contactId,
       });
 
       // Reset form
       email = '';
-      role = { value: 'member', label: 'Member' };
+      role = 'member';
       accountId = undefined;
       contactId = undefined;
 
@@ -100,22 +102,22 @@
 
       <div class="space-y-2">
         <Label>Role</Label>
-        <Select.Root bind:selected={role}>
+        <Select.Root type="single" bind:value={role}>
           <Select.Trigger>
-            <Select.Value placeholder="Select a role" />
+            {getRoleLabel(role)}
           </Select.Trigger>
           <Select.Content>
             {#each roles as r}
-              <Select.Item value={r.value} label={r.label}>
+              <Select.Item value={r.value}>
                 {r.label}
               </Select.Item>
             {/each}
           </Select.Content>
         </Select.Root>
         <p class="text-xs text-muted-foreground">
-          {#if role.value === 'admin'}
+          {#if role === 'admin'}
             Full access to portal features and can manage other users
-          {:else if role.value === 'member'}
+          {:else if role === 'member'}
             Can view deals, invoices, quotes, and documents
           {:else}
             Read-only access to basic information

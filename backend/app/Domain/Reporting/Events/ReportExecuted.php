@@ -5,23 +5,23 @@ declare(strict_types=1);
 namespace App\Domain\Reporting\Events;
 
 use App\Domain\Shared\Events\DomainEvent;
-use DateTimeImmutable;
 
 /**
  * Domain event fired when a report is executed.
  */
-final readonly class ReportExecuted implements DomainEvent
+final class ReportExecuted extends DomainEvent
 {
     public function __construct(
-        private int $reportId,
-        private int $moduleId,
-        private string $reportType,
-        private bool $usedCache,
-        private int $resultCount,
-        private float $executionTime,
-        private ?int $userId = null,
-        private ?DateTimeImmutable $occurredAt = null,
-    ) {}
+        private readonly int $reportId,
+        private readonly int $moduleId,
+        private readonly string $reportType,
+        private readonly bool $usedCache,
+        private readonly int $resultCount,
+        private readonly float $executionTime,
+        private readonly ?int $userId = null,
+    ) {
+        parent::__construct();
+    }
 
     public function reportId(): int
     {
@@ -58,12 +58,17 @@ final readonly class ReportExecuted implements DomainEvent
         return $this->userId;
     }
 
-    public function occurredAt(): DateTimeImmutable
+    public function aggregateId(): int|string
     {
-        return $this->occurredAt ?? new DateTimeImmutable();
+        return $this->reportId;
     }
 
-    public function toArray(): array
+    public function aggregateType(): string
+    {
+        return 'Report';
+    }
+
+    public function toPayload(): array
     {
         return [
             'report_id' => $this->reportId,
@@ -73,7 +78,6 @@ final readonly class ReportExecuted implements DomainEvent
             'result_count' => $this->resultCount,
             'execution_time' => $this->executionTime,
             'user_id' => $this->userId,
-            'occurred_at' => $this->occurredAt()->format('Y-m-d H:i:s'),
         ];
     }
 }

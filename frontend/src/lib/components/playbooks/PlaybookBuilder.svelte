@@ -470,91 +470,83 @@
 
 <!-- Task Edit Modal would go here -->
 {#if showTaskForm}
+  {@const formTask = editingTask || {} as Partial<PlaybookTask>}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
     <Card.Root class="w-full max-w-lg">
       <Card.Header>
         <Card.Title>{editingTask ? 'Edit Task' : 'Add Task'}</Card.Title>
       </Card.Header>
       <Card.Content>
-        <TaskForm
-          task={editingTask}
-          onSave={saveTask}
-          onCancel={() => { showTaskForm = false; editingTask = null; }}
-        />
+        <form
+          class="space-y-4"
+          onsubmit={(e) => {
+            e.preventDefault();
+            const form = e.currentTarget as HTMLFormElement;
+            const formData = new FormData(form);
+            saveTask({
+              title: formData.get('title') as string,
+              description: formData.get('description') as string || undefined,
+              due_days: formData.get('due_days') ? parseInt(formData.get('due_days') as string) : undefined,
+              is_required: formData.get('is_required') === 'on',
+              is_milestone: formData.get('is_milestone') === 'on',
+            });
+          }}
+        >
+          <div class="space-y-2">
+            <Label for="title">Task Title *</Label>
+            <Input
+              id="title"
+              name="title"
+              value={formTask.title || ''}
+              placeholder="What needs to be done?"
+              required
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="description">Description</Label>
+            <Textarea
+              id="description"
+              name="description"
+              value={formTask.description || ''}
+              placeholder="Additional details..."
+              rows={3}
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="due_days">Due (days from start)</Label>
+            <Input
+              id="due_days"
+              name="due_days"
+              type="number"
+              min="0"
+              value={formTask.due_days?.toString() || ''}
+              placeholder="e.g., 7"
+            />
+          </div>
+
+          <div class="flex items-center gap-6">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="is_required" checked={formTask.is_required} />
+              <span class="text-sm">Required</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="is_milestone" checked={formTask.is_milestone} />
+              <span class="text-sm">Milestone</span>
+            </label>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="outline" onclick={() => { showTaskForm = false; editingTask = null; }}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              {editingTask ? 'Update Task' : 'Add Task'}
+            </Button>
+          </div>
+        </form>
       </Card.Content>
     </Card.Root>
   </div>
 {/if}
-
-{#snippet TaskForm({ task, onSave, onCancel }: { task: PlaybookTask | null; onSave: (data: Partial<PlaybookTask>) => void; onCancel: () => void })}
-  {@const formTask = task || {} as Partial<PlaybookTask>}
-  <form
-    class="space-y-4"
-    onsubmit={(e) => {
-      e.preventDefault();
-      const form = e.currentTarget as HTMLFormElement;
-      const formData = new FormData(form);
-      onSave({
-        title: formData.get('title') as string,
-        description: formData.get('description') as string || undefined,
-        due_days: formData.get('due_days') ? parseInt(formData.get('due_days') as string) : undefined,
-        is_required: formData.get('is_required') === 'on',
-        is_milestone: formData.get('is_milestone') === 'on',
-      });
-    }}
-  >
-    <div class="space-y-2">
-      <Label for="title">Task Title *</Label>
-      <Input
-        id="title"
-        name="title"
-        value={formTask.title || ''}
-        placeholder="What needs to be done?"
-        required
-      />
-    </div>
-
-    <div class="space-y-2">
-      <Label for="description">Description</Label>
-      <Textarea
-        id="description"
-        name="description"
-        value={formTask.description || ''}
-        placeholder="Additional details..."
-        rows={3}
-      />
-    </div>
-
-    <div class="space-y-2">
-      <Label for="due_days">Due (days from start)</Label>
-      <Input
-        id="due_days"
-        name="due_days"
-        type="number"
-        min="0"
-        value={formTask.due_days?.toString() || ''}
-        placeholder="e.g., 7"
-      />
-    </div>
-
-    <div class="flex items-center gap-6">
-      <label class="flex items-center gap-2">
-        <input type="checkbox" name="is_required" checked={formTask.is_required} />
-        <span class="text-sm">Required</span>
-      </label>
-      <label class="flex items-center gap-2">
-        <input type="checkbox" name="is_milestone" checked={formTask.is_milestone} />
-        <span class="text-sm">Milestone</span>
-      </label>
-    </div>
-
-    <div class="flex justify-end gap-2 pt-4">
-      <Button type="button" variant="outline" onclick={onCancel}>
-        Cancel
-      </Button>
-      <Button type="submit">
-        {task ? 'Update Task' : 'Add Task'}
-      </Button>
-    </div>
-  </form>
-{/snippet}

@@ -151,7 +151,7 @@
         </p>
         <textarea
           bind:value={settings.custom_css}
-          placeholder=".proposal-header { ... }"
+          placeholder={".proposal-header { ... }"}
           class="w-full h-32 px-3 py-2 text-sm font-mono bg-background border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring"
         ></textarea>
       </div>

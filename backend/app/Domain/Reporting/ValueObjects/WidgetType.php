@@ -19,6 +19,15 @@ enum WidgetType: string
     case CALENDAR = 'calendar';
     case TEXT = 'text';
     case IFRAME = 'iframe';
+    // Phase 2 widget types for enhanced dashboards
+    case GOAL_KPI = 'goal_kpi';
+    case LEADERBOARD = 'leaderboard';
+    case FUNNEL = 'funnel';
+    case PROGRESS = 'progress';
+    case RECENT_RECORDS = 'recent_records';
+    case HEATMAP = 'heatmap';
+    case QUICK_LINKS = 'quick_links';
+    case EMBED = 'embed';
 
     /**
      * Get human-readable label for this widget type.
@@ -36,6 +45,14 @@ enum WidgetType: string
             self::CALENDAR => 'Calendar',
             self::TEXT => 'Text/Markdown',
             self::IFRAME => 'Embed URL',
+            self::GOAL_KPI => 'Goal KPI',
+            self::LEADERBOARD => 'Leaderboard',
+            self::FUNNEL => 'Funnel Chart',
+            self::PROGRESS => 'Progress Bar',
+            self::RECENT_RECORDS => 'Recent Records',
+            self::HEATMAP => 'Heatmap',
+            self::QUICK_LINKS => 'Quick Links',
+            self::EMBED => 'Embed',
         };
     }
 
@@ -55,6 +72,14 @@ enum WidgetType: string
             self::CALENDAR => 'Display calendar events',
             self::TEXT => 'Display custom text or markdown',
             self::IFRAME => 'Embed external content via iframe',
+            self::GOAL_KPI => 'KPI with target goal and progress indicator',
+            self::LEADERBOARD => 'Ranked list of users, records, or items',
+            self::FUNNEL => 'Sales or conversion funnel visualization',
+            self::PROGRESS => 'Progress bar toward a goal',
+            self::RECENT_RECORDS => 'Latest records from a module',
+            self::HEATMAP => 'Activity density grid visualization',
+            self::QUICK_LINKS => 'Navigation shortcuts panel',
+            self::EMBED => 'External URL, video, or form embed',
         };
     }
 
@@ -64,9 +89,11 @@ enum WidgetType: string
     public function category(): string
     {
         return match ($this) {
-            self::REPORT, self::KPI, self::CHART, self::TABLE => 'analytics',
-            self::ACTIVITY, self::PIPELINE, self::TASKS, self::CALENDAR => 'activity',
-            self::TEXT, self::IFRAME => 'content',
+            self::REPORT, self::KPI, self::CHART, self::TABLE, self::GOAL_KPI, self::FUNNEL => 'analytics',
+            self::ACTIVITY, self::PIPELINE, self::TASKS, self::CALENDAR, self::RECENT_RECORDS => 'activity',
+            self::TEXT, self::IFRAME, self::QUICK_LINKS, self::EMBED => 'content',
+            self::LEADERBOARD, self::PROGRESS => 'performance',
+            self::HEATMAP => 'visualization',
         };
     }
 
@@ -88,7 +115,28 @@ enum WidgetType: string
     {
         return match ($this) {
             self::REPORT, self::KPI, self::CHART, self::TABLE, self::ACTIVITY, self::PIPELINE, self::TASKS => true,
-            self::CALENDAR, self::TEXT, self::IFRAME => false,
+            self::GOAL_KPI, self::LEADERBOARD, self::FUNNEL, self::PROGRESS, self::RECENT_RECORDS, self::HEATMAP => true,
+            self::CALENDAR, self::TEXT, self::IFRAME, self::QUICK_LINKS, self::EMBED => false,
+        };
+    }
+
+    /**
+     * Get default grid size for this widget type.
+     */
+    public function defaultGridPosition(): array
+    {
+        return match ($this) {
+            self::KPI, self::GOAL_KPI => ['x' => 0, 'y' => 0, 'w' => 3, 'h' => 2, 'minW' => 2, 'minH' => 2],
+            self::PROGRESS => ['x' => 0, 'y' => 0, 'w' => 4, 'h' => 2, 'minW' => 3, 'minH' => 2],
+            self::CHART, self::FUNNEL, self::EMBED => ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4, 'minW' => 3, 'minH' => 3],
+            self::TABLE, self::PIPELINE => ['x' => 0, 'y' => 0, 'w' => 12, 'h' => 6, 'minW' => 6, 'minH' => 4],
+            self::LEADERBOARD, self::RECENT_RECORDS => ['x' => 0, 'y' => 0, 'w' => 4, 'h' => 6, 'minW' => 3, 'minH' => 4],
+            self::ACTIVITY, self::TASKS, self::QUICK_LINKS => ['x' => 0, 'y' => 0, 'w' => 4, 'h' => 4, 'minW' => 3, 'minH' => 3],
+            self::TEXT => ['x' => 0, 'y' => 0, 'w' => 4, 'h' => 2, 'minW' => 2, 'minH' => 1],
+            self::IFRAME => ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4, 'minW' => 3, 'minH' => 2],
+            self::CALENDAR => ['x' => 0, 'y' => 0, 'w' => 4, 'h' => 4, 'minW' => 3, 'minH' => 3],
+            self::HEATMAP => ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 5, 'minW' => 4, 'minH' => 4],
+            default => ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4],
         };
     }
 

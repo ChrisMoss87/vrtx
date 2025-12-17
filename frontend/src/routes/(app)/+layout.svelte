@@ -5,25 +5,14 @@
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import favicon from '$lib/assets/favicon.svg';
-	import { Separator } from '$lib/components/ui/separator';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import CommandPalette from '$lib/components/command-palette/CommandPalette.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { authApi } from '$lib/api/auth';
 	import { license } from '$lib/stores/license';
-	import {
-		Provider as SidebarProvider,
-		Inset as SidebarInset,
-		Trigger as SidebarTrigger
-	} from '$lib/components/ui/sidebar';
-	import {
-		Root as BreadcrumbRoot,
-		List as BreadcrumbList,
-		Link as BreadcrumbLink,
-		Separator as BreadcrumbSeparator,
-		Item as BreadcrumbItem,
-		Page as BreadcrumbPage
-	} from '$lib/components/ui/breadcrumb';
+	import { permissions } from '$lib/stores/permissions';
+	import { sidebarStyle } from '$lib/stores/sidebar';
+	import { TooltipProvider } from '$lib/components/ui/tooltip';
 
 	let { children } = $props();
 	let checkingAuth = $state(true);
@@ -50,8 +39,16 @@
 			return;
 		}
 
-		// Load license/subscription info
-		await license.load();
+		// Load license/subscription info, permissions, and sidebar preference in parallel
+		try {
+			await Promise.all([
+				license.load(),
+				permissions.load(),
+				sidebarStyle.load()
+			]);
+		} catch (error) {
+			console.error('Failed to load app data:', error);
+		}
 
 		checkingAuth = false;
 	});
@@ -70,31 +67,14 @@
 	</div>
 {:else}
 	<CommandPalette />
-	<SidebarProvider>
-		<AppSidebar />
-		<SidebarInset>
-			<header
-				class="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 bg-background/95 backdrop-blur-sm border-b border-border/50 transition-all duration-200 ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
-			>
-				<div class="flex items-center gap-2 px-4">
-					<SidebarTrigger class="-ml-1" />
-					<Separator orientation="vertical" class="mr-2 data-[orientation=vertical]:h-4" />
-					<BreadcrumbRoot>
-						<BreadcrumbList>
-							<BreadcrumbItem class="hidden md:block">
-								<BreadcrumbLink href="##">Building Your Application</BreadcrumbLink>
-							</BreadcrumbItem>
-							<BreadcrumbSeparator class="hidden md:block" />
-							<BreadcrumbItem>
-								<BreadcrumbPage>Data Fetching</BreadcrumbPage>
-							</BreadcrumbItem>
-						</BreadcrumbList>
-					</BreadcrumbRoot>
+	<TooltipProvider>
+		<div class="flex h-screen overflow-hidden">
+			<AppSidebar />
+			<main class="flex-1 overflow-auto bg-muted/30">
+				<div class="p-6">
+					{@render children()}
 				</div>
-			</header>
-			<div class="flex flex-1 flex-col gap-4 p-4 pt-0">
-				{@render children()}
-			</div>
-		</SidebarInset>
-	</SidebarProvider>
+			</main>
+		</div>
+	</TooltipProvider>
 {/if}

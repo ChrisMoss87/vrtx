@@ -18,8 +18,7 @@ class DashboardWidget extends Model
         'title',
         'type',
         'config',
-        'position',
-        'size',
+        'grid_position',
         'refresh_interval',
     ];
 
@@ -27,8 +26,7 @@ class DashboardWidget extends Model
         'dashboard_id' => 'integer',
         'report_id' => 'integer',
         'config' => 'array',
-        'position' => 'integer',
-        'size' => 'array',
+        'grid_position' => 'array',
         'refresh_interval' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -36,8 +34,7 @@ class DashboardWidget extends Model
 
     protected $attributes = [
         'config' => '{}',
-        'position' => 0,
-        'size' => '{"w": 6, "h": 4}',
+        'grid_position' => '{"x": 0, "y": 0, "w": 6, "h": 4}',
         'refresh_interval' => 0,
     ];
 

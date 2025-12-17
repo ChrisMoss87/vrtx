@@ -74,6 +74,9 @@ importers:
       formsnap:
         specifier: ^2.0.1
         version: 2.0.1(svelte@5.43.12)(sveltekit-superforms@2.28.1(@sveltejs/kit@2.48.5(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.43.12)(vite@7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.43.12)(vite@7.2.4(@types/node@22.19.1)(jiti@2.6.1)(lightningcss@1.30.2)))(@types/json-schema@7.0.15)(esbuild@0.25.12)(svelte@5.43.12)(typescript@5.9.3))
+      gridstack:
+        specifier: ^12.4.1
+        version: 12.4.1
       isomorphic-dompurify:
         specifier: ^2.33.0
         version: 2.33.0
@@ -95,6 +98,9 @@ importers:
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
+      svelte-dashboard:
+        specifier: ^0.1.0
+        version: 0.1.0(svelte@5.43.12)
       svelte-dnd-action:
         specifier: ^0.9.68
         version: 0.9.68(svelte@5.43.12)
@@ -1934,6 +1940,12 @@ packages:
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
+  gridstack@11.5.1:
+    resolution: {integrity: sha512-qgbH65F6TtyKyi9t6fCkrxLhiobgYR3RBjnK0AzZl+YO7hreMVlsZ1MFbkPV0+7ZhjXdvcaRSZp3UA1yAJqYBQ==}
+
+  gridstack@12.4.1:
+    resolution: {integrity: sha512-dYBNVEDw2zwnz0bCDouHk8rMclrMoMn4r6rtNyyWSeYsV3RF8QV2KFRTj4c86T2FsZPr3iQv+/LD/ae29FcpHQ==}
+
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
     engines: {node: '>=8'}
@@ -2758,6 +2770,11 @@ packages:
     peerDependencies:
       svelte: ^4.0.0 || ^5.0.0-next.0
       typescript: '>=5.0.0'
+
+  svelte-dashboard@0.1.0:
+    resolution: {integrity: sha512-WUzq6SHjVOl44U65I1URo95azc4MXJUum7l65XpI0iChEaOScVF2n8X7S7eHjUsN+FCMolH490Cuqdq+7WYMMA==}
+    peerDependencies:
+      svelte: ^5.0.0
 
   svelte-dnd-action@0.9.68:
     resolution: {integrity: sha512-maFNIHwimGYbvIG8uOHsU9T/4+VKBIaAaFEGWYFIyo4f8qwUs0BIqwvBfHkaN+MXt8MBB9rByPTvF7fRx0eIjw==}
@@ -4872,6 +4889,10 @@ snapshots:
 
   graphemer@1.4.0: {}
 
+  gridstack@11.5.1: {}
+
+  gridstack@12.4.1: {}
+
   has-flag@4.0.0: {}
 
   has-symbols@1.1.0: {}
@@ -5661,6 +5682,11 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - picomatch
+
+  svelte-dashboard@0.1.0(svelte@5.43.12):
+    dependencies:
+      gridstack: 11.5.1
+      svelte: 5.43.12
 
   svelte-dnd-action@0.9.68(svelte@5.43.12):
     dependencies:

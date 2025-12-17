@@ -42,8 +42,10 @@ use App\Infrastructure\Persistence\Eloquent\Repositories\Blueprint\EloquentTrans
 // Reporting Domain
 use App\Domain\Reporting\Repositories\ReportRepositoryInterface;
 use App\Domain\Reporting\Repositories\DashboardRepositoryInterface;
+use App\Domain\Reporting\Repositories\DashboardTemplateRepositoryInterface;
 use App\Infrastructure\Persistence\Eloquent\Repositories\Reporting\EloquentReportRepository;
 use App\Infrastructure\Persistence\Eloquent\Repositories\Reporting\EloquentDashboardRepository;
+use App\Infrastructure\Persistence\Eloquent\Repositories\Reporting\EloquentDashboardTemplateRepository;
 
 // Forecasting Domain
 use App\Domain\Forecasting\Repositories\ForecastScenarioRepositoryInterface;
@@ -274,6 +276,7 @@ class RepositoryServiceProvider extends ServiceProvider
     {
         $this->app->bind(ReportRepositoryInterface::class, EloquentReportRepository::class);
         $this->app->bind(DashboardRepositoryInterface::class, EloquentDashboardRepository::class);
+        $this->app->bind(DashboardTemplateRepositoryInterface::class, EloquentDashboardTemplateRepository::class);
     }
 
     private function registerForecastingRepositories(): void

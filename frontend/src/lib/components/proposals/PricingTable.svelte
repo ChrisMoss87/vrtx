@@ -14,10 +14,9 @@
   }: Props = $props();
 
   const pricingTypes = [
-    { value: 'one_time', label: 'One-time' },
+    { value: 'fixed', label: 'Fixed' },
     { value: 'recurring', label: 'Recurring' },
-    { value: 'hourly', label: 'Hourly' },
-    { value: 'optional', label: 'Optional Add-on' },
+    { value: 'usage', label: 'Usage-based' },
   ];
 
   function addItem() {
@@ -26,24 +25,28 @@
       {
         id: 0,
         proposal_id: 0,
+        section_id: null,
         name: '',
         description: null,
         quantity: 1,
+        unit: null,
         unit_price: 0,
-        discount_percent: null,
+        discount_percent: 0,
+        line_total: 0,
         is_optional: false,
         is_selected: true,
-        pricing_type: 'one_time',
-        order: items.length,
+        pricing_type: 'fixed',
+        billing_frequency: null,
+        display_order: items.length,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      },
+      } as unknown as ProposalPricingItem,
     ];
   }
 
   function removeItem(index: number) {
     items = items.filter((_: ProposalPricingItem, i: number) => i !== index);
-    items = items.map((item: ProposalPricingItem, i: number) => ({ ...item, order: i }));
+    items = items.map((item: ProposalPricingItem, i: number) => ({ ...item, display_order: i }));
   }
 
   function calculateSubtotal(item: ProposalPricingItem): number {
@@ -57,7 +60,7 @@
   }
 
   function updateItemPricingType(index: number, value: string) {
-    items[index].pricing_type = value as 'one_time' | 'recurring' | 'hourly' | 'optional';
+    items[index].pricing_type = value as 'fixed' | 'recurring' | 'usage';
     items = items;
   }
 </script>

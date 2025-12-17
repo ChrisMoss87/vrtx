@@ -5,6 +5,17 @@ declare(strict_types=1);
 namespace App\Application\Services\ImportExport;
 
 use App\Domain\ImportExport\Repositories\ImportRepositoryInterface;
+use App\Models\Export;
+use App\Models\ExportTemplate;
+use App\Models\Import;
+use App\Models\ImportRow;
+use App\Models\Module;
+use App\Models\ModuleRecord;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ImportExportApplicationService
 {
@@ -12,5 +23,1070 @@ class ImportExportApplicationService
         private ImportRepositoryInterface $repository,
     ) {}
 
-    // TODO: Add use case methods
+    // ==========================================
+    // IMPORT QUERY USE CASES
+    // ==========================================
+
+    /**
+     * List imports with filtering and pagination.
+     */
+    public function listImports(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    {
+        $query = Import::query()
+            ->with(['module', 'user']);
+
+        if (!empty($filters['module_id'])) {
+            $query->where('module_id', $filters['module_id']);
+        }
+
+        if (!empty($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
+
+        if (!empty($filters['status'])) {
+            $query->byStatus($filters['status']);
+        }
+
+        if (!empty($filters['file_type'])) {
+            $query->where('file_type', $filters['file_type']);
+        }
+
+        if (!empty($filters['search'])) {
+            $query->where('name', 'like', "%{$filters['search']}%");
+        }
+
+        if (!empty($filters['date_from'])) {
+            $query->whereDate('created_at', '>=', $filters['date_from']);
+        }
+
+        if (!empty($filters['date_to'])) {
+            $query->whereDate('created_at', '<=', $filters['date_to']);
+        }
+
+        $sortField = $filters['sort_by'] ?? 'created_at';
+        $sortDir = $filters['sort_dir'] ?? 'desc';
+        $query->orderBy($sortField, $sortDir);
+
+        return $query->paginate($perPage);
+    }
+
+    /**
+     * Get a single import by ID.
+     */
+    public function getImport(int $id): ?Import
+    {
+        return Import::with(['module', 'user'])->find($id);
+    }
+
+    /**
+     * Get import with all rows.
+     */
+    public function getImportWithRows(int $id): ?Import
+    {
+        return Import::with(['module', 'user', 'rows'])->find($id);
+    }
+
+    /**
+     * Get import rows with pagination.
+     */
+    public function getImportRows(int $importId, array $filters = [], int $perPage = 50): LengthAwarePaginator
+    {
+        $query = ImportRow::where('import_id', $importId);
+
+        if (!empty($filters['status'])) {
+            $query->byStatus($filters['status']);
+        }
+
+        if (!empty($filters['has_errors'])) {
+            $query->whereNotNull('errors')
+                ->where('errors', '!=', '[]');
+        }
+
+        $query->orderBy('row_number', 'asc');
+
+        return $query->paginate($perPage);
+    }
+
+    /**
+     * Get failed rows for an import.
+     */
+    public function getFailedRows(int $importId): Collection
+    {
+        return ImportRow::where('import_id', $importId)
+            ->failed()
+            ->orderBy('row_number')
+            ->get();
+    }
+
+    /**
+     * Get import statistics.
+     */
+    public function getImportStats(int $importId): array
+    {
+        $import = Import::findOrFail($importId);
+
+        return [
+            'total_rows' => $import->total_rows,
+            'processed_rows' => $import->processed_rows,
+            'successful_rows' => $import->successful_rows,
+            'failed_rows' => $import->failed_rows,
+            'skipped_rows' => $import->skipped_rows,
+            'progress_percentage' => $import->getProgressPercentage(),
+            'status' => $import->status,
+            'duration' => $import->started_at && $import->completed_at
+                ? $import->completed_at->diffInSeconds($import->started_at)
+                : null,
+            'rows_per_second' => $import->started_at && $import->completed_at && $import->processed_rows > 0
+                ? round($import->processed_rows / max(1, $import->completed_at->diffInSeconds($import->started_at)), 2)
+                : null,
+        ];
+    }
+
+    /**
+     * Get user's import history.
+     */
+    public function getUserImportHistory(int $userId, int $limit = 10): Collection
+    {
+        return Import::where('user_id', $userId)
+            ->with('module')
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Preview import file columns.
+     */
+    public function previewFileColumns(string $filePath, string $fileType): array
+    {
+        $columns = [];
+        $sampleRows = [];
+
+        if ($fileType === Import::FILE_TYPE_CSV) {
+            $handle = fopen(Storage::disk('imports')->path($filePath), 'r');
+            if ($handle) {
+                $headers = fgetcsv($handle);
+                $columns = $headers ?: [];
+
+                $rowCount = 0;
+                while (($row = fgetcsv($handle)) !== false && $rowCount < 5) {
+                    $sampleRows[] = array_combine($columns, $row);
+                    $rowCount++;
+                }
+                fclose($handle);
+            }
+        }
+        // Add XLSX parsing if needed
+
+        return [
+            'columns' => $columns,
+            'sample_rows' => $sampleRows,
+            'total_preview_rows' => count($sampleRows),
+        ];
+    }
+
+    /**
+     * Get available fields for import mapping.
+     */
+    public function getModuleImportFields(int $moduleId): array
+    {
+        $module = Module::with('fields')->findOrFail($moduleId);
+
+        return $module->fields
+            ->filter(fn ($field) => !in_array($field->api_name, ['id', 'created_at', 'updated_at', 'deleted_at']))
+            ->map(fn ($field) => [
+                'api_name' => $field->api_name,
+                'label' => $field->label,
+                'type' => $field->type,
+                'required' => $field->is_required,
+            ])
+            ->values()
+            ->toArray();
+    }
+
+    // ==========================================
+    // IMPORT COMMAND USE CASES
+    // ==========================================
+
+    /**
+     * Create a new import.
+     */
+    public function createImport(array $data): Import
+    {
+        return Import::create([
+            'module_id' => $data['module_id'],
+            'user_id' => Auth::id(),
+            'name' => $data['name'] ?? 'Import ' . now()->format('Y-m-d H:i'),
+            'file_name' => $data['file_name'],
+            'file_path' => $data['file_path'],
+            'file_type' => $data['file_type'],
+            'file_size' => $data['file_size'] ?? 0,
+            'column_mapping' => $data['column_mapping'] ?? [],
+            'import_options' => $data['import_options'] ?? [
+                'duplicate_handling' => Import::DUPLICATE_SKIP,
+                'duplicate_check_field' => null,
+            ],
+            'field_transformations' => $data['field_transformations'] ?? [],
+        ]);
+    }
+
+    /**
+     * Update import settings (before starting).
+     */
+    public function updateImportSettings(int $id, array $data): Import
+    {
+        $import = Import::findOrFail($id);
+
+        if ($import->status !== Import::STATUS_PENDING) {
+            throw new \InvalidArgumentException('Cannot update settings for an import that has already started');
+        }
+
+        $import->update([
+            'name' => $data['name'] ?? $import->name,
+            'column_mapping' => $data['column_mapping'] ?? $import->column_mapping,
+            'import_options' => $data['import_options'] ?? $import->import_options,
+            'field_transformations' => $data['field_transformations'] ?? $import->field_transformations,
+        ]);
+
+        return $import->fresh();
+    }
+
+    /**
+     * Validate import data before processing.
+     */
+    public function validateImport(int $id): array
+    {
+        $import = Import::findOrFail($id);
+        $import->update(['status' => Import::STATUS_VALIDATING]);
+
+        $errors = [];
+        $rowCount = 0;
+
+        try {
+            $filePath = Storage::disk('imports')->path($import->file_path);
+            $handle = fopen($filePath, 'r');
+
+            if (!$handle) {
+                throw new \RuntimeException('Cannot open import file');
+            }
+
+            $headers = fgetcsv($handle);
+            $rowNumber = 1;
+
+            while (($row = fgetcsv($handle)) !== false) {
+                $rowNumber++;
+                $rowCount++;
+                $rowData = array_combine($headers, $row);
+                $mappedData = $this->mapRowData($rowData, $import->column_mapping);
+                $rowErrors = $this->validateRowData($mappedData, $import->module_id);
+
+                ImportRow::create([
+                    'import_id' => $import->id,
+                    'row_number' => $rowNumber,
+                    'original_data' => $rowData,
+                    'mapped_data' => $mappedData,
+                    'status' => empty($rowErrors) ? ImportRow::STATUS_PENDING : ImportRow::STATUS_FAILED,
+                    'errors' => $rowErrors,
+                ]);
+
+                if (!empty($rowErrors)) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'errors' => $rowErrors,
+                    ];
+                }
+            }
+
+            fclose($handle);
+
+            $import->update([
+                'status' => Import::STATUS_VALIDATED,
+                'total_rows' => $rowCount,
+                'validation_errors' => $errors,
+            ]);
+
+        } catch (\Exception $e) {
+            $import->markAsFailed($e->getMessage());
+            throw $e;
+        }
+
+        return [
+            'total_rows' => $rowCount,
+            'valid_rows' => $rowCount - count($errors),
+            'invalid_rows' => count($errors),
+            'errors' => array_slice($errors, 0, 100), // Limit error details
+        ];
+    }
+
+    /**
+     * Start processing the import.
+     */
+    public function startImport(int $id): Import
+    {
+        $import = Import::findOrFail($id);
+
+        if (!in_array($import->status, [Import::STATUS_PENDING, Import::STATUS_VALIDATED])) {
+            throw new \InvalidArgumentException('Import is not in a valid state to start');
+        }
+
+        $import->markAsStarted();
+
+        // In production, this would dispatch a job
+        // For now, process synchronously
+        $this->processImport($import);
+
+        return $import->fresh();
+    }
+
+    /**
+     * Process import rows.
+     */
+    public function processImport(Import $import): void
+    {
+        DB::beginTransaction();
+
+        try {
+            $rows = $import->rows()->where('status', ImportRow::STATUS_PENDING)->get();
+
+            foreach ($rows as $row) {
+                try {
+                    $recordId = $this->processImportRow($import, $row);
+                    $row->markAsSuccess($recordId);
+                    $import->incrementProcessed(ImportRow::STATUS_SUCCESS);
+                } catch (\Exception $e) {
+                    $row->markAsFailed(['exception' => $e->getMessage()]);
+                    $import->incrementProcessed(ImportRow::STATUS_FAILED);
+                }
+            }
+
+            $import->markAsCompleted();
+            DB::commit();
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $import->markAsFailed($e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Cancel an import.
+     */
+    public function cancelImport(int $id): Import
+    {
+        $import = Import::findOrFail($id);
+
+        if (!$import->canBeCancelled()) {
+            throw new \InvalidArgumentException('This import cannot be cancelled');
+        }
+
+        $import->markAsCancelled();
+
+        return $import;
+    }
+
+    /**
+     * Delete an import and its rows.
+     */
+    public function deleteImport(int $id): void
+    {
+        $import = Import::findOrFail($id);
+
+        // Delete the file if it exists
+        if ($import->file_path && Storage::disk('imports')->exists($import->file_path)) {
+            Storage::disk('imports')->delete($import->file_path);
+        }
+
+        // Delete rows first
+        $import->rows()->delete();
+        $import->delete();
+    }
+
+    /**
+     * Retry failed rows.
+     */
+    public function retryFailedRows(int $importId): array
+    {
+        $import = Import::findOrFail($importId);
+        $failedRows = $import->failedRows()->get();
+
+        $retried = 0;
+        $success = 0;
+
+        foreach ($failedRows as $row) {
+            $retried++;
+            try {
+                $row->update(['status' => ImportRow::STATUS_PENDING, 'errors' => null]);
+                $recordId = $this->processImportRow($import, $row->fresh());
+                $row->markAsSuccess($recordId);
+                $import->decrement('failed_rows');
+                $import->increment('successful_rows');
+                $success++;
+            } catch (\Exception $e) {
+                $row->markAsFailed(['exception' => $e->getMessage()]);
+            }
+        }
+
+        return [
+            'retried' => $retried,
+            'success' => $success,
+            'still_failed' => $retried - $success,
+        ];
+    }
+
+    // ==========================================
+    // EXPORT QUERY USE CASES
+    // ==========================================
+
+    /**
+     * List exports with filtering and pagination.
+     */
+    public function listExports(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    {
+        $query = Export::query()
+            ->with(['module', 'user']);
+
+        if (!empty($filters['module_id'])) {
+            $query->where('module_id', $filters['module_id']);
+        }
+
+        if (!empty($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
+
+        if (!empty($filters['status'])) {
+            $query->byStatus($filters['status']);
+        }
+
+        if (!empty($filters['file_type'])) {
+            $query->where('file_type', $filters['file_type']);
+        }
+
+        if (!empty($filters['search'])) {
+            $query->where('name', 'like', "%{$filters['search']}%");
+        }
+
+        if (!empty($filters['downloadable_only'])) {
+            $query->where('status', Export::STATUS_COMPLETED)
+                ->where(function ($q) {
+                    $q->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', now());
+                });
+        }
+
+        $sortField = $filters['sort_by'] ?? 'created_at';
+        $sortDir = $filters['sort_dir'] ?? 'desc';
+        $query->orderBy($sortField, $sortDir);
+
+        return $query->paginate($perPage);
+    }
+
+    /**
+     * Get a single export by ID.
+     */
+    public function getExport(int $id): ?Export
+    {
+        return Export::with(['module', 'user'])->find($id);
+    }
+
+    /**
+     * Get export statistics.
+     */
+    public function getExportStats(int $exportId): array
+    {
+        $export = Export::findOrFail($exportId);
+
+        return [
+            'total_records' => $export->total_records,
+            'exported_records' => $export->exported_records,
+            'progress_percentage' => $export->getProgressPercentage(),
+            'status' => $export->status,
+            'file_size' => $export->file_size,
+            'file_size_formatted' => $this->formatBytes($export->file_size ?? 0),
+            'download_count' => $export->download_count,
+            'is_downloadable' => $export->isDownloadable(),
+            'has_expired' => $export->hasExpired(),
+            'expires_at' => $export->expires_at?->toIso8601String(),
+            'duration' => $export->started_at && $export->completed_at
+                ? $export->completed_at->diffInSeconds($export->started_at)
+                : null,
+        ];
+    }
+
+    /**
+     * Get user's export history.
+     */
+    public function getUserExportHistory(int $userId, int $limit = 10): Collection
+    {
+        return Export::where('user_id', $userId)
+            ->with('module')
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Get available fields for export.
+     */
+    public function getModuleExportFields(int $moduleId): array
+    {
+        $module = Module::with('fields')->findOrFail($moduleId);
+
+        return $module->fields
+            ->map(fn ($field) => [
+                'api_name' => $field->api_name,
+                'label' => $field->label,
+                'type' => $field->type,
+            ])
+            ->values()
+            ->toArray();
+    }
+
+    // ==========================================
+    // EXPORT COMMAND USE CASES
+    // ==========================================
+
+    /**
+     * Create and start an export.
+     */
+    public function createExport(array $data): Export
+    {
+        $export = Export::create([
+            'module_id' => $data['module_id'],
+            'user_id' => Auth::id(),
+            'name' => $data['name'] ?? 'Export ' . now()->format('Y-m-d H:i'),
+            'file_type' => $data['file_type'] ?? Export::FILE_TYPE_CSV,
+            'selected_fields' => $data['selected_fields'] ?? [],
+            'filters' => $data['filters'] ?? [],
+            'sorting' => $data['sorting'] ?? [],
+            'export_options' => $data['export_options'] ?? [],
+        ]);
+
+        // Count total records
+        $totalRecords = $this->countExportRecords($export);
+        $export->update(['total_records' => $totalRecords]);
+
+        return $export;
+    }
+
+    /**
+     * Start processing the export.
+     */
+    public function startExport(int $id): Export
+    {
+        $export = Export::findOrFail($id);
+
+        if ($export->status !== Export::STATUS_PENDING) {
+            throw new \InvalidArgumentException('Export has already been started');
+        }
+
+        $export->markAsStarted();
+
+        // In production, this would dispatch a job
+        $this->processExport($export);
+
+        return $export->fresh();
+    }
+
+    /**
+     * Process export and generate file.
+     */
+    public function processExport(Export $export): void
+    {
+        try {
+            $module = Module::findOrFail($export->module_id);
+            $records = $this->getExportRecords($export);
+
+            $fileName = $this->generateExportFileName($module, $export->file_type);
+            $filePath = $this->generateExportFile($export, $records, $fileName);
+
+            $fileSize = Storage::disk('exports')->size($filePath);
+            $export->markAsCompleted($filePath, $fileName, $fileSize, $records->count());
+
+        } catch (\Exception $e) {
+            $export->markAsFailed($e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Download an export file.
+     */
+    public function downloadExport(int $id): array
+    {
+        $export = Export::findOrFail($id);
+
+        if (!$export->isDownloadable()) {
+            throw new \InvalidArgumentException('Export is not available for download');
+        }
+
+        $export->incrementDownloadCount();
+
+        return [
+            'path' => Storage::disk('exports')->path($export->file_path),
+            'name' => $export->file_name,
+            'mime_type' => $this->getMimeType($export->file_type),
+        ];
+    }
+
+    /**
+     * Delete an export.
+     */
+    public function deleteExport(int $id): void
+    {
+        $export = Export::findOrFail($id);
+
+        if ($export->file_path && Storage::disk('exports')->exists($export->file_path)) {
+            Storage::disk('exports')->delete($export->file_path);
+        }
+
+        $export->delete();
+    }
+
+    /**
+     * Clean up expired exports.
+     */
+    public function cleanupExpiredExports(): int
+    {
+        $expired = Export::expired()->get();
+        $count = 0;
+
+        foreach ($expired as $export) {
+            $export->markAsExpired();
+            $count++;
+        }
+
+        return $count;
+    }
+
+    // ==========================================
+    // EXPORT TEMPLATE USE CASES
+    // ==========================================
+
+    /**
+     * List export templates.
+     */
+    public function listExportTemplates(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    {
+        $query = ExportTemplate::query()
+            ->with(['module', 'user']);
+
+        if (!empty($filters['module_id'])) {
+            $query->where('module_id', $filters['module_id']);
+        }
+
+        if (!empty($filters['user_id'])) {
+            $query->accessibleBy($filters['user_id']);
+        }
+
+        if (!empty($filters['shared_only'])) {
+            $query->shared();
+        }
+
+        if (!empty($filters['search'])) {
+            $query->where('name', 'like', "%{$filters['search']}%");
+        }
+
+        return $query->orderBy('name')->paginate($perPage);
+    }
+
+    /**
+     * Get a single export template.
+     */
+    public function getExportTemplate(int $id): ?ExportTemplate
+    {
+        return ExportTemplate::with(['module', 'user'])->find($id);
+    }
+
+    /**
+     * Create an export template.
+     */
+    public function createExportTemplate(array $data): ExportTemplate
+    {
+        return ExportTemplate::create([
+            'module_id' => $data['module_id'],
+            'user_id' => Auth::id(),
+            'name' => $data['name'],
+            'description' => $data['description'] ?? null,
+            'selected_fields' => $data['selected_fields'],
+            'filters' => $data['filters'] ?? [],
+            'sorting' => $data['sorting'] ?? [],
+            'export_options' => $data['export_options'] ?? [],
+            'default_file_type' => $data['default_file_type'] ?? Export::FILE_TYPE_CSV,
+            'is_shared' => $data['is_shared'] ?? false,
+        ]);
+    }
+
+    /**
+     * Update an export template.
+     */
+    public function updateExportTemplate(int $id, array $data): ExportTemplate
+    {
+        $template = ExportTemplate::findOrFail($id);
+
+        $template->update([
+            'name' => $data['name'] ?? $template->name,
+            'description' => $data['description'] ?? $template->description,
+            'selected_fields' => $data['selected_fields'] ?? $template->selected_fields,
+            'filters' => $data['filters'] ?? $template->filters,
+            'sorting' => $data['sorting'] ?? $template->sorting,
+            'export_options' => $data['export_options'] ?? $template->export_options,
+            'default_file_type' => $data['default_file_type'] ?? $template->default_file_type,
+            'is_shared' => $data['is_shared'] ?? $template->is_shared,
+        ]);
+
+        return $template->fresh();
+    }
+
+    /**
+     * Delete an export template.
+     */
+    public function deleteExportTemplate(int $id): void
+    {
+        ExportTemplate::findOrFail($id)->delete();
+    }
+
+    /**
+     * Create export from template.
+     */
+    public function createExportFromTemplate(int $templateId, ?string $name = null, ?string $fileType = null): Export
+    {
+        $template = ExportTemplate::findOrFail($templateId);
+        $export = $template->createExport(Auth::id(), $name, $fileType);
+
+        $totalRecords = $this->countExportRecords($export);
+        $export->update(['total_records' => $totalRecords]);
+
+        return $export;
+    }
+
+    // ==========================================
+    // ANALYTICS USE CASES
+    // ==========================================
+
+    /**
+     * Get import/export activity summary.
+     */
+    public function getActivitySummary(?int $userId = null, ?string $period = 'month'): array
+    {
+        $dateFrom = match ($period) {
+            'week' => now()->subWeek(),
+            'month' => now()->subMonth(),
+            'quarter' => now()->subQuarter(),
+            'year' => now()->subYear(),
+            default => now()->subMonth(),
+        };
+
+        $importQuery = Import::where('created_at', '>=', $dateFrom);
+        $exportQuery = Export::where('created_at', '>=', $dateFrom);
+
+        if ($userId) {
+            $importQuery->where('user_id', $userId);
+            $exportQuery->where('user_id', $userId);
+        }
+
+        return [
+            'imports' => [
+                'total' => $importQuery->count(),
+                'completed' => (clone $importQuery)->where('status', Import::STATUS_COMPLETED)->count(),
+                'failed' => (clone $importQuery)->where('status', Import::STATUS_FAILED)->count(),
+                'total_records' => (clone $importQuery)->sum('successful_rows'),
+            ],
+            'exports' => [
+                'total' => $exportQuery->count(),
+                'completed' => (clone $exportQuery)->where('status', Export::STATUS_COMPLETED)->count(),
+                'failed' => (clone $exportQuery)->where('status', Export::STATUS_FAILED)->count(),
+                'total_records' => (clone $exportQuery)->sum('exported_records'),
+                'total_downloads' => (clone $exportQuery)->sum('download_count'),
+            ],
+            'period' => $period,
+            'date_from' => $dateFrom->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Get import error analysis.
+     */
+    public function getImportErrorAnalysis(int $importId): array
+    {
+        $import = Import::findOrFail($importId);
+        $failedRows = $import->failedRows()->get();
+
+        $errorTypes = [];
+        $fieldErrors = [];
+
+        foreach ($failedRows as $row) {
+            $errors = $row->errors ?? [];
+            foreach ($errors as $field => $messages) {
+                if (!isset($fieldErrors[$field])) {
+                    $fieldErrors[$field] = 0;
+                }
+                $fieldErrors[$field]++;
+
+                foreach ((array) $messages as $message) {
+                    $type = $this->categorizeError($message);
+                    if (!isset($errorTypes[$type])) {
+                        $errorTypes[$type] = 0;
+                    }
+                    $errorTypes[$type]++;
+                }
+            }
+        }
+
+        arsort($errorTypes);
+        arsort($fieldErrors);
+
+        return [
+            'total_failed_rows' => $failedRows->count(),
+            'error_types' => $errorTypes,
+            'field_errors' => $fieldErrors,
+            'sample_errors' => $failedRows->take(10)->map(fn ($row) => [
+                'row_number' => $row->row_number,
+                'errors' => $row->errors,
+            ])->toArray(),
+        ];
+    }
+
+    // ==========================================
+    // HELPER METHODS
+    // ==========================================
+
+    /**
+     * Map row data using column mapping.
+     */
+    private function mapRowData(array $rowData, array $columnMapping): array
+    {
+        $mappedData = [];
+
+        foreach ($columnMapping as $sourceColumn => $targetField) {
+            if (isset($rowData[$sourceColumn])) {
+                $mappedData[$targetField] = $rowData[$sourceColumn];
+            }
+        }
+
+        return $mappedData;
+    }
+
+    /**
+     * Validate row data against module fields.
+     */
+    private function validateRowData(array $data, int $moduleId): array
+    {
+        $errors = [];
+        $module = Module::with('fields')->find($moduleId);
+
+        if (!$module) {
+            return ['module' => 'Module not found'];
+        }
+
+        foreach ($module->fields as $field) {
+            if ($field->is_required && empty($data[$field->api_name])) {
+                $errors[$field->api_name] = "{$field->label} is required";
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Process a single import row.
+     */
+    private function processImportRow(Import $import, ImportRow $row): ?int
+    {
+        $module = $import->module;
+        $data = $row->mapped_data;
+
+        // Check for duplicates if configured
+        if ($import->getDuplicateCheckField()) {
+            $checkField = $import->getDuplicateCheckField();
+            $existing = ModuleRecord::where('module_id', $module->id)
+                ->whereRaw("data->>'{$checkField}' = ?", [$data[$checkField] ?? null])
+                ->first();
+
+            if ($existing) {
+                $handling = $import->getDuplicateHandling();
+
+                if ($handling === Import::DUPLICATE_SKIP) {
+                    $row->markAsSkipped('Duplicate record found');
+                    return null;
+                }
+
+                if ($handling === Import::DUPLICATE_UPDATE) {
+                    $existing->update(['data' => array_merge($existing->data, $data)]);
+                    return $existing->id;
+                }
+            }
+        }
+
+        // Create new record
+        $record = ModuleRecord::create([
+            'module_id' => $module->id,
+            'data' => $data,
+            'created_by' => $import->user_id,
+        ]);
+
+        return $record->id;
+    }
+
+    /**
+     * Count records for export.
+     */
+    private function countExportRecords(Export $export): int
+    {
+        $query = ModuleRecord::where('module_id', $export->module_id);
+        $this->applyExportFilters($query, $export->filters);
+        return $query->count();
+    }
+
+    /**
+     * Get records for export.
+     */
+    private function getExportRecords(Export $export): Collection
+    {
+        $query = ModuleRecord::where('module_id', $export->module_id);
+        $this->applyExportFilters($query, $export->filters);
+        $this->applyExportSorting($query, $export->sorting);
+        return $query->get();
+    }
+
+    /**
+     * Apply filters to export query.
+     */
+    private function applyExportFilters($query, ?array $filters): void
+    {
+        if (empty($filters)) {
+            return;
+        }
+
+        foreach ($filters as $filter) {
+            $field = $filter['field'] ?? null;
+            $operator = $filter['operator'] ?? '=';
+            $value = $filter['value'] ?? null;
+
+            if ($field && $value !== null) {
+                $query->whereRaw("data->>'{$field}' {$operator} ?", [$value]);
+            }
+        }
+    }
+
+    /**
+     * Apply sorting to export query.
+     */
+    private function applyExportSorting($query, ?array $sorting): void
+    {
+        if (empty($sorting)) {
+            $query->orderBy('id', 'asc');
+            return;
+        }
+
+        foreach ($sorting as $sort) {
+            $field = $sort['field'] ?? null;
+            $direction = $sort['direction'] ?? 'asc';
+
+            if ($field) {
+                $query->orderByRaw("data->>'{$field}' {$direction}");
+            }
+        }
+    }
+
+    /**
+     * Generate export file name.
+     */
+    private function generateExportFileName(Module $module, string $fileType): string
+    {
+        $timestamp = now()->format('Y-m-d_His');
+        return "{$module->api_name}_export_{$timestamp}.{$fileType}";
+    }
+
+    /**
+     * Generate export file.
+     */
+    private function generateExportFile(Export $export, Collection $records, string $fileName): string
+    {
+        $filePath = "exports/{$fileName}";
+
+        if ($export->file_type === Export::FILE_TYPE_CSV) {
+            $this->generateCsvFile($export, $records, $filePath);
+        }
+        // Add XLSX, PDF generation if needed
+
+        return $filePath;
+    }
+
+    /**
+     * Generate CSV export file.
+     */
+    private function generateCsvFile(Export $export, Collection $records, string $filePath): void
+    {
+        $fields = $export->selected_fields;
+        $handle = fopen(Storage::disk('exports')->path($filePath), 'w');
+
+        // Write headers
+        fputcsv($handle, $fields);
+
+        // Write data rows
+        foreach ($records as $record) {
+            $row = [];
+            foreach ($fields as $field) {
+                $row[] = $record->data[$field] ?? '';
+            }
+            fputcsv($handle, $row);
+
+            $export->increment('exported_records');
+        }
+
+        fclose($handle);
+    }
+
+    /**
+     * Get MIME type for file type.
+     */
+    private function getMimeType(string $fileType): string
+    {
+        return match ($fileType) {
+            Export::FILE_TYPE_CSV => 'text/csv',
+            Export::FILE_TYPE_XLSX => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            Export::FILE_TYPE_PDF => 'application/pdf',
+            default => 'application/octet-stream',
+        };
+    }
+
+    /**
+     * Format bytes to human readable.
+     */
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $i = 0;
+
+        while ($bytes >= 1024 && $i < count($units) - 1) {
+            $bytes /= 1024;
+            $i++;
+        }
+
+        return round($bytes, 2) . ' ' . $units[$i];
+    }
+
+    /**
+     * Categorize error message.
+     */
+    private function categorizeError(string $message): string
+    {
+        $message = strtolower($message);
+
+        if (str_contains($message, 'required')) {
+            return 'Missing Required Field';
+        }
+        if (str_contains($message, 'format') || str_contains($message, 'invalid')) {
+            return 'Invalid Format';
+        }
+        if (str_contains($message, 'duplicate')) {
+            return 'Duplicate';
+        }
+        if (str_contains($message, 'reference') || str_contains($message, 'not found')) {
+            return 'Invalid Reference';
+        }
+
+        return 'Other';
+    }
 }

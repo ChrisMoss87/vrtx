@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 
 // Types
-export type ReportType = 'table' | 'chart' | 'summary' | 'matrix' | 'pivot';
+export type ReportType = 'table' | 'chart' | 'summary' | 'matrix' | 'pivot' | 'cohort';
 export type ChartType = 'bar' | 'line' | 'pie' | 'doughnut' | 'area' | 'funnel' | 'scatter' | 'gauge' | 'kpi';
 export type AggregationType = 'count' | 'sum' | 'avg' | 'min' | 'max' | 'count_distinct';
 
@@ -309,7 +309,8 @@ export function getReportTypeIcon(type: ReportType): string {
 		chart: 'bar-chart-2',
 		summary: 'file-text',
 		matrix: 'grid',
-		pivot: 'layout-grid'
+		pivot: 'layout-grid',
+		cohort: 'users'
 	};
 	return icons[type] || 'file-text';
 }
@@ -319,3 +320,148 @@ export function formatChangePercent(value: number | null): string {
 	const sign = value >= 0 ? '+' : '';
 	return `${sign}${value.toFixed(1)}%`;
 }
+
+// Advanced Reporting Types
+
+export type JoinType = 'inner' | 'left' | 'right';
+export type CohortInterval = 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+export interface ReportJoin {
+	source_module_id?: number;
+	source_field: string;
+	target_module_id: number;
+	target_field?: string;
+	alias: string;
+	join_type?: JoinType;
+}
+
+export interface CalculatedField {
+	name: string;
+	formula: string;
+	label?: string;
+	result_type?: 'number' | 'date' | 'string' | 'boolean';
+	precision?: number;
+}
+
+export interface AvailableJoin {
+	source_field: string;
+	source_field_label: string;
+	target_module_id: number;
+	target_module_name: string;
+	target_module_api_name: string;
+	suggested_alias: string;
+}
+
+export interface CrossObjectField extends ModuleField {
+	module: string;
+	qualified_name: string;
+}
+
+export interface CohortConfig {
+	cohort_field?: string;
+	cohort_interval?: CohortInterval;
+	period_field?: string;
+	period_interval?: CohortInterval;
+	metric_field?: string;
+	metric_aggregation?: AggregationType;
+}
+
+export interface CohortResult {
+	type: 'cohort';
+	cohorts: string[];
+	periods: string[];
+	data: Record<string, Record<string, number>>;
+	config: {
+		cohort_interval: CohortInterval;
+		period_interval: CohortInterval;
+		metric_aggregation: AggregationType;
+	};
+}
+
+export interface AdvancedReportRequest {
+	module_id: number;
+	type?: ReportType;
+	joins?: ReportJoin[];
+	filters?: ReportFilter[];
+	grouping?: ReportGrouping[];
+	aggregations?: ReportAggregation[];
+	calculated_fields?: CalculatedField[];
+	sorting?: ReportSorting[];
+	date_range?: ReportDateRange;
+	config?: ReportConfig & CohortConfig;
+}
+
+export interface FormulaValidationResult {
+	valid: boolean;
+	errors: string[];
+	dependencies: string[];
+	sql_preview: string | null;
+}
+
+// Advanced Reporting API
+export const advancedReportsApi = {
+	/**
+	 * Execute a cross-object report with joins and calculated fields
+	 */
+	async execute(request: AdvancedReportRequest): Promise<ReportResult | CohortResult> {
+		const response = await apiClient.post<{ data: ReportResult | CohortResult }>(
+			'/reports/advanced/execute',
+			request
+		);
+		return response.data;
+	},
+
+	/**
+	 * Get available joins for a module (based on lookup fields)
+	 */
+	async getAvailableJoins(moduleId: number): Promise<AvailableJoin[]> {
+		const response = await apiClient.get<{ data: AvailableJoin[] }>(
+			`/reports/advanced/joins/${moduleId}`
+		);
+		return response.data;
+	},
+
+	/**
+	 * Get all fields available in a cross-object report (primary + joined modules)
+	 */
+	async getCrossObjectFields(moduleId: number, joins: ReportJoin[]): Promise<CrossObjectField[]> {
+		const response = await apiClient.post<{ data: CrossObjectField[] }>('/reports/advanced/fields', {
+			module_id: moduleId,
+			joins
+		});
+		return response.data;
+	},
+
+	/**
+	 * Execute a cohort analysis report
+	 */
+	async executeCohort(
+		moduleId: number,
+		config: CohortConfig,
+		options?: {
+			joins?: ReportJoin[];
+			filters?: ReportFilter[];
+			date_range?: ReportDateRange;
+		}
+	): Promise<CohortResult> {
+		const response = await apiClient.post<{ data: CohortResult }>('/reports/advanced/cohort', {
+			module_id: moduleId,
+			joins: options?.joins,
+			filters: options?.filters,
+			date_range: options?.date_range,
+			...config
+		});
+		return response.data;
+	},
+
+	/**
+	 * Validate a calculated field formula
+	 */
+	async validateFormula(formula: string, name?: string): Promise<FormulaValidationResult> {
+		const response = await apiClient.post<FormulaValidationResult>(
+			'/reports/advanced/validate-formula',
+			{ formula, name }
+		);
+		return response;
+	}
+};

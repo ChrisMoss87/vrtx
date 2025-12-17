@@ -7,7 +7,7 @@
 
   let analytics = $state<PortalActivityAnalytics | null>(null);
   let loading = $state(true);
-  let days = $state<{ value: string; label: string }>({ value: '30', label: 'Last 30 days' });
+  let days = $state('30');
 
   const timeRanges = [
     { value: '7', label: 'Last 7 days' },
@@ -15,11 +15,13 @@
     { value: '90', label: 'Last 90 days' },
   ];
 
+  const getTimeRangeLabel = (value: string) => timeRanges.find(t => t.value === value)?.label ?? value;
+
   async function loadAnalytics() {
     loading = true;
     try {
-      const response = await portalAdminApi.getAnalytics({ days: parseInt(days.value) });
-      analytics = response.data;
+      const response = await portalAdminApi.getAnalytics({ days: parseInt(days) });
+      analytics = response;
     } catch (error) {
       console.error('Failed to load analytics:', error);
     } finally {
@@ -61,13 +63,13 @@
       <BarChart3 class="h-5 w-5" />
       Portal Analytics
     </h2>
-    <Select.Root bind:selected={days}>
+    <Select.Root type="single" bind:value={days}>
       <Select.Trigger class="w-[180px]">
-        <Select.Value placeholder="Select time range" />
+        {getTimeRangeLabel(days)}
       </Select.Trigger>
       <Select.Content>
         {#each timeRanges as range}
-          <Select.Item value={range.value} label={range.label}>
+          <Select.Item value={range.value}>
             {range.label}
           </Select.Item>
         {/each}

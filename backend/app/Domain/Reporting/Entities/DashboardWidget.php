@@ -21,8 +21,7 @@ final class DashboardWidget implements EntityInterface
         private string $title,
         private WidgetType $type,
         private array $config,
-        private int $position,
-        private array $size,
+        private array $gridPosition,
         private int $refreshInterval,
     ) {}
 
@@ -35,8 +34,7 @@ final class DashboardWidget implements EntityInterface
         WidgetType $type,
         ?int $reportId = null,
         array $config = [],
-        int $position = 0,
-        array $size = ['w' => 6, 'h' => 4],
+        array $gridPosition = ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4],
         int $refreshInterval = 0,
     ): self {
         return new self(
@@ -46,8 +44,7 @@ final class DashboardWidget implements EntityInterface
             title: $title,
             type: $type,
             config: $config,
-            position: $position,
-            size: $size,
+            gridPosition: $gridPosition,
             refreshInterval: $refreshInterval,
         );
     }
@@ -62,8 +59,7 @@ final class DashboardWidget implements EntityInterface
         string $title,
         WidgetType $type,
         array $config,
-        int $position,
-        array $size,
+        array $gridPosition,
         int $refreshInterval,
     ): self {
         return new self(
@@ -73,8 +69,7 @@ final class DashboardWidget implements EntityInterface
             title: $title,
             type: $type,
             config: $config,
-            position: $position,
-            size: $size,
+            gridPosition: $gridPosition,
             refreshInterval: $refreshInterval,
         );
     }
@@ -95,19 +90,11 @@ final class DashboardWidget implements EntityInterface
     }
 
     /**
-     * Update widget position.
+     * Update widget grid position.
      */
-    public function updatePosition(int $position): void
+    public function updateGridPosition(array $gridPosition): void
     {
-        $this->position = $position;
-    }
-
-    /**
-     * Update widget size.
-     */
-    public function updateSize(array $size): void
-    {
-        $this->size = $size;
+        $this->gridPosition = array_merge($this->gridPosition, $gridPosition);
     }
 
     /**
@@ -184,14 +171,9 @@ final class DashboardWidget implements EntityInterface
         return $this->config;
     }
 
-    public function position(): int
+    public function gridPosition(): array
     {
-        return $this->position;
-    }
-
-    public function size(): array
-    {
-        return $this->size;
+        return $this->gridPosition;
     }
 
     public function refreshInterval(): int

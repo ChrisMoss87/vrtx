@@ -1,8 +1,20 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import { Table as TableIcon } from 'lucide-svelte';
+	import { Table as TableIcon, TrendingUp, TrendingDown } from 'lucide-svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
+	import {
+		presets,
+		applyConditionalFormat,
+		formatStyleToInline,
+		type FormatCondition
+	} from './conditionalFormatting';
+
+	type ColumnFormatting = {
+		type: 'traffic_light' | 'reverse_traffic_light' | 'progress' | 'trend' | 'status' | 'custom';
+		thresholds?: [number, number];
+		conditions?: FormatCondition[];
+	};
 
 	interface Props {
 		title: string;
@@ -10,6 +22,7 @@
 			columns?: string[];
 			data?: Record<string, any>[];
 			total_count?: number;
+			column_formatting?: Record<string, ColumnFormatting>;
 		} | null;
 		loading?: boolean;
 		maxRows?: number;
@@ -53,6 +66,53 @@
 			.replace(/([A-Z])/g, ' $1')
 			.replace(/^./, (str) => str.toUpperCase())
 			.trim();
+	}
+
+	function getCellFormatting(col: string, value: any): { style: string; icon?: 'up' | 'down' } {
+		const formatting = data?.column_formatting?.[col];
+		if (!formatting) return { style: '' };
+
+		let formatStyle;
+
+		switch (formatting.type) {
+			case 'traffic_light':
+				if (typeof value === 'number') {
+					formatStyle = presets.trafficLight(value, formatting.thresholds);
+				}
+				break;
+			case 'reverse_traffic_light':
+				if (typeof value === 'number') {
+					formatStyle = presets.reverseTrafficLight(value, formatting.thresholds);
+				}
+				break;
+			case 'progress':
+				if (typeof value === 'number') {
+					formatStyle = presets.progress(value);
+				}
+				break;
+			case 'trend':
+				if (typeof value === 'number') {
+					formatStyle = presets.trend(value);
+				}
+				break;
+			case 'status':
+				if (typeof value === 'string') {
+					formatStyle = presets.status(value);
+				}
+				break;
+			case 'custom':
+				if (formatting.conditions) {
+					formatStyle = applyConditionalFormat(value, formatting.conditions);
+				}
+				break;
+		}
+
+		if (!formatStyle) return { style: '' };
+
+		return {
+			style: formatStyleToInline(formatStyle),
+			icon: formatStyle.icon as 'up' | 'down' | undefined
+		};
 	}
 </script>
 
@@ -98,8 +158,19 @@
 						{#each rows() as row}
 							<Table.Row>
 								{#each columns() as col}
+									{@const cellFormat = getCellFormatting(col, row[col])}
 									<Table.Cell class="text-sm">
-										{formatCellValue(row[col])}
+										<span
+											class="inline-flex items-center gap-1 rounded px-1"
+											style={cellFormat.style}
+										>
+											{#if cellFormat.icon === 'up'}
+												<TrendingUp class="h-3 w-3" />
+											{:else if cellFormat.icon === 'down'}
+												<TrendingDown class="h-3 w-3" />
+											{/if}
+											{formatCellValue(row[col])}
+										</span>
 									</Table.Cell>
 								{/each}
 							</Table.Row>

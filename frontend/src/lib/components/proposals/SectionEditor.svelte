@@ -105,7 +105,7 @@
                     type="button"
                     class="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-destructive-foreground rounded-full hidden group-hover:flex items-center justify-center text-xs"
                     onclick={() => {
-                      section.media_urls = section.media_urls?.filter(u => u !== url);
+                      section.media_urls = section.media_urls?.filter(u => u !== url) ?? null;
                     }}
                   >
                     ×

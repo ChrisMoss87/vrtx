@@ -21,6 +21,8 @@ use App\Http\Controllers\Api\Workflows\WorkflowController;
 use App\Http\Controllers\Api\Workflow\WorkflowEmailTemplateController;
 use App\Http\Controllers\Api\Reporting\ReportController;
 use App\Http\Controllers\Api\Reporting\DashboardController;
+use App\Http\Controllers\Api\Reporting\DashboardTemplateController;
+use App\Http\Controllers\Api\Reporting\AdvancedReportController;
 use App\Http\Controllers\Api\DataManagement\ImportController;
 use App\Http\Controllers\Api\DataManagement\ExportController;
 use App\Http\Controllers\Api\Integration\ApiKeyController;
@@ -72,6 +74,16 @@ use App\Http\Controllers\Api\Signature\PublicSignatureController;
 use App\Http\Controllers\Api\Proposal\ProposalController;
 use App\Http\Controllers\Api\Proposal\PublicProposalController;
 use App\Http\Controllers\Api\Approval\ApprovalController;
+use App\Http\Controllers\Api\UserPreferencesController;
+use App\Http\Controllers\Api\CMS\CmsPageController;
+use App\Http\Controllers\Api\CMS\CmsMediaController;
+use App\Http\Controllers\Api\CMS\CmsMediaFolderController;
+use App\Http\Controllers\Api\CMS\CmsTemplateController;
+use App\Http\Controllers\Api\CMS\CmsFormController;
+use App\Http\Controllers\Api\CMS\CmsCategoryController;
+use App\Http\Controllers\Api\CMS\CmsMenuController;
+use App\Http\Controllers\Api\CMS\CmsTagController;
+use App\Http\Controllers\Api\CMS\CmsPublicController;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
@@ -102,6 +114,14 @@ Route::middleware([
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
+
+        // User Preferences
+        Route::prefix('preferences')->group(function () {
+            Route::get('/', [UserPreferencesController::class, 'index']);
+            Route::get('/{key}', [UserPreferencesController::class, 'show']);
+            Route::put('/', [UserPreferencesController::class, 'update']);
+            Route::post('/set', [UserPreferencesController::class, 'set']);
+        });
 
         // Module Management Routes
         Route::prefix('modules')->group(function () {
@@ -465,6 +485,15 @@ Route::middleware([
 
             // Delete operations
             Route::delete('/{report}', [ReportController::class, 'destroy'])->middleware('permission:reports.delete');
+
+            // Advanced Reporting (Cross-object, Calculated Fields, Cohort Analysis)
+            Route::prefix('advanced')->middleware('permission:reports.view')->group(function () {
+                Route::post('/execute', [AdvancedReportController::class, 'execute']);
+                Route::get('/joins/{moduleId}', [AdvancedReportController::class, 'getJoins']);
+                Route::post('/fields', [AdvancedReportController::class, 'getFields']);
+                Route::post('/cohort', [AdvancedReportController::class, 'cohort']);
+                Route::post('/validate-formula', [AdvancedReportController::class, 'validateFormula']);
+            });
         });
 
         // Dashboard Routes
@@ -492,11 +521,20 @@ Route::middleware([
                 Route::post('/{dashboard}/widgets', [DashboardController::class, 'addWidget']);
                 Route::put('/{dashboard}/widgets/{widget}', [DashboardController::class, 'updateWidget']);
                 Route::delete('/{dashboard}/widgets/{widget}', [DashboardController::class, 'removeWidget']);
-                Route::post('/{dashboard}/widgets/reorder', [DashboardController::class, 'reorderWidgets']);
+                Route::post('/{dashboard}/widgets/positions', [DashboardController::class, 'updateWidgetPositions']);
             });
 
             // Delete operations
             Route::delete('/{dashboard}', [DashboardController::class, 'destroy'])->middleware('permission:dashboards.delete');
+        });
+
+        // Dashboard Template Routes
+        Route::prefix('dashboard-templates')->middleware('permission:dashboards.view')->group(function () {
+            Route::get('/', [DashboardTemplateController::class, 'index']);
+            Route::get('/categories', [DashboardTemplateController::class, 'categories']);
+            Route::get('/{id}', [DashboardTemplateController::class, 'show']);
+            Route::post('/{id}/create-dashboard', [DashboardTemplateController::class, 'createDashboard'])
+                ->middleware('permission:dashboards.create');
         });
 
         // RBAC (Role-Based Access Control) Routes
@@ -1068,6 +1106,106 @@ Route::middleware([
             Route::post('/{id}/build', [LookalikeController::class, 'build']);
             Route::get('/{id}/matches', [LookalikeController::class, 'matches']);
             Route::post('/{id}/export', [LookalikeController::class, 'export']);
+        });
+
+        // CMS Routes
+        Route::prefix('cms')->group(function () {
+            // Pages
+            Route::prefix('pages')->group(function () {
+                Route::get('/', [CmsPageController::class, 'index']);
+                Route::post('/', [CmsPageController::class, 'store']);
+                Route::get('/{cmsPage}', [CmsPageController::class, 'show']);
+                Route::put('/{cmsPage}', [CmsPageController::class, 'update']);
+                Route::delete('/{cmsPage}', [CmsPageController::class, 'destroy']);
+                Route::post('/{cmsPage}/publish', [CmsPageController::class, 'publish']);
+                Route::post('/{cmsPage}/unpublish', [CmsPageController::class, 'unpublish']);
+                Route::post('/{cmsPage}/schedule', [CmsPageController::class, 'schedule']);
+                Route::post('/{cmsPage}/duplicate', [CmsPageController::class, 'duplicate']);
+                Route::get('/{cmsPage}/versions', [CmsPageController::class, 'versions']);
+                Route::post('/{cmsPage}/versions/{versionNumber}/restore', [CmsPageController::class, 'restoreVersion']);
+            });
+
+            // Media
+            Route::prefix('media')->group(function () {
+                Route::get('/stats', [CmsMediaController::class, 'stats']);
+                Route::get('/', [CmsMediaController::class, 'index']);
+                Route::post('/', [CmsMediaController::class, 'store']);
+                Route::get('/{cmsMedia}', [CmsMediaController::class, 'show']);
+                Route::put('/{cmsMedia}', [CmsMediaController::class, 'update']);
+                Route::delete('/{cmsMedia}', [CmsMediaController::class, 'destroy']);
+                Route::post('/{cmsMedia}/move', [CmsMediaController::class, 'move']);
+                Route::post('/bulk-delete', [CmsMediaController::class, 'bulkDelete']);
+                Route::post('/bulk-move', [CmsMediaController::class, 'bulkMove']);
+            });
+
+            // Media Folders
+            Route::prefix('media-folders')->group(function () {
+                Route::get('/tree', [CmsMediaFolderController::class, 'tree']);
+                Route::get('/', [CmsMediaFolderController::class, 'index']);
+                Route::post('/', [CmsMediaFolderController::class, 'store']);
+                Route::get('/{cmsMediaFolder}', [CmsMediaFolderController::class, 'show']);
+                Route::put('/{cmsMediaFolder}', [CmsMediaFolderController::class, 'update']);
+                Route::delete('/{cmsMediaFolder}', [CmsMediaFolderController::class, 'destroy']);
+            });
+
+            // Templates
+            Route::prefix('templates')->group(function () {
+                Route::get('/', [CmsTemplateController::class, 'index']);
+                Route::post('/', [CmsTemplateController::class, 'store']);
+                Route::get('/{cmsTemplate}', [CmsTemplateController::class, 'show']);
+                Route::put('/{cmsTemplate}', [CmsTemplateController::class, 'update']);
+                Route::delete('/{cmsTemplate}', [CmsTemplateController::class, 'destroy']);
+                Route::post('/{cmsTemplate}/duplicate', [CmsTemplateController::class, 'duplicate']);
+                Route::post('/{cmsTemplate}/preview', [CmsTemplateController::class, 'preview']);
+            });
+
+            // Forms
+            Route::prefix('forms')->group(function () {
+                Route::get('/', [CmsFormController::class, 'index']);
+                Route::post('/', [CmsFormController::class, 'store']);
+                Route::get('/{cmsForm}', [CmsFormController::class, 'show']);
+                Route::put('/{cmsForm}', [CmsFormController::class, 'update']);
+                Route::delete('/{cmsForm}', [CmsFormController::class, 'destroy']);
+                Route::post('/{cmsForm}/duplicate', [CmsFormController::class, 'duplicate']);
+                Route::get('/{cmsForm}/submissions', [CmsFormController::class, 'submissions']);
+                Route::get('/{cmsForm}/submissions/{submission}', [CmsFormController::class, 'submission']);
+                Route::delete('/{cmsForm}/submissions/{submission}', [CmsFormController::class, 'deleteSubmission']);
+                Route::get('/{cmsForm}/embed-code', [CmsFormController::class, 'embedCode']);
+                Route::get('/{cmsForm}/analytics', [CmsFormController::class, 'analytics']);
+            });
+
+            // Categories
+            Route::prefix('categories')->group(function () {
+                Route::get('/tree', [CmsCategoryController::class, 'tree']);
+                Route::get('/', [CmsCategoryController::class, 'index']);
+                Route::post('/', [CmsCategoryController::class, 'store']);
+                Route::get('/{cmsCategory}', [CmsCategoryController::class, 'show']);
+                Route::put('/{cmsCategory}', [CmsCategoryController::class, 'update']);
+                Route::delete('/{cmsCategory}', [CmsCategoryController::class, 'destroy']);
+                Route::post('/reorder', [CmsCategoryController::class, 'reorder']);
+            });
+
+            // Menus
+            Route::prefix('menus')->group(function () {
+                Route::get('/locations', [CmsMenuController::class, 'locations']);
+                Route::get('/by-location/{location}', [CmsMenuController::class, 'byLocation']);
+                Route::get('/', [CmsMenuController::class, 'index']);
+                Route::post('/', [CmsMenuController::class, 'store']);
+                Route::get('/{cmsMenu}', [CmsMenuController::class, 'show']);
+                Route::put('/{cmsMenu}', [CmsMenuController::class, 'update']);
+                Route::delete('/{cmsMenu}', [CmsMenuController::class, 'destroy']);
+            });
+
+            // Tags
+            Route::prefix('tags')->group(function () {
+                Route::get('/popular', [CmsTagController::class, 'popular']);
+                Route::post('/merge', [CmsTagController::class, 'merge']);
+                Route::get('/', [CmsTagController::class, 'index']);
+                Route::post('/', [CmsTagController::class, 'store']);
+                Route::get('/{cmsTag}', [CmsTagController::class, 'show']);
+                Route::put('/{cmsTag}', [CmsTagController::class, 'update']);
+                Route::delete('/{cmsTag}', [CmsTagController::class, 'destroy']);
+            });
         });
 
         // Sales Forecasting Routes
@@ -2053,6 +2191,20 @@ Route::middleware([
         Route::get('/{slug}/thank-you', [PublicLandingPageController::class, 'thankYou']);
         Route::post('/{slug}/engagement', [PublicLandingPageController::class, 'trackEngagement']);
         Route::post('/{slug}/conversion', [PublicLandingPageController::class, 'trackConversion']);
+    });
+
+    // Public CMS Routes (no auth required, rate limited)
+    Route::prefix('cms/public')->middleware('throttle:public-forms')->group(function () {
+        // Blog posts
+        Route::get('/blog', [CmsPublicController::class, 'blogPosts']);
+        Route::get('/blog/{slug}', [CmsPublicController::class, 'blogPost']);
+
+        // Pages
+        Route::get('/pages/{slug}', [CmsPublicController::class, 'page']);
+
+        // Forms
+        Route::get('/forms/{slug}', [CmsPublicController::class, 'formEmbed']);
+        Route::post('/forms/{slug}/submit', [CmsPublicController::class, 'formSubmit']);
     });
 
     // WhatsApp Webhook Routes (no auth required - uses verify token)

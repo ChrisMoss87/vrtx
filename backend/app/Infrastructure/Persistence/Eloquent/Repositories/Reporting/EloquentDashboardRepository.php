@@ -192,8 +192,7 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
             title: $model->title,
             type: WidgetType::from($model->type),
             config: $model->config ?? [],
-            position: $model->position ?? 0,
-            size: $model->size ?? ['w' => 6, 'h' => 4],
+            gridPosition: $model->grid_position ?? ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4],
             refreshInterval: $model->refresh_interval ?? 0,
         );
     }
@@ -236,8 +235,7 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
                 'title' => $widget->title(),
                 'type' => $widget->type()->value,
                 'config' => $widget->config(),
-                'position' => $widget->position(),
-                'size' => $widget->size(),
+                'grid_position' => $widget->gridPosition(),
                 'refresh_interval' => $widget->refreshInterval(),
             ]);
         }

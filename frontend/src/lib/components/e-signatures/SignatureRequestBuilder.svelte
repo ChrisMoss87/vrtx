@@ -4,15 +4,47 @@
   import { Label } from '$lib/components/ui/label';
   import { Textarea } from '$lib/components/ui/textarea';
   import * as Card from '$lib/components/ui/card';
-  import type { SignatureRequest, SignatureSigner } from '$lib/api/signatures';
+  import type { SignatureRequest } from '$lib/api/signatures';
   import SignerManager from './SignerManager.svelte';
   import FieldPlacer from './FieldPlacer.svelte';
+
+  interface CreateSignerData {
+    name: string;
+    email: string;
+    role?: string;
+    order?: number;
+  }
+
+  interface CreateFieldData {
+    signer_index: number;
+    type: string;
+    page: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    required: boolean;
+    label?: string;
+  }
+
+  interface CreateSignatureRequestData {
+    title: string;
+    message?: string | null;
+    expires_at?: string | null;
+    signers: CreateSignerData[];
+    fields: CreateFieldData[];
+    settings?: {
+      reminder_days?: number;
+      allow_decline?: boolean;
+      require_reason?: boolean;
+    };
+  }
 
   interface Props {
     request?: Partial<SignatureRequest>;
     documentUrl?: string | null;
     loading?: boolean;
-    onSave?: (data: Partial<SignatureRequest>) => void;
+    onSave?: (data: CreateSignatureRequestData) => void;
     onCancel?: () => void;
     onUploadDocument?: () => void;
   }
@@ -32,24 +64,15 @@
   let reminderDays = $state(request.settings?.reminder_days || 3);
   let allowDecline = $state(request.settings?.allow_decline ?? true);
   let requireReason = $state(request.settings?.require_reason ?? false);
-  let signers = $state<Partial<SignatureSigner>[]>(request.signers || []);
-  let fields = $state<Array<{
-    signer_index: number;
-    type: string;
-    page: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    required: boolean;
-    label?: string;
-  }>>([]);
+  let signers = $state<CreateSignerData[]>(
+    request.signers?.map(s => ({ name: s.name, email: s.email, role: s.role, order: s.order })) || []
+  );
+  let fields = $state<CreateFieldData[]>([]);
 
   let currentStep = $state<'details' | 'signers' | 'fields'>('details');
 
   function handleSave() {
     onSave?.({
-      ...request,
       title,
       message: message || null,
       expires_at: expiresAt || null,

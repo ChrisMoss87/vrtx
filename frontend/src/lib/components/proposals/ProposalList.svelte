@@ -53,9 +53,9 @@
 
   const filteredProposals = $derived(proposals.filter(p => {
     const matchesSearch = !search ||
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.client_name.toLowerCase().includes(search.toLowerCase()) ||
-      p.client_email.toLowerCase().includes(search.toLowerCase());
+      p.title?.toLowerCase().includes(search.toLowerCase()) ||
+      p.client_name?.toLowerCase().includes(search.toLowerCase()) ||
+      p.sent_to_email?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !statusFilter || p.status === statusFilter;
     return matchesSearch && matchesStatus;
   }));

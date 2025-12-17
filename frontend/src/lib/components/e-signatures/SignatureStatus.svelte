@@ -101,7 +101,7 @@
             <Badge variant="outline" class={signerStatusColors[signer.status]}>
               {getStatusLabel(signer.status)}
             </Badge>
-            {#if signer.status === 'pending' || signer.status === 'sent'}
+            {#if signer.status === 'pending'}
               <Button variant="ghost" size="sm" onclick={() => onRemind?.(signer.id)}>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
