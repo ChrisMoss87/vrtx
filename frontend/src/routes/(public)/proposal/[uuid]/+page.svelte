@@ -4,7 +4,7 @@
   import { PublicProposalView } from '$lib/components/proposals';
   import { publicProposalApi, type Proposal, type ProposalSection, type ProposalPricingItem, type ProposalComment } from '$lib/api/proposals';
 
-  const uuid = $derived($page.params.uuid);
+  const uuid = $derived($page.params.uuid ?? '');
 
   let proposal = $state<Proposal | null>(null);
   let sections = $state<ProposalSection[]>([]);
@@ -21,14 +21,25 @@
     loading = true;
     error = '';
     try {
-      const data = await publicProposalApi.getProposal(uuid);
-      proposal = data.proposal;
-      sections = data.sections;
-      pricingItems = data.pricing_items;
-      comments = data.comments;
-
-      // Track view
-      await publicProposalApi.trackView(uuid);
+      const response = await publicProposalApi.get(uuid);
+      // Check if response has proposal data or is an error response
+      if ('proposal' in response) {
+        proposal = response.proposal;
+        // Load additional data
+        sections = proposal.sections || [];
+        pricingItems = proposal.pricing_items || [];
+        // Load comments separately
+        try {
+          comments = await publicProposalApi.getComments(uuid);
+        } catch {
+          comments = [];
+        }
+        // Track view
+        await publicProposalApi.trackView(uuid);
+      } else {
+        // Error response
+        error = response.message || 'This proposal link is invalid or has expired.';
+      }
     } catch (err) {
       console.error('Failed to load proposal:', err);
       error = 'This proposal link is invalid or has expired.';
@@ -37,10 +48,10 @@
     }
   }
 
-  async function handleAccept() {
+  async function handleAccept(acceptedBy: string, signature?: string) {
     loading = true;
     try {
-      await publicProposalApi.accept(uuid);
+      await publicProposalApi.accept(uuid, acceptedBy, signature);
       proposal = { ...proposal!, status: 'accepted' } as Proposal;
     } catch (err) {
       console.error('Failed to accept proposal:', err);
@@ -49,11 +60,11 @@
     }
   }
 
-  async function handleDecline(event: CustomEvent<string>) {
+  async function handleDecline(rejectedBy: string, reason?: string) {
     loading = true;
     try {
-      await publicProposalApi.decline(uuid, event.detail);
-      proposal = { ...proposal!, status: 'declined' } as Proposal;
+      await publicProposalApi.reject(uuid, rejectedBy, reason);
+      proposal = { ...proposal!, status: 'rejected' } as Proposal;
     } catch (err) {
       console.error('Failed to decline proposal:', err);
     } finally {
@@ -61,22 +72,27 @@
     }
   }
 
-  async function handleAddComment(event: CustomEvent<{ sectionId: number | null; content: string }>) {
+  async function handleAddComment(sectionId: number | null, content: string, authorEmail: string, authorName?: string) {
     try {
-      const newComment = await publicProposalApi.addComment(uuid, event.detail.sectionId, event.detail.content);
+      const newComment = await publicProposalApi.addComment(uuid, {
+        section_id: sectionId ?? undefined,
+        comment: content,
+        author_email: authorEmail,
+        author_name: authorName
+      });
       comments = [...comments, newComment];
     } catch (err) {
       console.error('Failed to add comment:', err);
     }
   }
 
-  async function handleTogglePricingItem(event: CustomEvent<number>) {
+  async function handleTogglePricingItem(itemId: number) {
     try {
-      await publicProposalApi.togglePricingItem(uuid, event.detail);
-      const itemIndex = pricingItems.findIndex(i => i.id === event.detail);
+      const result = await publicProposalApi.toggleItem(uuid, itemId);
+      const itemIndex = pricingItems.findIndex(i => i.id === itemId);
       if (itemIndex >= 0) {
-        pricingItems[itemIndex].is_selected = !pricingItems[itemIndex].is_selected;
-        pricingItems = pricingItems;
+        pricingItems[itemIndex].is_selected = result.is_selected;
+        pricingItems = [...pricingItems];
       }
     } catch (err) {
       console.error('Failed to toggle pricing item:', err);
@@ -114,9 +130,9 @@
     {pricingItems}
     {comments}
     {loading}
-    on:accept={handleAccept}
-    on:decline={handleDecline}
-    on:addComment={handleAddComment}
-    on:togglePricingItem={handleTogglePricingItem}
+    onAccept={() => handleAccept('Client')}
+    onDecline={(reason) => handleDecline('Client', reason)}
+    onAddComment={(data) => handleAddComment(data.sectionId, data.content, 'client@example.com')}
+    onTogglePricingItem={handleTogglePricingItem}
   />
 {/if}

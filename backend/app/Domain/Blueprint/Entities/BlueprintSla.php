@@ -186,9 +186,7 @@ class BlueprintSla
             return $startTime->modify("+{$this->durationHours} hours");
         }
 
-        // Business hours calculation would go here
-        // For now, simple calculation
-        return $startTime->modify("+{$this->durationHours} hours");
+        return $this->addBusinessHours($startTime, $this->durationHours);
     }
 
     /**
@@ -200,7 +198,122 @@ class BlueprintSla
             return $startTime->modify("+{$this->warningHours} hours");
         }
 
-        return $startTime->modify("+{$this->warningHours} hours");
+        return $this->addBusinessHours($startTime, $this->warningHours);
+    }
+
+    /**
+     * Add business hours to a date, accounting for working hours and weekends.
+     *
+     * Business hours are defined as 9:00 AM - 5:00 PM, Monday - Friday.
+     */
+    private function addBusinessHours(\DateTimeImmutable $startTime, int $hoursToAdd): \DateTimeImmutable
+    {
+        // Business hours configuration
+        $businessStartHour = 9;
+        $businessEndHour = 17;
+        $businessHoursPerDay = $businessEndHour - $businessStartHour; // 8 hours
+
+        $currentTime = \DateTime::createFromImmutable($startTime);
+        $remainingHours = $hoursToAdd;
+
+        while ($remainingHours > 0) {
+            $dayOfWeek = (int) $currentTime->format('N'); // 1 (Mon) to 7 (Sun)
+            $currentHour = (int) $currentTime->format('G');
+
+            // Skip weekends
+            if ($dayOfWeek >= 6) {
+                // Move to next Monday at business start
+                $daysUntilMonday = $dayOfWeek === 6 ? 2 : 1;
+                $currentTime->modify("+{$daysUntilMonday} days");
+                $currentTime->setTime($businessStartHour, 0, 0);
+                continue;
+            }
+
+            // If before business hours, move to start of business hours
+            if ($currentHour < $businessStartHour) {
+                $currentTime->setTime($businessStartHour, 0, 0);
+                $currentHour = $businessStartHour;
+            }
+
+            // If after business hours, move to next business day
+            if ($currentHour >= $businessEndHour) {
+                $currentTime->modify('+1 day');
+                $currentTime->setTime($businessStartHour, 0, 0);
+                continue;
+            }
+
+            // Calculate available hours today
+            $availableHoursToday = $businessEndHour - $currentHour;
+
+            if ($remainingHours <= $availableHoursToday) {
+                // We can finish within today
+                $currentTime->modify("+{$remainingHours} hours");
+                $remainingHours = 0;
+            } else {
+                // Use up today's available hours and move to next day
+                $remainingHours -= $availableHoursToday;
+                $currentTime->modify('+1 day');
+                $currentTime->setTime($businessStartHour, 0, 0);
+            }
+        }
+
+        return \DateTimeImmutable::createFromMutable($currentTime);
+    }
+
+    /**
+     * Calculate elapsed business hours between two dates.
+     */
+    public function calculateElapsedBusinessHours(\DateTimeImmutable $startTime, \DateTimeImmutable $endTime): int
+    {
+        if (!$this->businessHoursOnly) {
+            $diff = $startTime->diff($endTime);
+            return (int) ($diff->days * 24 + $diff->h);
+        }
+
+        $businessStartHour = 9;
+        $businessEndHour = 17;
+        $businessHoursPerDay = $businessEndHour - $businessStartHour;
+
+        $currentTime = \DateTime::createFromImmutable($startTime);
+        $end = \DateTime::createFromImmutable($endTime);
+        $totalHours = 0;
+
+        while ($currentTime < $end) {
+            $dayOfWeek = (int) $currentTime->format('N');
+            $currentHour = (int) $currentTime->format('G');
+
+            // Skip weekends
+            if ($dayOfWeek >= 6) {
+                $currentTime->modify('+1 day');
+                $currentTime->setTime($businessStartHour, 0, 0);
+                continue;
+            }
+
+            // Adjust to business hours
+            if ($currentHour < $businessStartHour) {
+                $currentTime->setTime($businessStartHour, 0, 0);
+                $currentHour = $businessStartHour;
+            }
+
+            if ($currentHour >= $businessEndHour) {
+                $currentTime->modify('+1 day');
+                $currentTime->setTime($businessStartHour, 0, 0);
+                continue;
+            }
+
+            // Calculate hours for this day
+            $endOfBusinessDay = (clone $currentTime)->setTime($businessEndHour, 0, 0);
+            $effectiveEnd = min($end, $endOfBusinessDay);
+
+            $hoursThisPeriod = max(0, ((int) $effectiveEnd->format('G')) - $currentHour);
+            $totalHours += $hoursThisPeriod;
+
+            // Move to next day
+            $currentTime->modify('+1 day');
+            $currentTime->setTime($businessStartHour, 0, 0);
+        }
+
+        return $totalHours;
     }
 
     /**

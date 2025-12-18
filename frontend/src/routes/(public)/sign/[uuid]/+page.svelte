@@ -4,7 +4,7 @@
   import { PublicSigningView } from '$lib/components/e-signatures';
   import { publicSigningApi, type SignatureRequest, type SignatureSigner, type SignatureField } from '$lib/api/signatures';
 
-  const uuid = $derived($page.params.uuid);
+  const uuid = $derived($page.params.uuid ?? '');
 
   let request = $state<SignatureRequest | null>(null);
   let signer = $state<SignatureSigner | null>(null);
@@ -12,8 +12,12 @@
   let documentUrl = $state('');
   let loading = $state(true);
   let error = $state('');
+  let token = $state('');
 
   onMount(async () => {
+    // Get token from URL query params
+    const url = new URL(window.location.href);
+    token = url.searchParams.get('token') || '';
     await loadSigningData();
   });
 
@@ -21,11 +25,11 @@
     loading = true;
     error = '';
     try {
-      const data = await publicSigningApi.getSigningData(uuid);
+      const data = await publicSigningApi.getRequest(uuid, token);
       request = data.request;
       signer = data.signer;
-      fields = data.fields;
-      documentUrl = data.document_url;
+      fields = request.fields || [];
+      documentUrl = request.document_url || '';
     } catch (err) {
       console.error('Failed to load signing data:', err);
       error = 'This signing link is invalid or has expired.';
@@ -34,18 +38,17 @@
     }
   }
 
-  async function handleSign(event: CustomEvent<{ fieldId: number; signature: string }>) {
-    try {
-      await publicSigningApi.signField(uuid, event.detail.fieldId, event.detail.signature);
-    } catch (err) {
-      console.error('Failed to sign field:', err);
-    }
+  let signedFieldValues = $state<Record<number, string>>({});
+
+  async function handleSign(data: { fieldId: number; signature: string }) {
+    // Store signature locally until complete
+    signedFieldValues[data.fieldId] = data.signature;
   }
 
   async function handleComplete() {
     loading = true;
     try {
-      await publicSigningApi.complete(uuid);
+      await publicSigningApi.sign(uuid, token, signedFieldValues);
       // Show success message
       request = { ...request!, status: 'completed' } as SignatureRequest;
     } catch (err) {
@@ -55,10 +58,10 @@
     }
   }
 
-  async function handleDecline(event: CustomEvent<string>) {
+  async function handleDecline(reason: string) {
     loading = true;
     try {
-      await publicSigningApi.decline(uuid, event.detail);
+      await publicSigningApi.decline(uuid, token, reason);
       // Show declined message
       request = { ...request!, status: 'declined' } as SignatureRequest;
     } catch (err) {
@@ -122,8 +125,8 @@
     {fields}
     {documentUrl}
     {loading}
-    on:sign={handleSign}
-    on:complete={handleComplete}
-    on:decline={handleDecline}
+    onSign={handleSign}
+    onComplete={handleComplete}
+    onDecline={handleDecline}
   />
 {/if}

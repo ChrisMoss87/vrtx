@@ -23,6 +23,9 @@
 	import FormCanvas from '$lib/components/form-builder/FormCanvas.svelte';
 	import FieldConfigPanel from '$lib/components/form-builder/FieldConfigPanel.svelte';
 	import IconPicker from '$lib/components/form-builder/IconPicker.svelte';
+	import CardDesigner from '$lib/components/card-designer/CardDesigner.svelte';
+	import type { KanbanCardConfig } from '$lib/types/kanban-card-config';
+	import { DEFAULT_CARD_CONFIG } from '$lib/types/kanban-card-config';
 	import {
 		ArrowLeft,
 		Save,
@@ -40,6 +43,7 @@
 		GripVertical,
 		Columns3,
 		Tag,
+		LayoutGrid,
 		Users,
 		Building2,
 		Briefcase,
@@ -104,6 +108,8 @@
 	let defaultSortDirection = $state<'asc' | 'desc'>('asc');
 	let defaultColumnOrder = $state<string[]>([]);
 	let recordNameField = $state<string>('');
+	let kanbanCardFields = $state<string[]>([]);
+	let kanbanCardConfig = $state<KanbanCardConfig | null>(null);
 
 	// Dragging state for column reorder
 	let draggedColumnIndex = $state<number | null>(null);
@@ -117,7 +123,7 @@
 	let loading = $state(false);
 	let loadingModule = $state(true);
 	let error = $state<string | null>(null);
-	let currentStep = $state<'details' | 'builder' | 'settings'>('details');
+	let currentStep = $state<'details' | 'builder' | 'cards' | 'settings'>('details');
 
 	let isStep1Valid = $derived(moduleName.trim() && singularName.trim());
 	let isStep2Valid = $derived(
@@ -233,12 +239,20 @@
 				defaultSortDirection = module.default_sorting[0].desc ? 'desc' : 'asc';
 			}
 
-			// Load record name field and column order from settings
+			// Load record name field, column order, kanban card fields, and kanban card config from settings
 			if (module.settings) {
 				recordNameField = (module.settings as any).record_name_field || '';
 				const savedColumnOrder = (module.settings as any).default_column_order;
 				if (savedColumnOrder && Array.isArray(savedColumnOrder)) {
 					defaultColumnOrder = savedColumnOrder;
+				}
+				const savedKanbanCardFields = (module.settings as any).kanban_card_fields;
+				if (savedKanbanCardFields && Array.isArray(savedKanbanCardFields)) {
+					kanbanCardFields = savedKanbanCardFields;
+				}
+				const savedKanbanCardConfig = (module.settings as any).kanban_card_config;
+				if (savedKanbanCardConfig) {
+					kanbanCardConfig = savedKanbanCardConfig;
 				}
 			}
 
@@ -323,7 +337,7 @@
 		selectedFieldIndex = -1;
 	}
 
-	function goToStep(step: 'details' | 'builder' | 'settings') {
+	function goToStep(step: 'details' | 'builder' | 'cards' | 'settings') {
 		// Allow navigating to any step freely
 		currentStep = step;
 	}
@@ -400,7 +414,7 @@
 				}))
 			}));
 
-			// Build settings with record_name_field and column order
+			// Build settings with record_name_field, column order, kanban card fields, and kanban card config
 			const moduleSettings: Record<string, unknown> = {
 				has_import: true,
 				has_export: true,
@@ -410,7 +424,9 @@
 				has_activity_log: true,
 				has_custom_views: true,
 				record_name_field: recordNameField || null,
-				default_column_order: defaultColumnOrder.length > 0 ? defaultColumnOrder : undefined
+				default_column_order: defaultColumnOrder.length > 0 ? defaultColumnOrder : undefined,
+				kanban_card_fields: kanbanCardFields.length > 0 ? kanbanCardFields : undefined,
+				kanban_card_config: kanbanCardConfig || undefined
 			};
 
 			const request: UpdateModuleRequest = {
@@ -530,6 +546,17 @@
 							{#if availableFields.length > 0}
 								<Badge variant="secondary" class="ml-1 h-5 px-1.5 text-xs">{availableFields.length}</Badge>
 							{/if}
+						</button>
+
+						<button
+							onclick={() => goToStep('cards')}
+							class="relative flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all {currentStep ===
+							'cards'
+								? 'bg-background text-foreground shadow-sm'
+								: 'text-muted-foreground hover:text-foreground'}"
+						>
+							<LayoutGrid class="h-4 w-4" />
+							<span>Card Designer</span>
 						</button>
 
 						<button
@@ -714,15 +741,44 @@
 				{#if isStep2Valid}
 					<div class="absolute right-6 bottom-6 lg:right-8 lg:bottom-8">
 						<Button
-							onclick={() => goToStep('settings')}
+							onclick={() => goToStep('cards')}
 							size="lg"
 							class="h-12 gap-2 px-6 shadow-2xl"
 						>
-							<Table2 class="h-5 w-5" />
-							Configure Table Settings
+							<LayoutGrid class="h-5 w-5" />
+							Configure Card Designer
 						</Button>
 					</div>
 				{/if}
+			{:else if currentStep === 'cards'}
+				<!-- Step 3: Card Designer -->
+				<div class="container mx-auto h-full overflow-y-auto px-4 py-8 md:px-6">
+					{#if availableFields.length > 0}
+						<CardDesigner
+							config={kanbanCardConfig}
+							{availableFields}
+							onchange={(config) => (kanbanCardConfig = config)}
+						/>
+					{:else}
+						<div class="flex h-full items-center justify-center">
+							<div class="text-center">
+								<LayoutGrid class="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+								<h3 class="text-lg font-semibold">No Fields Available</h3>
+								<p class="text-muted-foreground mt-2">
+									Add fields in the Fields tab to configure card design
+								</p>
+								<Button
+									variant="outline"
+									onclick={() => goToStep('builder')}
+									class="mt-4 gap-2"
+								>
+									<Columns3 class="h-4 w-4" />
+									Go to Fields
+								</Button>
+							</div>
+						</div>
+					{/if}
+				</div>
 			{:else if currentStep === 'settings'}
 				<!-- Step 3: DataTable Settings -->
 				<div class="container mx-auto h-full max-w-4xl overflow-y-auto px-4 py-8 md:px-6">
@@ -979,12 +1035,12 @@
 							<div class="flex items-center justify-between pt-4">
 								<Button
 									variant="outline"
-									onclick={() => goToStep('builder')}
+									onclick={() => goToStep('cards')}
 									size="lg"
 									class="gap-2"
 								>
 									<ArrowLeft class="h-4 w-4" />
-									Back to Builder
+									Back to Card Designer
 								</Button>
 								<Button
 									onclick={handleSubmit}

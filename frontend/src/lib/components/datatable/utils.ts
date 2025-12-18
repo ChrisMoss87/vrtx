@@ -549,3 +549,160 @@ export function areAllRowsSelected(
 export function areSomeRowsSelected(rowSelection: Record<string | number, boolean>): boolean {
 	return getSelectedRowCount(rowSelection) > 0;
 }
+
+/**
+ * Mobile Priority Constants
+ */
+export const MOBILE_PRIORITY = {
+	ALWAYS_VISIBLE: 1,
+	HIGH: 2,
+	MEDIUM: 3,
+	LOW: 4,
+	HIDDEN: 5
+} as const;
+
+/**
+ * Get default mobile priority based on column type and name
+ * Priority 1: Always visible (name/title fields, record identifiers)
+ * Priority 2: High priority (status, stage, amount, currency)
+ * Priority 3: Medium priority (email, phone, date, select)
+ * Priority 4: Low priority (description, notes, textarea)
+ * Priority 5: Hidden on mobile (timestamps, IDs, actions)
+ */
+export function getDefaultMobilePriority(
+	column: ColumnDef,
+	recordNameField?: string
+): 1 | 2 | 3 | 4 | 5 {
+	// If explicitly set, return that
+	if (column.mobilePriority !== undefined) {
+		return column.mobilePriority;
+	}
+
+	const id = column.id.toLowerCase();
+	const type = column.type;
+
+	// Priority 1: Record name field, name, title
+	if (recordNameField && column.id === recordNameField) {
+		return MOBILE_PRIORITY.ALWAYS_VISIBLE;
+	}
+	if (id === 'name' || id === 'title' || id.includes('_name') || id.endsWith('name')) {
+		return MOBILE_PRIORITY.ALWAYS_VISIBLE;
+	}
+
+	// Priority 5: System fields, timestamps, IDs, actions
+	if (id === 'id' || id === 'actions') {
+		return MOBILE_PRIORITY.HIDDEN;
+	}
+	if (id === 'created_at' || id === 'updated_at' || id === 'deleted_at') {
+		return MOBILE_PRIORITY.HIDDEN;
+	}
+	if (id.endsWith('_id') && type === 'number') {
+		return MOBILE_PRIORITY.HIDDEN;
+	}
+
+	// Priority 2: High importance fields
+	if (type === 'currency' || type === 'percent') {
+		return MOBILE_PRIORITY.HIGH;
+	}
+	if (id === 'status' || id === 'stage' || id === 'state' || id === 'priority') {
+		return MOBILE_PRIORITY.HIGH;
+	}
+	if (id === 'amount' || id === 'total' || id === 'value' || id === 'price') {
+		return MOBILE_PRIORITY.HIGH;
+	}
+
+	// Priority 3: Medium importance
+	if (type === 'email' || type === 'phone' || type === 'url') {
+		return MOBILE_PRIORITY.MEDIUM;
+	}
+	if (type === 'date' || type === 'datetime') {
+		return MOBILE_PRIORITY.MEDIUM;
+	}
+	if (type === 'select' || type === 'boolean') {
+		return MOBILE_PRIORITY.MEDIUM;
+	}
+	if (type === 'lookup' || type === 'user') {
+		return MOBILE_PRIORITY.MEDIUM;
+	}
+
+	// Priority 4: Low importance
+	if (type === 'textarea' || type === 'text') {
+		// Long text fields are lower priority
+		if (id === 'description' || id === 'notes' || id === 'comment' || id === 'comments') {
+			return MOBILE_PRIORITY.LOW;
+		}
+	}
+	if (type === 'multiselect' || type === 'tags') {
+		return MOBILE_PRIORITY.LOW;
+	}
+
+	// Default to medium priority
+	return MOBILE_PRIORITY.MEDIUM;
+}
+
+/**
+ * Check if a column should be visible on mobile based on priority threshold
+ */
+export function isColumnVisibleOnMobile(
+	column: ColumnDef,
+	priorityThreshold: number = 3,
+	recordNameField?: string
+): boolean {
+	// Explicit override takes precedence
+	if (column.mobileVisible !== undefined) {
+		return column.mobileVisible;
+	}
+
+	const priority = getDefaultMobilePriority(column, recordNameField);
+	return priority <= priorityThreshold;
+}
+
+/**
+ * Get columns sorted by mobile priority
+ */
+export function getColumnsByMobilePriority(
+	columns: ColumnDef[],
+	recordNameField?: string
+): ColumnDef[] {
+	return [...columns].sort((a, b) => {
+		const aPriority = getDefaultMobilePriority(a, recordNameField);
+		const bPriority = getDefaultMobilePriority(b, recordNameField);
+		return aPriority - bPriority;
+	});
+}
+
+/**
+ * Get visible columns for mobile (priority 1-3 by default)
+ */
+export function getMobileVisibleColumns(
+	columns: ColumnDef[],
+	maxColumns: number = 4,
+	recordNameField?: string
+): ColumnDef[] {
+	const sorted = getColumnsByMobilePriority(columns, recordNameField);
+
+	// Filter out actions and id columns for card display
+	const filtered = sorted.filter(
+		(col) => col.type !== 'actions' && col.id !== 'id'
+	);
+
+	return filtered.slice(0, maxColumns);
+}
+
+/**
+ * Get hidden columns for mobile (to show in expanded section)
+ */
+export function getMobileHiddenColumns(
+	columns: ColumnDef[],
+	maxVisibleColumns: number = 4,
+	recordNameField?: string
+): ColumnDef[] {
+	const sorted = getColumnsByMobilePriority(columns, recordNameField);
+
+	// Filter out actions and id columns
+	const filtered = sorted.filter(
+		(col) => col.type !== 'actions' && col.id !== 'id'
+	);
+
+	return filtered.slice(maxVisibleColumns);
+}

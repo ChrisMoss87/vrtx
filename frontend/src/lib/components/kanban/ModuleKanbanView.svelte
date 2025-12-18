@@ -7,6 +7,8 @@
 		KanbanColumn,
 		KanbanColumnSettings
 	} from '$lib/api/views';
+	import type { KanbanCardConfig, CardStyle } from '$lib/types/kanban-card-config';
+	import { mergeCardStyles } from '$lib/types/kanban-card-config';
 	import { getKanbanData, moveKanbanRecord, getKanbanFields } from '$lib/api/views';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -17,8 +19,10 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import * as Card from '$lib/components/ui/card';
 	import { toast } from 'svelte-sonner';
 	import { cn } from '$lib/utils';
+	import { formatFieldValue, truncateText } from '$lib/utils/field-formatters';
 	import {
 		Search,
 		RefreshCw,
@@ -44,6 +48,7 @@
 	interface Props {
 		moduleApiName: string;
 		view?: KanbanViewConfig;
+		moduleSettings?: Record<string, unknown>;
 		onRecordClick?: (record: KanbanRecord) => void;
 		onFieldChange?: (fieldApiName: string) => void;
 		onConfigChange?: (config: KanbanConfig) => void;
@@ -53,6 +58,7 @@
 	let {
 		moduleApiName,
 		view,
+		moduleSettings,
 		onRecordClick,
 		onFieldChange,
 		onConfigChange,
@@ -82,6 +88,55 @@
 	const groupByField = $derived(selectedField || view?.kanban_config?.group_by_field);
 	const valueField = $derived(view?.kanban_config?.value_field);
 	const titleField = $derived(view?.kanban_config?.title_field ?? 'name');
+	const subtitleField = $derived(view?.kanban_config?.subtitle_field);
+
+	// Card fields: use view config first, then fall back to module settings
+	const cardFields = $derived.by(() => {
+		if (view?.kanban_config?.card_fields && view.kanban_config.card_fields.length > 0) {
+			return view.kanban_config.card_fields;
+		}
+		// Fall back to module settings
+		if (moduleSettings?.kanban_card_fields && Array.isArray(moduleSettings.kanban_card_fields)) {
+			return moduleSettings.kanban_card_fields as string[];
+		}
+		return [];
+	});
+
+	// Card config from module settings
+	const cardConfig = $derived.by(() => {
+		if (moduleSettings?.kanban_card_config) {
+			return moduleSettings.kanban_card_config as KanbanCardConfig;
+		}
+		return null;
+	});
+
+	// Get card style for a specific record based on its field value
+	function getCardStyle(record: KanbanRecord, columnId: string): CardStyle {
+		if (!cardConfig) {
+			return {
+				backgroundColor: '#ffffff',
+				borderColor: '#e5e7eb',
+				accentColor: '#3b82f6',
+				accentWidth: 3,
+				titleColor: '#111827',
+				subtitleColor: '#6b7280',
+				textColor: '#374151'
+			};
+		}
+
+		const defaultStyle = cardConfig.default;
+		const override = cardConfig.fieldOverrides?.[columnId];
+
+		return mergeCardStyles(defaultStyle, override);
+	}
+
+	// Get field value for display
+	function getCardFieldValue(record: KanbanRecord, field: any): string {
+		const fieldApiName = typeof field === 'string' ? field : field.fieldApiName;
+		const value = record.data[fieldApiName];
+		if (value === undefined || value === null || value === '') return '';
+		return formatFieldValue(value, 'text');
+	}
 
 	// Merge view config with local config
 	const effectiveConfig = $derived<Partial<KanbanConfig>>({
@@ -168,7 +223,8 @@
 
 	async function loadData(field?: string | null) {
 		const fieldToUse = field ?? groupByField;
-		if (!fieldToUse) {
+		// Ensure we have a valid field before making API call
+		if (!fieldToUse || fieldToUse.trim() === '') {
 			return;
 		}
 
@@ -201,6 +257,7 @@
 			});
 
 			// Auto-select first field if none selected
+			// The $effect will automatically trigger loadData when selectedField changes
 			if (kanbanFields.length > 0 && !selectedField && !view?.kanban_config?.group_by_field) {
 				selectedField = kanbanFields[0].api_name;
 			}
@@ -396,10 +453,14 @@
 		loadKanbanFields();
 	});
 
-	// Load data when groupByField becomes available or changes
+	// Load data when selectedField or view config changes
 	$effect(() => {
-		const field = groupByField;
+		// Track all dependencies explicitly by reading them
+		const currentSelectedField = selectedField;
+		const configField = view?.kanban_config?.group_by_field;
 		const _module = moduleApiName;
+
+		const field = currentSelectedField || configField;
 		if (field) {
 			loadData(field);
 		}
@@ -600,9 +661,10 @@
 				{@const isOverWipLimit = column.wip_limit && column.count > column.wip_limit}
 				{@const isAtWipLimit = column.wip_limit && column.count === column.wip_limit}
 				<div
-					class="flex w-72 flex-shrink-0 flex-col rounded-lg border bg-muted/30 {column.collapsed
-						? 'w-12'
-						: ''}"
+					class={cn(
+						'flex flex-shrink-0 flex-col rounded-lg border bg-muted/30 transition-all duration-200',
+						column.collapsed ? 'w-14' : 'w-72'
+					)}
 					ondragover={(e) => handleDragOver(e, column.id)}
 					ondragleave={handleDragLeave}
 					ondrop={() => handleDrop(column.id)}
@@ -611,9 +673,10 @@
 				>
 					<!-- Column Header -->
 					<div
-						class="flex items-center justify-between border-b p-3 {column.collapsed
-							? 'flex-col gap-2'
-							: ''}"
+						class={cn(
+							'flex items-center border-b p-3',
+							column.collapsed ? 'flex-col gap-2 p-2' : 'justify-between'
+						)}
 						style="border-left: 4px solid {column.color}"
 					>
 						{#if column.collapsed}
@@ -621,19 +684,21 @@
 							<Button
 								variant="ghost"
 								size="icon"
-								class="h-6 w-6"
+								class="h-6 w-6 shrink-0"
 								onclick={() => toggleColumnCollapsed(column.id)}
 							>
 								<ChevronRight class="h-4 w-4" />
 							</Button>
-							<span
-								class="[writing-mode:vertical-rl] rotate-180 font-medium text-sm whitespace-nowrap"
-							>
-								{column.name}
-							</span>
+							<div class="flex-1 flex flex-col items-center justify-center min-h-0">
+								<span
+									class="[writing-mode:vertical-rl] rotate-180 font-medium text-sm whitespace-nowrap max-h-[200px] overflow-hidden text-ellipsis"
+								>
+									{column.name}
+								</span>
+							</div>
 							<Badge
 								variant={isOverWipLimit ? 'destructive' : isAtWipLimit ? 'secondary' : 'outline'}
-								class="px-1.5"
+								class="px-1.5 shrink-0"
 							>
 								{column.count}
 							</Badge>
@@ -679,36 +744,142 @@
 									: ''}"
 							>
 								{#each column.records as record (record.id)}
+									{@const cardStyle = getCardStyle(record, column.id)}
+									{@const layout = cardConfig?.layout}
 									<div
-										class="cursor-pointer rounded-md border bg-card p-3 shadow-sm transition-all hover:shadow-md {draggedRecord?.id ===
-										record.id
-											? 'opacity-50 scale-95'
-											: ''}"
+										class={cn(
+											'rounded-lg cursor-pointer transition-all hover:shadow-md',
+											draggedRecord?.id === record.id && 'opacity-50 scale-95'
+										)}
+										style="background-color: {cardStyle.backgroundColor || '#ffffff'};
+											   border: 1px solid {cardStyle.borderColor || '#e5e7eb'};
+											   border-left: {cardStyle.accentWidth || 3}px solid {cardStyle.accentColor || '#3b82f6'};"
 										draggable="true"
 										ondragstart={() => handleDragStart(record, column.id)}
 										ondragend={handleDragEnd}
 										onclick={() => onRecordClick?.(record)}
 										onkeypress={(e) => e.key === 'Enter' && onRecordClick?.(record)}
 										role="button"
-										tabindex="0"
+										tabindex={0}
 									>
-										<p class="font-medium text-sm truncate">{record.title}</p>
-										{#if record.value !== undefined}
-											<p class="text-sm text-muted-foreground mt-1">
-												{formatCurrency(record.value)}
-											</p>
-										{/if}
-										{#if view?.kanban_config?.card_fields}
-											<div class="mt-2 space-y-1">
-												{#each view.kanban_config.card_fields.slice(0, 2) as fieldName}
-													{#if record.data[fieldName]}
-														<p class="text-xs text-muted-foreground truncate">
-															{record.data[fieldName]}
-														</p>
+										<div class="p-4 space-y-2">
+											{#if layout && layout.fields && layout.fields.length > 0}
+												<!-- Render fields based on configured layout -->
+												{#each layout.fields as field}
+													{@const value = getCardFieldValue(record, field)}
+													{#if value}
+														{#if field.displayAs === 'title'}
+															<h4
+																class="font-semibold text-base line-clamp-2"
+																style="color: {cardStyle.titleColor || '#111827'}"
+															>
+																{#if field.showLabel || layout.showFieldLabels}
+																	<span class="text-xs font-medium text-muted-foreground">
+																		{field.fieldApiName}:
+																	</span>
+																{/if}
+																{value}
+															</h4>
+														{:else if field.displayAs === 'subtitle'}
+															<p
+																class="text-sm line-clamp-1"
+																style="color: {cardStyle.subtitleColor || '#6b7280'}"
+															>
+																{#if field.showLabel || layout.showFieldLabels}
+																	<span class="text-xs font-medium">{field.fieldApiName}:</span>
+																{/if}
+																{value}
+															</p>
+														{:else if field.displayAs === 'badge'}
+															<div class="flex items-center gap-2">
+																{#if field.showLabel || layout.showFieldLabels}
+																	<span class="text-xs font-medium" style="color: {cardStyle.textColor || '#374151'}">
+																		{field.fieldApiName}:
+																	</span>
+																{/if}
+																<Badge variant="outline" class="text-xs">{value}</Badge>
+															</div>
+														{:else if field.displayAs === 'value'}
+															<div class="flex items-center gap-2">
+																{#if field.showLabel || layout.showFieldLabels}
+																	<span class="text-xs font-medium" style="color: {cardStyle.textColor || '#374151'}">
+																		{field.fieldApiName}:
+																	</span>
+																{/if}
+																<span class="text-lg font-bold text-primary">{value}</span>
+															</div>
+														{:else if field.displayAs === 'text'}
+															<div class="flex items-center gap-2">
+																{#if field.showLabel || layout.showFieldLabels}
+																	<span class="text-xs font-medium" style="color: {cardStyle.textColor || '#374151'}">
+																		{field.fieldApiName}:
+																	</span>
+																{/if}
+																<span class="text-sm" style="color: {cardStyle.textColor || '#374151'}">{value}</span>
+															</div>
+														{:else if field.displayAs === 'small'}
+															<div class="flex items-center gap-2">
+																{#if field.showLabel || layout.showFieldLabels}
+																	<span class="text-xs text-muted-foreground">{field.fieldApiName}:</span>
+																{/if}
+																<span class="text-xs text-muted-foreground">{value}</span>
+															</div>
+														{/if}
 													{/if}
 												{/each}
-											</div>
-										{/if}
+											{:else}
+												<!-- Fallback to default rendering if no layout configured -->
+												<h4
+													class="font-semibold text-sm line-clamp-2 mb-1"
+													style="color: {cardStyle.titleColor || '#111827'}"
+												>
+													{truncateText(record.title, 60)}
+												</h4>
+
+												{#if subtitleField && record.data[subtitleField]}
+													<p class="text-xs mb-2" style="color: {cardStyle.subtitleColor || '#6b7280'}">
+														{truncateText(String(record.data[subtitleField]), 50)}
+													</p>
+												{/if}
+
+												{#if groupByField && record.data[groupByField]}
+													<div class="flex items-center gap-2 mb-2">
+														<Badge variant="outline" class="text-xs">
+															{record.data[groupByField]}
+														</Badge>
+													</div>
+												{/if}
+
+												{#if record.value !== undefined}
+													<div class="mb-2">
+														<p class="text-lg font-bold text-primary">
+															{formatCurrency(record.value)}
+														</p>
+													</div>
+												{/if}
+
+												{#if cardFields.length > 0}
+													<div class="space-y-1.5 mt-2 pt-2 border-t" style="border-color: {cardStyle.borderColor || '#e5e7eb'}">
+														{#each cardFields as fieldName}
+															{#if record.data[fieldName] !== undefined && record.data[fieldName] !== null && record.data[fieldName] !== ''}
+																{@const fieldValue = record.data[fieldName]}
+																{@const fieldType = kanbanFields
+																	.flatMap(f => f.options)
+																	.find(opt => opt.value === fieldName)?.label || 'text'}
+																<div class="flex items-start gap-2">
+																	<span
+																		class="text-xs min-w-0 flex-1 truncate"
+																		style="color: {cardStyle.textColor || '#374151'}"
+																	>
+																		{truncateText(formatFieldValue(fieldValue, fieldType), 100)}
+																	</span>
+																</div>
+															{/if}
+														{/each}
+													</div>
+												{/if}
+											{/if}
+										</div>
 									</div>
 								{:else}
 									<div

@@ -1,10 +1,31 @@
 import { apiClient } from './client';
 
 export interface UserPreferences {
+	// Display
 	sidebar_style?: 'rail' | 'collapsible';
 	theme?: 'light' | 'dark' | 'system';
 	compact_mode?: boolean;
-	notifications_enabled?: boolean;
+	default_landing_page?: 'dashboard' | 'modules' | string;
+
+	// Tables & Lists
+	default_rows_per_page?: 10 | 25 | 50 | 100;
+	default_list_view?: 'table' | 'kanban' | 'cards';
+
+	// Notifications
+	email_notifications?: boolean;
+	desktop_notifications?: boolean;
+	notification_sounds?: boolean;
+
+	// Date & Time
+	date_format?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+	time_format?: '12h' | '24h';
+	week_starts_on?: 'sunday' | 'monday';
+	timezone?: string;
+
+	// Communication
+	email_signature?: string;
+	calendar_sync?: boolean;
+
 	[key: string]: unknown;
 }
 

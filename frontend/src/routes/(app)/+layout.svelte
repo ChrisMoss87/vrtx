@@ -12,6 +12,7 @@
 	import { license } from '$lib/stores/license';
 	import { permissions } from '$lib/stores/permissions';
 	import { sidebarStyle } from '$lib/stores/sidebar';
+	import { preferences } from '$lib/stores/preferences';
 	import { TooltipProvider } from '$lib/components/ui/tooltip';
 
 	let { children } = $props();
@@ -39,12 +40,13 @@
 			return;
 		}
 
-		// Load license/subscription info, permissions, and sidebar preference in parallel
+		// Load license/subscription info, permissions, sidebar preference, and all preferences in parallel
 		try {
 			await Promise.all([
 				license.load(),
 				permissions.load(),
-				sidebarStyle.load()
+				sidebarStyle.load(),
+				preferences.load()
 			]);
 		} catch (error) {
 			console.error('Failed to load app data:', error);

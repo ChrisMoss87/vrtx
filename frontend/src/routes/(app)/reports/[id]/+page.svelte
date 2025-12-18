@@ -25,7 +25,9 @@
 		PieChart,
 		Table,
 		FileText,
-		Settings
+		Settings,
+		Users,
+		LayoutGrid
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -157,12 +159,13 @@
 	}
 
 	function getReportIcon(type: ReportType) {
-		const icons = {
+		const icons: Record<ReportType, typeof Table> = {
 			table: Table,
 			chart: BarChart2,
 			summary: FileText,
-			matrix: Table,
-			pivot: Table
+			matrix: LayoutGrid,
+			pivot: LayoutGrid,
+			cohort: Users
 		};
 		return icons[type] || FileText;
 	}

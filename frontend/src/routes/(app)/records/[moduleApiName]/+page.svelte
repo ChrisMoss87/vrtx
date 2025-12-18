@@ -236,6 +236,7 @@
 			<div class="h-[calc(100vh-16rem)]">
 				<ModuleKanbanView
 					{moduleApiName}
+					moduleSettings={module.settings}
 					onRecordClick={handleKanbanRecordClick}
 				/>
 			</div>

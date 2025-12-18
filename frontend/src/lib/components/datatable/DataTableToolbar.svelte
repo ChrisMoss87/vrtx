@@ -36,6 +36,8 @@
 		defaultViewId?: number | null;
 		selectedCount?: number;
 		hasFilters?: boolean;
+		/** Whether we're in mobile card view mode */
+		isMobileView?: boolean;
 	}
 
 	let {
@@ -48,7 +50,8 @@
 		module = '',
 		defaultViewId,
 		selectedCount = 0,
-		hasFilters = false
+		hasFilters = false,
+		isMobileView = false
 	}: Props = $props();
 
 	const table = getContext<TableContext>('table');

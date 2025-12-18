@@ -35,7 +35,6 @@
 		type Report,
 		type ReportType,
 		type ChartType,
-		type ReportFilter,
 		type ReportGrouping,
 		type ReportAggregation,
 		type ReportSorting,
@@ -45,6 +44,7 @@
 		type CreateReportRequest,
 		type UpdateReportRequest
 	} from '$lib/api/reports';
+	import type { FilterConfig } from '$lib/types/filters';
 	import ReportFilterBuilder from './ReportFilterBuilder.svelte';
 	import ReportPreview from './ReportPreview.svelte';
 
@@ -63,7 +63,7 @@
 	let reportType = $state<ReportType>(report?.type || 'table');
 	let chartType = $state<ChartType | null>(report?.chart_type || null);
 	let isPublic = $state(report?.is_public || false);
-	let filters = $state<ReportFilter[]>(report?.filters || []);
+	let filters = $state<FilterConfig[]>(report?.filters || []);
 	let grouping = $state<ReportGrouping[]>(report?.grouping || []);
 	let aggregations = $state<ReportAggregation[]>(report?.aggregations || []);
 	let sorting = $state<ReportSorting[]>(report?.sorting || []);
@@ -374,13 +374,14 @@
 									<Label>Chart Type</Label>
 									<div class="grid grid-cols-4 gap-2">
 										{#each chartTypeOptions as option}
+											{@const IconComponent = option.icon}
 											<Button
 												variant={chartType === option.value ? 'default' : 'outline'}
 												size="sm"
 												class="flex-col gap-1 h-auto py-2"
 												onclick={() => (chartType = option.value as ChartType)}
 											>
-												<svelte:component this={option.icon} class="h-4 w-4" />
+												<IconComponent class="h-4 w-4" />
 												<span class="text-xs">{option.label}</span>
 											</Button>
 										{/each}

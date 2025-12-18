@@ -6,7 +6,7 @@
 	import { Settings2, GripVertical } from 'lucide-svelte';
 	import type { TableContext, ColumnDef } from './types';
 	import { flip } from 'svelte/animate';
-	import { dndzone } from 'svelte-dnd-action';
+	import { dndzone, SHADOW_ITEM_MARKER_PROPERTY_NAME, TRIGGERS } from 'svelte-dnd-action';
 
 	const table = getContext<TableContext>('table');
 
@@ -37,10 +37,15 @@
 	}
 
 	// DND items - must have id property
-	let items = $state<Array<{ id: string; column: ColumnDef }>>([]);
+	let items = $state<Array<{ id: string; column: ColumnDef; [SHADOW_ITEM_MARKER_PROPERTY_NAME]?: boolean }>>([]);
 
-	// Initialize items
+	// Track if we're currently dragging to prevent $effect from overwriting drag state
+	let isDragging = $state(false);
+
+	// Initialize items only when not dragging
 	$effect(() => {
+		if (isDragging) return;
+
 		const ordered = getOrderedColumns();
 		// Only update if column order actually changed (compare ids)
 		const currentIds = items.map((i) => i.id).join(',');
@@ -52,11 +57,35 @@
 
 	const flipDurationMs = 200;
 
-	function handleConsider(e: CustomEvent<{ items: Array<{ id: string; column: ColumnDef }> }>) {
+	function handleConsider(e: CustomEvent<{ items: Array<{ id: string; column: ColumnDef }>, info: { trigger: string } }>) {
+		const { trigger } = e.detail.info;
+		console.log('[DND Consider]', {
+			trigger,
+			itemCount: e.detail.items.length,
+			items: e.detail.items.map(i => ({
+				id: i.id,
+				hasColumn: !!i.column,
+				isShadow: !!(i as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]
+			}))
+		});
+		if (trigger === TRIGGERS.DRAG_STARTED) {
+			isDragging = true;
+		}
 		items = e.detail.items;
 	}
 
-	function handleFinalize(e: CustomEvent<{ items: Array<{ id: string; column: ColumnDef }> }>) {
+	function handleFinalize(e: CustomEvent<{ items: Array<{ id: string; column: ColumnDef }>, info: { trigger: string } }>) {
+		const { trigger } = e.detail.info;
+		console.log('[DND Finalize]', {
+			trigger,
+			itemCount: e.detail.items.length,
+			items: e.detail.items.map(i => ({
+				id: i.id,
+				hasColumn: !!i.column,
+				isShadow: !!(i as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]
+			}))
+		});
+		isDragging = false;
 		items = e.detail.items;
 		// Update column order
 		const newOrder = items.map((item) => item.id);
@@ -85,29 +114,39 @@
 		<DropdownMenu.Separator />
 		<section
 			class="max-h-[350px] overflow-y-auto p-1 space-y-0.5"
-			use:dndzone={{ items, flipDurationMs, dropTargetStyle: {} }}
+			use:dndzone={{
+				items,
+				flipDurationMs,
+				dropTargetStyle: {},
+				dragDisabled: false,
+				morphDisabled: false,
+				type: 'column-toggle'
+			}}
 			onconsider={handleConsider}
 			onfinalize={handleFinalize}
 		>
 			{#each items as item (item.id)}
+				{@const isShadow = item[SHADOW_ITEM_MARKER_PROPERTY_NAME]}
+				{@const _ = (isShadow || !item.column) && console.log('[DND Render]', { id: item.id, isShadow, hasColumn: !!item.column, column: item.column })}
 				<div
-					class="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-accent group bg-background"
+					class="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-accent group bg-background transition-all duration-150 {isShadow ? 'opacity-40 border-2 border-dashed border-primary bg-primary/5' : ''}"
 					animate:flip={{ duration: flipDurationMs }}
 				>
-					<div class="cursor-grab active:cursor-grabbing">
+					<div class="cursor-grab active:cursor-grabbing touch-none">
 						<GripVertical class="h-4 w-4 text-muted-foreground opacity-50 group-hover:opacity-100 flex-shrink-0" />
 					</div>
 					<button
 						type="button"
 						class="flex items-center gap-2 flex-1 min-w-0"
 						onclick={() => handleToggle(item.id)}
+						disabled={isShadow}
 					>
 						<Checkbox
 							checked={table.state.columnVisibility[item.id] !== false}
 							tabindex={-1}
 						/>
 						<span class="text-sm font-normal select-none truncate">
-							{item.column.header}
+							{item.column?.header ?? item.id}
 						</span>
 					</button>
 				</div>

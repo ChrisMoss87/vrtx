@@ -1,5 +1,9 @@
 import { apiClient } from './client';
 import type { Report, ReportResult } from './reports';
+import type { FilterConfig, DateRangeConfig, FilterOperator, FilterValue } from '$lib/types/filters';
+
+// Re-export filter types for convenience
+export type { FilterConfig, DateRangeConfig, FilterOperator, FilterValue } from '$lib/types/filters';
 
 // Types
 export type WidgetType =
@@ -38,9 +42,9 @@ export interface WidgetConfig {
 	module_id?: number;
 	aggregation?: string;
 	field?: string;
-	filters?: any[];
-	date_range?: any;
-	compare_range?: any;
+	filters?: FilterConfig[];
+	date_range?: DateRangeConfig;
+	compare_range?: DateRangeConfig;
 	// Pipeline widget
 	pipeline_id?: number;
 	// Tasks/Activity widget
@@ -121,6 +125,18 @@ export interface DashboardWidget {
 	report?: Pick<Report, 'id' | 'name' | 'type' | 'chart_type'>;
 }
 
+/**
+ * Dashboard-level filters configuration
+ */
+export interface DashboardFilters {
+	/** Global filters applied to all widgets */
+	global?: FilterConfig[];
+	/** Global date range applied to all widgets */
+	date_range?: DateRangeConfig;
+	/** Module-specific filters (keyed by module API name) */
+	modules?: Record<string, FilterConfig[]>;
+}
+
 export interface Dashboard {
 	id: number;
 	name: string;
@@ -130,7 +146,7 @@ export interface Dashboard {
 	is_public: boolean;
 	layout: DashboardLayout;
 	settings: Record<string, any>;
-	filters: Record<string, any>;
+	filters: DashboardFilters;
 	refresh_interval: number;
 	created_at: string;
 	updated_at: string;
@@ -149,7 +165,7 @@ export interface CreateDashboardRequest {
 	is_default?: boolean;
 	layout?: DashboardLayout;
 	settings?: Record<string, any>;
-	filters?: Record<string, any>;
+	filters?: DashboardFilters;
 	refresh_interval?: number;
 }
 

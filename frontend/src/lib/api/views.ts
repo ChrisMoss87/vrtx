@@ -209,7 +209,7 @@ export async function getKanbanData(
 
 	const response = await apiClient.get<{ success: boolean } & KanbanData>(
 		`/views/${moduleApiName}/${viewId}/kanban`,
-		params
+		{ params }
 	);
 	return {
 		columns: response.columns,

@@ -3,6 +3,7 @@
 use App\Jobs\CheckRottingDealsJob;
 use App\Jobs\CreateForecastSnapshotsJob;
 use App\Jobs\ProcessBlueprintSLAsJob;
+use App\Jobs\ProcessCadenceStepsJob;
 use App\Jobs\ProcessExpiredApprovalsJob;
 use App\Jobs\ProcessScheduledEmailsJob;
 use App\Jobs\SendRottingDigestJob;
@@ -20,9 +21,19 @@ Artisan::command('inspire', function () {
 |--------------------------------------------------------------------------
 */
 
+// Execute scheduled workflows every minute
+Schedule::command('workflows:execute-scheduled')->everyMinute()
+    ->name('execute-scheduled-workflows')
+    ->withoutOverlapping();
+
 // Process scheduled emails every minute
 Schedule::job(new ProcessScheduledEmailsJob)->everyMinute()
     ->name('process-scheduled-emails')
+    ->withoutOverlapping();
+
+// Process due cadence steps every minute
+Schedule::job(new ProcessCadenceStepsJob)->everyMinute()
+    ->name('process-cadence-steps')
     ->withoutOverlapping();
 
 // Process Blueprint SLAs every minute (check for breaches and escalations)

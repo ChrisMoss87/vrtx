@@ -1,14 +1,27 @@
 import { apiClient } from './client';
+import type {
+	FilterConfig,
+	FilterOperator,
+	FilterValue,
+	DateRangeConfig,
+	SortConfig
+} from '$lib/types/filters';
+
+// Re-export filter types for convenience
+export type { FilterConfig, FilterOperator, FilterValue, DateRangeConfig } from '$lib/types/filters';
 
 // Types
 export type ReportType = 'table' | 'chart' | 'summary' | 'matrix' | 'pivot' | 'cohort';
 export type ChartType = 'bar' | 'line' | 'pie' | 'doughnut' | 'area' | 'funnel' | 'scatter' | 'gauge' | 'kpi';
 export type AggregationType = 'count' | 'sum' | 'avg' | 'min' | 'max' | 'count_distinct';
 
+/**
+ * @deprecated Use FilterConfig from '$lib/types/filters' instead
+ */
 export interface ReportFilter {
 	field: string;
-	operator: string;
-	value: any;
+	operator: FilterOperator;
+	value: FilterValue;
 }
 
 export interface ReportGrouping {
@@ -23,17 +36,18 @@ export interface ReportAggregation {
 	alias?: string;
 }
 
+/**
+ * @deprecated Use SortConfig from '$lib/types/filters' instead
+ */
 export interface ReportSorting {
 	field: string;
 	direction: 'asc' | 'desc';
 }
 
-export interface ReportDateRange {
-	field?: string;
-	type?: 'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'this_quarter' | 'last_quarter' | 'this_year' | 'last_year' | 'last_7_days' | 'last_30_days' | 'last_90_days' | 'custom';
-	start?: string;
-	end?: string;
-}
+/**
+ * @deprecated Use DateRangeConfig from '$lib/types/filters' instead
+ */
+export interface ReportDateRange extends DateRangeConfig {}
 
 export interface ReportConfig {
 	limit?: number;

@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { setContext, onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import axios from 'axios';
 	import {
 		generateColumnsFromModule,
@@ -26,6 +27,8 @@
 	import DataTableGroupedBody from './DataTableGroupedBody.svelte';
 	import DataTablePagination from './DataTablePagination.svelte';
 	import DataTableToolbar from './DataTableToolbar.svelte';
+	import DataTableCardList from './DataTableCardList.svelte';
+	import MobileActionSheet from './MobileActionSheet.svelte';
 	import * as Table from '$lib/components/ui/table';
 	import {
 		getDefaultView,
@@ -36,6 +39,7 @@
 		type CreateViewRequest
 	} from '$lib/api/views';
 	import { toast } from 'svelte-sonner';
+	import { defaultRowsPerPage } from '$lib/stores/preferences';
 
 	interface Props {
 		moduleApiName: string;
@@ -58,6 +62,12 @@
 		virtualRowHeight?: number;
 		enableGrouping?: boolean;
 		groupByField?: string;
+		/** Enable responsive card view on mobile/tablet */
+		enableResponsive?: boolean;
+		/** Breakpoint for switching to card view (default: 1024) */
+		mobileBreakpoint?: number;
+		/** Record name field for card display */
+		recordNameField?: string;
 		class?: string;
 		onRowClick?: (row: any) => void;
 		onSelectionChange?: (rows: any[]) => void;
@@ -87,6 +97,9 @@
 		virtualRowHeight = 48,
 		enableGrouping = false,
 		groupByField,
+		enableResponsive = true,
+		mobileBreakpoint = 1024,
+		recordNameField,
 		class: className = '',
 		onRowClick,
 		onSelectionChange,
@@ -124,14 +137,15 @@
 		{} as Record<string, 'left' | 'right' | false>
 	);
 
-	// Initialize table state
+	// Initialize table state with user's preferred rows per page
+	const userRowsPerPage = get(defaultRowsPerPage);
 	let tableState: TableState = $state({
 		data: initialData || [],
 		loading: false,
 		error: null,
 		pagination: {
 			page: 1,
-			perPage: 50,
+			perPage: userRowsPerPage,
 			total: 0,
 			from: 0,
 			to: 0,
@@ -229,7 +243,10 @@
 		toggleRowSelection(rowId: string | number) {
 			if (!enableSelection) return;
 
-			tableState.rowSelection[rowId] = !tableState.rowSelection[rowId];
+			tableState.rowSelection = {
+				...tableState.rowSelection,
+				[rowId]: !tableState.rowSelection[rowId]
+			};
 
 			if (onSelectionChange) {
 				onSelectionChange(selectedRows);
@@ -245,9 +262,11 @@
 				tableState.rowSelection = {};
 			} else {
 				// Select all visible rows
+				const newSelection: Record<string | number, boolean> = {};
 				tableState.data.forEach((row: any) => {
-					tableState.rowSelection[row.id] = true;
+					newSelection[row.id] = true;
 				});
+				tableState.rowSelection = newSelection;
 			}
 
 			if (onSelectionChange) {
@@ -262,7 +281,10 @@
 			}
 		},
 		toggleColumnVisibility(columnId: string) {
-			tableState.columnVisibility[columnId] = !tableState.columnVisibility[columnId];
+			tableState.columnVisibility = {
+				...tableState.columnVisibility,
+				[columnId]: !tableState.columnVisibility[columnId]
+			};
 		},
 		resetColumnVisibility() {
 			tableState.columnVisibility = columns.reduce(
@@ -279,10 +301,16 @@
 		resizeColumn(columnId: string, width: number) {
 			if (!enableColumnResize) return;
 
-			tableState.columnWidths[columnId] = width;
+			tableState.columnWidths = {
+				...tableState.columnWidths,
+				[columnId]: width
+			};
 		},
 		pinColumn(columnId: string, position: 'left' | 'right' | false) {
-			tableState.columnPinning[columnId] = position;
+			tableState.columnPinning = {
+				...tableState.columnPinning,
+				[columnId]: position
+			};
 		},
 		async loadView(view: any) {
 			if (!view) {
@@ -625,6 +653,76 @@
 		}
 	}
 
+	// Responsive mode: Track viewport width for card view
+	let windowWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 1200);
+	let isMobileView = $derived(enableResponsive && windowWidth < mobileBreakpoint);
+
+	// Mobile action sheet state
+	let actionSheetOpen = $state(false);
+	let actionSheetRecord = $state<any>(null);
+
+	// Get record name for action sheet
+	function getRecordDisplayName(record: any): string {
+		if (!record) return 'Record';
+
+		// Try record name field
+		if (recordNameField && record.data?.[recordNameField]) {
+			return String(record.data[recordNameField]);
+		}
+
+		// Try module's record_name_field setting
+		const moduleRecordNameField = module?.settings?.record_name_field;
+		if (moduleRecordNameField && record.data?.[moduleRecordNameField]) {
+			return String(record.data[moduleRecordNameField]);
+		}
+
+		// Try common name fields
+		const nameFields = ['name', 'title', 'subject', 'label'];
+		for (const field of nameFields) {
+			if (record.data?.[field]) {
+				return String(record.data[field]);
+			}
+		}
+
+		return `Record #${record.id}`;
+	}
+
+	// Handle mobile card actions
+	function handleMobileAction(action: string, record: any) {
+		actionSheetOpen = false;
+		actionSheetRecord = null;
+
+		if (action === 'view' && onRowClick) {
+			onRowClick(record);
+		} else if (action === 'edit' && onRowClick) {
+			onRowClick(record);
+		} else if (action === 'delete' && onBulkAction) {
+			onBulkAction('delete', [record]);
+		} else if (action === 'duplicate' && onBulkAction) {
+			onBulkAction('duplicate', [record]);
+		}
+	}
+
+	// Handle mobile selection change
+	function handleMobileSelectionChange(selection: Record<string | number, boolean>) {
+		tableState.rowSelection = selection;
+		if (onSelectionChange) {
+			onSelectionChange(selectedRows);
+		}
+	}
+
+	// Setup viewport listener
+	$effect(() => {
+		if (typeof window === 'undefined' || !enableResponsive) return;
+
+		const handleResize = () => {
+			windowWidth = window.innerWidth;
+		};
+
+		window.addEventListener('resize', handleResize);
+		return () => window.removeEventListener('resize', handleResize);
+	});
+
 	console.log('tableState', tableState);
 </script>
 
@@ -637,13 +735,49 @@
 			{enableBulkActions}
 			{enableExport}
 			{enableViews}
-			enableColumnToggle={true}
+			enableColumnToggle={!isMobileView}
 			module={moduleApiName}
 			defaultViewId={defaultView}
 			{selectedCount}
 			hasFilters={tableState.filters.length > 0}
+			{isMobileView}
 		/>
 	{/if}
+
+	<!-- Mobile Card View -->
+	{#if isMobileView}
+		<DataTableCardList
+			data={tableState.data}
+			columns={columns}
+			pagination={tableState.pagination}
+			rowSelection={tableState.rowSelection}
+			loading={tableState.loading}
+			recordNameField={recordNameField || module?.settings?.record_name_field}
+			maxVisibleFields={4}
+			{enableSelection}
+			{enablePagination}
+			onRowClick={(record) => {
+				actionSheetRecord = record;
+				actionSheetOpen = true;
+			}}
+			onSelectionChange={handleMobileSelectionChange}
+			onPageChange={(page) => tableContext.goToPage(page)}
+			onPageSizeChange={(size) => tableContext.setPageSize(size)}
+			onAction={handleMobileAction}
+		/>
+
+		<!-- Mobile Action Sheet -->
+		<MobileActionSheet
+			bind:open={actionSheetOpen}
+			record={actionSheetRecord}
+			recordTitle={getRecordDisplayName(actionSheetRecord)}
+			onOpenChange={(open) => {
+				actionSheetOpen = open;
+				if (!open) actionSheetRecord = null;
+			}}
+			onAction={handleMobileAction}
+		/>
+	{:else}
 
 	<!-- Table with horizontal scroll on mobile -->
 	<div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm transition-shadow duration-300 hover:shadow-md">
@@ -820,8 +954,9 @@
 		{/if}
 	</div>
 
-	<!-- Pagination -->
+	<!-- Pagination (desktop only - mobile has it in card list) -->
 	{#if enablePagination}
 		<DataTablePagination />
+	{/if}
 	{/if}
 </div>

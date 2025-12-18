@@ -26,7 +26,8 @@
 		LayoutGrid,
 		FileText,
 		Clock,
-		Edit
+		Edit,
+		Users
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import { reportsApi, type Report, type ReportType } from '$lib/api/reports';
@@ -47,7 +48,8 @@
 		chart: BarChart2,
 		summary: FileText,
 		matrix: LayoutGrid,
-		pivot: LayoutGrid
+		pivot: LayoutGrid,
+		cohort: Users
 	};
 
 	const chartIcons: Record<string, typeof BarChart2> = {
@@ -252,6 +254,7 @@
 				<Select.Item value="summary">Summary</Select.Item>
 				<Select.Item value="matrix">Matrix</Select.Item>
 				<Select.Item value="pivot">Pivot</Select.Item>
+				<Select.Item value="cohort">Cohort</Select.Item>
 			</Select.Content>
 		</Select.Root>
 	</div>

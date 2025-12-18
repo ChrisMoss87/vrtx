@@ -1,0 +1,528 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\Reporting;
+
+use App\Models\Report;
+use App\Models\Dashboard;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Collection;
+
+class PdfExportService
+{
+    /**
+     * Export a report to PDF.
+     */
+    public function exportReport(Report $report, array $data, array $options = []): string
+    {
+        $html = $this->generateReportHtml($report, $data, $options);
+
+        $pdf = Pdf::loadHTML($html)
+            ->setPaper($options['paper'] ?? 'a4', $options['orientation'] ?? 'portrait')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+            ]);
+
+        return $pdf->output();
+    }
+
+    /**
+     * Export a dashboard to PDF.
+     */
+    public function exportDashboard(Dashboard $dashboard, array $widgetData, array $options = []): string
+    {
+        $html = $this->generateDashboardHtml($dashboard, $widgetData, $options);
+
+        $pdf = Pdf::loadHTML($html)
+            ->setPaper($options['paper'] ?? 'a4', $options['orientation'] ?? 'landscape')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+            ]);
+
+        return $pdf->output();
+    }
+
+    /**
+     * Generate HTML for a report.
+     */
+    protected function generateReportHtml(Report $report, array $data, array $options = []): string
+    {
+        $rows = $data['rows'] ?? [];
+        $columns = $data['columns'] ?? [];
+        $summary = $data['summary'] ?? null;
+
+        $reportDate = now()->format('F j, Y');
+        $reportName = htmlspecialchars($report->name);
+        $reportType = ucfirst($report->type);
+
+        $tableHtml = $this->generateTableHtml($rows, $columns);
+        $summaryHtml = $summary ? $this->generateSummaryHtml($summary) : '';
+        $chartHtml = $report->chart_type ? $this->generateChartPlaceholder($report->chart_type) : '';
+
+        return <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{$reportName}</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+            color: #1f2937;
+        }
+        .header .meta {
+            color: #6b7280;
+            font-size: 11px;
+        }
+        .summary-box {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-grid {
+            display: table;
+            width: 100%;
+        }
+        .summary-item {
+            display: table-cell;
+            text-align: center;
+            padding: 10px;
+        }
+        .summary-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        .summary-label {
+            font-size: 10px;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th {
+            background: #f9fafb;
+            border-bottom: 2px solid #e5e7eb;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #374151;
+        }
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        tr:nth-child(even) {
+            background: #f9fafb;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            font-size: 10px;
+            color: #9ca3af;
+        }
+        .chart-placeholder {
+            background: #f3f4f6;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            color: #6b7280;
+            margin: 20px 0;
+        }
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{$reportName}</h1>
+        <div class="meta">
+            {$reportType} Report • Generated on {$reportDate}
+        </div>
+    </div>
+
+    {$summaryHtml}
+    {$chartHtml}
+    {$tableHtml}
+
+    <div class="footer">
+        Generated by VRTX CRM • {$reportDate}
+    </div>
+</body>
+</html>
+HTML;
+    }
+
+    /**
+     * Generate HTML for a dashboard.
+     */
+    protected function generateDashboardHtml(Dashboard $dashboard, array $widgetData, array $options = []): string
+    {
+        $dashboardName = htmlspecialchars($dashboard->name);
+        $reportDate = now()->format('F j, Y');
+
+        $widgetsHtml = '';
+        foreach ($widgetData as $widget) {
+            $widgetsHtml .= $this->generateWidgetHtml($widget);
+        }
+
+        return <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{$dashboardName}</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+            color: #1f2937;
+        }
+        .header .meta {
+            color: #6b7280;
+            font-size: 11px;
+        }
+        .widgets-grid {
+            display: table;
+            width: 100%;
+            border-spacing: 10px;
+        }
+        .widget-row {
+            display: table-row;
+        }
+        .widget {
+            display: table-cell;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 15px;
+            vertical-align: top;
+            width: 50%;
+        }
+        .widget-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .kpi-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        .kpi-label {
+            font-size: 10px;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+        .kpi-change {
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .kpi-change.positive { color: #10b981; }
+        .kpi-change.negative { color: #ef4444; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        th {
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 8px 6px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 8px 6px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            font-size: 10px;
+            color: #9ca3af;
+        }
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{$dashboardName}</h1>
+        <div class="meta">
+            Dashboard Export • Generated on {$reportDate}
+        </div>
+    </div>
+
+    {$widgetsHtml}
+
+    <div class="footer">
+        Generated by VRTX CRM • {$reportDate}
+    </div>
+</body>
+</html>
+HTML;
+    }
+
+    /**
+     * Generate HTML for a single widget.
+     */
+    protected function generateWidgetHtml(array $widget): string
+    {
+        $title = htmlspecialchars($widget['title'] ?? 'Widget');
+        $type = $widget['type'] ?? 'unknown';
+        $data = $widget['data'] ?? [];
+
+        $contentHtml = match ($type) {
+            'kpi', 'goal_kpi' => $this->generateKpiWidgetHtml($data),
+            'table', 'recent_records' => $this->generateTableWidgetHtml($data),
+            'chart', 'funnel' => $this->generateChartPlaceholder($widget['chart_type'] ?? 'bar'),
+            'progress' => $this->generateProgressWidgetHtml($data),
+            'leaderboard' => $this->generateLeaderboardWidgetHtml($data),
+            default => '<div class="no-data">Widget data not available for PDF export</div>',
+        };
+
+        return <<<HTML
+<div class="widget" style="margin-bottom: 15px; display: block;">
+    <div class="widget-title">{$title}</div>
+    {$contentHtml}
+</div>
+HTML;
+    }
+
+    /**
+     * Generate table HTML from rows and columns.
+     */
+    protected function generateTableHtml(array $rows, array $columns): string
+    {
+        if (empty($rows)) {
+            return '<div class="no-data">No data available</div>';
+        }
+
+        $headers = '';
+        foreach ($columns as $col) {
+            $label = htmlspecialchars($col['label'] ?? $col['field'] ?? '');
+            $headers .= "<th>{$label}</th>";
+        }
+
+        $body = '';
+        foreach ($rows as $row) {
+            $body .= '<tr>';
+            foreach ($columns as $col) {
+                $field = $col['field'] ?? '';
+                $value = $row[$field] ?? '';
+                $formatted = $this->formatValue($value, $col['type'] ?? 'text');
+                $body .= "<td>{$formatted}</td>";
+            }
+            $body .= '</tr>';
+        }
+
+        return <<<HTML
+<table>
+    <thead>
+        <tr>{$headers}</tr>
+    </thead>
+    <tbody>
+        {$body}
+    </tbody>
+</table>
+HTML;
+    }
+
+    /**
+     * Generate summary HTML.
+     */
+    protected function generateSummaryHtml(array $summary): string
+    {
+        $items = '';
+        foreach ($summary as $item) {
+            $label = htmlspecialchars($item['label'] ?? '');
+            $value = $this->formatValue($item['value'] ?? 0, $item['type'] ?? 'number');
+            $items .= <<<HTML
+<div class="summary-item">
+    <div class="summary-value">{$value}</div>
+    <div class="summary-label">{$label}</div>
+</div>
+HTML;
+        }
+
+        return <<<HTML
+<div class="summary-box">
+    <div class="summary-grid">
+        {$items}
+    </div>
+</div>
+HTML;
+    }
+
+    /**
+     * Generate KPI widget HTML.
+     */
+    protected function generateKpiWidgetHtml(array $data): string
+    {
+        $value = $this->formatValue($data['value'] ?? 0, 'number');
+        $label = htmlspecialchars($data['label'] ?? '');
+        $change = $data['change_percent'] ?? null;
+
+        $changeHtml = '';
+        if ($change !== null) {
+            $changeClass = $change >= 0 ? 'positive' : 'negative';
+            $changeSign = $change >= 0 ? '+' : '';
+            $changeHtml = "<div class=\"kpi-change {$changeClass}\">{$changeSign}{$change}% vs previous period</div>";
+        }
+
+        return <<<HTML
+<div class="kpi-value">{$value}</div>
+<div class="kpi-label">{$label}</div>
+{$changeHtml}
+HTML;
+    }
+
+    /**
+     * Generate table widget HTML.
+     */
+    protected function generateTableWidgetHtml(array $data): string
+    {
+        $rows = $data['rows'] ?? $data['records'] ?? [];
+        $columns = $data['columns'] ?? [];
+
+        if (empty($columns) && !empty($rows)) {
+            $columns = array_map(fn($key) => ['field' => $key, 'label' => ucfirst(str_replace('_', ' ', $key))], array_keys($rows[0] ?? []));
+        }
+
+        return $this->generateTableHtml(array_slice($rows, 0, 20), array_slice($columns, 0, 6));
+    }
+
+    /**
+     * Generate progress widget HTML.
+     */
+    protected function generateProgressWidgetHtml(array $data): string
+    {
+        $current = $data['current'] ?? $data['value'] ?? 0;
+        $target = $data['target'] ?? 100;
+        $percent = $target > 0 ? min(100, round(($current / $target) * 100)) : 0;
+
+        $currentFormatted = $this->formatValue($current, 'number');
+        $targetFormatted = $this->formatValue($target, 'number');
+
+        return <<<HTML
+<div style="margin: 10px 0;">
+    <div style="background: #e5e7eb; border-radius: 4px; height: 20px; overflow: hidden;">
+        <div style="background: #3b82f6; height: 100%; width: {$percent}%;"></div>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px;">
+        <span>{$currentFormatted} of {$targetFormatted}</span>
+        <span style="font-weight: bold;">{$percent}%</span>
+    </div>
+</div>
+HTML;
+    }
+
+    /**
+     * Generate leaderboard widget HTML.
+     */
+    protected function generateLeaderboardWidgetHtml(array $data): string
+    {
+        $entries = $data['entries'] ?? $data['items'] ?? $data;
+
+        if (empty($entries)) {
+            return '<div class="no-data">No leaderboard data</div>';
+        }
+
+        $rows = '';
+        foreach (array_slice($entries, 0, 10) as $index => $entry) {
+            $rank = $index + 1;
+            $name = htmlspecialchars($entry['name'] ?? $entry['user']['name'] ?? 'Unknown');
+            $value = $this->formatValue($entry['value'] ?? $entry['score'] ?? 0, 'number');
+            $rows .= "<tr><td style=\"width: 30px; font-weight: bold;\">#{$rank}</td><td>{$name}</td><td style=\"text-align: right;\">{$value}</td></tr>";
+        }
+
+        return "<table>{$rows}</table>";
+    }
+
+    /**
+     * Generate chart placeholder (charts can't be rendered in PDF without JS).
+     */
+    protected function generateChartPlaceholder(string $chartType): string
+    {
+        $type = ucfirst($chartType);
+        return <<<HTML
+<div class="chart-placeholder">
+    <strong>{$type} Chart</strong><br>
+    <small>Chart visualization is available in the interactive dashboard view.</small>
+</div>
+HTML;
+    }
+
+    /**
+     * Format a value based on its type.
+     */
+    protected function formatValue(mixed $value, string $type = 'text'): string
+    {
+        if ($value === null) {
+            return '-';
+        }
+
+        return match ($type) {
+            'number', 'integer' => number_format((float) $value),
+            'decimal', 'float' => number_format((float) $value, 2),
+            'currency' => '$' . number_format((float) $value, 2),
+            'percent' => number_format((float) $value, 1) . '%',
+            'date' => is_string($value) ? date('M j, Y', strtotime($value)) : (string) $value,
+            'datetime' => is_string($value) ? date('M j, Y g:i A', strtotime($value)) : (string) $value,
+            default => htmlspecialchars((string) $value),
+        };
+    }
+}

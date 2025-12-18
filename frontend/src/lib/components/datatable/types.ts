@@ -5,12 +5,40 @@
  */
 
 import type { Component } from 'svelte';
-import type { RecordData, RecordFieldValue } from '$lib/types/modules';
+import type { RecordData, RecordFieldValue, ModuleRecord } from '$lib/types/modules';
+
+// Re-export shared filter types for backward compatibility
+export type {
+	FilterOperator,
+	FilterConfig,
+	FilterOption,
+	FilterGroup as FilterGroupData,
+	FilterValue as DataTableFilterValue,
+	DateRangeValue,
+	NumberRangeValue,
+	SortConfig
+} from '$lib/types/filters';
+
+// Import for internal use
+import type {
+	FilterOperator,
+	FilterConfig,
+	FilterOption,
+	FilterValue as DataTableFilterValue,
+	DateRangeValue,
+	NumberRangeValue,
+	SortConfig,
+	FilterGroup
+} from '$lib/types/filters';
 
 /**
- * Base row data type for tables - defaults to RecordData but can be customized
+ * Base row data type for tables - represents a module record with id and nested data
+ * The id is always required and is either a number or string.
  */
-export type BaseRowData = RecordData;
+export type BaseRowData = {
+	id: number | string;
+	data?: RecordData;
+} & Record<string, unknown>;
 
 /**
  * Column Definition
@@ -75,6 +103,19 @@ export interface ColumnDef<TData extends BaseRowData = BaseRowData> {
 
 	/** Column-specific metadata */
 	meta?: ColumnMetadata;
+
+	/**
+	 * Mobile display priority (1-5, lower = higher priority)
+	 * Priority 1: Always visible on mobile (name/title fields)
+	 * Priority 2: High priority (status, amount)
+	 * Priority 3: Medium priority (email, phone, date)
+	 * Priority 4: Low priority (description, notes)
+	 * Priority 5: Hidden on mobile (timestamps, IDs)
+	 */
+	mobilePriority?: 1 | 2 | 3 | 4 | 5;
+
+	/** Explicitly control mobile visibility (overrides mobilePriority) */
+	mobileVisible?: boolean;
 }
 
 /**
@@ -131,78 +172,6 @@ export type ColumnType =
  * Sort Direction
  */
 export type SortDirection = 'asc' | 'desc' | false;
-
-/**
- * Sort Configuration
- */
-export interface SortConfig {
-	field: string;
-	direction: 'asc' | 'desc';
-}
-
-/**
- * Filter Operators
- */
-export type FilterOperator =
-	| 'equals'
-	| 'not_equals'
-	| 'contains'
-	| 'not_contains'
-	| 'starts_with'
-	| 'ends_with'
-	| 'in'
-	| 'not_in'
-	| 'greater_than'
-	| 'greater_than_or_equal'
-	| 'less_than'
-	| 'less_than_or_equal'
-	| 'between'
-	| 'is_null'
-	| 'is_not_null'
-	| 'is_empty'
-	| 'is_not_empty'
-	// Date-specific operators
-	| 'today'
-	| 'yesterday'
-	| 'last_7_days'
-	| 'last_30_days'
-	| 'this_month'
-	| 'last_month'
-	| 'before'
-	| 'after';
-
-/**
- * Filter value type - supports primitive values, arrays, and range objects
- */
-export type DataTableFilterValue =
-	| string
-	| number
-	| boolean
-	| null
-	| string[]
-	| number[]
-	| DateRangeValue
-	| NumberRangeValue
-	| { from: string; to: string }
-	| { from: number; to: number };
-
-/**
- * Filter Configuration
- */
-export interface FilterConfig {
-	field: string;
-	operator: FilterOperator;
-	value: DataTableFilterValue;
-}
-
-/**
- * Filter Option (for select filters)
- */
-export interface FilterOption {
-	label: string;
-	value: string | number | boolean;
-	count?: number;
-}
 
 /**
  * Pagination State
@@ -377,24 +346,6 @@ export interface BulkAction {
 	handler: (rows: BaseRowData[]) => void | Promise<void>;
 }
 
-// Note: FilterOption is defined above (lines 191-198) - no duplicate needed here
-
-/**
- * Date Range Filter Value
- */
-export interface DateRangeValue {
-	from: Date | null;
-	to: Date | null;
-}
-
-/**
- * Number Range Filter Value
- */
-export interface NumberRangeValue {
-	from: number | null;
-	to: number | null;
-}
-
 /**
  * Column Context
  */
@@ -482,12 +433,4 @@ export interface ExportOptions {
 	allPages?: boolean;
 }
 
-/**
- * Filter Group Data (for nested filter conditions)
- */
-export interface FilterGroupData {
-	id: string;
-	logic: 'AND' | 'OR';
-	conditions: FilterConfig[];
-	groups: FilterGroupData[];
-}
+// FilterGroupData is now exported from '$lib/types/filters' as FilterGroup

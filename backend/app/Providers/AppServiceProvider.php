@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\BlueprintApprovalRequest;
 use App\Models\Module;
 use App\Models\ModuleRecord;
+use App\Observers\BlueprintApprovalRequestObserver;
 use App\Observers\ModuleObserver;
 use App\Observers\ModuleRecordObserver;
 use App\Observers\RoleObserver;
@@ -34,6 +36,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Register observer for Time Machine (record history tracking)
         ModuleRecord::observe(ModuleRecordObserver::class);
+
+        // Register observer for Blueprint approval workflow
+        BlueprintApprovalRequest::observe(BlueprintApprovalRequestObserver::class);
 
         // Configure rate limiters
         $this->configureRateLimiting();

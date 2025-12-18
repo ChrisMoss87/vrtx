@@ -5,16 +5,17 @@
 	import * as Select from '$lib/components/ui/select';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Plus, Trash2, Filter } from 'lucide-svelte';
-	import type { ReportFilter, ModuleField } from '$lib/api/reports';
+	import type { ModuleField } from '$lib/api/reports';
+	import type { FilterConfig, FilterOperator, FilterValue } from '$lib/types/filters';
 
 	interface Props {
 		fields: ModuleField[];
-		filters: ReportFilter[];
+		filters: FilterConfig[];
 	}
 
 	let { fields, filters = $bindable([]) }: Props = $props();
 
-	const operators = [
+	const operators: { value: FilterOperator; label: string; types: string[] }[] = [
 		{ value: 'equals', label: 'Equals', types: ['all'] },
 		{ value: 'not_equals', label: 'Not Equals', types: ['all'] },
 		{ value: 'contains', label: 'Contains', types: ['text', 'textarea', 'email'] },
@@ -44,7 +45,7 @@
 		const availableOperators = getOperatorsForField(firstField);
 		filters = [...filters, {
 			field: firstField.name,
-			operator: availableOperators[0]?.value || 'equals',
+			operator: availableOperators[0]?.value ?? 'equals',
 			value: ''
 		}];
 	}
@@ -53,7 +54,7 @@
 		filters = filters.filter((_, i) => i !== index);
 	}
 
-	function updateFilter(index: number, updates: Partial<ReportFilter>) {
+	function updateFilter(index: number, updates: Partial<FilterConfig>) {
 		filters = filters.map((f, i) => i === index ? { ...f, ...updates } : f);
 	}
 
@@ -127,7 +128,7 @@
 									const newOperators = newField ? getOperatorsForField(newField) : operators;
 									updateFilter(index, {
 										field: v,
-										operator: newOperators[0]?.value || 'equals',
+										operator: newOperators[0]?.value ?? 'equals',
 										value: ''
 									});
 								}
@@ -149,7 +150,7 @@
 							value={filter.operator}
 							onValueChange={(v) => {
 								if (v) {
-									updateFilter(index, { operator: v });
+									updateFilter(index, { operator: v as FilterOperator });
 								}
 							}}
 						>
@@ -193,11 +194,14 @@
 									<Input
 										type={getInputType(field)}
 										placeholder="From"
-										value={Array.isArray(filter.value) ? filter.value[0] : ''}
+										value={Array.isArray(filter.value) ? String(filter.value[0]) : ''}
 										oninput={(e) => {
-											const newValue = Array.isArray(filter.value) ? [...filter.value] : ['', ''];
+											const currentValue = filter.value;
+											const newValue: [string, string] = Array.isArray(currentValue)
+												? [String(currentValue[0] ?? ''), String(currentValue[1] ?? '')]
+												: ['', ''];
 											newValue[0] = e.currentTarget.value;
-											updateFilter(index, { value: newValue });
+											updateFilter(index, { value: { from: newValue[0], to: newValue[1] } });
 										}}
 										class="w-24"
 									/>
@@ -205,11 +209,14 @@
 									<Input
 										type={getInputType(field)}
 										placeholder="To"
-										value={Array.isArray(filter.value) ? filter.value[1] : ''}
+										value={Array.isArray(filter.value) ? String(filter.value[1]) : ''}
 										oninput={(e) => {
-											const newValue = Array.isArray(filter.value) ? [...filter.value] : ['', ''];
+											const currentValue = filter.value;
+											const newValue: [string, string] = Array.isArray(currentValue)
+												? [String(currentValue[0] ?? ''), String(currentValue[1] ?? '')]
+												: ['', ''];
 											newValue[1] = e.currentTarget.value;
-											updateFilter(index, { value: newValue });
+											updateFilter(index, { value: { from: newValue[0], to: newValue[1] } });
 										}}
 										class="w-24"
 									/>
