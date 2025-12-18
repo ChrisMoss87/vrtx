@@ -61,7 +61,8 @@
 		RecentRecordsWidget,
 		HeatmapWidget,
 		QuickLinksWidget,
-		EmbedWidget
+		EmbedWidget,
+		ForecastWidget
 	} from '$lib/components/dashboard/widgets';
 	import DashboardGrid from '$lib/components/dashboard/DashboardGrid.svelte';
 	import WidgetPalette from '$lib/components/dashboard/WidgetPalette.svelte';
@@ -122,6 +123,13 @@
 			label: 'Funnel',
 			icon: Filter,
 			description: 'Sales/conversion funnel',
+			category: 'Analytics'
+		},
+		{
+			value: 'forecast',
+			label: 'Sales Forecast',
+			icon: BarChart2,
+			description: 'Pipeline & quota tracking',
 			category: 'Analytics'
 		},
 		{
@@ -575,6 +583,8 @@
 						<ActivityWidget title={widget.title} data={widgetDataItem} />
 					{:else if widget.type === 'tasks'}
 						<TasksWidget title={widget.title} data={widgetDataItem} />
+					{:else if widget.type === 'forecast'}
+						<ForecastWidget title={widget.title} config={widget.config} data={widgetDataItem} />
 					{:else}
 						<Card.Root class="h-full">
 							<Card.Header class="pb-2">

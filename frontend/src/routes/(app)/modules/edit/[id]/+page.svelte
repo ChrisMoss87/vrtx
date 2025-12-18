@@ -71,7 +71,13 @@
 		Database,
 		Rocket,
 		Home,
-		Store
+		Store,
+		Link2,
+		History,
+		MessageSquare,
+		Paperclip,
+		Plus,
+		Trash2
 	} from 'lucide-svelte';
 	import type { ComponentType } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -110,6 +116,7 @@
 	let recordNameField = $state<string>('');
 	let kanbanCardFields = $state<string[]>([]);
 	let kanbanCardConfig = $state<KanbanCardConfig | null>(null);
+	let kanbanGroupByField = $state<string>('');
 
 	// Dragging state for column reorder
 	let draggedColumnIndex = $state<number | null>(null);
@@ -123,7 +130,23 @@
 	let loading = $state(false);
 	let loadingModule = $state(true);
 	let error = $state<string | null>(null);
-	let currentStep = $state<'details' | 'builder' | 'cards' | 'settings'>('details');
+	let currentStep = $state<'details' | 'builder' | 'cards' | 'related' | 'settings'>('details');
+
+	// Related lists configuration
+	interface RelatedListConfig {
+		module_api_name: string;
+		lookup_field: string;
+		title?: string;
+		limit?: number;
+		enabled: boolean;
+	}
+
+	let hasActivityLog = $state(true);
+	let hasComments = $state(true);
+	let hasAttachments = $state(true);
+	let hasAuditHistory = $state(true);
+	let relatedLists = $state<RelatedListConfig[]>([]);
+	let allModules = $state<Array<{ id: number; name: string; api_name: string; singular_name: string }>>([]);
 
 	let isStep1Valid = $derived(moduleName.trim() && singularName.trim());
 	let isStep2Valid = $derived(
@@ -149,6 +172,36 @@
 			});
 		});
 		return fields;
+	});
+
+	// Fields that have options (select, radio, multiselect) - suitable for kanban grouping
+	let fieldsWithOptions = $derived.by(() => {
+		const optionFieldTypes = ['select', 'radio', 'multiselect', 'picklist', 'status'];
+		const fields: Array<{ api_name: string; label: string; type: string; options: Array<{ value: string; label: string; color?: string }> }> = [];
+		blocks.forEach((block) => {
+			block.fields?.forEach((field) => {
+				if (optionFieldTypes.includes(field.type) && field.options && field.options.length > 0) {
+					fields.push({
+						api_name: field.api_name || field.label.toLowerCase().replace(/\s+/g, '_'),
+						label: field.label,
+						type: field.type,
+						options: field.options.map((opt) => ({
+							value: opt.value,
+							label: opt.label,
+							color: opt.color || undefined
+						}))
+					});
+				}
+			});
+		});
+		return fields;
+	});
+
+	// Get field options for the selected kanban group-by field
+	let kanbanFieldOptions = $derived.by(() => {
+		if (!kanbanGroupByField) return [];
+		const field = fieldsWithOptions.find((f) => f.api_name === kanbanGroupByField);
+		return field?.options || [];
 	});
 
 	// Fields ordered by column order preference
@@ -217,8 +270,22 @@
 	]);
 
 	onMount(async () => {
-		await loadModule();
+		await Promise.all([loadModule(), loadAllModules()]);
 	});
+
+	async function loadAllModules() {
+		try {
+			const modules = await modulesApi.getActive();
+			allModules = modules.map((m) => ({
+				id: m.id,
+				name: m.name,
+				api_name: m.api_name,
+				singular_name: m.singular_name
+			}));
+		} catch (err) {
+			console.error('Failed to load modules:', err);
+		}
+	}
 
 	async function loadModule() {
 		try {
@@ -253,6 +320,15 @@
 				const savedKanbanCardConfig = (module.settings as any).kanban_card_config;
 				if (savedKanbanCardConfig) {
 					kanbanCardConfig = savedKanbanCardConfig;
+				}
+				// Load related lists settings
+				hasActivityLog = (module.settings as any).has_activity_log !== false;
+				hasComments = (module.settings as any).has_comments !== false;
+				hasAttachments = (module.settings as any).has_attachments !== false;
+				hasAuditHistory = (module.settings as any).has_audit_history !== false;
+				const savedRelatedLists = (module.settings as any).related_lists;
+				if (savedRelatedLists && Array.isArray(savedRelatedLists)) {
+					relatedLists = savedRelatedLists;
 				}
 			}
 
@@ -337,7 +413,7 @@
 		selectedFieldIndex = -1;
 	}
 
-	function goToStep(step: 'details' | 'builder' | 'cards' | 'settings') {
+	function goToStep(step: 'details' | 'builder' | 'cards' | 'related' | 'settings') {
 		// Allow navigating to any step freely
 		currentStep = step;
 	}
@@ -414,19 +490,21 @@
 				}))
 			}));
 
-			// Build settings with record_name_field, column order, kanban card fields, and kanban card config
+			// Build settings with record_name_field, column order, kanban card fields, kanban card config, and related lists
 			const moduleSettings: Record<string, unknown> = {
 				has_import: true,
 				has_export: true,
 				has_mass_actions: true,
-				has_comments: true,
-				has_attachments: true,
-				has_activity_log: true,
+				has_comments: hasComments,
+				has_attachments: hasAttachments,
+				has_activity_log: hasActivityLog,
+				has_audit_history: hasAuditHistory,
 				has_custom_views: true,
 				record_name_field: recordNameField || null,
 				default_column_order: defaultColumnOrder.length > 0 ? defaultColumnOrder : undefined,
 				kanban_card_fields: kanbanCardFields.length > 0 ? kanbanCardFields : undefined,
-				kanban_card_config: kanbanCardConfig || undefined
+				kanban_card_config: kanbanCardConfig || undefined,
+				related_lists: relatedLists.length > 0 ? relatedLists : undefined
 			};
 
 			const request: UpdateModuleRequest = {
@@ -557,6 +635,17 @@
 						>
 							<LayoutGrid class="h-4 w-4" />
 							<span>Card Designer</span>
+						</button>
+
+						<button
+							onclick={() => goToStep('related')}
+							class="relative flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all {currentStep ===
+							'related'
+								? 'bg-background text-foreground shadow-sm'
+								: 'text-muted-foreground hover:text-foreground'}"
+						>
+							<Link2 class="h-4 w-4" />
+							<span>Related Lists</span>
 						</button>
 
 						<button
@@ -738,18 +827,6 @@
 					{/if}
 				</div>
 
-				{#if isStep2Valid}
-					<div class="absolute right-6 bottom-6 lg:right-8 lg:bottom-8">
-						<Button
-							onclick={() => goToStep('cards')}
-							size="lg"
-							class="h-12 gap-2 px-6 shadow-2xl"
-						>
-							<LayoutGrid class="h-5 w-5" />
-							Configure Card Designer
-						</Button>
-					</div>
-				{/if}
 			{:else if currentStep === 'cards'}
 				<!-- Step 3: Card Designer -->
 				<div class="container mx-auto h-full overflow-y-auto px-4 py-8 md:px-6">
@@ -757,8 +834,39 @@
 						<CardDesigner
 							config={kanbanCardConfig}
 							{availableFields}
+							groupByField={kanbanGroupByField || null}
+							fieldOptions={kanbanFieldOptions}
 							onchange={(config) => (kanbanCardConfig = config)}
 						/>
+
+						<!-- Kanban Group By Field Selector -->
+						{#if fieldsWithOptions.length > 0}
+							<div class="mt-6 rounded-lg border bg-card p-6">
+								<h3 class="text-lg font-semibold mb-2">Kanban Grouping</h3>
+								<p class="text-sm text-muted-foreground mb-4">
+									Select which field to use for grouping records into columns in the kanban view.
+								</p>
+								<Select.Root type="single" bind:value={kanbanGroupByField}>
+									<Select.Trigger class="w-[280px]">
+										{#if kanbanGroupByField}
+											{fieldsWithOptions.find((f) => f.api_name === kanbanGroupByField)?.label || 'Select field'}
+										{:else}
+											<span class="text-muted-foreground">Select a field...</span>
+										{/if}
+									</Select.Trigger>
+									<Select.Content>
+										{#each fieldsWithOptions as field}
+											<Select.Item value={field.api_name}>
+												{field.label}
+												<span class="ml-2 text-xs text-muted-foreground">
+													({field.options.length} options)
+												</span>
+											</Select.Item>
+										{/each}
+									</Select.Content>
+								</Select.Root>
+							</div>
+						{/if}
 					{:else}
 						<div class="flex h-full items-center justify-center">
 							<div class="text-center">
@@ -779,8 +887,294 @@
 						</div>
 					{/if}
 				</div>
+			{:else if currentStep === 'related'}
+				<!-- Step 4: Related Lists Configuration -->
+				<div class="container mx-auto h-full max-w-4xl overflow-y-auto px-4 py-8 md:px-6">
+					<Card.Root class="border-2 shadow-lg">
+						<Card.Header class="space-y-2 pb-6">
+							<div class="flex items-center gap-3">
+								<div class="rounded-xl bg-primary/10 p-3">
+									<Link2 class="h-6 w-6 text-primary" />
+								</div>
+								<div>
+									<Card.Title class="text-2xl">Related Lists</Card.Title>
+									<Card.Description class="text-base">
+										Configure which related information appears on record detail pages
+									</Card.Description>
+								</div>
+							</div>
+						</Card.Header>
+						<Card.Content class="space-y-6">
+							<!-- Universal Related Lists -->
+							<div class="space-y-4">
+								<h3 class="text-lg font-semibold">Standard Related Lists</h3>
+								<p class="text-sm text-muted-foreground">
+									These related lists are available for all modules and show common related information.
+								</p>
+
+								<div class="grid gap-3">
+									<!-- Activities -->
+									<div class="flex items-center justify-between rounded-lg border p-4">
+										<div class="flex items-center gap-3">
+											<div class="rounded-lg bg-blue-500/10 p-2">
+												<Activity class="h-5 w-5 text-blue-600" />
+											</div>
+											<div>
+												<p class="font-medium">Activities</p>
+												<p class="text-sm text-muted-foreground">
+													Notes, calls, meetings, tasks, and emails related to this record
+												</p>
+											</div>
+										</div>
+										<button
+											type="button"
+											onclick={() => (hasActivityLog = !hasActivityLog)}
+											class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {hasActivityLog ? 'bg-primary' : 'bg-muted'}"
+										>
+											<span
+												class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {hasActivityLog ? 'translate-x-6' : 'translate-x-1'}"
+											></span>
+										</button>
+									</div>
+
+									<!-- Audit History -->
+									<div class="flex items-center justify-between rounded-lg border p-4">
+										<div class="flex items-center gap-3">
+											<div class="rounded-lg bg-purple-500/10 p-2">
+												<History class="h-5 w-5 text-purple-600" />
+											</div>
+											<div>
+												<p class="font-medium">Change History</p>
+												<p class="text-sm text-muted-foreground">
+													Audit trail of all changes made to this record
+												</p>
+											</div>
+										</div>
+										<button
+											type="button"
+											onclick={() => (hasAuditHistory = !hasAuditHistory)}
+											class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {hasAuditHistory ? 'bg-primary' : 'bg-muted'}"
+										>
+											<span
+												class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {hasAuditHistory ? 'translate-x-6' : 'translate-x-1'}"
+											></span>
+										</button>
+									</div>
+
+									<!-- Comments -->
+									<div class="flex items-center justify-between rounded-lg border p-4">
+										<div class="flex items-center gap-3">
+											<div class="rounded-lg bg-green-500/10 p-2">
+												<MessageSquare class="h-5 w-5 text-green-600" />
+											</div>
+											<div>
+												<p class="font-medium">Comments</p>
+												<p class="text-sm text-muted-foreground">
+													Team comments and discussions on this record
+												</p>
+											</div>
+										</div>
+										<button
+											type="button"
+											onclick={() => (hasComments = !hasComments)}
+											class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {hasComments ? 'bg-primary' : 'bg-muted'}"
+										>
+											<span
+												class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {hasComments ? 'translate-x-6' : 'translate-x-1'}"
+											></span>
+										</button>
+									</div>
+
+									<!-- Attachments -->
+									<div class="flex items-center justify-between rounded-lg border p-4">
+										<div class="flex items-center gap-3">
+											<div class="rounded-lg bg-orange-500/10 p-2">
+												<Paperclip class="h-5 w-5 text-orange-600" />
+											</div>
+											<div>
+												<p class="font-medium">Attachments</p>
+												<p class="text-sm text-muted-foreground">
+													Files and documents attached to this record
+												</p>
+											</div>
+										</div>
+										<button
+											type="button"
+											onclick={() => (hasAttachments = !hasAttachments)}
+											class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {hasAttachments ? 'bg-primary' : 'bg-muted'}"
+										>
+											<span
+												class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {hasAttachments ? 'translate-x-6' : 'translate-x-1'}"
+											></span>
+										</button>
+									</div>
+								</div>
+							</div>
+
+							<Separator />
+
+							<!-- Custom Related Lists (Records from other modules) -->
+							<div class="space-y-4">
+								<div class="flex items-center justify-between">
+									<div>
+										<h3 class="text-lg font-semibold">Related Records</h3>
+										<p class="text-sm text-muted-foreground">
+											Show records from other modules that link to this module
+										</p>
+									</div>
+									<Button
+										variant="outline"
+										size="sm"
+										onclick={() => {
+											relatedLists = [
+												...relatedLists,
+												{
+													module_api_name: '',
+													lookup_field: '',
+													title: '',
+													limit: 5,
+													enabled: true
+												}
+											];
+										}}
+									>
+										<Plus class="mr-1 h-4 w-4" />
+										Add Related List
+									</Button>
+								</div>
+
+								{#if relatedLists.length === 0}
+									<div class="rounded-lg border-2 border-dashed p-8 text-center">
+										<Link2 class="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+										<p class="text-sm text-muted-foreground">
+											No related record lists configured. Add one to show records from other modules.
+										</p>
+									</div>
+								{:else}
+									<div class="space-y-3">
+										{#each relatedLists as relatedList, index}
+											<div class="rounded-lg border p-4 space-y-3">
+												<div class="flex items-center justify-between">
+													<div class="flex items-center gap-2">
+														<button
+															type="button"
+															onclick={() => (relatedLists[index].enabled = !relatedLists[index].enabled)}
+															class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {relatedLists[index].enabled ? 'bg-primary' : 'bg-muted'}"
+														>
+															<span
+																class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {relatedLists[index].enabled ? 'translate-x-5' : 'translate-x-1'}"
+															></span>
+														</button>
+														<span class="text-sm font-medium">
+															{relatedLists[index].title || 'Untitled Related List'}
+														</span>
+													</div>
+													<Button
+														variant="ghost"
+														size="icon"
+														class="h-8 w-8 text-muted-foreground hover:text-destructive"
+														onclick={() => {
+															relatedLists = relatedLists.filter((_, i) => i !== index);
+														}}
+													>
+														<Trash2 class="h-4 w-4" />
+													</Button>
+												</div>
+
+												<div class="grid gap-3 sm:grid-cols-2">
+													<div class="space-y-1">
+														<Label class="text-xs">Related Module</Label>
+														<Select.Root
+															type="single"
+															value={relatedLists[index].module_api_name}
+															onValueChange={(val) => {
+																if (val) relatedLists[index].module_api_name = val;
+															}}
+														>
+															<Select.Trigger class="h-9">
+																{#if relatedLists[index].module_api_name}
+																	{allModules.find((m) => m.api_name === relatedLists[index].module_api_name)?.name || 'Select module'}
+																{:else}
+																	<span class="text-muted-foreground">Select module...</span>
+																{/if}
+															</Select.Trigger>
+															<Select.Content>
+																{#each allModules as mod}
+																	<Select.Item value={mod.api_name}>{mod.name}</Select.Item>
+																{/each}
+															</Select.Content>
+														</Select.Root>
+													</div>
+
+													<div class="space-y-1">
+														<Label class="text-xs">Lookup Field</Label>
+														<Input
+															class="h-9"
+															placeholder="e.g., contact_id"
+															bind:value={relatedLists[index].lookup_field}
+														/>
+													</div>
+
+													<div class="space-y-1">
+														<Label class="text-xs">Display Title</Label>
+														<Input
+															class="h-9"
+															placeholder="e.g., Related Deals"
+															bind:value={relatedLists[index].title}
+														/>
+													</div>
+
+													<div class="space-y-1">
+														<Label class="text-xs">Records to Show</Label>
+														<Select.Root
+															type="single"
+															value={String(relatedLists[index].limit || 5)}
+															onValueChange={(val) => {
+																if (val) relatedLists[index].limit = parseInt(val);
+															}}
+														>
+															<Select.Trigger class="h-9">
+																{relatedLists[index].limit || 5} records
+															</Select.Trigger>
+															<Select.Content>
+																<Select.Item value="3">3 records</Select.Item>
+																<Select.Item value="5">5 records</Select.Item>
+																<Select.Item value="10">10 records</Select.Item>
+																<Select.Item value="20">20 records</Select.Item>
+															</Select.Content>
+														</Select.Root>
+													</div>
+												</div>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							</div>
+
+							<div class="flex items-center justify-between pt-4">
+								<Button
+									variant="outline"
+									onclick={() => goToStep('cards')}
+									size="lg"
+									class="gap-2"
+								>
+									<ArrowLeft class="h-4 w-4" />
+									Back to Card Designer
+								</Button>
+								<Button
+									onclick={() => goToStep('settings')}
+									size="lg"
+									class="gap-2"
+								>
+									Continue to Table Settings
+									<ArrowLeft class="h-4 w-4 rotate-180" />
+								</Button>
+							</div>
+						</Card.Content>
+					</Card.Root>
+				</div>
 			{:else if currentStep === 'settings'}
-				<!-- Step 3: DataTable Settings -->
+				<!-- Step 5: DataTable Settings -->
 				<div class="container mx-auto h-full max-w-4xl overflow-y-auto px-4 py-8 md:px-6">
 					<Card.Root class="border-2 shadow-lg">
 						<Card.Header class="space-y-2 pb-6">
@@ -1035,12 +1429,12 @@
 							<div class="flex items-center justify-between pt-4">
 								<Button
 									variant="outline"
-									onclick={() => goToStep('cards')}
+									onclick={() => goToStep('related')}
 									size="lg"
 									class="gap-2"
 								>
 									<ArrowLeft class="h-4 w-4" />
-									Back to Card Designer
+									Back to Related Lists
 								</Button>
 								<Button
 									onclick={handleSubmit}

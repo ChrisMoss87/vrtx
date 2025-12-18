@@ -11,6 +11,7 @@
 	import { toast } from 'svelte-sonner';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import { BlueprintStatus } from '$lib/components/blueprint/runtime';
+	import { ActivityTimeline, AuditHistory, RelatedRecords } from '$lib/components/related-lists';
 
 	const moduleApiName = $derived($page.params.moduleApiName as string);
 	const recordId = $derived(parseInt($page.params.recordId as string));
@@ -103,6 +104,9 @@
 		const option = field.options?.find((o: any) => o.value === value);
 		return option?.label || value;
 	}
+
+	// Get the subject type for activities (e.g., "ModuleRecord" or the module's model name)
+	const activitySubjectType = $derived(`App\\Models\\ModuleRecord`);
 </script>
 
 <div class="container mx-auto max-w-4xl py-8">
@@ -240,6 +244,25 @@
 					</Card.Content>
 				</Card.Root>
 			{/each}
+
+			<!-- Related Lists Section -->
+			<div class="space-y-4">
+				<h2 class="text-lg font-semibold">Related Information</h2>
+
+				<!-- Activities Timeline -->
+				{#if module.settings?.has_activity_log !== false}
+					<ActivityTimeline
+						subjectType={activitySubjectType}
+						subjectId={record.id}
+					/>
+				{/if}
+
+				<!-- Audit History / Change Log -->
+				<AuditHistory
+					auditableType={activitySubjectType}
+					auditableId={record.id}
+				/>
+			</div>
 
 			<!-- Actions at bottom -->
 			<div class="flex justify-between border-t pt-4">

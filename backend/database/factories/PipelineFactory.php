@@ -24,7 +24,7 @@ class PipelineFactory extends Factory
     {
         return [
             'name' => $this->faker->words(2, true) . ' Pipeline',
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'stage_field_api_name' => 'stage_id',
             'is_active' => $this->faker->boolean(90),
             'settings' => [],

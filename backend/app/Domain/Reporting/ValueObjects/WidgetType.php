@@ -28,6 +28,7 @@ enum WidgetType: string
     case HEATMAP = 'heatmap';
     case QUICK_LINKS = 'quick_links';
     case EMBED = 'embed';
+    case FORECAST = 'forecast';
 
     /**
      * Get human-readable label for this widget type.
@@ -53,6 +54,7 @@ enum WidgetType: string
             self::HEATMAP => 'Heatmap',
             self::QUICK_LINKS => 'Quick Links',
             self::EMBED => 'Embed',
+            self::FORECAST => 'Sales Forecast',
         };
     }
 
@@ -80,6 +82,7 @@ enum WidgetType: string
             self::HEATMAP => 'Activity density grid visualization',
             self::QUICK_LINKS => 'Navigation shortcuts panel',
             self::EMBED => 'External URL, video, or form embed',
+            self::FORECAST => 'Sales forecast with pipeline categories and quota tracking',
         };
     }
 
@@ -89,7 +92,7 @@ enum WidgetType: string
     public function category(): string
     {
         return match ($this) {
-            self::REPORT, self::KPI, self::CHART, self::TABLE, self::GOAL_KPI, self::FUNNEL => 'analytics',
+            self::REPORT, self::KPI, self::CHART, self::TABLE, self::GOAL_KPI, self::FUNNEL, self::FORECAST => 'analytics',
             self::ACTIVITY, self::PIPELINE, self::TASKS, self::CALENDAR, self::RECENT_RECORDS => 'activity',
             self::TEXT, self::IFRAME, self::QUICK_LINKS, self::EMBED => 'content',
             self::LEADERBOARD, self::PROGRESS => 'performance',
@@ -115,7 +118,7 @@ enum WidgetType: string
     {
         return match ($this) {
             self::REPORT, self::KPI, self::CHART, self::TABLE, self::ACTIVITY, self::PIPELINE, self::TASKS => true,
-            self::GOAL_KPI, self::LEADERBOARD, self::FUNNEL, self::PROGRESS, self::RECENT_RECORDS, self::HEATMAP => true,
+            self::GOAL_KPI, self::LEADERBOARD, self::FUNNEL, self::PROGRESS, self::RECENT_RECORDS, self::HEATMAP, self::FORECAST => true,
             self::CALENDAR, self::TEXT, self::IFRAME, self::QUICK_LINKS, self::EMBED => false,
         };
     }
@@ -136,6 +139,7 @@ enum WidgetType: string
             self::IFRAME => ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4, 'minW' => 3, 'minH' => 2],
             self::CALENDAR => ['x' => 0, 'y' => 0, 'w' => 4, 'h' => 4, 'minW' => 3, 'minH' => 3],
             self::HEATMAP => ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 5, 'minW' => 4, 'minH' => 4],
+            self::FORECAST => ['x' => 0, 'y' => 0, 'w' => 4, 'h' => 6, 'minW' => 3, 'minH' => 4],
             default => ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4],
         };
     }

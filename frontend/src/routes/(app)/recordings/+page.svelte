@@ -7,9 +7,9 @@
 	import { getActiveRecording, type Recording } from '$lib/api/recordings';
 	import { tryCatch } from '$lib/utils/tryCatch';
 
-	let activeRecording: Recording | null = null;
-	let loading = true;
-	let showRecordingIndicator = false;
+	let activeRecording = $state<Recording | null>(null);
+	let loading = $state(true);
+	let showRecordingIndicator = $state(false);
 
 	onMount(async () => {
 		const { data } = await tryCatch(getActiveRecording());
@@ -21,22 +21,22 @@
 		}
 	});
 
-	function handleStarted(event: CustomEvent<Recording>) {
-		activeRecording = event.detail;
+	function handleStarted(recording: Recording) {
+		activeRecording = recording;
 		showRecordingIndicator = true;
 	}
 
-	function handleStopped(event: CustomEvent<Recording>) {
+	function handleStopped(recording: Recording) {
 		activeRecording = null;
 		showRecordingIndicator = false;
 	}
 
-	function handlePaused(event: CustomEvent<Recording>) {
-		activeRecording = event.detail;
+	function handlePaused(recording: Recording) {
+		activeRecording = recording;
 	}
 
-	function handleResumed(event: CustomEvent<Recording>) {
-		activeRecording = event.detail;
+	function handleResumed(recording: Recording) {
+		activeRecording = recording;
 	}
 </script>
 
@@ -66,10 +66,10 @@
 		</h2>
 		<RecordingControls
 			currentRecording={activeRecording}
-			on:started={handleStarted}
-			on:stopped={handleStopped}
-			on:paused={handlePaused}
-			on:resumed={handleResumed}
+			onStarted={handleStarted}
+			onStopped={handleStopped}
+			onPaused={handlePaused}
+			onResumed={handleResumed}
 		/>
 		<p class="text-sm text-muted-foreground mt-3">
 			Select a module to focus the recording, or leave blank to record actions across all modules.
@@ -88,9 +88,9 @@
 {#if showRecordingIndicator && activeRecording}
 	<RecordingIndicator
 		recording={activeRecording}
-		on:stopped={handleStopped}
-		on:paused={handlePaused}
-		on:resumed={handleResumed}
+		onStopped={handleStopped}
+		onPaused={handlePaused}
+		onResumed={handleResumed}
 	/>
 {/if}
 </PluginGate>

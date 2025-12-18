@@ -95,7 +95,8 @@
       <div class="space-y-2">
         <Label>Company Logo URL</Label>
         <Input
-          bind:value={settings.branding.logo_url}
+          value={settings.branding?.logo_url ?? ''}
+          oninput={(e) => { if (settings.branding) settings.branding.logo_url = e.currentTarget.value; }}
           placeholder="https://example.com/logo.png"
         />
       </div>
@@ -106,10 +107,11 @@
           <div class="flex gap-2">
             <input
               type="color"
-              bind:value={settings.branding.primary_color}
+              value={settings.branding?.primary_color ?? '#3b82f6'}
+              oninput={(e) => { if (settings.branding) settings.branding.primary_color = e.currentTarget.value; }}
               class="w-10 h-10 rounded border cursor-pointer"
             />
-            <Input bind:value={settings.branding.primary_color} class="font-mono" />
+            <Input value={settings.branding?.primary_color ?? '#3b82f6'} oninput={(e) => { if (settings.branding) settings.branding.primary_color = e.currentTarget.value; }} class="font-mono" />
           </div>
         </div>
 
@@ -118,10 +120,11 @@
           <div class="flex gap-2">
             <input
               type="color"
-              bind:value={settings.branding.accent_color}
+              value={settings.branding?.accent_color ?? '#10b981'}
+              oninput={(e) => { if (settings.branding) settings.branding.accent_color = e.currentTarget.value; }}
               class="w-10 h-10 rounded border cursor-pointer"
             />
-            <Input bind:value={settings.branding.accent_color} class="font-mono" />
+            <Input value={settings.branding?.accent_color ?? '#10b981'} oninput={(e) => { if (settings.branding) settings.branding.accent_color = e.currentTarget.value; }} class="font-mono" />
           </div>
         </div>
       </div>

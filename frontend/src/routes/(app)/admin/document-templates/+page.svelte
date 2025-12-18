@@ -4,8 +4,8 @@
   import { TemplateList } from '$lib/components/document-templates';
   import { documentTemplatesApi, type DocumentTemplate } from '$lib/api/document-templates';
 
-  let templates: DocumentTemplate[] = [];
-  let loading = true;
+  let templates = $state<DocumentTemplate[]>([]);
+  let loading = $state(true);
 
   onMount(async () => {
     await loadTemplates();
@@ -27,23 +27,23 @@
     goto('/admin/document-templates/create');
   }
 
-  function handleEdit(event: CustomEvent<number>) {
-    goto(`/admin/document-templates/${event.detail}/edit`);
+  function handleEdit(id: number) {
+    goto(`/admin/document-templates/${id}/edit`);
   }
 
-  async function handleDuplicate(event: CustomEvent<number>) {
+  async function handleDuplicate(id: number) {
     try {
-      await documentTemplatesApi.duplicate(event.detail);
+      await documentTemplatesApi.duplicate(id);
       await loadTemplates();
     } catch (error) {
       console.error('Failed to duplicate template:', error);
     }
   }
 
-  async function handleDelete(event: CustomEvent<number>) {
+  async function handleDelete(id: number) {
     if (confirm('Are you sure you want to delete this template?')) {
       try {
-        await documentTemplatesApi.delete(event.detail);
+        await documentTemplatesApi.delete(id);
         await loadTemplates();
       } catch (error) {
         console.error('Failed to delete template:', error);
@@ -51,8 +51,8 @@
     }
   }
 
-  function handleGenerate(event: CustomEvent<{ templateId: number }>) {
-    goto(`/admin/document-templates/${event.detail.templateId}/generate`);
+  function handleGenerate(templateId: number) {
+    goto(`/admin/document-templates/${templateId}/generate`);
   }
 </script>
 
@@ -69,10 +69,10 @@
   <TemplateList
     {templates}
     {loading}
-    on:create={handleCreate}
-    on:edit={handleEdit}
-    on:duplicate={handleDuplicate}
-    on:delete={handleDelete}
-    on:generate={handleGenerate}
+    onCreate={handleCreate}
+    onEdit={handleEdit}
+    onDuplicate={handleDuplicate}
+    onDelete={handleDelete}
+    onGenerate={handleGenerate}
   />
 </div>

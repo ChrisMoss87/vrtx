@@ -4,10 +4,15 @@
   import { Label } from '$lib/components/ui/label';
   import * as Card from '$lib/components/ui/card';
   import * as Select from '$lib/components/ui/select';
-  import type { SignatureSigner } from '$lib/api/signatures';
+    interface SignerData {
+    name: string;
+    email: string;
+    role?: string;
+    order?: number;
+  }
 
   interface Props {
-    signers?: Partial<SignatureSigner>[];
+    signers?: SignerData[];
   }
 
   let {
@@ -36,23 +41,23 @@
   }
 
   function removeSigner(index: number) {
-    signers = signers.filter((_: Partial<SignatureSigner>, i: number) => i !== index);
+    signers = signers.filter((_: SignerData, i: number) => i !== index);
     // Reorder remaining signers
-    signers = signers.map((s: Partial<SignatureSigner>, i: number) => ({ ...s, order: i + 1 }));
+    signers = signers.map((s: SignerData, i: number) => ({ ...s, order: i + 1 }));
   }
 
   function moveUp(index: number) {
     if (index === 0) return;
     const newSigners = [...signers];
     [newSigners[index - 1], newSigners[index]] = [newSigners[index], newSigners[index - 1]];
-    signers = newSigners.map((s: Partial<SignatureSigner>, i: number) => ({ ...s, order: i + 1 }));
+    signers = newSigners.map((s: SignerData, i: number) => ({ ...s, order: i + 1 }));
   }
 
   function moveDown(index: number) {
     if (index === signers.length - 1) return;
     const newSigners = [...signers];
     [newSigners[index], newSigners[index + 1]] = [newSigners[index + 1], newSigners[index]];
-    signers = newSigners.map((s: Partial<SignatureSigner>, i: number) => ({ ...s, order: i + 1 }));
+    signers = newSigners.map((s: SignerData, i: number) => ({ ...s, order: i + 1 }));
   }
 
   function updateSignerRole(index: number, role: string) {

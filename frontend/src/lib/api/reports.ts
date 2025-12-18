@@ -268,7 +268,7 @@ export const reportsApi = {
 	/**
 	 * Export a report
 	 */
-	async export(id: number, format: 'csv' | 'json' = 'csv'): Promise<Blob> {
+	async export(id: number, format: 'csv' | 'json' | 'pdf' | 'xlsx' = 'csv'): Promise<Blob> {
 		const response = await apiClient.get(`/reports/${id}/export`, {
 			params: { format },
 			responseType: 'blob'

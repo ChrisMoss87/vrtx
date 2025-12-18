@@ -23,7 +23,7 @@ class BlockFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'name' => $this->faker->words(3, true),
             'type' => $this->faker->randomElement(['section', 'tab', 'accordion', 'card']),
             'display_order' => $this->faker->numberBetween(0, 10),

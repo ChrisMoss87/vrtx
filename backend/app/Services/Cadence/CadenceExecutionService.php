@@ -9,8 +9,13 @@ use App\Models\CadenceEnrollment;
 use App\Models\CadenceMetric;
 use App\Models\CadenceStep;
 use App\Models\CadenceStepExecution;
+use App\Models\EmailAccount;
+use App\Models\EmailMessage;
 use App\Models\ModuleRecord;
+use App\Models\SmsConnection;
 use App\Models\Task;
+use App\Services\Email\EmailService;
+use App\Services\Sms\SmsService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -22,6 +27,10 @@ use Illuminate\Support\Facades\Log;
  */
 class CadenceExecutionService
 {
+    public function __construct(
+        protected EmailService $emailService,
+        protected SmsService $smsService
+    ) {}
     /**
      * Process all due cadence step executions.
      */
@@ -174,7 +183,7 @@ class CadenceExecutionService
 
         // Get email from record data
         $recordData = $record->data ?? [];
-        $email = $recordData['email'] ?? $recordData['Email'] ?? null;
+        $email = $recordData['email'] ?? $recordData['Email'] ?? $recordData['email_address'] ?? null;
 
         if (!$email) {
             return ['success' => false, 'error' => 'No email address found on record'];
@@ -190,32 +199,104 @@ class CadenceExecutionService
             $content = $content ?: $this->personalizeContent($step->template->content ?? '', $recordData);
         }
 
-        // Queue the email for sending
-        // Note: This integrates with the existing email system
         try {
-            // For now, log the email that would be sent
-            // TODO: Integrate with actual email sending service
-            Log::info('Cadence email would be sent', [
-                'enrollment_id' => $enrollment->id,
-                'record_id' => $enrollment->record_id,
-                'to' => $email,
+            // Get the email account for sending
+            // Priority: cadence owner's default account > system default account
+            $emailAccount = $this->getEmailAccountForCadence($enrollment->cadence);
+
+            if (!$emailAccount) {
+                return ['success' => false, 'error' => 'No email account configured for sending'];
+            }
+
+            // Create the email message
+            $emailMessage = EmailMessage::create([
+                'account_id' => $emailAccount->id,
+                'user_id' => $enrollment->cadence->owner_id ?? $enrollment->enrolled_by,
+                'direction' => EmailMessage::DIRECTION_OUTBOUND,
+                'status' => EmailMessage::STATUS_DRAFT,
+                'from_email' => $emailAccount->email_address,
+                'from_name' => $emailAccount->name,
+                'to_emails' => [$email],
                 'subject' => $subject,
+                'body_html' => $content,
+                'body_text' => strip_tags($content),
+                'linked_record_type' => ModuleRecord::class,
+                'linked_record_id' => $enrollment->record_id,
+                'metadata' => [
+                    'cadence_id' => $enrollment->cadence_id,
+                    'enrollment_id' => $enrollment->id,
+                    'step_id' => $step->id,
+                    'source' => 'cadence',
+                ],
             ]);
 
-            // In a real implementation:
-            // Mail::to($email)->queue(new CadenceEmail($subject, $content, $enrollment));
+            // Send the email
+            $sent = $this->emailService->send($emailMessage);
 
-            return [
-                'success' => true,
-                'result' => CadenceStepExecution::RESULT_SENT,
-                'metadata' => [
+            if ($sent) {
+                Log::info('Cadence email sent successfully', [
+                    'enrollment_id' => $enrollment->id,
+                    'record_id' => $enrollment->record_id,
                     'to' => $email,
                     'subject' => $subject,
-                ],
+                    'email_message_id' => $emailMessage->id,
+                ]);
+
+                return [
+                    'success' => true,
+                    'result' => CadenceStepExecution::RESULT_SENT,
+                    'metadata' => [
+                        'to' => $email,
+                        'subject' => $subject,
+                        'email_message_id' => $emailMessage->id,
+                    ],
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $emailMessage->failed_reason ?? 'Failed to send email',
             ];
         } catch (\Exception $e) {
+            Log::error('Cadence email failed', [
+                'enrollment_id' => $enrollment->id,
+                'record_id' => $enrollment->record_id,
+                'error' => $e->getMessage(),
+            ]);
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Get the email account to use for a cadence.
+     */
+    protected function getEmailAccountForCadence(Cadence $cadence): ?EmailAccount
+    {
+        // First, try to get the cadence owner's default email account
+        if ($cadence->owner_id) {
+            $ownerAccount = EmailAccount::where('user_id', $cadence->owner_id)
+                ->where('is_default', true)
+                ->where('is_active', true)
+                ->first();
+
+            if ($ownerAccount) {
+                return $ownerAccount;
+            }
+
+            // Fallback to any active account for the owner
+            $ownerAccount = EmailAccount::where('user_id', $cadence->owner_id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($ownerAccount) {
+                return $ownerAccount;
+            }
+        }
+
+        // Fallback to any system-wide active account (for system cadences)
+        return EmailAccount::where('is_active', true)
+            ->orderBy('is_default', 'desc')
+            ->first();
     }
 
     /**
@@ -287,7 +368,7 @@ class CadenceExecutionService
         }
 
         $recordData = $record->data ?? [];
-        $phone = $recordData['phone'] ?? $recordData['Phone'] ?? $recordData['mobile'] ?? null;
+        $phone = $recordData['phone'] ?? $recordData['Phone'] ?? $recordData['mobile'] ?? $recordData['Mobile'] ?? $recordData['phone_number'] ?? null;
 
         if (!$phone) {
             return ['success' => false, 'error' => 'No phone number found on record'];
@@ -295,22 +376,97 @@ class CadenceExecutionService
 
         $message = $this->personalizeContent($step->content ?? '', $recordData);
 
-        // TODO: Integrate with SMS provider (Twilio, etc.)
-        Log::info('Cadence SMS would be sent', [
-            'enrollment_id' => $enrollment->id,
-            'record_id' => $enrollment->record_id,
-            'to' => $phone,
-            'message' => substr($message, 0, 160),
-        ]);
+        try {
+            // Get SMS connection for the cadence
+            $smsConnection = $this->getSmsConnectionForCadence($enrollment->cadence);
 
-        return [
-            'success' => true,
-            'result' => CadenceStepExecution::RESULT_SENT,
-            'metadata' => [
-                'to' => $phone,
-                'message_length' => strlen($message),
-            ],
-        ];
+            if (!$smsConnection) {
+                return ['success' => false, 'error' => 'No SMS connection configured for sending'];
+            }
+
+            // Send the SMS using the SMS service
+            $smsMessage = $this->smsService->sendMessage(
+                connection: $smsConnection,
+                to: $phone,
+                content: $message,
+                template: $step->sms_template_id ? \App\Models\SmsTemplate::find($step->sms_template_id) : null,
+                mergeData: $recordData,
+                recordId: $enrollment->record_id,
+                moduleApiName: $record->module?->api_name
+            );
+
+            if ($smsMessage->status === 'sent' || $smsMessage->status === 'delivered') {
+                Log::info('Cadence SMS sent successfully', [
+                    'enrollment_id' => $enrollment->id,
+                    'record_id' => $enrollment->record_id,
+                    'to' => $phone,
+                    'sms_message_id' => $smsMessage->id,
+                ]);
+
+                return [
+                    'success' => true,
+                    'result' => CadenceStepExecution::RESULT_SENT,
+                    'metadata' => [
+                        'to' => $phone,
+                        'message_length' => strlen($message),
+                        'segment_count' => $smsMessage->segment_count,
+                        'sms_message_id' => $smsMessage->id,
+                    ],
+                ];
+            }
+
+            // Check for opt-out or rate limit failures
+            if ($smsMessage->error_code === 'OPT_OUT') {
+                return [
+                    'success' => false,
+                    'error' => 'Recipient has opted out of SMS messages',
+                    'metadata' => ['opt_out' => true],
+                ];
+            }
+
+            if ($smsMessage->error_code === 'RATE_LIMIT') {
+                return [
+                    'success' => false,
+                    'error' => 'SMS rate limit exceeded',
+                    'metadata' => ['rate_limited' => true],
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $smsMessage->error_message ?? 'Failed to send SMS',
+            ];
+        } catch (\Exception $e) {
+            Log::error('Cadence SMS failed', [
+                'enrollment_id' => $enrollment->id,
+                'record_id' => $enrollment->record_id,
+                'error' => $e->getMessage(),
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Get the SMS connection to use for a cadence.
+     */
+    protected function getSmsConnectionForCadence(Cadence $cadence): ?SmsConnection
+    {
+        // First, check if the cadence has a specific SMS connection configured
+        if ($cadence->sms_connection_id) {
+            $connection = SmsConnection::where('id', $cadence->sms_connection_id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($connection) {
+                return $connection;
+            }
+        }
+
+        // Fallback to the default active SMS connection
+        return SmsConnection::where('is_active', true)
+            ->where('is_default', true)
+            ->first()
+            ?? SmsConnection::where('is_active', true)->first();
     }
 
     /**

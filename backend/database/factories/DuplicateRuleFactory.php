@@ -22,7 +22,7 @@ class DuplicateRuleFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'name' => $this->faker->words(3, true) . ' Rule',
             'description' => $this->faker->optional()->sentence(),
             'is_active' => true,

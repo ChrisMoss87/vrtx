@@ -186,7 +186,7 @@
     <!-- Recalculate Button -->
     <div class="flex justify-end">
       <Button variant="outline" onclick={recalculateAll} disabled={recalculating}>
-        <RefreshCw class="mr-2 h-4 w-4" class:animate-spin={recalculating} />
+        <RefreshCw class="mr-2 h-4 w-4 {recalculating ? 'animate-spin' : ''}" />
         {recalculating ? 'Recalculating...' : 'Recalculate All Scores'}
       </Button>
     </div>

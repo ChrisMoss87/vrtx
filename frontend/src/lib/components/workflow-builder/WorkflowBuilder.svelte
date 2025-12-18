@@ -24,7 +24,7 @@
 	import StepList from './StepList.svelte';
 
 	interface Props {
-		workflow?: Workflow;
+		workflow?: Workflow | Partial<WorkflowInput>;
 		modules: Module[];
 		onSave: (data: WorkflowInput) => Promise<Workflow>;
 		onCancel: () => void;
@@ -33,7 +33,7 @@
 
 	let { workflow, modules, onSave, onCancel, onTest }: Props = $props();
 
-	const isNew = !workflow?.id;
+	const isNew = !workflow || !('id' in workflow);
 
 	// Form state
 	let name = $state(workflow?.name || '');
@@ -127,10 +127,10 @@
 	}
 
 	async function handleTest() {
-		if (!workflow || !onTest) return;
+		if (!workflow || !onTest || !('id' in workflow)) return;
 		testing = true;
 		try {
-			onTest(workflow);
+			onTest(workflow as Workflow);
 		} finally {
 			testing = false;
 		}

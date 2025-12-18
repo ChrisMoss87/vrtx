@@ -1,22 +1,51 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { SignatureRequestBuilder } from '$lib/components/e-signatures';
-  import { signaturesApi, type SignatureRequest } from '$lib/api/signatures';
+  import { signaturesApi } from '$lib/api/signatures';
 
-  let loading = false;
-  let documentUrl: string | null = null;
+  // Type that matches SignatureRequestBuilder's internal CreateSignatureRequestData
+  interface BuilderSignatureData {
+    title: string;
+    message?: string | null;
+    expires_at?: string | null;
+    signers: { name: string; email: string; role?: string; order?: number }[];
+    fields: { signer_index: number; type: string; page: number; x: number; y: number; width: number; height: number; required: boolean; label?: string }[];
+    settings?: { reminder_days?: number; allow_decline?: boolean; require_reason?: boolean };
+  }
 
-  async function handleSave(event: CustomEvent<Partial<SignatureRequest>>) {
+  let loading = $state(false);
+  let documentUrl = $state<string | null>(null);
+
+  function handleSave(data: BuilderSignatureData) {
     loading = true;
-    try {
-      const created = await signaturesApi.create(event.detail);
-      await signaturesApi.send(created.id);
-      goto('/signatures');
-    } catch (error) {
-      console.error('Failed to create signature request:', error);
-    } finally {
-      loading = false;
-    }
+    // Convert builder format to API format
+    signaturesApi.create({
+      title: data.title,
+      description: data.message ?? undefined,
+      expires_at: data.expires_at ?? undefined,
+      settings: data.settings,
+      signers: data.signers.map(s => ({
+        name: s.name,
+        email: s.email,
+        role: s.role,
+        sign_order: s.order,
+      })),
+      fields: data.fields.map(f => ({
+        field_type: f.type,
+        signer_order: f.signer_index,
+        page_number: f.page,
+        x_position: f.x,
+        y_position: f.y,
+        width: f.width,
+        height: f.height,
+        required: f.required,
+        label: f.label,
+      })),
+    })
+      .then(created => signaturesApi.send(created.id))
+      .then(() => goto('/signatures'))
+      .catch(error => console.error('Failed to create signature request:', error))
+      .finally(() => loading = false);
   }
 
   function handleCancel() {
@@ -47,8 +76,8 @@
   <SignatureRequestBuilder
     {loading}
     {documentUrl}
-    on:save={handleSave}
-    on:cancel={handleCancel}
-    on:uploadDocument={handleUploadDocument}
+    onSave={handleSave}
+    onCancel={handleCancel}
+    onUploadDocument={handleUploadDocument}
   />
 </div>

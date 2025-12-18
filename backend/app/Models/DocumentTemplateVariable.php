@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class DocumentTemplateVariable extends Model
 {
+    use HasFactory;
     public const CATEGORY_CONTACT = 'contact';
     public const CATEGORY_COMPANY = 'company';
     public const CATEGORY_DEAL = 'deal';

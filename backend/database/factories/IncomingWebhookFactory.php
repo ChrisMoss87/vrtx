@@ -28,7 +28,7 @@ class IncomingWebhookFactory extends Factory
             'name' => fake()->words(3, true) . ' Webhook',
             'description' => fake()->optional()->sentence(),
             'token' => IncomingWebhook::generateToken(),
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'field_mapping' => [
                 'name' => 'name',
                 'email' => 'email',

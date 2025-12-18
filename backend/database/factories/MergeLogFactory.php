@@ -23,7 +23,7 @@ class MergeLogFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'surviving_record_id' => ModuleRecord::factory(),
             'merged_record_ids' => [$this->faker->numberBetween(1, 1000)],
             'field_selections' => [

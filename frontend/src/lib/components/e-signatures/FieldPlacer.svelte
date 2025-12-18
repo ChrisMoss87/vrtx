@@ -1,11 +1,17 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
   import * as Select from '$lib/components/ui/select';
-  import type { SignatureSigner } from '$lib/api/signatures';
+
+  interface SignerData {
+    name: string;
+    email: string;
+    role?: string;
+    order?: number;
+  }
 
   interface Props {
     documentUrl?: string | null;
-    signers?: Partial<SignatureSigner>[];
+    signers?: SignerData[];
     fields?: Array<{
       signer_index: number;
       type: string;

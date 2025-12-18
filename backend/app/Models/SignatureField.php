@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SignatureField extends Model
 {
+    use HasFactory;
     public const TYPE_SIGNATURE = 'signature';
     public const TYPE_INITIALS = 'initials';
     public const TYPE_DATE = 'date';
@@ -67,7 +69,7 @@ class SignatureField extends Model
     }
 
     // Helpers
-    public function fill(string $value): void
+    public function fillValue(string $value): void
     {
         $this->value = $value;
         $this->filled_at = now();

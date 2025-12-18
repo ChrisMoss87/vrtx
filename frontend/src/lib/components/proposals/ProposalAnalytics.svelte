@@ -89,18 +89,18 @@
           <Table.Body>
             {#each views as view}
               <Table.Row>
-                <Table.Cell>{formatDate(view.viewed_at)}</Table.Cell>
-                <Table.Cell>{formatDuration(view.duration_seconds || 0)}</Table.Cell>
+                <Table.Cell>{formatDate(view.started_at)}</Table.Cell>
+                <Table.Cell>{formatDuration(view.time_spent || 0)}</Table.Cell>
                 <Table.Cell>
                   {#if view.location}
-                    {view.location.city}, {view.location.country}
+                    {view.location}
                   {:else}
                     -
                   {/if}
                 </Table.Cell>
                 <Table.Cell>
                   <span class="text-xs">
-                    {#if view.user_agent?.includes('Mobile')}
+                    {#if view.device_type === 'mobile' || view.user_agent?.includes('Mobile')}
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
                         <line x1="12" y1="18" x2="12.01" y2="18" />

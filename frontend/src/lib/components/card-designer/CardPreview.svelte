@@ -20,17 +20,56 @@
 		class: className
 	}: Props = $props();
 
-	// Default sample data if none provided
-	const defaultSampleData = {
-		title: 'Sample Card Title',
-		description: 'This is a sample description for the kanban card preview',
-		status: 'In Progress',
-		priority: 'High',
-		amount: 25000,
-		date: new Date().toISOString()
-	};
+	// Generate sample value based on field type
+	function getSampleValue(fieldType: string, fieldLabel: string): unknown {
+		switch (fieldType) {
+			case 'currency':
+			case 'decimal':
+				return 25000;
+			case 'number':
+			case 'integer':
+			case 'percent':
+				return 75;
+			case 'date':
+			case 'datetime':
+				return new Date().toISOString();
+			case 'checkbox':
+			case 'boolean':
+				return true;
+			case 'email':
+				return 'sample@example.com';
+			case 'phone':
+				return '(555) 123-4567';
+			case 'url':
+				return 'https://example.com';
+			case 'select':
+			case 'radio':
+			case 'picklist':
+				return 'Option A';
+			case 'multiselect':
+				return ['Option A', 'Option B'];
+			default:
+				// Generate a readable sample text based on field label
+				return `Sample ${fieldLabel}`;
+		}
+	}
 
-	const data = $derived(Object.keys(sampleData).length > 0 ? sampleData : defaultSampleData);
+	// Build dynamic sample data from available fields and explicit sample data
+	const data = $derived.by(() => {
+		const result: Record<string, unknown> = { ...sampleData };
+
+		// Add sample values for any fields in layout that aren't in sampleData
+		for (const field of layout.fields) {
+			if (result[field.fieldApiName] === undefined) {
+				const fieldMeta = availableFields.find((f) => f.api_name === field.fieldApiName);
+				const fieldType = fieldMeta?.type || 'text';
+				const fieldLabel = fieldMeta?.label || field.fieldApiName;
+				result[field.fieldApiName] = getSampleValue(fieldType, fieldLabel);
+			}
+		}
+
+		return result;
+	});
 
 	function getFieldValue(fieldApiName: string): string {
 		const value = data[fieldApiName];

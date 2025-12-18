@@ -23,6 +23,7 @@ class DefaultModulesSeeder extends Seeder
         $this->createContactsModule();
         $this->createOrganizationsModule();
         $this->createDealsModule();
+        $this->createLeadsModule();
         $this->createTasksModule();
         $this->createActivitiesModule();
         $this->createNotesModule();
@@ -204,6 +205,69 @@ class DefaultModulesSeeder extends Seeder
         $this->createFieldOptions($tagsField, ['High Value', 'Strategic', 'Quick Win', 'Renewal', 'Expansion']);
 
         $this->command->info('  - Created Deals module');
+        return $module;
+    }
+
+    private function createLeadsModule(): Module
+    {
+        $module = Module::updateOrCreate(
+            ['api_name' => 'leads'],
+            [
+                'name' => 'Leads',
+                'singular_name' => 'Lead',
+                'icon' => 'user-plus',
+                'description' => 'Potential customers and sales opportunities',
+                'is_active' => true,
+                'display_order' => 0,
+                'settings' => $this->defaultModuleSettings('first_name'),
+            ]
+        );
+
+        // Lead Information Block
+        $infoBlock = $this->createBlock($module, 'Lead Information', 1);
+        $this->createField($infoBlock, 'first_name', 'First Name', 'text', 1, true, true, true, true);
+        $this->createField($infoBlock, 'last_name', 'Last Name', 'text', 2, true, true, true, true);
+        $this->createField($infoBlock, 'email', 'Email', 'email', 3, false, true, true, true, true);
+        $this->createField($infoBlock, 'phone', 'Phone', 'phone', 4, false, true, false, true);
+        $this->createField($infoBlock, 'mobile', 'Mobile', 'phone', 5, false, true, false, true);
+
+        // Company Information Block
+        $companyBlock = $this->createBlock($module, 'Company Information', 2);
+        $this->createField($companyBlock, 'company', 'Company', 'text', 1, false, true, true, true);
+        $this->createField($companyBlock, 'title', 'Title', 'text', 2, false, true, true, true);
+        $this->createField($companyBlock, 'website', 'Website', 'url', 3, false, false, false, true);
+        $industryField = $this->createField($companyBlock, 'industry', 'Industry', 'select', 4, false, true, true, true);
+        $this->createFieldOptions($industryField, ['Technology', 'Finance', 'Healthcare', 'Manufacturing', 'Retail', 'Education', 'Government', 'Other']);
+        $employeeField = $this->createField($companyBlock, 'number_of_employees', 'Number of Employees', 'select', 5, false, true, false, true);
+        $this->createFieldOptions($employeeField, ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+']);
+        $this->createField($companyBlock, 'annual_revenue', 'Annual Revenue', 'currency', 6, false, true, false, true);
+
+        // Lead Status Block
+        $statusBlock = $this->createBlock($module, 'Lead Status', 3);
+        $statusField = $this->createField($statusBlock, 'status', 'Lead Status', 'select', 1, true, true, false, true);
+        $this->createFieldOptions($statusField, ['New', 'Contacted', 'Qualified', 'Unqualified', 'Converted']);
+        $sourceField = $this->createField($statusBlock, 'source', 'Lead Source', 'select', 2, false, true, false, true);
+        $this->createFieldOptions($sourceField, ['Website', 'Referral', 'Trade Show', 'Cold Call', 'Social Media', 'Advertisement', 'Webinar', 'Partner', 'Other']);
+        $ratingField = $this->createField($statusBlock, 'rating', 'Rating', 'select', 3, false, true, false, true);
+        $this->createFieldOptions($ratingField, ['Hot', 'Warm', 'Cold']);
+        $this->createField($statusBlock, 'assigned_to', 'Assigned To', 'lookup', 4, false, true, true, true, false, ['target_module' => 'users']);
+
+        // Address Block
+        $addressBlock = $this->createBlock($module, 'Address', 4);
+        $this->createField($addressBlock, 'street', 'Street', 'text', 1, false, false, false, true);
+        $this->createField($addressBlock, 'city', 'City', 'text', 2, false, true, true, true);
+        $this->createField($addressBlock, 'state', 'State/Province', 'text', 3, false, true, true, true);
+        $this->createField($addressBlock, 'postal_code', 'Postal Code', 'text', 4, false, true, false, true);
+        $countryField = $this->createField($addressBlock, 'country', 'Country', 'select', 5, false, true, true, true);
+        $this->createCountryOptions($countryField);
+
+        // Additional Block
+        $additionalBlock = $this->createBlock($module, 'Additional', 5);
+        $this->createField($additionalBlock, 'description', 'Description', 'textarea', 1, false, false, false, false);
+        $tagsField = $this->createField($additionalBlock, 'tags', 'Tags', 'multiselect', 2, false, true, false, true);
+        $this->createFieldOptions($tagsField, ['High Priority', 'Follow Up', 'Demo Requested', 'Budget Approved', 'Decision Maker']);
+
+        $this->command->info('  - Created Leads module');
         return $module;
     }
 

@@ -15,6 +15,7 @@ export { default as RecentRecordsWidget } from './RecentRecordsWidget.svelte';
 export { default as HeatmapWidget } from './HeatmapWidget.svelte';
 export { default as QuickLinksWidget } from './QuickLinksWidget.svelte';
 export { default as EmbedWidget } from './EmbedWidget.svelte';
+export { default as ForecastWidget } from './ForecastWidget.svelte';
 
 // Utilities
 export { default as Sparkline } from './Sparkline.svelte';

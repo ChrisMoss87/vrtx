@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\AnalyticsAlert;
 use App\Models\Dashboard;
 use App\Models\ModuleRecord;
 use App\Models\Report;
 use App\Models\SchedulingPage;
+use App\Policies\AnalyticsAlertPolicy;
 use App\Policies\DashboardPolicy;
 use App\Policies\ModuleRecordPolicy;
 use App\Policies\ReportPolicy;
@@ -26,6 +28,7 @@ class AuthServiceProvider extends ServiceProvider
         Dashboard::class => DashboardPolicy::class,
         Report::class => ReportPolicy::class,
         SchedulingPage::class => SchedulingPagePolicy::class,
+        AnalyticsAlert::class => AnalyticsAlertPolicy::class,
     ];
 
     /**

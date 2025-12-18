@@ -7,9 +7,13 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
-	import { getActiveModules, type Module } from '$lib/api/modules';
+	import { type Module } from '$lib/api/modules';
+	import { modulesStore, favoritesStore } from '$lib/stores/modules';
 	import { getIconComponent } from '$lib/utils/icons';
 	import { permissions, hasPermission } from '$lib/stores/permissions';
+	import { license } from '$lib/stores/license';
+	import { NotificationBell } from '$lib/components/notifications';
+	import { authStore } from '$lib/stores/auth.svelte';
 	import {
 		Home,
 		Briefcase,
@@ -28,8 +32,8 @@
 		X,
 		PanelLeftClose,
 		User,
-		Bell,
-		Star
+		Star,
+		FileText, Waypoints
 	} from 'lucide-svelte';
 
 	// Types
@@ -48,17 +52,34 @@
 		icon: any;
 		color?: string;
 		permission?: string;
+		featureFlag?: string;
 		items: NavItem[];
 	}
 
 	// State
-	let modules = $state<Module[]>([]);
-	let loading = $state(true);
 	let activePanel = $state<string | null>(null);
 	let searchQuery = $state('');
 
+	// Subscribe to stores
+	let modules = $state<Module[]>([]);
+	let favorites = $state<string[]>([]);
+
+	// Keep local state in sync with stores
+	$effect(() => {
+		const unsubModules = modulesStore.subscribe(value => {
+			modules = value;
+		});
+		const unsubFavorites = favoritesStore.subscribe(value => {
+			favorites = value;
+		});
+		return () => {
+			unsubModules();
+			unsubFavorites();
+		};
+	});
+
 	// Build navigation categories
-	const getNavCategories = (modules: Module[]): NavCategory[] => [
+	const getNavCategories = (modules: Module[], favorites: string[]): NavCategory[] => [
 		{
 			id: 'home',
 			title: 'Home',
@@ -66,8 +87,7 @@
 			color: 'text-blue-500',
 			items: [
 				{ title: 'Dashboard', url: '/dashboard', icon: Home },
-				{ title: 'Activity Feed', url: '/activity' },
-				{ title: 'Notifications', url: '/notifications', icon: Bell, badge: 3 }
+				{ title: 'Activity Feed', url: '/activity' }
 			]
 		},
 		{
@@ -77,24 +97,28 @@
 			color: 'text-emerald-500',
 			permission: 'modules.view',
 			items: [
-				{ title: 'All Modules', url: '/modules' },
+				{ title: 'Module Manager', url: '/modules', starred: true },
+				{ title: 'Create Module', url: '/modules/create-builder' },
+				{ title: 'Module Settings', url: '/settings/modules' },
 				...modules.map((m) => ({
 					title: m.name,
 					url: `/records/${m.api_name}`,
 					icon: getIconComponent(m.icon),
-					starred: ['leads', 'deals'].includes(m.api_name)
+					starred: favorites.includes(m.api_name)
 				}))
 			]
 		},
 		{
 			id: 'automation',
 			title: 'Automation',
-			icon: Zap,
+			icon: Waypoints,
 			color: 'text-amber-500',
 			permission: 'workflows.view',
 			items: [
 				{ title: 'Workflows', url: '/admin/workflows' },
+				{ title: 'Wizards', url: '/wizards' },
 				{ title: 'Blueprints', url: '/admin/blueprints' },
+				{ title: 'Pending Approvals', url: '/approvals' },
 				{ title: 'Approval Rules', url: '/admin/approval-rules' },
 				{ title: 'Cadences', url: '/marketing/cadences' },
 				{ title: 'Playbooks', url: '/playbooks' }
@@ -111,6 +135,7 @@
 				{ title: 'Dashboards', url: '/dashboards', starred: true },
 				{ title: 'Forecasts', url: '/forecasts' },
 				{ title: 'Quotas & Goals', url: '/quotas' },
+				{ title: 'Goals', url: '/goals' },
 				{ title: 'Revenue Graph', url: '/graph' }
 			]
 		},
@@ -121,8 +146,12 @@
 			color: 'text-sky-500',
 			items: [
 				{ title: 'Email', url: '/email', starred: true },
+				{ title: 'Shared Inbox', url: '/shared-inbox' },
 				{ title: 'Scheduling', url: '/settings/scheduling' },
+				{ title: 'Meetings', url: '/meetings' },
+				{ title: 'Video Meetings', url: '/video-meetings' },
 				{ title: 'Live Chat', url: '/live-chat' },
+				{ title: 'Team Chat', url: '/team-chat' },
 				{ title: 'Calls', url: '/calls' },
 				{ title: 'WhatsApp', url: '/whatsapp' },
 				{ title: 'SMS', url: '/sms' }
@@ -153,7 +182,22 @@
 				{ title: 'Landing Pages', url: '/landing-pages' },
 				{ title: 'Web Forms', url: '/admin/web-forms' },
 				{ title: 'A/B Testing', url: '/ab-tests' },
+				{ title: 'Lookalike Audiences', url: '/lookalike-audiences' },
 				{ title: 'Email Templates', url: '/admin/workflow-email-templates' }
+			]
+		},
+		{
+			id: 'cms',
+			title: 'Content',
+			icon: FileText,
+			color: 'text-teal-500',
+			items: [
+				{ title: 'Pages', url: '/cms/pages' },
+				{ title: 'Forms', url: '/cms/forms' },
+				{ title: 'Media Library', url: '/cms/media' },
+				{ title: 'Categories', url: '/cms/categories' },
+				{ title: 'Tags', url: '/cms/tags' },
+				{ title: 'Menus', url: '/cms/menus' }
 			]
 		},
 		{
@@ -174,6 +218,7 @@
 			icon: Sparkles,
 			color: 'text-purple-500',
 			permission: 'ai.view',
+			featureFlag: 'ai.sidebar',
 			items: [
 				{ title: 'AI Settings', url: '/admin/ai' },
 				{ title: 'Document Templates', url: '/admin/document-templates' },
@@ -189,13 +234,13 @@
 			items: [
 				{ title: 'General', url: '/settings' },
 				{ title: 'Preferences', url: '/settings/preferences', starred: true },
+				{ title: 'Notifications', url: '/settings/notifications' },
 				{ title: 'Users', url: '/settings/users' },
 				{ title: 'Roles & Permissions', url: '/settings/roles' },
+				{ title: 'Modules', url: '/settings/modules' },
 				{ title: 'Billing & Plugins', url: '/settings/billing' },
 				{ title: 'Integrations', url: '/settings/integrations' },
-				{ title: 'API Keys', url: '/admin/api-keys' },
-				{ title: 'Webhooks', url: '/admin/webhooks' },
-				{ title: 'Audit Logs', url: '/admin/audit-logs' }
+				{ title: 'Audit Logs', url: '/settings/audit-logs' }
 			]
 		},
 		{
@@ -209,16 +254,27 @@
 				{ title: 'DataTable Demo', url: '/datatable-demo' },
 				{ title: 'Form Builder', url: '/test-form' },
 				{ title: 'Field Types', url: '/field-types-demo' },
-				{ title: 'Wizard Demo', url: '/wizard-demo' }
+				{ title: 'Wizard Demo', url: '/wizard-demo' },
+				{ title: 'Wizard Builder', url: '/wizard-builder-demo' },
+				{ title: 'Step Types Demo', url: '/step-types-demo' },
+				{ title: 'Conditional Wizard', url: '/conditional-wizard-demo' },
+				{ title: 'Draft Demo', url: '/draft-demo' },
+				{ title: 'Editor Demo', url: '/editor-demo' }
 			]
 		}
 	];
 
-	// Filter by permissions
+	// Filter by permissions and feature flags
 	const filteredCategories = $derived.by(() => {
-		const allCategories = getNavCategories(modules);
+		const allCategories = getNavCategories(modules, favorites);
 		return allCategories
-			.filter((cat) => !cat.permission || hasPermission(cat.permission))
+			.filter((cat) => {
+				// Check permission
+				if (cat.permission && !hasPermission(cat.permission)) return false;
+				// Check feature flag
+				if (cat.featureFlag && !license.hasFeature(cat.featureFlag)) return false;
+				return true;
+			})
 			.map((cat) => ({
 				...cat,
 				items: cat.items.filter((item) => !item.permission || hasPermission(item.permission))
@@ -271,12 +327,10 @@
 
 	onMount(async () => {
 		try {
-			modules = await getActiveModules();
-			modules.sort((a, b) => a.display_order - b.display_order);
+			// Load modules from store (will fetch from API if needed)
+			await modulesStore.load();
 		} catch (error) {
 			console.error('Failed to load modules:', error);
-		} finally {
-			loading = false;
 		}
 	});
 </script>
@@ -330,6 +384,12 @@
 			>
 				<Search class="h-[18px] w-[18px]" />
 			</button>
+			<div
+				class="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+				title="Notifications"
+			>
+				<NotificationBell userId={authStore.user?.id} />
+			</div>
 			<button
 				class="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
 				title="Profile"

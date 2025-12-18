@@ -182,14 +182,16 @@
 
 		<!-- Advanced Settings (Collapsible) -->
 		<Collapsible.Root bind:open={showAdvanced}>
-			<Collapsible.Trigger asChild>
-				<Button variant="ghost" class="w-full justify-between gap-2 text-muted-foreground hover:text-foreground">
-					<span class="flex items-center gap-2">
-						<Settings2 class="h-4 w-4" />
-						Advanced Settings
-					</span>
-					<ChevronDown class="h-4 w-4 transition-transform {showAdvanced ? 'rotate-180' : ''}" />
-				</Button>
+			<Collapsible.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} variant="ghost" class="w-full justify-between gap-2 text-muted-foreground hover:text-foreground">
+						<span class="flex items-center gap-2">
+							<Settings2 class="h-4 w-4" />
+							Advanced Settings
+						</span>
+						<ChevronDown class="h-4 w-4 transition-transform {showAdvanced ? 'rotate-180' : ''}" />
+					</Button>
+				{/snippet}
 			</Collapsible.Trigger>
 			<Collapsible.Content class="mt-3 space-y-4">
 				<!-- API Name -->

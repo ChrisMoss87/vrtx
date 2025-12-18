@@ -354,6 +354,23 @@ export async function getQuotaAttainment(params: {
 }
 
 /**
+ * Forecasts API object for convenience
+ */
+export const forecastsApi = {
+	getSummary: getForecastSummary,
+	getDeals: getForecastDeals,
+	updateDeal: updateDealForecast,
+	getHistory: getForecastHistory,
+	getAccuracy: getForecastAccuracy,
+	getAdjustments: getForecastAdjustments,
+	getQuotas,
+	createQuota,
+	updateQuota,
+	deleteQuota,
+	getQuotaAttainment
+};
+
+/**
  * Format currency amount
  */
 export function formatCurrency(amount: number, currency = 'USD'): string {

@@ -4,8 +4,8 @@
   import { ProposalList } from '$lib/components/proposals';
   import { proposalsApi, type Proposal } from '$lib/api/proposals';
 
-  let proposals: Proposal[] = [];
-  let loading = true;
+  let proposals = $state<Proposal[]>([]);
+  let loading = $state(true);
 
   onMount(async () => {
     await loadProposals();
@@ -27,27 +27,27 @@
     goto('/proposals/create');
   }
 
-  function handleView(event: CustomEvent<number>) {
-    goto(`/proposals/${event.detail}`);
+  function handleView(id: number) {
+    goto(`/proposals/${id}`);
   }
 
-  function handleEdit(event: CustomEvent<number>) {
-    goto(`/proposals/${event.detail}/edit`);
+  function handleEdit(id: number) {
+    goto(`/proposals/${id}/edit`);
   }
 
-  async function handleDuplicate(event: CustomEvent<number>) {
+  async function handleDuplicate(id: number) {
     try {
-      const duplicated = await proposalsApi.duplicate(event.detail);
+      const duplicated = await proposalsApi.duplicate(id);
       goto(`/proposals/${duplicated.id}/edit`);
     } catch (error) {
       console.error('Failed to duplicate proposal:', error);
     }
   }
 
-  async function handleDelete(event: CustomEvent<number>) {
+  async function handleDelete(id: number) {
     if (confirm('Are you sure you want to delete this proposal?')) {
       try {
-        await proposalsApi.delete(event.detail);
+        await proposalsApi.delete(id);
         await loadProposals();
       } catch (error) {
         console.error('Failed to delete proposal:', error);
@@ -55,9 +55,12 @@
     }
   }
 
-  async function handleSend(event: CustomEvent<number>) {
+  async function handleSend(id: number) {
+    const email = prompt('Enter recipient email address:');
+    if (!email) return;
+
     try {
-      await proposalsApi.send(event.detail);
+      await proposalsApi.send(id, email);
       await loadProposals();
       alert('Proposal sent successfully');
     } catch (error) {
@@ -79,11 +82,11 @@
   <ProposalList
     {proposals}
     {loading}
-    on:create={handleCreate}
-    on:view={handleView}
-    on:edit={handleEdit}
-    on:duplicate={handleDuplicate}
-    on:delete={handleDelete}
-    on:send={handleSend}
+    onCreate={handleCreate}
+    onView={handleView}
+    onEdit={handleEdit}
+    onDuplicate={handleDuplicate}
+    onDelete={handleDelete}
+    onSend={handleSend}
   />
 </div>

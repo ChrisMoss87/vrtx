@@ -7,6 +7,8 @@
 	import type { FilterConfig, ColumnDef } from './types';
 	import type { FilterGroupData } from './types';
 	import { cn } from '$lib/utils';
+	import { DateRangeFilter } from '$lib/components/filters';
+	import type { DateRangeValue } from '$lib/components/filters';
 
 	interface Props {
 		group: FilterGroupData;
@@ -65,11 +67,13 @@
 			case 'date':
 			case 'datetime':
 				return [
-					{ value: 'equals', label: 'Is' },
+					{ value: 'between', label: 'Is in range' },
+					{ value: 'equals', label: 'Is exactly' },
 					{ value: 'not_equals', label: 'Is not' },
-					{ value: 'before', label: 'Before' },
-					{ value: 'after', label: 'After' },
-					{ value: 'between', label: 'Between' }
+					{ value: 'before', label: 'Is before' },
+					{ value: 'after', label: 'Is after' },
+					{ value: 'is_empty', label: 'Is empty' },
+					{ value: 'is_not_empty', label: 'Is not empty' }
 				];
 			case 'select':
 			case 'multiselect':
@@ -259,6 +263,39 @@
 								oninput={(e) => handleValueChange(condition, index, e.currentTarget.value)}
 								class="flex-1"
 							/>
+						{:else if column?.type === 'date' || column?.type === 'datetime'}
+							{#if condition.operator === 'between'}
+								{@const dateValue = ((): DateRangeValue => {
+									const val = condition.value;
+									if (val && typeof val === 'object' && !Array.isArray(val)) {
+										// Handle { start, end } format
+										if ('start' in val && 'end' in val) {
+											return { start: String(val.start) || null, end: String(val.end) || null };
+										}
+										// Handle { from, to } format (legacy)
+										if ('from' in val && 'to' in val) {
+											const v = val as { from?: string | number; to?: string | number };
+											return { start: v.from ? String(v.from) : null, end: v.to ? String(v.to) : null };
+										}
+									}
+									return { start: null, end: null };
+								})()}
+								<DateRangeFilter
+									value={dateValue}
+									onchange={(range) => handleValueChange(condition, index, range)}
+									placeholder="Select date range"
+									class="flex-1"
+									showPresets={true}
+								/>
+							{:else}
+								<Input
+									type="date"
+									placeholder="Select date"
+									value={typeof condition.value === 'string' ? condition.value : ''}
+									oninput={(e) => handleValueChange(condition, index, e.currentTarget.value)}
+									class="flex-1"
+								/>
+							{/if}
 						{:else}
 							<Input
 								type="text"

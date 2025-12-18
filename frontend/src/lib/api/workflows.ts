@@ -414,3 +414,299 @@ export async function getWorkflowExecution(
 	);
 	return response.execution;
 }
+
+// Workflow Templates
+
+export type TemplateCategory = 'lead' | 'deal' | 'customer' | 'data' | 'productivity' | 'communication';
+export type TemplateDifficulty = 'beginner' | 'intermediate' | 'advanced';
+
+export interface WorkflowTemplate {
+	id: number;
+	name: string;
+	slug: string;
+	description: string;
+	category: TemplateCategory;
+	icon: string | null;
+	workflow_data: Record<string, unknown>;
+	required_modules: string[] | null;
+	required_fields: string[] | null;
+	variable_mappings: Record<string, {
+		label: string;
+		description?: string;
+		type: 'module' | 'field' | 'user' | 'text' | 'number';
+		required?: boolean;
+	}> | null;
+	is_system: boolean;
+	is_active: boolean;
+	usage_count: number;
+	difficulty: TemplateDifficulty;
+	estimated_time_saved_hours: number | null;
+	is_compatible?: boolean;
+	missing_modules?: string[];
+	created_at: string;
+	updated_at: string;
+}
+
+interface TemplateListResponse {
+	success: boolean;
+	templates: WorkflowTemplate[];
+	categories: Record<string, string>;
+	difficulty_levels: Record<string, string>;
+}
+
+interface TemplateResponse {
+	success: boolean;
+	template: WorkflowTemplate;
+}
+
+interface TemplateUseResponse {
+	success: boolean;
+	message: string;
+	workflow_data: Record<string, unknown>;
+	template_id: number;
+}
+
+interface CategoriesResponse {
+	success: boolean;
+	categories: Record<string, string>;
+}
+
+interface TemplatesByCategoryResponse {
+	success: boolean;
+	category: string;
+	category_label: string;
+	templates: WorkflowTemplate[];
+}
+
+/**
+ * Get all workflow templates
+ */
+export async function getWorkflowTemplates(params?: {
+	category?: TemplateCategory;
+	difficulty?: TemplateDifficulty;
+	search?: string;
+	popular?: boolean;
+}): Promise<{ templates: WorkflowTemplate[]; categories: Record<string, string>; difficulty_levels: Record<string, string> }> {
+	const queryParams: Record<string, string> = {};
+	if (params?.category) {
+		queryParams.category = params.category;
+	}
+	if (params?.difficulty) {
+		queryParams.difficulty = params.difficulty;
+	}
+	if (params?.search) {
+		queryParams.search = params.search;
+	}
+	if (params?.popular) {
+		queryParams.popular = 'true';
+	}
+
+	const response = await apiClient.get<TemplateListResponse>('/workflows/templates', queryParams);
+	return {
+		templates: response.templates,
+		categories: response.categories,
+		difficulty_levels: response.difficulty_levels
+	};
+}
+
+/**
+ * Get a single workflow template
+ */
+export async function getWorkflowTemplate(id: number): Promise<WorkflowTemplate> {
+	const response = await apiClient.get<TemplateResponse>(`/workflows/templates/${id}`);
+	return response.template;
+}
+
+/**
+ * Get template categories
+ */
+export async function getTemplateCategories(): Promise<Record<string, string>> {
+	const response = await apiClient.get<CategoriesResponse>('/workflows/templates/categories');
+	return response.categories;
+}
+
+/**
+ * Get popular templates
+ */
+export async function getPopularTemplates(limit?: number): Promise<WorkflowTemplate[]> {
+	const queryParams: Record<string, string> = {};
+	if (limit) {
+		queryParams.limit = String(limit);
+	}
+	const response = await apiClient.get<{ success: boolean; templates: WorkflowTemplate[] }>(
+		'/workflows/templates/popular',
+		queryParams
+	);
+	return response.templates;
+}
+
+/**
+ * Get templates by category
+ */
+export async function getTemplatesByCategory(category: TemplateCategory): Promise<{ templates: WorkflowTemplate[]; category_label: string }> {
+	const response = await apiClient.get<TemplatesByCategoryResponse>(
+		`/workflows/templates/category/${category}`
+	);
+	return {
+		templates: response.templates,
+		category_label: response.category_label
+	};
+}
+
+/**
+ * Use a template to create workflow data
+ */
+export async function useWorkflowTemplate(
+	id: number,
+	options?: {
+		name?: string;
+		mappings?: Record<string, unknown>;
+	}
+): Promise<{ workflow_data: Record<string, unknown>; template_id: number }> {
+	const response = await apiClient.post<TemplateUseResponse>(
+		`/workflows/templates/${id}/use`,
+		options
+	);
+	return {
+		workflow_data: response.workflow_data,
+		template_id: response.template_id
+	};
+}
+
+// Workflow Versioning
+
+export interface WorkflowVersionSummary {
+	id: number;
+	version_number: number;
+	name: string;
+	description: string | null;
+	change_type: 'create' | 'update' | 'rollback' | 'restore';
+	change_summary: string | null;
+	changes: string[];
+	is_active: boolean;
+	trigger_type: string;
+	step_count: number;
+	created_by: {
+		id: number;
+		name: string;
+	} | null;
+	created_at: string;
+}
+
+export interface WorkflowVersionDetails extends WorkflowVersionSummary {
+	workflow_id: number;
+	workflow_data: Record<string, unknown>;
+	steps: Array<{
+		id: number;
+		order: number;
+		name: string | null;
+		description: string | null;
+		action_type: string;
+		action_config: Record<string, unknown>;
+		conditions: unknown[] | null;
+		branch_id: string | null;
+		is_parallel: boolean;
+		continue_on_error: boolean;
+		retry_count: number;
+		retry_delay_seconds: number;
+	}>;
+	trigger_config: Record<string, unknown> | null;
+	conditions: unknown[] | null;
+	diff: {
+		type: 'initial' | 'diff';
+		changes: string[];
+	};
+}
+
+export interface VersionComparison {
+	version1: {
+		id: number;
+		version_number: number;
+		created_at: string;
+	};
+	version2: {
+		id: number;
+		version_number: number;
+		created_at: string;
+	};
+	changes: {
+		workflow: Record<string, { old: unknown; new: unknown }>;
+		steps: {
+			added: unknown[];
+			removed: unknown[];
+			modified: Array<{ old: unknown; new: unknown }>;
+			count_change: number;
+		};
+	};
+	summary: string[];
+}
+
+interface VersionListResponse {
+	success: boolean;
+	versions: WorkflowVersionSummary[];
+	current_version: number;
+}
+
+interface VersionDetailResponse {
+	success: boolean;
+	version: WorkflowVersionDetails;
+}
+
+interface VersionCompareResponse {
+	success: boolean;
+	comparison: VersionComparison;
+}
+
+/**
+ * Get version history for a workflow
+ */
+export async function getWorkflowVersions(workflowId: number): Promise<{
+	versions: WorkflowVersionSummary[];
+	current_version: number;
+}> {
+	const response = await apiClient.get<VersionListResponse>(`/workflows/${workflowId}/versions`);
+	return {
+		versions: response.versions,
+		current_version: response.current_version
+	};
+}
+
+/**
+ * Get a specific version's details
+ */
+export async function getWorkflowVersion(
+	workflowId: number,
+	versionId: number
+): Promise<WorkflowVersionDetails> {
+	const response = await apiClient.get<VersionDetailResponse>(
+		`/workflows/${workflowId}/versions/${versionId}`
+	);
+	return response.version;
+}
+
+/**
+ * Rollback workflow to a specific version
+ */
+export async function rollbackWorkflowToVersion(
+	workflowId: number,
+	versionId: number
+): Promise<Workflow> {
+	const response = await apiClient.post<{ success: boolean; workflow: Workflow; message: string }>(
+		`/workflows/${workflowId}/versions/${versionId}/rollback`
+	);
+	return response.workflow;
+}
+
+/**
+ * Compare two versions
+ */
+export async function compareWorkflowVersions(
+	workflowId: number,
+	versionId1: number,
+	versionId2: number
+): Promise<VersionComparison> {
+	const response = await apiClient.get<VersionCompareResponse>(
+		`/workflows/${workflowId}/versions/${versionId1}/compare/${versionId2}`
+	);
+	return response.comparison;
+}

@@ -13,7 +13,7 @@
   let views = $state<ProposalView[]>([]);
   let loading = $state(true);
 
-  const proposalId = $derived(parseInt($page.params.id));
+  const proposalId = $derived(parseInt($page.params.id ?? '0'));
 
   onMount(async () => {
     await loadProposal();
@@ -23,7 +23,24 @@
     loading = true;
     try {
       proposal = await proposalsApi.get(proposalId);
-      views = await proposalsApi.getViews(proposalId);
+      // Get analytics which contains view history
+      const analytics = await proposalsApi.getAnalytics(proposalId);
+      // Map analytics view history to ProposalView format
+      views = analytics.view_history?.map((v, i) => ({
+        id: i,
+        proposal_id: proposalId,
+        viewer_email: v.viewer_email,
+        viewer_name: v.viewer_name,
+        session_id: '',
+        started_at: v.started_at,
+        ended_at: null,
+        time_spent: v.time_spent,
+        sections_viewed: null,
+        ip_address: null,
+        user_agent: null,
+        device_type: v.device_type,
+        location: null,
+      })) || [];
     } catch (error) {
       console.error('Failed to load proposal:', error);
     } finally {
@@ -32,8 +49,11 @@
   }
 
   async function handleSend() {
+    const email = proposal?.sent_to_email || prompt('Enter client email address:');
+    if (!email) return;
+
     try {
-      await proposalsApi.send(proposalId);
+      await proposalsApi.send(proposalId, email);
       await loadProposal();
       alert('Proposal sent successfully');
     } catch (error) {
@@ -190,7 +210,7 @@
           {views}
           totalViews={proposal.view_count || 0}
           uniqueViews={views.length}
-          averageViewTime={views.reduce((sum, v) => sum + (v.duration_seconds || 0), 0) / Math.max(views.length, 1)}
+          averageViewTime={views.reduce((sum, v) => sum + (v.time_spent || 0), 0) / Math.max(views.length, 1)}
         />
       </Tabs.Content>
 

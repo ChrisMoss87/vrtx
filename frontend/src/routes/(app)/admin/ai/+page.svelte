@@ -41,9 +41,9 @@
   async function loadModules() {
     try {
       const result = await getModules();
-      modules = result.modules.map((m: { api_name: string; label: string }) => ({
+      modules = result.map((m) => ({
         api_name: m.api_name,
-        label: m.label
+        label: m.name
       }));
     } catch (error) {
       console.error('Failed to load modules:', error);

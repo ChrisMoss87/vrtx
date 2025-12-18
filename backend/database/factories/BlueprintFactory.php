@@ -25,7 +25,7 @@ class BlueprintFactory extends Factory
     {
         return [
             'name' => $this->faker->words(2, true) . ' Blueprint',
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'field_id' => Field::factory(),
             'description' => $this->faker->sentence(),
             'is_active' => true,

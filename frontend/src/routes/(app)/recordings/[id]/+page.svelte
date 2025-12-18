@@ -110,15 +110,15 @@
 		toast.success('Recording resumed');
 	}
 
-	function handleStepRemoved(event: CustomEvent<number>) {
-		steps = steps.filter(s => s.id !== event.detail);
+	function handleStepRemoved(stepId: number) {
+		steps = steps.filter(s => s.id !== stepId);
 		if (recording) {
 			recording.step_count = steps.length;
 		}
 	}
 
-	function handleStepParameterized(event: CustomEvent<RecordingStep>) {
-		steps = steps.map(s => s.id === event.detail.id ? event.detail : s);
+	function handleStepParameterized(step: RecordingStep) {
+		steps = steps.map(s => s.id === step.id ? step : s);
 	}
 
 	function getStatusLabel(status: string): string {
@@ -277,8 +277,8 @@
 			<RecordingSummary
 				{recording}
 				{steps}
-				on:stepRemoved={handleStepRemoved}
-				on:stepParameterized={handleStepParameterized}
+				onStepRemoved={handleStepRemoved}
+				onStepParameterized={handleStepParameterized}
 			/>
 		</div>
 

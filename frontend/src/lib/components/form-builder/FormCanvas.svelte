@@ -2,17 +2,19 @@
 	import { flip } from 'svelte/animate';
 	import { fade, slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
-	import { Plus, Settings, Trash2, GripVertical, ChevronDown, ChevronRight } from 'lucide-svelte';
+	import { Plus, Settings, Trash2, GripVertical, ChevronDown, ChevronRight, X } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Label } from '$lib/components/ui/label';
+	import { Switch } from '$lib/components/ui/switch';
+	import * as Popover from '$lib/components/ui/popover';
+	import * as Select from '$lib/components/ui/select';
 	import { getFieldTypeMetadata, type FieldType } from '$lib/constants/fieldTypes';
 	import type { CreateBlockRequest, CreateFieldRequest } from '$lib/api/modules';
-	import { droppable } from '$lib/utils/dnd.svelte';
 
 	interface Props {
 		blocks: CreateBlockRequest[];
 		onBlocksChange: (blocks: CreateBlockRequest[]) => void;
 		onFieldSelect?: (blockIndex: number, fieldIndex: number) => void;
-		onBlockSelect?: (blockIndex: number) => void;
 		selectedBlockIndex?: number;
 		selectedFieldIndex?: number;
 	}
@@ -21,10 +23,12 @@
 		blocks = $bindable([]),
 		onBlocksChange,
 		onFieldSelect,
-		onBlockSelect,
 		selectedBlockIndex = -1,
 		selectedFieldIndex = -1
 	}: Props = $props();
+
+	// Block settings popover state
+	let blockSettingsOpenIndex = $state<number | null>(null);
 
 	// Collapsed blocks state
 	let collapsedBlocks = $state<Set<number>>(new Set());
@@ -73,6 +77,18 @@
 
 	function removeBlock(blockIndex: number) {
 		onBlocksChange(blocks.filter((_, i) => i !== blockIndex));
+	}
+
+	function updateBlockSettings(blockIndex: number, settings: Partial<CreateBlockRequest['settings']>) {
+		const updatedBlocks = [...blocks];
+		updatedBlocks[blockIndex] = {
+			...updatedBlocks[blockIndex],
+			settings: {
+				...updatedBlocks[blockIndex].settings,
+				...settings
+			}
+		};
+		onBlocksChange(updatedBlocks);
 	}
 
 	// Section drag handlers
@@ -173,7 +189,7 @@
 		);
 	}
 
-	function addFieldToBlock(blockIndex: number, fieldType: FieldType) {
+	function createField(blockIndex: number, fieldType: FieldType): CreateFieldRequest {
 		const metadata = getFieldTypeMetadata(fieldType);
 		const block = blocks[blockIndex];
 		const fieldCount = block.fields?.length || 0;
@@ -201,6 +217,14 @@
 			];
 		}
 
+		return newField;
+	}
+
+	function addFieldToBlock(blockIndex: number, fieldType: FieldType) {
+		const block = blocks[blockIndex];
+		const fieldCount = block.fields?.length || 0;
+		const newField = createField(blockIndex, fieldType);
+
 		const updatedBlocks = [...blocks];
 		updatedBlocks[blockIndex] = {
 			...block,
@@ -210,6 +234,30 @@
 
 		if (onFieldSelect) {
 			onFieldSelect(blockIndex, fieldCount);
+		}
+	}
+
+	function addFieldAtPosition(blockIndex: number, fieldType: FieldType, position: number) {
+		const block = blocks[blockIndex];
+		const newField = createField(blockIndex, fieldType);
+
+		const existingFields = [...(block.fields || [])];
+		existingFields.splice(position, 0, newField);
+
+		// Update display_order for all fields
+		existingFields.forEach((field, idx) => {
+			field.display_order = idx;
+		});
+
+		const updatedBlocks = [...blocks];
+		updatedBlocks[blockIndex] = {
+			...block,
+			fields: existingFields
+		};
+		onBlocksChange(updatedBlocks);
+
+		if (onFieldSelect) {
+			onFieldSelect(blockIndex, position);
 		}
 	}
 
@@ -240,10 +288,12 @@
 		targetFieldIndex: number
 	) {
 		event.preventDefault();
+		event.stopPropagation();
 		if (event.dataTransfer) {
 			event.dataTransfer.dropEffect = 'move';
 		}
 
+		// Check if this is a palette drag
 		if (!draggedField) {
 			isDraggingFromPalette = true;
 			insertAtBlockIndex = targetBlockIndex;
@@ -251,8 +301,10 @@
 
 		const target = event.currentTarget as HTMLElement;
 		const rect = target.getBoundingClientRect();
-		const midY = rect.top + rect.height / 2;
-		const position: 'before' | 'after' = event.clientY < midY ? 'before' : 'after';
+		// Use a larger threshold (40%) for more predictable positioning
+		const threshold = rect.height * 0.4;
+		const offsetY = event.clientY - rect.top;
+		const position: 'before' | 'after' = offsetY < threshold ? 'before' : 'after';
 
 		if (
 			dragOverField?.blockIndex !== targetBlockIndex ||
@@ -267,13 +319,17 @@
 		event.preventDefault();
 		event.stopPropagation();
 
+		// First check if this is a palette drop
 		if (event.dataTransfer) {
 			try {
 				const rawData = event.dataTransfer.getData('application/json');
 				if (rawData) {
 					const parsed = JSON.parse(rawData);
 					if (parsed.sourceId === 'field-palette' && parsed.data?.fieldType) {
-						addFieldToBlock(targetBlockIndex, parsed.data.fieldType);
+						// Insert at the correct position based on dragOverField
+						const position = dragOverField?.position || 'after';
+						const insertIndex = position === 'after' ? targetFieldIndex + 1 : targetFieldIndex;
+						addFieldAtPosition(targetBlockIndex, parsed.data.fieldType, insertIndex);
 						resetDragState();
 						return;
 					}
@@ -283,7 +339,10 @@
 			}
 		}
 
-		if (!draggedField) return;
+		if (!draggedField) {
+			resetDragState();
+			return;
+		}
 
 		const { blockIndex: sourceBlockIndex, fieldIndex: sourceFieldIndex } = draggedField;
 		const dropPosition = dragOverField?.position || 'after';
@@ -375,6 +434,7 @@
 			{@const isBlockDragging = draggedBlockIndex === blockIndex}
 			{@const isBlockDropBefore = dragOverBlockIndex === blockIndex && dragOverBlockPosition === 'before'}
 			{@const isBlockDropAfter = dragOverBlockIndex === blockIndex && dragOverBlockPosition === 'after'}
+			{@const blockSettings = block.settings as { collapsible?: boolean; columns?: number } | undefined}
 
 			<!-- Drop indicator before block -->
 			{#if isBlockDropBefore && !isBlockDragging}
@@ -425,14 +485,70 @@
 						{block.fields?.length || 0} fields
 					</span>
 
-					<Button
-						variant="ghost"
-						size="icon"
-						class="h-8 w-8"
-						onclick={() => onBlockSelect?.(blockIndex)}
-					>
-						<Settings class="h-4 w-4" />
-					</Button>
+					<Popover.Root bind:open={() => blockSettingsOpenIndex === blockIndex, (v) => blockSettingsOpenIndex = v ? blockIndex : null}>
+						<Popover.Trigger>
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-8 w-8"
+							>
+								<Settings class="h-4 w-4" />
+							</Button>
+						</Popover.Trigger>
+						<Popover.Content class="w-72" align="end">
+							<div class="space-y-4">
+								<div class="flex items-center justify-between">
+									<h4 class="text-sm font-semibold">Section Settings</h4>
+									<button
+										type="button"
+										class="rounded p-1 hover:bg-accent"
+										onclick={() => blockSettingsOpenIndex = null}
+									>
+										<X class="h-4 w-4 text-muted-foreground" />
+									</button>
+								</div>
+
+								<div class="space-y-3">
+									<div class="flex items-center justify-between">
+										<Label for="collapsible-{blockIndex}" class="text-sm">
+											Collapsible
+										</Label>
+										<Switch
+											id="collapsible-{blockIndex}"
+											checked={blockSettings?.collapsible ?? false}
+											onCheckedChange={() => updateBlockSettings(blockIndex, { collapsible: !(blockSettings?.collapsible ?? false) })}
+										/>
+									</div>
+									<p class="text-xs text-muted-foreground">
+										Allow users to collapse/expand this section
+									</p>
+								</div>
+
+								<div class="space-y-2">
+									<Label class="text-sm">Columns</Label>
+									<Select.Root
+										type="single"
+										value={(blockSettings?.columns ?? 2).toString()}
+										onValueChange={(val) => {
+											if (val) updateBlockSettings(blockIndex, { columns: parseInt(val) });
+										}}
+									>
+										<Select.Trigger class="w-full">
+											<span>{blockSettings?.columns ?? 2} columns</span>
+										</Select.Trigger>
+										<Select.Content>
+											<Select.Item value="1">1 column</Select.Item>
+											<Select.Item value="2">2 columns</Select.Item>
+											<Select.Item value="3">3 columns</Select.Item>
+										</Select.Content>
+									</Select.Root>
+									<p class="text-xs text-muted-foreground">
+										Maximum columns for fields in this section
+									</p>
+								</div>
+							</div>
+						</Popover.Content>
+					</Popover.Root>
 
 					<Button
 						variant="ghost"
@@ -446,15 +562,51 @@
 
 				<!-- Block Content -->
 				{#if !isCollapsed}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
 						class="p-4 transition-all duration-200 min-h-[80px]
 							{isDropTarget ? 'bg-primary/5' : ''}"
-						use:droppable={{
-							accepts: ['field-palette'],
-							onDragEnter: () => handlePaletteDragEnter(blockIndex),
-							onDragLeave: handlePaletteDragLeave,
-							onDrop: (item) =>
-								handlePaletteDrop(blockIndex, item.data as { fieldType?: FieldType })
+						role="region"
+						ondragover={(e) => {
+							e.preventDefault();
+							if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+							// Check if from palette
+							try {
+								const types = e.dataTransfer?.types || [];
+								if (types.includes('application/json')) {
+									isDraggingFromPalette = true;
+									insertAtBlockIndex = blockIndex;
+								}
+							} catch {
+								// Ignore
+							}
+						}}
+						ondragleave={(e) => {
+							const relatedTarget = e.relatedTarget as HTMLElement | null;
+							const currentTarget = e.currentTarget as HTMLElement;
+							if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+								if (insertAtBlockIndex === blockIndex) {
+									insertAtBlockIndex = null;
+								}
+							}
+						}}
+						ondrop={(e) => {
+							if (e.dataTransfer) {
+								try {
+									const rawData = e.dataTransfer.getData('application/json');
+									if (rawData) {
+										const parsed = JSON.parse(rawData);
+										if (parsed.sourceId === 'field-palette' && parsed.data?.fieldType) {
+											e.preventDefault();
+											e.stopPropagation();
+											addFieldToBlock(blockIndex, parsed.data.fieldType);
+											resetDragState();
+										}
+									}
+								} catch {
+									// Ignore
+								}
+							}
 						}}
 						transition:slide={{ duration: 150 }}
 					>
@@ -479,30 +631,6 @@
 							<div
 								class="grid grid-cols-6 gap-3"
 								role="list"
-								ondragover={(e) => {
-									e.preventDefault();
-									if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-									isDraggingFromPalette = true;
-									insertAtBlockIndex = blockIndex;
-								}}
-								ondrop={(e) => {
-									if (e.dataTransfer) {
-										try {
-											const rawData = e.dataTransfer.getData('application/json');
-											if (rawData) {
-												const parsed = JSON.parse(rawData);
-												if (parsed.sourceId === 'field-palette' && parsed.data?.fieldType) {
-													e.preventDefault();
-													e.stopPropagation();
-													addFieldToBlock(blockIndex, parsed.data.fieldType);
-													resetDragState();
-												}
-											}
-										} catch {
-											// Ignore
-										}
-									}
-								}}
 							>
 								{#each block.fields as field, fieldIndex (getFieldKey(field, blockIndex, fieldIndex))}
 									{@const FieldIcon = getFieldIcon(field.type)}

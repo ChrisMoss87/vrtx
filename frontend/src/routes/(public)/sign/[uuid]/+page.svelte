@@ -29,7 +29,7 @@
       request = data.request;
       signer = data.signer;
       fields = request.fields || [];
-      documentUrl = request.document_url || '';
+      documentUrl = request.file_url || '';
     } catch (err) {
       console.error('Failed to load signing data:', err);
       error = 'This signing link is invalid or has expired.';

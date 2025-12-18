@@ -214,11 +214,11 @@
 
 	const folders = [
 		{ id: 'inbox', label: 'Inbox', icon: Inbox, showCount: true },
-		{ id: 'sent', label: 'Sent', icon: Send },
-		{ id: 'drafts', label: 'Drafts', icon: FileText },
-		{ id: 'starred', label: 'Starred', icon: Star },
-		{ id: 'archive', label: 'Archive', icon: Archive },
-		{ id: 'trash', label: 'Trash', icon: Trash2 }
+		{ id: 'sent', label: 'Sent', icon: Send, showCount: false },
+		{ id: 'drafts', label: 'Drafts', icon: FileText, showCount: false },
+		{ id: 'starred', label: 'Starred', icon: Star, showCount: false },
+		{ id: 'archive', label: 'Archive', icon: Archive, showCount: false },
+		{ id: 'trash', label: 'Trash', icon: Trash2, showCount: false }
 	] as const;
 </script>
 

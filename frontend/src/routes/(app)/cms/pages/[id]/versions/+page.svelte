@@ -11,7 +11,7 @@
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
 
-	const pageId = parseInt($page.params.id);
+	const pageId = parseInt($page.params.id ?? '0');
 
 	let loading = $state(true);
 	let pageData = $state<CmsPage | null>(null);

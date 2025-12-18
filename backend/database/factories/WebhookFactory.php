@@ -26,7 +26,7 @@ class WebhookFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'name' => $this->faker->words(2, true) . ' Webhook',
             'url' => $this->faker->url(),
             'secret' => Str::random(32),

@@ -26,7 +26,7 @@ class FieldFactory extends Factory
         $label = $this->faker->words(2, true);
 
         return [
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'block_id' => null,
             'label' => ucwords($label),
             'api_name' => strtolower(str_replace(' ', '_', $label)) . '_' . $this->faker->unique()->numberBetween(1, 9999),

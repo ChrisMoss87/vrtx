@@ -12,6 +12,8 @@ use App\Domain\Reporting\ValueObjects\ReportType;
 use App\Http\Controllers\Controller;
 use App\Models\Report;
 use App\Services\Reporting\ReportService;
+use App\Services\Reporting\PdfExportService;
+use App\Services\Reporting\ExcelExportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -21,7 +23,9 @@ class ReportController extends Controller
 {
     public function __construct(
         protected ReportingApplicationService $reportingService,
-        protected ReportService $reportService
+        protected ReportService $reportService,
+        protected PdfExportService $pdfExportService,
+        protected ExcelExportService $excelExportService
     ) {}
 
     /**
@@ -290,10 +294,28 @@ class ReportController extends Controller
         $this->authorize('view', $report);
 
         $format = $request->input('format', 'csv');
-
-        $content = $this->reportService->exportReport($report, $format);
-
         $filename = str_replace(' ', '_', $report->name) . '_' . now()->format('Y-m-d');
+
+        // For PDF and Excel, we need the full report data
+        if (in_array($format, ['pdf', 'xlsx', 'excel'])) {
+            $reportData = $this->reportService->executeReport($report);
+
+            if ($format === 'pdf') {
+                $content = $this->pdfExportService->exportReport($report, $reportData);
+                return response($content)
+                    ->header('Content-Type', 'application/pdf')
+                    ->header('Content-Disposition', "attachment; filename=\"{$filename}.pdf\"");
+            }
+
+            // Excel export
+            $content = $this->excelExportService->exportReport($report, $reportData);
+            return response($content)
+                ->header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                ->header('Content-Disposition', "attachment; filename=\"{$filename}.xlsx\"");
+        }
+
+        // CSV and JSON exports (existing behavior)
+        $content = $this->reportService->exportReport($report, $format);
 
         return match ($format) {
             'csv' => response($content)

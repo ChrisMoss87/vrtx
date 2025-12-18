@@ -118,7 +118,9 @@ export interface CreateAccountData {
 	password?: string;
 	signature?: string;
 	sync_folders?: string[];
+	sync_enabled?: boolean;
 	is_default?: boolean;
+	is_active?: boolean;
 }
 
 export interface CreateEmailData {

@@ -7,6 +7,7 @@
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { toast } from 'svelte-sonner';
 	import { getModules, modulesApi, type Module } from '$lib/api/modules';
+	import { modulesStore, favoritesStore } from '$lib/stores/modules';
 	import { getIconComponent } from '$lib/utils/icons';
 	import GripVerticalIcon from '@lucide/svelte/icons/grip-vertical';
 	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
@@ -16,16 +17,31 @@
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import EyeIcon from '@lucide/svelte/icons/eye';
 	import EyeOffIcon from '@lucide/svelte/icons/eye-off';
+	import StarIcon from '@lucide/svelte/icons/star';
+	import StarOffIcon from '@lucide/svelte/icons/star-off';
 
 	let modules = $state<Module[]>([]);
 	let originalModules = $state<Module[]>([]);
 	let loading = $state(true);
 	let saving = $state(false);
 	let hasChanges = $state(false);
+	let favorites = $state<string[]>([]);
 
 	// Drag state
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
+
+	// Subscribe to favorites store
+	$effect(() => {
+		const unsub = favoritesStore.subscribe(value => {
+			favorites = value;
+		});
+		return unsub;
+	});
+
+	function toggleFavorite(apiName: string) {
+		favoritesStore.toggle(apiName);
+	}
 
 	// Check if there are unsaved changes
 	$effect(() => {
@@ -136,6 +152,9 @@
 			// Update original state
 			originalModules = JSON.parse(JSON.stringify(modules.map((m, idx) => ({ ...m, display_order: idx }))));
 
+			// Refresh the modules store so sidebar updates immediately
+			await modulesStore.refresh();
+
 			toast.success('Module order saved successfully');
 		} catch (error) {
 			console.error('Failed to save changes:', error);
@@ -204,9 +223,9 @@
 	{:else}
 		<Card.Root>
 			<Card.Header>
-				<Card.Title>Module Order</Card.Title>
+				<Card.Title>Module Order & Favorites</Card.Title>
 				<Card.Description>
-					Drag modules to reorder them or use the arrow buttons. The order determines how they appear in the sidebar CRM menu.
+					Drag modules to reorder them or use the arrow buttons. Star modules to add them to your favorites section in the sidebar.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -243,6 +262,21 @@
 								<div class="font-medium">{module.name}</div>
 								<div class="text-sm text-muted-foreground">{module.api_name}</div>
 							</div>
+
+							<!-- Favorite Toggle -->
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-8 w-8"
+								onclick={() => toggleFavorite(module.api_name)}
+								title={favorites.includes(module.api_name) ? 'Remove from favorites' : 'Add to favorites'}
+							>
+								{#if favorites.includes(module.api_name)}
+									<StarIcon class="h-4 w-4 text-yellow-500 fill-yellow-500" />
+								{:else}
+									<StarOffIcon class="h-4 w-4 text-muted-foreground" />
+								{/if}
+							</Button>
 
 							<!-- Active Toggle -->
 							<div class="flex items-center gap-2">

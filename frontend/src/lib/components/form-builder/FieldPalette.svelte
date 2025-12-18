@@ -99,31 +99,33 @@
 		</ScrollArea>
 	{/if}
 
-	<!-- Field Type Grid -->
+	<!-- Field Type List -->
 	<ScrollArea class="flex-1">
-		<div class="grid gap-2 p-3">
+		<div class="flex flex-col gap-1.5 p-3">
 			{#each filteredFieldTypes as fieldType (fieldType.value)}
 				{@const Icon = fieldType.icon}
-				<button
-					class="field-type-card group flex cursor-grab items-center gap-3 rounded-lg border bg-card p-3 text-left transition-all hover:border-primary hover:bg-accent active:cursor-grabbing"
+				<div
+					class="field-type-card group flex cursor-grab items-center gap-3 rounded-lg border bg-card p-2.5 text-left transition-all hover:border-primary hover:bg-accent active:cursor-grabbing"
+					role="button"
+					tabindex="0"
 					use:draggable={getDraggableOptions(fieldType.value)}
 					data-testid="field-type-{fieldType.value}"
 				>
 					<div
-						class="shrink-0 rounded-md bg-primary/10 p-2 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground"
+						class="shrink-0 rounded-md bg-primary/10 p-1.5 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground"
 					>
 						<Icon class="h-4 w-4" />
 					</div>
 					<div class="min-w-0 flex-1">
-						<div class="mb-0.5 text-sm font-medium">{fieldType.label}</div>
-						<p class="truncate text-xs text-muted-foreground">
+						<div class="text-sm font-medium leading-tight">{fieldType.label}</div>
+						<p class="truncate text-[11px] text-muted-foreground leading-tight">
 							{fieldType.description}
 						</p>
 					</div>
 					{#if fieldType.isAdvanced}
 						<Badge variant="secondary" class="h-5 shrink-0 px-1.5 text-[10px]">Pro</Badge>
 					{/if}
-				</button>
+				</div>
 			{/each}
 		</div>
 

@@ -24,7 +24,7 @@ class ModuleRecordFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'data' => [
                 'name' => $this->faker->name(),
                 'email' => $this->faker->email(),

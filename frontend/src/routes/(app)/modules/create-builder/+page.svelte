@@ -87,6 +87,7 @@
 	let recordNameField = $state<string>('');
 	let kanbanCardFields = $state<string[]>([]);
 	let kanbanCardConfig = $state<KanbanCardConfig | null>(null);
+	let kanbanGroupByField = $state<string>('');
 
 	// Dragging state for column reorder
 	let draggedColumnIndex = $state<number | null>(null);
@@ -128,6 +129,36 @@
 			});
 		});
 		return fields;
+	});
+
+	// Fields that have options (select, radio, multiselect) - suitable for kanban grouping
+	let fieldsWithOptions = $derived.by(() => {
+		const optionFieldTypes = ['select', 'radio', 'multiselect', 'picklist', 'status'];
+		const fields: Array<{ api_name: string; label: string; type: string; options: Array<{ value: string; label: string; color?: string }> }> = [];
+		blocks.forEach((block) => {
+			block.fields?.forEach((field) => {
+				if (optionFieldTypes.includes(field.type) && field.options && field.options.length > 0) {
+					fields.push({
+						api_name: field.api_name || field.label.toLowerCase().replace(/\s+/g, '_'),
+						label: field.label,
+						type: field.type,
+						options: field.options.map((opt) => ({
+							value: opt.value,
+							label: opt.label,
+							color: opt.color
+						}))
+					});
+				}
+			});
+		});
+		return fields;
+	});
+
+	// Get field options for the selected kanban group-by field
+	let kanbanFieldOptions = $derived.by(() => {
+		if (!kanbanGroupByField) return [];
+		const field = fieldsWithOptions.find((f) => f.api_name === kanbanGroupByField);
+		return field?.options || [];
 	});
 
 	// Fields ordered by column order preference
@@ -594,15 +625,6 @@
 				{/if}
 			</div>
 
-			<!-- Floating action button to continue -->
-			{#if isStep2Valid}
-				<div class="absolute right-6 bottom-6 lg:right-8 lg:bottom-8">
-					<Button onclick={() => goToStep('cards')} size="lg" class="h-12 gap-2 px-6 shadow-2xl">
-						<LayoutGrid class="h-5 w-5" />
-						Configure Card Designer
-					</Button>
-				</div>
-			{/if}
 		{:else if currentStep === 'cards'}
 			<!-- Step 3: Card Designer -->
 			<div class="container mx-auto h-full overflow-y-auto px-4 py-8 md:px-6">
@@ -610,8 +632,39 @@
 					<CardDesigner
 						config={kanbanCardConfig}
 						{availableFields}
+						groupByField={kanbanGroupByField || null}
+						fieldOptions={kanbanFieldOptions}
 						onchange={(config) => (kanbanCardConfig = config)}
 					/>
+
+					<!-- Kanban Group By Field Selector -->
+					{#if fieldsWithOptions.length > 0}
+						<div class="mt-6 rounded-lg border bg-card p-6">
+							<h3 class="text-lg font-semibold mb-2">Kanban Grouping</h3>
+							<p class="text-sm text-muted-foreground mb-4">
+								Select which field to use for grouping records into columns in the kanban view.
+							</p>
+							<Select.Root type="single" bind:value={kanbanGroupByField}>
+								<Select.Trigger class="w-[280px]">
+									{#if kanbanGroupByField}
+										{fieldsWithOptions.find((f) => f.api_name === kanbanGroupByField)?.label || 'Select field'}
+									{:else}
+										<span class="text-muted-foreground">Select a field...</span>
+									{/if}
+								</Select.Trigger>
+								<Select.Content>
+									{#each fieldsWithOptions as field}
+										<Select.Item value={field.api_name}>
+											{field.label}
+											<span class="ml-2 text-xs text-muted-foreground">
+												({field.options.length} options)
+											</span>
+										</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						</div>
+					{/if}
 				{:else}
 					<div class="flex h-full items-center justify-center">
 						<div class="text-center">

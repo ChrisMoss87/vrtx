@@ -23,7 +23,7 @@ class DuplicateCandidateFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'record_id_a' => ModuleRecord::factory(),
             'record_id_b' => ModuleRecord::factory(),
             'match_score' => $this->faker->randomFloat(4, 0.5, 1.0),

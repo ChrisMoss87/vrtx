@@ -24,7 +24,7 @@ class ModuleViewFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'user_id' => User::factory(),
             'name' => fake()->words(2, true) . ' View',
             'description' => fake()->optional()->sentence(),

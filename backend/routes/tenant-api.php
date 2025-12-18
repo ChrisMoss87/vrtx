@@ -15,7 +15,9 @@ use App\Http\Controllers\Api\Modules\RecordController;
 use App\Http\Controllers\Api\Modules\ViewsController;
 use App\Http\Controllers\Api\Pipelines\PipelineController;
 use App\Http\Controllers\Api\RbacController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserSearchController;
+use App\Http\Controllers\Api\WizardController;
 use App\Http\Controllers\Api\WizardDraftController;
 use App\Http\Controllers\Api\Workflows\WorkflowController;
 use App\Http\Controllers\Api\Workflow\WorkflowEmailTemplateController;
@@ -115,12 +117,34 @@ Route::middleware([
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
 
+        // Broadcasting authentication for Laravel Echo
+        Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
+            return \Illuminate\Support\Facades\Broadcast::auth($request);
+        });
+
         // User Preferences
         Route::prefix('preferences')->group(function () {
             Route::get('/', [UserPreferencesController::class, 'index']);
             Route::get('/{key}', [UserPreferencesController::class, 'show']);
             Route::put('/', [UserPreferencesController::class, 'update']);
             Route::post('/set', [UserPreferencesController::class, 'set']);
+        });
+
+        // Notifications
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\NotificationController::class, 'index']);
+            Route::get('/unread-count', [\App\Http\Controllers\Api\NotificationController::class, 'unreadCount']);
+            Route::post('/mark-all-read', [\App\Http\Controllers\Api\NotificationController::class, 'markAllAsRead']);
+            Route::post('/{id}/read', [\App\Http\Controllers\Api\NotificationController::class, 'markAsRead']);
+            Route::post('/{id}/archive', [\App\Http\Controllers\Api\NotificationController::class, 'archive']);
+
+            // Notification preferences
+            Route::get('/preferences', [\App\Http\Controllers\Api\NotificationController::class, 'getPreferences']);
+            Route::put('/preferences', [\App\Http\Controllers\Api\NotificationController::class, 'updatePreferences']);
+
+            // Notification schedule (quiet hours, DND)
+            Route::get('/schedule', [\App\Http\Controllers\Api\NotificationController::class, 'getSchedule']);
+            Route::put('/schedule', [\App\Http\Controllers\Api\NotificationController::class, 'updateSchedule']);
         });
 
         // Module Management Routes
@@ -183,6 +207,19 @@ Route::middleware([
             Route::post('/{moduleApiName}/{viewId}/kanban/move', [ViewsController::class, 'moveKanbanRecord']);
         });
 
+        // Wizard Routes (user-created wizards)
+        Route::prefix('wizards')->group(function () {
+            Route::get('/', [WizardController::class, 'index']);
+            Route::post('/', [WizardController::class, 'store']);
+            Route::get('/module/{moduleId}', [WizardController::class, 'forModule']);
+            Route::post('/reorder', [WizardController::class, 'reorder']);
+            Route::get('/{id}', [WizardController::class, 'show']);
+            Route::put('/{id}', [WizardController::class, 'update']);
+            Route::delete('/{id}', [WizardController::class, 'destroy']);
+            Route::post('/{id}/duplicate', [WizardController::class, 'duplicate']);
+            Route::post('/{id}/toggle-active', [WizardController::class, 'toggleActive']);
+        });
+
         // Wizard Draft Routes
         Route::prefix('wizard-drafts')->group(function () {
             Route::get('/', [WizardDraftController::class, 'index']);
@@ -243,6 +280,16 @@ Route::middleware([
             Route::get('/trigger-types', [WorkflowController::class, 'triggerTypes']);
             Route::get('/action-types', [WorkflowController::class, 'actionTypes']);
 
+            // Workflow Templates
+            Route::prefix('templates')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Workflows\WorkflowTemplateController::class, 'index']);
+                Route::get('/categories', [\App\Http\Controllers\Api\Workflows\WorkflowTemplateController::class, 'categories']);
+                Route::get('/popular', [\App\Http\Controllers\Api\Workflows\WorkflowTemplateController::class, 'popular']);
+                Route::get('/category/{category}', [\App\Http\Controllers\Api\Workflows\WorkflowTemplateController::class, 'byCategory']);
+                Route::get('/{id}', [\App\Http\Controllers\Api\Workflows\WorkflowTemplateController::class, 'show']);
+                Route::post('/{id}/use', [\App\Http\Controllers\Api\Workflows\WorkflowTemplateController::class, 'use']);
+            });
+
             // CRUD operations
             Route::get('/', [WorkflowController::class, 'index']);
             Route::post('/', [WorkflowController::class, 'store']);
@@ -259,6 +306,12 @@ Route::middleware([
             // Execution history
             Route::get('/{id}/executions', [WorkflowController::class, 'executions']);
             Route::get('/{id}/executions/{executionId}', [WorkflowController::class, 'showExecution']);
+
+            // Version history and rollback
+            Route::get('/{id}/versions', [WorkflowController::class, 'versions']);
+            Route::get('/{id}/versions/{versionId}', [WorkflowController::class, 'showVersion']);
+            Route::post('/{id}/versions/{versionId}/rollback', [WorkflowController::class, 'rollback']);
+            Route::get('/{id}/versions/{versionId1}/compare/{versionId2}', [WorkflowController::class, 'compareVersions']);
         });
 
         // Workflow Email Templates Routes
@@ -505,6 +558,7 @@ Route::middleware([
                 Route::get('/{dashboard}', [DashboardController::class, 'show']);
                 Route::get('/{dashboard}/data', [DashboardController::class, 'allWidgetData']);
                 Route::get('/{dashboard}/widgets/{widget}/data', [DashboardController::class, 'widgetData']);
+                Route::get('/{dashboard}/export', [DashboardController::class, 'export']);
             });
 
             // Create operations
@@ -567,6 +621,31 @@ Route::middleware([
 
             // Delete operations
             Route::delete('/roles/{id}', [RbacController::class, 'deleteRole'])->middleware('permission:roles.delete');
+        });
+
+        // User Management Routes
+        Route::prefix('users')->group(function () {
+            // View operations
+            Route::middleware('permission:users.view')->group(function () {
+                Route::get('/', [UserController::class, 'index']);
+                Route::get('/{id}', [UserController::class, 'show']);
+                Route::get('/{id}/sessions', [UserController::class, 'sessions']);
+            });
+
+            // Create operations
+            Route::post('/', [UserController::class, 'store'])->middleware('permission:users.create');
+
+            // Edit operations
+            Route::middleware('permission:users.edit')->group(function () {
+                Route::put('/{id}', [UserController::class, 'update']);
+                Route::post('/{id}/toggle-status', [UserController::class, 'toggleStatus']);
+                Route::post('/{id}/reset-password', [UserController::class, 'resetPassword']);
+                Route::delete('/{id}/sessions/{sessionId}', [UserController::class, 'revokeSession']);
+                Route::delete('/{id}/sessions', [UserController::class, 'revokeAllSessions']);
+            });
+
+            // Delete operations
+            Route::delete('/{id}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         });
 
         // Import Routes - requires data.import permission
@@ -880,6 +959,37 @@ Route::middleware([
                 Route::get('/distribution/{module}', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'distribution']);
                 Route::post('/batch-analyze-emails', [\App\Http\Controllers\Api\AI\SentimentAnalysisController::class, 'batchAnalyzeEmails']);
             });
+
+            // AI Report Generation
+            Route::prefix('reports')->group(function () {
+                Route::get('/status', [\App\Http\Controllers\Api\AiReportController::class, 'status']);
+                Route::post('/generate', [\App\Http\Controllers\Api\AiReportController::class, 'generate']);
+                Route::post('/create', [\App\Http\Controllers\Api\AiReportController::class, 'createReport']);
+                Route::get('/suggest/{reportId}', [\App\Http\Controllers\Api\AiReportController::class, 'suggest']);
+                Route::post('/parse-filter', [\App\Http\Controllers\Api\AiReportController::class, 'parseFilter']);
+            });
+        });
+
+        // Analytics Alerts Routes
+        Route::prefix('analytics-alerts')->group(function () {
+            Route::get('/options', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'options']);
+            Route::get('/stats', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'stats']);
+            Route::get('/unacknowledged', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'unacknowledged']);
+
+            Route::get('/', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'store']);
+            Route::get('/{alert}', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'show']);
+            Route::put('/{alert}', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'update']);
+            Route::delete('/{alert}', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'destroy']);
+            Route::post('/{alert}/toggle', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'toggle']);
+            Route::post('/{alert}/check', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'check']);
+            Route::get('/{alert}/history', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'history']);
+            Route::post('/{alert}/subscribe', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'subscribe']);
+            Route::delete('/{alert}/subscribe', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'unsubscribe']);
+            Route::post('/{alert}/mute', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'mute']);
+
+            // Alert history actions
+            Route::post('/history/{history}/acknowledge', [\App\Http\Controllers\Api\AnalyticsAlertController::class, 'acknowledge']);
         });
 
         // Document Templates Routes (Phase F)

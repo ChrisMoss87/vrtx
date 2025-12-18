@@ -100,7 +100,7 @@
           </div>
         {:else if proposal.status === 'accepted'}
           <Badge class="bg-green-100 text-green-800">Accepted</Badge>
-        {:else if proposal.status === 'declined'}
+        {:else if proposal.status === 'rejected'}
           <Badge class="bg-red-100 text-red-800">Declined</Badge>
         {/if}
       </div>
@@ -128,7 +128,7 @@
         </Card.Header>
         <Card.Content>
           <div class="prose prose-sm max-w-none">
-            {@html section.content.replace(/\n/g, '<br>')}
+            {@html (section.content ?? '').replace(/\n/g, '<br>')}
           </div>
 
           {#if section.media_urls && section.media_urls.length > 0}
@@ -149,7 +149,7 @@
                   <span class="font-medium text-sm">{comment.author_name}</span>
                   <span class="text-xs text-muted-foreground">{formatDate(comment.created_at)}</span>
                 </div>
-                <p class="text-sm">{comment.content}</p>
+                <p class="text-sm">{comment.comment}</p>
               </div>
             {/each}
 

@@ -344,14 +344,14 @@
 			<DuplicateRuleBuilder
 				moduleId={selectedModuleId}
 				fields={[
-					{ name: 'name', label: 'Name', type: 'text' },
-					{ name: 'email', label: 'Email', type: 'email' },
-					{ name: 'phone', label: 'Phone', type: 'phone' },
-					{ name: 'company_name', label: 'Company', type: 'text' }
+					{ name: 'name', label: 'Name' },
+					{ name: 'email', label: 'Email' },
+					{ name: 'phone', label: 'Phone' },
+					{ name: 'company_name', label: 'Company' }
 				]}
-				existingRule={editingRule ?? undefined}
+				rule={editingRule}
 				onSaved={handleRuleSaved}
-				onCancel={() => { showRuleBuilder = false; editingRule = null; }}
+				onClose={() => { showRuleBuilder = false; editingRule = null; }}
 			/>
 		{/if}
 	</Dialog.Content>
@@ -364,8 +364,8 @@
 			<DuplicateMergeWizard
 				recordAId={mergeRecordAId}
 				recordBId={mergeRecordBId}
-				onComplete={handleMergeComplete}
-				onCancel={() => { showMergeWizard = false; }}
+				onMerged={handleMergeComplete}
+				onClose={() => { showMergeWizard = false; }}
 			/>
 		{/if}
 	</Dialog.Content>

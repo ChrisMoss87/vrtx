@@ -250,7 +250,7 @@ export function buildApiRequest(state: TableState): DataTableRequest {
 /**
  * Parse API response to update table state
  */
-export function parseApiResponse<TData extends RecordData = RecordData>(
+export function parseApiResponse<TData extends BaseRowData = BaseRowData>(
 	response: DataTableResponse<TData>
 ): { data: TData[]; pagination: PaginationState } {
 	return {

@@ -24,7 +24,8 @@ export type WidgetType =
 	| 'recent_records'
 	| 'heatmap'
 	| 'quick_links'
-	| 'embed';
+	| 'embed'
+	| 'forecast';
 
 export interface GridPosition {
 	x: number;
@@ -264,6 +265,17 @@ export const dashboardsApi = {
 		return response.data;
 	},
 
+	/**
+	 * Export dashboard to PDF or Excel
+	 */
+	async export(id: number, format: 'pdf' | 'xlsx' = 'pdf'): Promise<Blob> {
+		const response = await apiClient.get(`/dashboards/${id}/export`, {
+			params: { format },
+			responseType: 'blob'
+		});
+		return response as unknown as Blob;
+	},
+
 	// Widget operations
 	widgets: {
 		/**
@@ -329,7 +341,8 @@ export function getWidgetIcon(type: WidgetType): string {
 		recent_records: 'list',
 		heatmap: 'grid-3x3',
 		quick_links: 'link',
-		embed: 'globe'
+		embed: 'globe',
+		forecast: 'pie-chart'
 	};
 	return icons[type] || 'square';
 }
@@ -354,7 +367,8 @@ export function getDefaultGridPosition(type: WidgetType): GridPosition {
 		recent_records: { x: 0, y: 0, w: 4, h: 6, minW: 3, minH: 4 },
 		heatmap: { x: 0, y: 0, w: 6, h: 5, minW: 4, minH: 4 },
 		quick_links: { x: 0, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
-		embed: { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 }
+		embed: { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+		forecast: { x: 0, y: 0, w: 4, h: 6, minW: 3, minH: 4 }
 	};
 	return positions[type] || { x: 0, y: 0, w: 4, h: 4 };
 }

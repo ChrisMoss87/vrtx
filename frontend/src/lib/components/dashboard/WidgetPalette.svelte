@@ -18,7 +18,8 @@
 		Clock,
 		Grid3x3,
 		Link,
-		Globe
+		Globe,
+		PieChart
 	} from 'lucide-svelte';
 	import type { WidgetType } from '$lib/api/dashboards';
 
@@ -66,6 +67,13 @@
 			label: 'Funnel',
 			icon: Filter,
 			description: 'Sales/conversion funnel',
+			category: 'Analytics'
+		},
+		{
+			value: 'forecast',
+			label: 'Sales Forecast',
+			icon: PieChart,
+			description: 'Pipeline categories & quota',
 			category: 'Analytics'
 		},
 		{

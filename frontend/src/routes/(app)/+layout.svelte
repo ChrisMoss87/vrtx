@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../../app.css';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
@@ -13,6 +13,8 @@
 	import { permissions } from '$lib/stores/permissions';
 	import { sidebarStyle } from '$lib/stores/sidebar';
 	import { preferences } from '$lib/stores/preferences';
+	import { notifications } from '$lib/stores/notifications';
+	import { initializeEcho, disconnectEcho } from '$lib/echo';
 	import { TooltipProvider } from '$lib/components/ui/tooltip';
 
 	let { children } = $props();
@@ -52,7 +54,21 @@
 			console.error('Failed to load app data:', error);
 		}
 
+		// Initialize real-time notifications (requires `php artisan reverb:start`)
+		// Uncomment when Reverb is running:
+		// if (authStore.token && authStore.user?.id) {
+		// 	initializeEcho(authStore.token);
+		// 	notifications.connectRealtime(authStore.user.id);
+		// }
+
 		checkingAuth = false;
+	});
+
+	onDestroy(() => {
+		if (authStore.user?.id) {
+			notifications.disconnectRealtime(authStore.user.id);
+		}
+		disconnectEcho();
 	});
 </script>
 

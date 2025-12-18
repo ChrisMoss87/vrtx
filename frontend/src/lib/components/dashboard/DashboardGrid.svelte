@@ -2,7 +2,6 @@
 	import { onMount, onDestroy } from 'svelte';
 	import type { GridStack, GridStackNode } from 'gridstack';
 	import 'gridstack/dist/gridstack.min.css';
-	import 'gridstack/dist/gridstack-extra.min.css';
 	import type { DashboardWidget, GridPosition } from '$lib/api/dashboards';
 
 	interface Props {

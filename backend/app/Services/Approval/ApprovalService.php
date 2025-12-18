@@ -11,11 +11,18 @@ use App\Models\ApprovalQuickAction;
 use App\Models\ApprovalRequest;
 use App\Models\ApprovalRule;
 use App\Models\ApprovalStep;
+use App\Models\Notification;
+use App\Services\Notification\NotificationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 
 class ApprovalService
 {
+    public function __construct(
+        protected ?NotificationService $notificationService = null
+    ) {
+        $this->notificationService = $notificationService ?? app(NotificationService::class);
+    }
     public function submitForApproval(string $entityType, int $entityId, array $data = []): ?ApprovalRequest
     {
         // Find matching rule
@@ -193,11 +200,29 @@ class ApprovalService
             return;
         }
 
+        // Queue legacy notification
         $this->queueNotification(
             $request,
             $currentStep,
             $currentStep->approver_id,
             ApprovalNotification::TYPE_PENDING
+        );
+
+        // Send real-time notification via new notification system
+        $this->notificationService->notify(
+            $currentStep->approver_id,
+            Notification::TYPE_APPROVAL_PENDING,
+            'Approval Required: ' . $request->title,
+            $request->description,
+            '/approvals/' . $request->id,
+            'Review Request',
+            $request,
+            [
+                'request_id' => $request->id,
+                'entity_type' => $request->entity_type,
+                'entity_id' => $request->entity_id,
+                'step' => $currentStep->step_order,
+            ]
         );
     }
 
@@ -211,6 +236,22 @@ class ApprovalService
                 $request->requested_by,
                 ApprovalNotification::TYPE_COMPLETED
             );
+
+            // Send real-time notification via new notification system
+            $this->notificationService->notify(
+                $request->requested_by,
+                Notification::TYPE_APPROVAL_APPROVED,
+                'Approved: ' . $request->title,
+                'Your approval request has been approved.',
+                '/approvals/' . $request->id,
+                'View Details',
+                $request,
+                [
+                    'request_id' => $request->id,
+                    'entity_type' => $request->entity_type,
+                    'entity_id' => $request->entity_id,
+                ]
+            );
         }
     }
 
@@ -223,6 +264,22 @@ class ApprovalService
                 null,
                 $request->requested_by,
                 ApprovalNotification::TYPE_COMPLETED
+            );
+
+            // Send real-time notification via new notification system
+            $this->notificationService->notify(
+                $request->requested_by,
+                Notification::TYPE_APPROVAL_REJECTED,
+                'Rejected: ' . $request->title,
+                'Your approval request has been rejected.',
+                '/approvals/' . $request->id,
+                'View Details',
+                $request,
+                [
+                    'request_id' => $request->id,
+                    'entity_type' => $request->entity_type,
+                    'entity_id' => $request->entity_id,
+                ]
             );
         }
     }

@@ -13,7 +13,7 @@
 
 	interface Props {
 		groupByField: string | null;
-		fieldOptions: Array<{ value: string; label: string }>;
+		fieldOptions: Array<{ value: string; label: string; color?: string }>;
 		fieldOverrides: Record<string, Partial<CardStyle>>;
 		defaultStyle: CardStyle;
 		layout: any;
@@ -41,8 +41,11 @@
 
 		const newOverrides = { ...fieldOverrides };
 		if (!newOverrides[selectedFieldValue]) {
+			// Use the field option's color if available, otherwise default to blue
+			const option = fieldOptions.find((o) => o.value === selectedFieldValue);
+			const defaultColor = option?.color || '#3b82f6';
 			newOverrides[selectedFieldValue] = {
-				accentColor: '#3b82f6'
+				accentColor: defaultColor
 			};
 		}
 
@@ -118,14 +121,27 @@
 				<Select.Root type="single" bind:value={selectedFieldValue}>
 					<Select.Trigger>
 						{#if selectedFieldValue}
-							{getFieldLabel(selectedFieldValue)}
+							{@const opt = fieldOptions.find((o) => o.value === selectedFieldValue)}
+							<div class="flex items-center gap-2">
+								{#if opt?.color}
+									<div class="h-3 w-3 rounded-full border" style="background-color: {opt.color}"></div>
+								{/if}
+								{getFieldLabel(selectedFieldValue)}
+							</div>
 						{:else}
 							<span class="text-muted-foreground">Select column to customize...</span>
 						{/if}
 					</Select.Trigger>
 					<Select.Content>
 						{#each unusedOptions as option}
-							<Select.Item value={option.value}>{option.label}</Select.Item>
+							<Select.Item value={option.value}>
+								<div class="flex items-center gap-2">
+									{#if option.color}
+										<div class="h-3 w-3 rounded-full border" style="background-color: {option.color}"></div>
+									{/if}
+									{option.label}
+								</div>
+							</Select.Item>
 						{/each}
 					</Select.Content>
 				</Select.Root>
@@ -146,15 +162,24 @@
 			</div>
 		{:else}
 			<!-- Override list -->
-			<Accordion.Root class="space-y-2">
+			<Accordion.Root type="multiple" class="space-y-2">
 				{#each overrideEntries as [fieldValue, override]}
+					{@const originalOption = fieldOptions.find((o) => o.value === fieldValue)}
 					<Accordion.Item value={fieldValue} class="rounded-lg border bg-card">
 						<Accordion.Trigger class="px-4 hover:no-underline">
 							<div class="flex items-center justify-between flex-1">
 								<div class="flex items-center gap-3">
+									{#if originalOption?.color}
+										<div
+											class="h-4 w-4 rounded-full border"
+											style="background-color: {originalOption.color}"
+											title="Original option color"
+										></div>
+									{/if}
 									<div
 										class="h-4 w-4 rounded border"
 										style="background-color: {override.accentColor || defaultStyle.accentColor}"
+										title="Card accent color"
 									></div>
 									<span class="font-medium">{getFieldLabel(fieldValue)}</span>
 									<Badge variant="secondary" class="text-xs">Custom Style</Badge>

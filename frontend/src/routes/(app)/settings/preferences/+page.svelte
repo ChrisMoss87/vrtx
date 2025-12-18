@@ -48,7 +48,7 @@
 	let notificationSounds = $state(true);
 
 	// Date & Time
-	let dateFormat = $state<string>('MM/DD/YYYY');
+	let dateFormat = $state<'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD'>('MM/DD/YYYY');
 	let timeFormat = $state<'12h' | '24h'>('12h');
 	let weekStartsOn = $state<'sunday' | 'monday'>('sunday');
 	let timezone = $state<string>(Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -294,32 +294,30 @@
 					<Label class="text-sm font-medium">Default Landing Page</Label>
 					<Select.Root
 						type="single"
-						value={{ value: landingPage, label: landingPage === 'dashboard' ? 'Dashboard' : landingPage === 'modules' ? 'Modules' : landingPage }}
+						value={landingPage}
 						onValueChange={async (selected) => {
-							if (selected?.value) {
-								landingPage = selected.value;
-								await savePref('default_landing_page', selected.value);
+							if (selected) {
+								landingPage = selected;
+								await savePref('default_landing_page', selected);
 							}
 						}}
 					>
 						<Select.Trigger class="w-full md:w-64">
-							{#snippet children({ open })}
-								<span class="flex items-center gap-2">
-									{#if landingPage === 'dashboard'}
-										<LayoutDashboard class="h-4 w-4" />
-									{:else}
-										<Home class="h-4 w-4" />
-									{/if}
-									{landingPage === 'dashboard' ? 'Dashboard' : landingPage === 'modules' ? 'Modules' : landingPage}
-								</span>
-							{/snippet}
+							<span class="flex items-center gap-2">
+								{#if landingPage === 'dashboard'}
+									<LayoutDashboard class="h-4 w-4" />
+								{:else}
+									<Home class="h-4 w-4" />
+								{/if}
+								{landingPage === 'dashboard' ? 'Dashboard' : landingPage === 'modules' ? 'Modules' : landingPage}
+							</span>
 						</Select.Trigger>
 						<Select.Content>
-							<Select.Item value="dashboard">
+							<Select.Item value="dashboard" label="Dashboard">
 								<LayoutDashboard class="h-4 w-4 mr-2" />
 								Dashboard
 							</Select.Item>
-							<Select.Item value="modules">
+							<Select.Item value="modules" label="Modules">
 								<Home class="h-4 w-4 mr-2" />
 								Modules
 							</Select.Item>
@@ -345,24 +343,22 @@
 					<Label class="text-sm font-medium">Default Rows Per Page</Label>
 					<Select.Root
 						type="single"
-						value={{ value: String(rowsPerPage), label: String(rowsPerPage) }}
+						value={String(rowsPerPage)}
 						onValueChange={async (selected) => {
-							if (selected?.value) {
-								rowsPerPage = Number(selected.value);
-								await savePref('default_rows_per_page', Number(selected.value) as 10 | 25 | 50 | 100);
+							if (selected) {
+								rowsPerPage = Number(selected);
+								await savePref('default_rows_per_page', Number(selected) as 10 | 25 | 50 | 100);
 							}
 						}}
 					>
 						<Select.Trigger class="w-full md:w-64">
-							{#snippet children({ open })}
-								{rowsPerPage} rows
-							{/snippet}
+							{rowsPerPage} rows
 						</Select.Trigger>
 						<Select.Content>
-							<Select.Item value="10">10 rows</Select.Item>
-							<Select.Item value="25">25 rows</Select.Item>
-							<Select.Item value="50">50 rows</Select.Item>
-							<Select.Item value="100">100 rows</Select.Item>
+							<Select.Item value="10" label="10 rows">10 rows</Select.Item>
+							<Select.Item value="25" label="25 rows">25 rows</Select.Item>
+							<Select.Item value="50" label="50 rows">50 rows</Select.Item>
+							<Select.Item value="100" label="100 rows">100 rows</Select.Item>
 						</Select.Content>
 					</Select.Root>
 				</div>
@@ -434,6 +430,12 @@
 						}}
 					/>
 				</div>
+
+				<div class="pt-2">
+					<Button variant="outline" href="/settings/notifications">
+						Advanced Notification Settings
+					</Button>
+				</div>
 			</CardContent>
 		</Card>
 
@@ -454,23 +456,21 @@
 					<Label class="text-sm font-medium">Date Format</Label>
 					<Select.Root
 						type="single"
-						value={{ value: dateFormat, label: dateFormat }}
+						value={dateFormat}
 						onValueChange={async (selected) => {
-							if (selected?.value) {
-								dateFormat = selected.value;
-								await savePref('date_format', selected.value);
+							if (selected && (selected === 'MM/DD/YYYY' || selected === 'DD/MM/YYYY' || selected === 'YYYY-MM-DD')) {
+								dateFormat = selected;
+								await savePref('date_format', selected);
 							}
 						}}
 					>
 						<Select.Trigger class="w-full md:w-64">
-							{#snippet children({ open })}
-								{dateFormat}
-							{/snippet}
+							{dateFormat}
 						</Select.Trigger>
 						<Select.Content>
-							<Select.Item value="MM/DD/YYYY">MM/DD/YYYY (12/25/2024)</Select.Item>
-							<Select.Item value="DD/MM/YYYY">DD/MM/YYYY (25/12/2024)</Select.Item>
-							<Select.Item value="YYYY-MM-DD">YYYY-MM-DD (2024-12-25)</Select.Item>
+							<Select.Item value="MM/DD/YYYY" label="MM/DD/YYYY">MM/DD/YYYY (12/25/2024)</Select.Item>
+							<Select.Item value="DD/MM/YYYY" label="DD/MM/YYYY">DD/MM/YYYY (25/12/2024)</Select.Item>
+							<Select.Item value="YYYY-MM-DD" label="YYYY-MM-DD">YYYY-MM-DD (2024-12-25)</Select.Item>
 						</Select.Content>
 					</Select.Root>
 				</div>
@@ -546,25 +546,23 @@
 					<Label class="text-sm font-medium">Timezone</Label>
 					<Select.Root
 						type="single"
-						value={{ value: timezone, label: timezone.replace(/_/g, ' ') }}
+						value={timezone}
 						onValueChange={async (selected) => {
-							if (selected?.value) {
-								timezone = selected.value;
-								await savePref('timezone', selected.value);
+							if (selected) {
+								timezone = selected;
+								await savePref('timezone', selected);
 							}
 						}}
 					>
 						<Select.Trigger class="w-full md:w-64">
-							{#snippet children({ open })}
-								<span class="flex items-center gap-2">
-									<Globe class="h-4 w-4" />
-									{timezone.replace(/_/g, ' ')}
-								</span>
-							{/snippet}
+							<span class="flex items-center gap-2">
+								<Globe class="h-4 w-4" />
+								{timezone.replace(/_/g, ' ')}
+							</span>
 						</Select.Trigger>
 						<Select.Content>
 							{#each timezones as tz}
-								<Select.Item value={tz}>{tz.replace(/_/g, ' ')}</Select.Item>
+								<Select.Item value={tz} label={tz.replace(/_/g, ' ')}>{tz.replace(/_/g, ' ')}</Select.Item>
 							{/each}
 						</Select.Content>
 					</Select.Root>

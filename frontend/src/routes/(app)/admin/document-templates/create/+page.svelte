@@ -2,13 +2,13 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { TemplateBuilder, DocumentPreview } from '$lib/components/document-templates';
-  import { documentTemplatesApi, type DocumentTemplate, type MergeFieldVariable } from '$lib/api/document-templates';
+  import { documentTemplatesApi, type DocumentTemplate, type MergeFieldVariable, type CreateTemplateData } from '$lib/api/document-templates';
 
-  let variables: Record<string, MergeFieldVariable[]> = {};
-  let loading = false;
-  let previewOpen = false;
-  let previewHtml = '';
-  let previewLoading = false;
+  let variables = $state<Record<string, MergeFieldVariable[]>>({});
+  let loading = $state(false);
+  let previewOpen = $state(false);
+  let previewHtml = $state('');
+  let previewLoading = $state(false);
 
   onMount(async () => {
     await loadVariables();
@@ -16,16 +16,28 @@
 
   async function loadVariables() {
     try {
-      variables = await documentTemplatesApi.getMergeFields();
+      variables = await documentTemplatesApi.getVariables();
     } catch (error) {
       console.error('Failed to load merge fields:', error);
     }
   }
 
-  async function handleSave(event: CustomEvent<Partial<DocumentTemplate>>) {
+  async function handleSave(data: Partial<DocumentTemplate>) {
     loading = true;
     try {
-      await documentTemplatesApi.create(event.detail);
+      const createData: CreateTemplateData = {
+        name: data.name || 'Untitled Template',
+        content: data.content || '',
+        category: data.category ?? undefined,
+        description: data.description ?? undefined,
+        output_format: data.output_format,
+        page_settings: data.page_settings ?? undefined,
+        header_settings: data.header_settings ?? undefined,
+        footer_settings: data.footer_settings ?? undefined,
+        conditional_blocks: data.conditional_blocks ?? undefined,
+        is_shared: data.is_shared,
+      };
+      await documentTemplatesApi.create(createData);
       goto('/admin/document-templates');
     } catch (error) {
       console.error('Failed to create template:', error);
@@ -53,9 +65,9 @@
   <TemplateBuilder
     {variables}
     {loading}
-    on:save={handleSave}
-    on:cancel={handleCancel}
-    on:preview={handlePreview}
+    onSave={handleSave}
+    onCancel={handleCancel}
+    onPreview={handlePreview}
   />
 </div>
 
@@ -63,5 +75,5 @@
   bind:open={previewOpen}
   html={previewHtml}
   loading={previewLoading}
-  on:close={() => previewOpen = false}
+  onClose={() => previewOpen = false}
 />

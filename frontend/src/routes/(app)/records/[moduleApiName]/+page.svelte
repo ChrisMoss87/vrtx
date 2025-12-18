@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
 	import { modulesApi, type Module } from '$lib/api/modules';
 	import { Button } from '$lib/components/ui/button';
 	import { ArrowLeft, Plus, Upload, Download, Kanban, Table2 } from 'lucide-svelte';
@@ -25,8 +25,12 @@
 		);
 	});
 
-	onMount(async () => {
-		await loadModule();
+	// Reload module when moduleApiName changes
+	$effect(() => {
+		const apiName = moduleApiName;
+		untrack(() => {
+			loadModule();
+		});
 	});
 
 	async function loadModule() {
@@ -236,7 +240,7 @@
 			<div class="h-[calc(100vh-16rem)]">
 				<ModuleKanbanView
 					{moduleApiName}
-					moduleSettings={module.settings}
+					moduleSettings={module.settings as unknown as Record<string, unknown>}
 					onRecordClick={handleKanbanRecordClick}
 				/>
 			</div>

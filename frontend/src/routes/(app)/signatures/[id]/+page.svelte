@@ -10,7 +10,7 @@
   let loading = $state(true);
   let showAuditLog = $state(false);
 
-  const requestId = $derived(parseInt($page.params.id));
+  const requestId = $derived(parseInt($page.params.id ?? '0'));
 
   onMount(async () => {
     await loadRequest();
@@ -30,7 +30,8 @@
 
   async function handleRemind(signerId: number) {
     try {
-      await signaturesApi.remindSigner(requestId, signerId);
+      // Send reminder to all pending signers for this request
+      await signaturesApi.remind(requestId);
       alert('Reminder sent successfully');
     } catch (error) {
       console.error('Failed to send reminder:', error);
@@ -38,9 +39,10 @@
   }
 
   async function handleVoid() {
-    if (confirm('Are you sure you want to void this signature request?')) {
+    const reason = prompt('Please provide a reason for voiding this request:');
+    if (reason) {
       try {
-        await signaturesApi.void(requestId);
+        await signaturesApi.void(requestId, reason);
         goto('/signatures');
       } catch (error) {
         console.error('Failed to void request:', error);
@@ -50,13 +52,12 @@
 
   async function handleDownload() {
     try {
-      const blob = await signaturesApi.downloadSigned(requestId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `signed-document-${requestId}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Use the signed file URL from the request
+      if (request?.signed_file_url) {
+        window.open(request.signed_file_url, '_blank');
+      } else {
+        console.error('No signed document available');
+      }
     } catch (error) {
       console.error('Failed to download document:', error);
     }

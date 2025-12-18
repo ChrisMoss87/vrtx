@@ -43,7 +43,7 @@
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
 
-	const formId = parseInt($page.params.id);
+	const formId = parseInt($page.params.id ?? '0');
 
 	let loading = $state(true);
 	let saving = $state(false);

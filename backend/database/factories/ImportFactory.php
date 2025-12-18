@@ -24,7 +24,7 @@ class ImportFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'user_id' => User::factory(),
             'file_name' => $this->faker->word() . '.csv',
             'file_path' => 'imports/' . $this->faker->uuid() . '.csv',

@@ -26,7 +26,7 @@ class WorkflowFactory extends Factory
         return [
             'name' => $this->faker->words(3, true) . ' Workflow',
             'description' => $this->faker->sentence(),
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'is_active' => $this->faker->boolean(80),
             'priority' => $this->faker->numberBetween(0, 10),
             'trigger_type' => $this->faker->randomElement([

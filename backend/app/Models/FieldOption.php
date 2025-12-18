@@ -16,6 +16,7 @@ class FieldOption extends Model
         'field_id',
         'label',
         'value',
+        'color',
         'display_order',
         'is_active',
         'metadata',

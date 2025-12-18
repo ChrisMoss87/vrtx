@@ -26,7 +26,7 @@ class ReportFactory extends Factory
         return [
             'name' => $this->faker->words(3, true) . ' Report',
             'description' => $this->faker->sentence(),
-            'module_id' => Module::factory(),
+            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
             'user_id' => User::factory(),
             'type' => Report::TYPE_TABLE,
             'chart_type' => null,

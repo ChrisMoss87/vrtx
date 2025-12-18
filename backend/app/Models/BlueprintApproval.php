@@ -19,12 +19,22 @@ class BlueprintApproval extends Model
     public const TYPE_MANAGER = 'manager';
     public const TYPE_FIELD_VALUE = 'field_value';
 
+    // Escalation types
+    public const ESCALATION_MANAGER = 'manager';
+    public const ESCALATION_SPECIFIC_USER = 'specific_user';
+    public const ESCALATION_ROLE = 'role';
+
     protected $fillable = [
         'transition_id',
         'approval_type',
         'config',
         'require_all',
         'auto_reject_days',
+        'escalation_hours',
+        'escalation_type',
+        'escalation_config',
+        'reminder_hours',
+        'max_reminders',
         'notify_on_pending',
         'notify_on_complete',
     ];
@@ -34,6 +44,10 @@ class BlueprintApproval extends Model
         'config' => 'array',
         'require_all' => 'boolean',
         'auto_reject_days' => 'integer',
+        'escalation_hours' => 'integer',
+        'escalation_config' => 'array',
+        'reminder_hours' => 'integer',
+        'max_reminders' => 'integer',
         'notify_on_pending' => 'boolean',
         'notify_on_complete' => 'boolean',
     ];
@@ -123,5 +137,76 @@ class BlueprintApproval extends Model
         }
 
         return $this->config['field_id'] ?? null;
+    }
+
+    /**
+     * Check if escalation is configured.
+     */
+    public function hasEscalation(): bool
+    {
+        return $this->escalation_hours !== null && $this->escalation_type !== null;
+    }
+
+    /**
+     * Check if reminders are configured.
+     */
+    public function hasReminders(): bool
+    {
+        return $this->reminder_hours !== null && $this->reminder_hours > 0;
+    }
+
+    /**
+     * Check if auto-reject is configured.
+     */
+    public function hasAutoReject(): bool
+    {
+        return $this->auto_reject_days !== null && $this->auto_reject_days > 0;
+    }
+
+    /**
+     * Get the escalation target user ID.
+     */
+    public function getEscalationTargetUserId(): ?int
+    {
+        if ($this->escalation_type === self::ESCALATION_SPECIFIC_USER) {
+            return $this->escalation_config['user_id'] ?? null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the escalation target role IDs.
+     */
+    public function getEscalationRoleIds(): array
+    {
+        if ($this->escalation_type === self::ESCALATION_ROLE) {
+            return $this->escalation_config['role_ids'] ?? [];
+        }
+
+        return [];
+    }
+
+    /**
+     * Get available escalation types.
+     */
+    public static function getEscalationTypes(): array
+    {
+        return [
+            self::ESCALATION_MANAGER => [
+                'label' => 'Manager',
+                'description' => 'Escalate to the original approver\'s manager',
+            ],
+            self::ESCALATION_SPECIFIC_USER => [
+                'label' => 'Specific User',
+                'description' => 'Escalate to a specific user',
+                'config_fields' => ['user_id'],
+            ],
+            self::ESCALATION_ROLE => [
+                'label' => 'Role',
+                'description' => 'Escalate to users with specific roles',
+                'config_fields' => ['role_ids'],
+            ],
+        ];
     }
 }

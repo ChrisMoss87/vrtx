@@ -111,23 +111,34 @@
 	});
 
 	// Get card style for a specific record based on its field value
-	function getCardStyle(record: KanbanRecord, columnId: string): CardStyle {
+	function getCardStyle(record: KanbanRecord, columnId: string, columnColor?: string): CardStyle {
+		const defaultFallback: CardStyle = {
+			backgroundColor: '#ffffff',
+			borderColor: '#e5e7eb',
+			accentColor: columnColor || '#3b82f6', // Use column color as default accent
+			accentWidth: 3,
+			titleColor: '#111827',
+			subtitleColor: '#6b7280',
+			textColor: '#374151'
+		};
+
 		if (!cardConfig) {
-			return {
-				backgroundColor: '#ffffff',
-				borderColor: '#e5e7eb',
-				accentColor: '#3b82f6',
-				accentWidth: 3,
-				titleColor: '#111827',
-				subtitleColor: '#6b7280',
-				textColor: '#374151'
-			};
+			return defaultFallback;
 		}
 
 		const defaultStyle = cardConfig.default;
 		const override = cardConfig.fieldOverrides?.[columnId];
 
-		return mergeCardStyles(defaultStyle, override);
+		// If there's an override, use it. Otherwise use default style with column color as accent fallback
+		if (override) {
+			return mergeCardStyles(defaultStyle, override);
+		}
+
+		// Use default style but apply column color as accent if no specific accent is set
+		return {
+			...defaultStyle,
+			accentColor: defaultStyle.accentColor || columnColor || '#3b82f6'
+		};
 	}
 
 	// Get field value for display
@@ -744,7 +755,7 @@
 									: ''}"
 							>
 								{#each column.records as record (record.id)}
-									{@const cardStyle = getCardStyle(record, column.id)}
+									{@const cardStyle = getCardStyle(record, column.id, column.color)}
 									{@const layout = cardConfig?.layout}
 									<div
 										class={cn(

@@ -4,8 +4,8 @@
   import { SignatureRequestList } from '$lib/components/e-signatures';
   import { signaturesApi, type SignatureRequest } from '$lib/api/signatures';
 
-  let requests: SignatureRequest[] = [];
-  let loading = true;
+  let requests = $state<SignatureRequest[]>([]);
+  let loading = $state(true);
 
   onMount(async () => {
     await loadRequests();
@@ -27,14 +27,15 @@
     goto('/signatures/create');
   }
 
-  function handleView(event: CustomEvent<number>) {
-    goto(`/signatures/${event.detail}`);
+  function handleView(id: number) {
+    goto(`/signatures/${id}`);
   }
 
-  async function handleVoid(event: CustomEvent<number>) {
-    if (confirm('Are you sure you want to void this signature request?')) {
+  async function handleVoid(id: number) {
+    const reason = prompt('Please provide a reason for voiding this request:');
+    if (reason) {
       try {
-        await signaturesApi.void(event.detail);
+        await signaturesApi.void(id, reason);
         await loadRequests();
       } catch (error) {
         console.error('Failed to void request:', error);
@@ -42,24 +43,24 @@
     }
   }
 
-  async function handleRemind(event: CustomEvent<number>) {
+  async function handleRemind(id: number) {
     try {
-      await signaturesApi.sendReminder(event.detail);
+      await signaturesApi.remind(id);
       alert('Reminder sent successfully');
     } catch (error) {
       console.error('Failed to send reminder:', error);
     }
   }
 
-  async function handleDownload(event: CustomEvent<number>) {
+  async function handleDownload(id: number) {
     try {
-      const blob = await signaturesApi.downloadSigned(event.detail);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `signed-document-${event.detail}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Find the request to get the signed file URL
+      const request = requests.find(r => r.id === id);
+      if (request?.signed_file_url) {
+        window.open(request.signed_file_url, '_blank');
+      } else {
+        console.error('No signed document available');
+      }
     } catch (error) {
       console.error('Failed to download document:', error);
     }
@@ -79,10 +80,10 @@
   <SignatureRequestList
     {requests}
     {loading}
-    on:create={handleCreate}
-    on:view={handleView}
-    on:void={handleVoid}
-    on:remind={handleRemind}
-    on:download={handleDownload}
+    onCreate={handleCreate}
+    onView={handleView}
+    onVoid={handleVoid}
+    onRemind={handleRemind}
+    onDownload={handleDownload}
   />
 </div>

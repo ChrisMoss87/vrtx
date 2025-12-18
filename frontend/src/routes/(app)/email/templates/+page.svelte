@@ -376,7 +376,7 @@
 				<Input
 					id="subject"
 					bind:value={formData.subject}
-					placeholder="Use {{variable}} for dynamic content"
+					placeholder="Use {'{'}variable{'}'} for dynamic content"
 				/>
 				<p class="text-xs text-muted-foreground">
 					Available variables: {'{user.name}'}, {'{user.email}'}, {'{date.today}'}, {'{company.name}'}

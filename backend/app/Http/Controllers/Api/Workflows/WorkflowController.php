@@ -655,4 +655,152 @@ class WorkflowController extends Controller
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
+    /**
+     * Get version history for a workflow.
+     */
+    public function versions(int $id): JsonResponse
+    {
+        try {
+            $existing = $this->workflowService->getWorkflow($id);
+
+            if (!$existing) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Workflow not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $versioningService = app(\App\Services\Workflow\WorkflowVersioningService::class);
+            $versions = $versioningService->getVersionHistory($id);
+
+            return response()->json([
+                'success' => true,
+                'versions' => $versions,
+                'current_version' => $existing->currentVersion ?? 1,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch versions',
+                'error' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Get a specific version.
+     */
+    public function showVersion(int $id, int $versionId): JsonResponse
+    {
+        try {
+            $existing = $this->workflowService->getWorkflow($id);
+
+            if (!$existing) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Workflow not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $versioningService = app(\App\Services\Workflow\WorkflowVersioningService::class);
+            $version = $versioningService->getVersionDetails($versionId);
+
+            if (!$version || $version['workflow_id'] !== $id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Version not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            return response()->json([
+                'success' => true,
+                'version' => $version,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch version',
+                'error' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Rollback to a specific version.
+     */
+    public function rollback(Request $request, int $id, int $versionId): JsonResponse
+    {
+        try {
+            $existing = $this->workflowService->getWorkflow($id);
+
+            if (!$existing) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Workflow not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $versioningService = app(\App\Services\Workflow\WorkflowVersioningService::class);
+            $version = $versioningService->getVersion($versionId);
+
+            if (!$version || $version->workflow_id !== $id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Version not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $workflow = $versioningService->rollbackToVersion($versionId, $request->user()?->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Workflow restored to version {$version->version_number}",
+                'workflow' => $this->workflowService->getWorkflow($workflow->id),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to rollback workflow',
+                'error' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Compare two versions.
+     */
+    public function compareVersions(int $id, int $versionId1, int $versionId2): JsonResponse
+    {
+        try {
+            $existing = $this->workflowService->getWorkflow($id);
+
+            if (!$existing) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Workflow not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $versioningService = app(\App\Services\Workflow\WorkflowVersioningService::class);
+
+            $comparison = $versioningService->compareVersions($versionId1, $versionId2);
+
+            return response()->json([
+                'success' => true,
+                'comparison' => $comparison,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], Response::HTTP_BAD_REQUEST);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to compare versions',
+                'error' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
 }

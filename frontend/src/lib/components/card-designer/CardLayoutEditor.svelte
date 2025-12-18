@@ -166,7 +166,7 @@
 		</div>
 		<Switch
 			checked={layout.showFieldLabels || false}
-			onchange={(checked) => toggleShowFieldLabels(checked)}
+			onCheckedChange={(checked) => toggleShowFieldLabels(checked)}
 		/>
 	</div>
 
@@ -250,7 +250,7 @@
 						<Label class="text-xs text-muted-foreground">Label</Label>
 						<Switch
 							checked={field.showLabel || false}
-							onchange={(checked) => updateField(index, { showLabel: checked })}
+							onCheckedChange={(checked) => updateField(index, { showLabel: checked })}
 							class="scale-75"
 						/>
 					</div>

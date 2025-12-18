@@ -8,9 +8,12 @@ use App\Application\Services\Reporting\ReportingApplicationService;
 use App\Http\Controllers\Controller;
 use App\Models\Dashboard;
 use App\Models\DashboardWidget;
+use App\Services\Reporting\PdfExportService;
+use App\Services\Reporting\ExcelExportService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -18,7 +21,9 @@ class DashboardController extends Controller
     use AuthorizesRequests;
 
     public function __construct(
-        protected ReportingApplicationService $reportingService
+        protected ReportingApplicationService $reportingService,
+        protected PdfExportService $pdfExportService,
+        protected ExcelExportService $excelExportService
     ) {}
 
     /**
@@ -351,5 +356,50 @@ class DashboardController extends Controller
         }
 
         return response()->json(['data' => $widgetData]);
+    }
+
+    /**
+     * Export dashboard to PDF or Excel.
+     */
+    public function export(Dashboard $dashboard, Request $request): Response
+    {
+        $this->authorize('view', $dashboard);
+
+        $format = $request->input('format', 'pdf');
+        $filename = str_replace(' ', '_', $dashboard->name) . '_' . now()->format('Y-m-d');
+
+        // Gather all widget data
+        $dashboard->load('widgets.report');
+        $widgetData = [];
+
+        foreach ($dashboard->widgets as $widget) {
+            $data = null;
+            if ($widget->report_id && $widget->report) {
+                $data = $this->reportingService->executeReport($widget->report_id);
+            } else {
+                $data = $widget->getData();
+            }
+
+            $widgetData[] = [
+                'id' => $widget->id,
+                'title' => $widget->title,
+                'type' => $widget->type,
+                'chart_type' => $widget->config['chart_type'] ?? null,
+                'data' => $data,
+            ];
+        }
+
+        if ($format === 'pdf') {
+            $content = $this->pdfExportService->exportDashboard($dashboard, $widgetData);
+            return response($content)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', "attachment; filename=\"{$filename}.pdf\"");
+        }
+
+        // Excel export
+        $content = $this->excelExportService->exportDashboard($dashboard, $widgetData);
+        return response($content)
+            ->header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->header('Content-Disposition', "attachment; filename=\"{$filename}.xlsx\"");
     }
 }

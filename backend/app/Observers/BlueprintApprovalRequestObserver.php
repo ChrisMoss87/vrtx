@@ -8,7 +8,7 @@ use App\Models\BlueprintApproval;
 use App\Models\BlueprintApprovalRequest;
 use App\Models\BlueprintRecordState;
 use App\Models\BlueprintTransitionExecution;
-use App\Services\Blueprint\BlueprintEngine;
+use App\Services\Blueprint\ActionService;
 use App\Services\Blueprint\SLAService;
 use Illuminate\Support\Facades\Log;
 
@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
 class BlueprintApprovalRequestObserver
 {
     public function __construct(
-        protected BlueprintEngine $blueprintEngine,
+        protected ActionService $actionService,
         protected SLAService $slaService,
     ) {}
 
@@ -201,14 +201,17 @@ class BlueprintApprovalRequestObserver
     protected function executeAfterActions(BlueprintTransitionExecution $execution): array
     {
         $results = [];
-        $actions = $execution->transition->actions ?? collect();
+        $actions = $execution->transition->actions()
+            ->where('is_active', true)
+            ->orderBy('display_order')
+            ->get();
 
         foreach ($actions as $action) {
             try {
-                $result = $this->blueprintEngine->executeAction($action, $execution);
+                $log = $this->actionService->executeAction($execution, $action);
                 $results[$action->id] = [
-                    'status' => 'success',
-                    'result' => $result,
+                    'status' => $log->status,
+                    'result' => $log->result,
                 ];
             } catch (\Exception $e) {
                 $results[$action->id] = [

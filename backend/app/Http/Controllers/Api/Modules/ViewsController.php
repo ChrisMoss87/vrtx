@@ -306,7 +306,7 @@ class ViewsController extends Controller
                 'options' => $field->options->map(fn ($opt) => [
                     'value' => $opt->value,
                     'label' => $opt->label,
-                    'color' => $opt->metadata['color'] ?? null,
+                    'color' => $opt->color ?? $opt->metadata['color'] ?? null,
                     'display_order' => $opt->display_order,
                 ]),
             ]);
@@ -396,10 +396,12 @@ class ViewsController extends Controller
         // Build columns from field options
         $columns = [];
         foreach ($field->options as $option) {
+            // Color can be stored directly or in metadata
+            $optionColor = $option->color ?? $option->metadata['color'] ?? '#6b7280';
             $columns[$option->value] = [
                 'id' => $option->value,
                 'name' => $option->label,
-                'color' => $option->metadata['color'] ?? '#6b7280',
+                'color' => $optionColor,
                 'display_order' => $option->display_order,
                 'records' => [],
                 'count' => 0,

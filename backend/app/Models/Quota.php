@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Quota extends Model
 {
+    use HasFactory;
     public const METRIC_REVENUE = 'revenue';
     public const METRIC_DEALS = 'deals';
     public const METRIC_LEADS = 'leads';

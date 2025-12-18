@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DocumentSendLog extends Model
 {
+    use HasFactory;
     public const STATUS_SENT = 'sent';
     public const STATUS_DELIVERED = 'delivered';
     public const STATUS_OPENED = 'opened';

@@ -46,6 +46,11 @@ Schedule::job(new ProcessExpiredApprovalsJob)->hourly()
     ->name('process-expired-approvals')
     ->withoutOverlapping();
 
+// Process overdue approvals (reminders, escalations, auto-rejections) every 15 minutes
+Schedule::command('approvals:process-overdue')->everyFifteenMinutes()
+    ->name('process-overdue-approvals')
+    ->withoutOverlapping();
+
 // Check for rotting deals hourly
 Schedule::job(new CheckRottingDealsJob)->hourly()
     ->name('check-rotting-deals')
@@ -74,4 +79,14 @@ Schedule::job(new CreateForecastSnapshotsJob('week'))->weeklyOn(0, '00:00')
 // Create quarterly forecast snapshots on the 1st of each quarter at midnight
 Schedule::job(new CreateForecastSnapshotsJob('quarter'))->quarterlyOn(1, '00:00')
     ->name('create-forecast-snapshots-quarterly')
+    ->withoutOverlapping();
+
+// Process scheduled reports every 15 minutes
+Schedule::command('reports:process-scheduled')->everyFifteenMinutes()
+    ->name('process-scheduled-reports')
+    ->withoutOverlapping();
+
+// Process analytics alerts every 15 minutes
+Schedule::job(new \App\Jobs\ProcessAnalyticsAlertsJob)->everyFifteenMinutes()
+    ->name('process-analytics-alerts')
     ->withoutOverlapping();

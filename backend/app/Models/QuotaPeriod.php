@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class QuotaPeriod extends Model
 {
+    use HasFactory;
     public const TYPE_MONTH = 'month';
     public const TYPE_QUARTER = 'quarter';
     public const TYPE_YEAR = 'year';
