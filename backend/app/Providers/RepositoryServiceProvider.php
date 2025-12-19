@@ -199,6 +199,30 @@ use App\Infrastructure\Persistence\Eloquent\Repositories\Video\EloquentVideoMeet
 use App\Domain\Playbook\Repositories\PlaybookRepositoryInterface;
 use App\Infrastructure\Persistence\Eloquent\Repositories\Playbook\EloquentPlaybookRepository;
 
+// Notification Domain
+use App\Domain\Notification\Repositories\NotificationRepositoryInterface;
+use App\Domain\Notification\Repositories\NotificationPreferenceRepositoryInterface;
+use App\Domain\Notification\Repositories\NotificationScheduleRepositoryInterface;
+use App\Infrastructure\Persistence\Eloquent\Repositories\Notification\EloquentNotificationRepository;
+use App\Infrastructure\Persistence\Eloquent\Repositories\Notification\EloquentNotificationPreferenceRepository;
+use App\Infrastructure\Persistence\Eloquent\Repositories\Notification\EloquentNotificationScheduleRepository;
+
+// User Domain
+use App\Domain\User\Repositories\UserRepositoryInterface;
+use App\Domain\User\Repositories\SessionRepositoryInterface;
+use App\Infrastructure\Persistence\Eloquent\Repositories\User\EloquentUserRepository;
+use App\Infrastructure\Persistence\Eloquent\Repositories\User\EloquentSessionRepository;
+
+// Wizard Domain
+use App\Domain\Wizard\Repositories\WizardRepositoryInterface;
+use App\Infrastructure\Persistence\Eloquent\Repositories\Wizard\EloquentWizardRepository;
+
+// Analytics Domain
+use App\Domain\Analytics\Repositories\AnalyticsAlertRepositoryInterface;
+use App\Domain\Analytics\Repositories\AnalyticsAlertHistoryRepositoryInterface;
+use App\Infrastructure\Persistence\Eloquent\Repositories\Analytics\EloquentAnalyticsAlertRepository;
+use App\Infrastructure\Persistence\Eloquent\Repositories\Analytics\EloquentAnalyticsAlertHistoryRepository;
+
 use Illuminate\Support\ServiceProvider;
 
 class RepositoryServiceProvider extends ServiceProvider
@@ -245,6 +269,10 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->registerPluginRepositories();
         $this->registerVideoRepositories();
         $this->registerPlaybookRepositories();
+        $this->registerNotificationRepositories();
+        $this->registerUserRepositories();
+        $this->registerWizardRepositories();
+        $this->registerAnalyticsRepositories();
         $this->registerWorkflowDomainServices();
     }
 
@@ -452,6 +480,30 @@ class RepositoryServiceProvider extends ServiceProvider
     private function registerPlaybookRepositories(): void
     {
         $this->app->bind(PlaybookRepositoryInterface::class, EloquentPlaybookRepository::class);
+    }
+
+    private function registerNotificationRepositories(): void
+    {
+        $this->app->bind(NotificationRepositoryInterface::class, EloquentNotificationRepository::class);
+        $this->app->bind(NotificationPreferenceRepositoryInterface::class, EloquentNotificationPreferenceRepository::class);
+        $this->app->bind(NotificationScheduleRepositoryInterface::class, EloquentNotificationScheduleRepository::class);
+    }
+
+    private function registerUserRepositories(): void
+    {
+        $this->app->bind(UserRepositoryInterface::class, EloquentUserRepository::class);
+        $this->app->bind(SessionRepositoryInterface::class, EloquentSessionRepository::class);
+    }
+
+    private function registerWizardRepositories(): void
+    {
+        $this->app->bind(WizardRepositoryInterface::class, EloquentWizardRepository::class);
+    }
+
+    private function registerAnalyticsRepositories(): void
+    {
+        $this->app->bind(AnalyticsAlertRepositoryInterface::class, EloquentAnalyticsAlertRepository::class);
+        $this->app->bind(AnalyticsAlertHistoryRepositoryInterface::class, EloquentAnalyticsAlertHistoryRepository::class);
     }
 
     private function registerWorkflowDomainServices(): void

@@ -64,4 +64,16 @@ interface ModuleRecordRepositoryInterface
      * @return array<ModuleRecord>
      */
     public function findByIds(int $moduleId, array $recordIds): array;
+
+    /**
+     * Calculate a metric for records with aggregation.
+     *
+     * @param  array<array{field: string, operator: string, value?: mixed}>  $filters
+     */
+    public function calculateMetric(
+        int $moduleId,
+        string $field,
+        string $aggregation,
+        array $filters = []
+    ): float;
 }

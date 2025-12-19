@@ -4,44 +4,44 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
-use App\Domain\Modules\Entities\Field;
+use App\Domain\Modules\Entities\Field as FieldEntity;
 use App\Domain\Modules\Repositories\FieldRepositoryInterface;
 use App\Domain\Modules\ValueObjects\FieldSettings;
 use App\Domain\Modules\ValueObjects\FieldType;
 use App\Domain\Modules\ValueObjects\ValidationRules;
-use App\Infrastructure\Persistence\Eloquent\Models\FieldModel;
+use App\Models\Field;
 use DateTimeImmutable;
 
 final class EloquentFieldRepository implements FieldRepositoryInterface
 {
-    public function findById(int $id): ?Field
+    public function findById(int $id): ?FieldEntity
     {
-        $model = FieldModel::with('options')->find($id);
+        $model = Field::with('options')->find($id);
 
         return $model ? $this->toDomain($model) : null;
     }
 
     public function findByModuleId(int $moduleId): array
     {
-        return FieldModel::with('options')
+        return Field::with('options')
             ->where('module_id', $moduleId)
             ->orderBy('display_order')
             ->get()
-            ->map(fn (FieldModel $model): Field => $this->toDomain($model))
+            ->map(fn (Field $model): FieldEntity => $this->toDomain($model))
             ->all();
     }
 
     public function findByBlockId(int $blockId): array
     {
-        return FieldModel::with('options')
+        return Field::with('options')
             ->where('block_id', $blockId)
             ->orderBy('display_order')
             ->get()
-            ->map(fn (FieldModel $model): Field => $this->toDomain($model))
+            ->map(fn (Field $model): FieldEntity => $this->toDomain($model))
             ->all();
     }
 
-    public function save(Field $field): Field
+    public function save(FieldEntity $field): FieldEntity
     {
         $data = [
             'module_id' => $field->moduleId(),
@@ -64,9 +64,9 @@ final class EloquentFieldRepository implements FieldRepositoryInterface
         ];
 
         if ($field->id() === null) {
-            $model = FieldModel::create($data);
+            $model = Field::create($data);
         } else {
-            $model = FieldModel::findOrFail($field->id());
+            $model = Field::findOrFail($field->id());
             $model->update($data);
         }
 
@@ -75,12 +75,12 @@ final class EloquentFieldRepository implements FieldRepositoryInterface
 
     public function delete(int $id): bool
     {
-        return (bool) FieldModel::destroy($id);
+        return (bool) Field::destroy($id);
     }
 
     public function existsByApiName(int $moduleId, string $apiName, ?int $excludeId = null): bool
     {
-        $query = FieldModel::where('module_id', $moduleId)
+        $query = Field::where('module_id', $moduleId)
             ->where('api_name', $apiName);
 
         if ($excludeId !== null) {
@@ -90,9 +90,9 @@ final class EloquentFieldRepository implements FieldRepositoryInterface
         return $query->exists();
     }
 
-    public function toDomain(FieldModel $model): Field
+    public function toDomain(Field $model): FieldEntity
     {
-        $field = new Field(
+        $entity = new FieldEntity(
             id: $model->id,
             moduleId: $model->module_id,
             blockId: $model->block_id,
@@ -118,10 +118,10 @@ final class EloquentFieldRepository implements FieldRepositoryInterface
         if ($model->relationLoaded('options')) {
             $optionRepo = new EloquentFieldOptionRepository();
             foreach ($model->options as $optionModel) {
-                $field->addOption($optionRepo->toDomain($optionModel));
+                $entity->addOption($optionRepo->toDomain($optionModel));
             }
         }
 
-        return $field;
+        return $entity;
     }
 }

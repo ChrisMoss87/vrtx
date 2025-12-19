@@ -4,89 +4,202 @@ declare(strict_types=1);
 
 namespace App\Domain\Approval\Entities;
 
-use App\Domain\Approval\ValueObjects\ApprovalStatus;
+use App\Domain\Approval\ValueObjects\StepStatus;
 
-class ApprovalStep
+final class ApprovalStep
 {
-    private ?int $id = null;
-    private int $requestId;
-    private int $stepOrder;
-    private int $approverId;
-    private ApprovalStatus $status;
-    private ?string $comment;
-    private ?\DateTimeImmutable $respondedAt;
-    private ?\DateTimeImmutable $createdAt;
-    private ?\DateTimeImmutable $updatedAt;
+    private function __construct(
+        private ?int $id,
+        private int $requestId,
+        private ?int $approverId,
+        private ?int $roleId,
+        private string $approverType,
+        private int $stepOrder,
+        private StepStatus $status,
+        private bool $isCurrent,
+        private ?string $comments,
+        private ?\DateTimeImmutable $respondedAt,
+        private ?\DateTimeImmutable $dueAt,
+        private ?int $delegatedToId,
+        private ?int $delegatedById,
+        private ?\DateTimeImmutable $createdAt,
+        private ?\DateTimeImmutable $updatedAt,
+    ) {}
 
-    private function __construct(int $requestId, int $stepOrder, int $approverId)
-    {
-        $this->requestId = $requestId;
-        $this->stepOrder = $stepOrder;
-        $this->approverId = $approverId;
-        $this->status = ApprovalStatus::PENDING;
-        $this->comment = null;
-        $this->respondedAt = null;
-    }
-
-    public static function create(int $requestId, int $stepOrder, int $approverId): self
-    {
-        return new self($requestId, $stepOrder, $approverId);
+    public static function create(
+        int $requestId,
+        int $stepOrder,
+        ?int $approverId = null,
+        ?int $roleId = null,
+        string $approverType = 'user',
+    ): self {
+        return new self(
+            id: null,
+            requestId: $requestId,
+            approverId: $approverId,
+            roleId: $roleId,
+            approverType: $approverType,
+            stepOrder: $stepOrder,
+            status: StepStatus::PENDING,
+            isCurrent: false,
+            comments: null,
+            respondedAt: null,
+            dueAt: null,
+            delegatedToId: null,
+            delegatedById: null,
+            createdAt: new \DateTimeImmutable(),
+            updatedAt: null,
+        );
     }
 
     public static function reconstitute(
         int $id,
         int $requestId,
+        ?int $approverId,
+        ?int $roleId,
+        string $approverType,
         int $stepOrder,
-        int $approverId,
-        ApprovalStatus $status,
-        ?string $comment,
+        StepStatus $status,
+        bool $isCurrent,
+        ?string $comments,
         ?\DateTimeImmutable $respondedAt,
+        ?\DateTimeImmutable $dueAt,
+        ?int $delegatedToId,
+        ?int $delegatedById,
         \DateTimeImmutable $createdAt,
         ?\DateTimeImmutable $updatedAt,
     ): self {
-        $step = new self($requestId, $stepOrder, $approverId);
-        $step->id = $id;
-        $step->status = $status;
-        $step->comment = $comment;
-        $step->respondedAt = $respondedAt;
-        $step->createdAt = $createdAt;
-        $step->updatedAt = $updatedAt;
-        return $step;
+        return new self(
+            id: $id,
+            requestId: $requestId,
+            approverId: $approverId,
+            roleId: $roleId,
+            approverType: $approverType,
+            stepOrder: $stepOrder,
+            status: $status,
+            isCurrent: $isCurrent,
+            comments: $comments,
+            respondedAt: $respondedAt,
+            dueAt: $dueAt,
+            delegatedToId: $delegatedToId,
+            delegatedById: $delegatedById,
+            createdAt: $createdAt,
+            updatedAt: $updatedAt,
+        );
     }
 
+    // Getters
     public function getId(): ?int { return $this->id; }
     public function getRequestId(): int { return $this->requestId; }
+    public function getApproverId(): ?int { return $this->approverId; }
+    public function getRoleId(): ?int { return $this->roleId; }
+    public function getApproverType(): string { return $this->approverType; }
     public function getStepOrder(): int { return $this->stepOrder; }
-    public function getApproverId(): int { return $this->approverId; }
-    public function getStatus(): ApprovalStatus { return $this->status; }
-    public function getComment(): ?string { return $this->comment; }
+    public function getStatus(): StepStatus { return $this->status; }
+    public function isCurrent(): bool { return $this->isCurrent; }
+    public function getComments(): ?string { return $this->comments; }
     public function getRespondedAt(): ?\DateTimeImmutable { return $this->respondedAt; }
+    public function getDueAt(): ?\DateTimeImmutable { return $this->dueAt; }
+    public function getDelegatedToId(): ?int { return $this->delegatedToId; }
+    public function getDelegatedById(): ?int { return $this->delegatedById; }
+    public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
+    public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
 
-    public function approve(?string $comment = null): void
+    // Get effective approver (considering delegation)
+    public function getEffectiveApproverId(): ?int
     {
-        $this->status = ApprovalStatus::APPROVED;
-        $this->comment = $comment;
+        return $this->delegatedToId ?? $this->approverId;
+    }
+
+    // Domain actions
+    public function approve(?string $comments = null): void
+    {
+        if (!$this->isPending()) {
+            throw new \RuntimeException('Cannot approve a non-pending step');
+        }
+
+        $this->status = StepStatus::APPROVED;
+        $this->comments = $comments;
         $this->respondedAt = new \DateTimeImmutable();
         $this->updatedAt = new \DateTimeImmutable();
     }
 
-    public function reject(?string $comment = null): void
+    public function reject(?string $comments = null): void
     {
-        $this->status = ApprovalStatus::REJECTED;
-        $this->comment = $comment;
+        if (!$this->isPending()) {
+            throw new \RuntimeException('Cannot reject a non-pending step');
+        }
+
+        $this->status = StepStatus::REJECTED;
+        $this->comments = $comments;
         $this->respondedAt = new \DateTimeImmutable();
         $this->updatedAt = new \DateTimeImmutable();
     }
 
-    public function delegate(int $newApproverId): void
+    public function skip(?string $reason = null): void
     {
-        $this->approverId = $newApproverId;
-        $this->status = ApprovalStatus::DELEGATED;
+        if (!$this->isPending()) {
+            throw new \RuntimeException('Cannot skip a non-pending step');
+        }
+
+        $this->status = StepStatus::SKIPPED;
+        $this->comments = $reason;
+        $this->respondedAt = new \DateTimeImmutable();
         $this->updatedAt = new \DateTimeImmutable();
     }
 
+    public function delegate(int $delegateId, int $delegatedById): void
+    {
+        $this->delegatedToId = $delegateId;
+        $this->delegatedById = $delegatedById;
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    public function activate(?\DateTimeImmutable $dueAt = null): void
+    {
+        $this->isCurrent = true;
+        $this->dueAt = $dueAt;
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    public function deactivate(): void
+    {
+        $this->isCurrent = false;
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    // State checks
     public function isPending(): bool
     {
-        return $this->status->isPending();
+        return $this->status === StepStatus::PENDING;
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->status === StepStatus::APPROVED;
+    }
+
+    public function isRejected(): bool
+    {
+        return $this->status === StepStatus::REJECTED;
+    }
+
+    public function isDecided(): bool
+    {
+        return $this->status->isDecided();
+    }
+
+    public function isOverdue(): bool
+    {
+        if ($this->dueAt === null || !$this->isPending()) {
+            return false;
+        }
+
+        return $this->dueAt < new \DateTimeImmutable();
+    }
+
+    public function isDelegated(): bool
+    {
+        return $this->delegatedToId !== null;
     }
 }

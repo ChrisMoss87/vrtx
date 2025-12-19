@@ -4,16 +4,24 @@ declare(strict_types=1);
 
 namespace App\Services\Notification;
 
+use App\Domain\Notification\Repositories\NotificationRepositoryInterface;
+use App\Domain\Notification\Repositories\NotificationPreferenceRepositoryInterface;
+use App\Domain\Notification\Repositories\NotificationScheduleRepositoryInterface;
 use App\Events\NotificationCreated;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
-use App\Models\NotificationSchedule;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class NotificationService
 {
+    public function __construct(
+        private NotificationRepositoryInterface $notificationRepository,
+        private NotificationPreferenceRepositoryInterface $preferenceRepository,
+        private NotificationScheduleRepositoryInterface $scheduleRepository,
+    ) {}
+
     /**
      * Send a notification to a user
      */
@@ -28,19 +36,18 @@ class NotificationService
         ?array $data = null,
         ?string $icon = null,
         ?string $iconColor = null
-    ): ?Notification {
+    ): ?array {
         $userId = $user instanceof User ? $user->id : $user;
         $category = Notification::getCategoryFromType($type);
 
         // Check user preferences
         $preference = $this->getPreference($userId, $category);
-        if (!$preference->in_app) {
+        if (!($preference['in_app'] ?? true)) {
             return null;
         }
 
         // Check schedule (quiet hours, DND, etc.)
-        $schedule = $this->getSchedule($userId);
-        $shouldDelay = $schedule->shouldSuppressNotifications();
+        $shouldDelay = $this->scheduleRepository->shouldSuppressNotifications($userId);
 
         // Get icon defaults if not provided
         if (!$icon || !$iconColor) {
@@ -49,7 +56,7 @@ class NotificationService
             $iconColor = $iconColor ?? $defaults['color'];
         }
 
-        $notification = Notification::create([
+        $notificationData = $this->notificationRepository->create([
             'user_id' => $userId,
             'type' => $type,
             'category' => $category,
@@ -66,15 +73,18 @@ class NotificationService
 
         // Broadcast for real-time updates (unless suppressed)
         if (!$shouldDelay) {
-            event(new NotificationCreated($notification));
+            $notification = Notification::find($notificationData['id']);
+            if ($notification) {
+                event(new NotificationCreated($notification));
+            }
         }
 
         // Queue email notification if enabled
-        if ($preference->email) {
-            $this->queueEmailNotification($notification, $preference);
+        if ($preference['email'] ?? false) {
+            $this->queueEmailNotification($notificationData, $preference);
         }
 
-        return $notification;
+        return $notificationData;
     }
 
     /**
@@ -122,19 +132,13 @@ class NotificationService
         int $limit = 50,
         int $offset = 0
     ): Collection {
-        $query = Notification::where('user_id', $userId)
-            ->active()
-            ->orderByDesc('created_at');
-
-        if ($category) {
-            $query->forCategory($category);
-        }
-
-        if ($unreadOnly) {
-            $query->unread();
-        }
-
-        return $query->skip($offset)->take($limit)->get();
+        return $this->notificationRepository->getForUser(
+            $userId,
+            $category,
+            $unreadOnly,
+            $limit,
+            $offset
+        );
     }
 
     /**
@@ -142,15 +146,7 @@ class NotificationService
      */
     public function getUnreadCount(int $userId, ?string $category = null): int
     {
-        $query = Notification::where('user_id', $userId)
-            ->active()
-            ->unread();
-
-        if ($category) {
-            $query->forCategory($category);
-        }
-
-        return $query->count();
+        return $this->notificationRepository->getUnreadCount($userId, $category);
     }
 
     /**
@@ -158,9 +154,7 @@ class NotificationService
      */
     public function markAsRead(int $notificationId, int $userId): bool
     {
-        return Notification::where('id', $notificationId)
-            ->where('user_id', $userId)
-            ->update(['read_at' => now()]) > 0;
+        return $this->notificationRepository->markAsRead($notificationId, $userId);
     }
 
     /**
@@ -168,14 +162,7 @@ class NotificationService
      */
     public function markAllAsRead(int $userId, ?string $category = null): int
     {
-        $query = Notification::where('user_id', $userId)
-            ->whereNull('read_at');
-
-        if ($category) {
-            $query->forCategory($category);
-        }
-
-        return $query->update(['read_at' => now()]);
+        return $this->notificationRepository->markAllAsRead($userId, $category);
     }
 
     /**
@@ -183,9 +170,7 @@ class NotificationService
      */
     public function archive(int $notificationId, int $userId): bool
     {
-        return Notification::where('id', $notificationId)
-            ->where('user_id', $userId)
-            ->update(['archived_at' => now()]) > 0;
+        return $this->notificationRepository->archive($notificationId, $userId);
     }
 
     /**
@@ -193,8 +178,7 @@ class NotificationService
      */
     public function cleanupOldNotifications(int $daysToKeep = 90): int
     {
-        return Notification::where('created_at', '<', now()->subDays($daysToKeep))
-            ->delete();
+        return $this->notificationRepository->deleteOlderThan($daysToKeep);
     }
 
     /**
@@ -202,22 +186,18 @@ class NotificationService
      */
     public function getPreferences(int $userId): Collection
     {
-        $preferences = NotificationPreference::where('user_id', $userId)
-            ->get()
-            ->keyBy('category');
-
-        // Fill in defaults for missing categories
-        $defaults = NotificationPreference::getDefaults();
+        $preferences = $this->preferenceRepository->getForUser($userId);
+        $defaults = $this->preferenceRepository->getDefaults();
         $result = collect();
 
         foreach (Notification::CATEGORIES as $category) {
             if ($preferences->has($category)) {
                 $result[$category] = $preferences[$category];
             } else {
-                $result[$category] = new NotificationPreference(array_merge(
+                $result[$category] = array_merge(
                     ['user_id' => $userId, 'category' => $category],
                     $defaults[$category] ?? []
-                ));
+                );
             }
         }
 
@@ -227,18 +207,16 @@ class NotificationService
     /**
      * Get preference for a specific category
      */
-    public function getPreference(int $userId, string $category): NotificationPreference
+    public function getPreference(int $userId, string $category): array
     {
-        $preference = NotificationPreference::where('user_id', $userId)
-            ->where('category', $category)
-            ->first();
+        $preference = $this->preferenceRepository->getForCategory($userId, $category);
 
         if (!$preference) {
-            $defaults = NotificationPreference::getDefaults()[$category] ?? [];
-            $preference = new NotificationPreference(array_merge(
+            $defaults = $this->preferenceRepository->getDefaults()[$category] ?? [];
+            $preference = array_merge(
                 ['user_id' => $userId, 'category' => $category],
                 $defaults
-            ));
+            );
         }
 
         return $preference;
@@ -249,50 +227,36 @@ class NotificationService
      */
     public function updatePreferences(int $userId, array $preferences): void
     {
-        DB::transaction(function () use ($userId, $preferences) {
-            foreach ($preferences as $category => $settings) {
-                NotificationPreference::updateOrCreate(
-                    ['user_id' => $userId, 'category' => $category],
-                    $settings
-                );
-            }
-        });
+        $this->preferenceRepository->updateMany($userId, $preferences);
     }
 
     /**
      * Get user's notification schedule
      */
-    public function getSchedule(int $userId): NotificationSchedule
+    public function getSchedule(int $userId): array
     {
-        return NotificationSchedule::firstOrCreate(
-            ['user_id' => $userId],
-            ['timezone' => 'UTC']
-        );
+        return $this->scheduleRepository->getOrCreateForUser($userId);
     }
 
     /**
      * Update notification schedule
      */
-    public function updateSchedule(int $userId, array $settings): NotificationSchedule
+    public function updateSchedule(int $userId, array $settings): array
     {
-        return NotificationSchedule::updateOrCreate(
-            ['user_id' => $userId],
-            $settings
-        );
+        return $this->scheduleRepository->update($userId, $settings);
     }
 
     /**
      * Queue email notification based on preference frequency
      */
     protected function queueEmailNotification(
-        Notification $notification,
-        NotificationPreference $preference
+        array $notification,
+        array $preference
     ): void {
-        $frequency = $preference->email_frequency ?? NotificationPreference::FREQUENCY_IMMEDIATE;
+        $frequency = $preference['email_frequency'] ?? NotificationPreference::FREQUENCY_IMMEDIATE;
 
         if ($frequency === NotificationPreference::FREQUENCY_IMMEDIATE) {
             // TODO: Dispatch immediate email job
-            // dispatch(new SendNotificationEmailJob($notification));
             return;
         }
 
@@ -305,8 +269,8 @@ class NotificationService
         };
 
         DB::table('notification_email_queue')->insert([
-            'user_id' => $notification->user_id,
-            'notification_id' => $notification->id,
+            'user_id' => $notification['user_id'],
+            'notification_id' => $notification['id'],
             'frequency' => $frequency,
             'scheduled_for' => $scheduledFor,
             'created_at' => now(),

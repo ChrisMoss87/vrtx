@@ -128,29 +128,7 @@ class Notification extends Model
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
-    // Helpers
-    public function markAsRead(): void
-    {
-        if ($this->read_at === null) {
-            $this->update(['read_at' => now()]);
-        }
-    }
-
-    public function markAsUnread(): void
-    {
-        $this->update(['read_at' => null]);
-    }
-
-    public function archive(): void
-    {
-        $this->update(['archived_at' => now()]);
-    }
-
-    public function unarchive(): void
-    {
-        $this->update(['archived_at' => null]);
-    }
-
+    // Accessors (read-only state checks - acceptable in models)
     public function isRead(): bool
     {
         return $this->read_at !== null;

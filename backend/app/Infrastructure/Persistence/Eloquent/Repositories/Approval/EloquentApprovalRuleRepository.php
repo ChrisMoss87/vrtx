@@ -70,6 +70,23 @@ class EloquentApprovalRuleRepository implements ApprovalRuleRepositoryInterface
         return $model->delete() ?? false;
     }
 
+    public function findMatchingRule(string $entityType, array $data): ?ApprovalRule
+    {
+        $models = ApprovalRuleModel::active()
+            ->forEntity($entityType)
+            ->ordered()
+            ->get();
+
+        foreach ($models as $model) {
+            $rule = $this->toDomainEntity($model);
+            if ($rule->matchesConditions($data)) {
+                return $rule;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Convert an Eloquent model to a domain entity.
      */

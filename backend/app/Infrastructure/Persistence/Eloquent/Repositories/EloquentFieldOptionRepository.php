@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
-use App\Domain\Modules\Entities\FieldOption;
-use App\Infrastructure\Persistence\Eloquent\Models\FieldOptionModel;
+use App\Domain\Modules\Entities\FieldOption as FieldOptionEntity;
+use App\Models\FieldOption;
 use DateTimeImmutable;
 
 final class EloquentFieldOptionRepository
 {
-    public function toDomain(FieldOptionModel $model): FieldOption
+    public function toDomain(FieldOption $model): FieldOptionEntity
     {
-        return new FieldOption(
+        return new FieldOptionEntity(
             id: $model->id,
             fieldId: $model->field_id,
             label: $model->label,

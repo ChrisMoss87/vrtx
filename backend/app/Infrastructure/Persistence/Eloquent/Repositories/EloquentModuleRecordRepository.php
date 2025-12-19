@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
-use App\Domain\Modules\Entities\ModuleRecord;
+use App\Domain\Modules\Entities\ModuleRecord as ModuleRecordEntity;
 use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
-use App\Infrastructure\Persistence\Eloquent\Models\ModuleRecordModel;
+use App\Models\ModuleRecord;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
 
 final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInterface
 {
-    public function findById(int $moduleId, int $recordId): ?ModuleRecord
+    public function findById(int $moduleId, int $recordId): ?ModuleRecordEntity
     {
-        $model = ModuleRecordModel::where('module_id', $moduleId)
+        $model = ModuleRecord::where('module_id', $moduleId)
             ->find($recordId);
 
         return $model ? $this->toDomain($model) : null;
@@ -27,7 +27,7 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
         int $page = 1,
         int $perPage = 15
     ): array {
-        $query = ModuleRecordModel::where('module_id', $moduleId);
+        $query = ModuleRecord::where('module_id', $moduleId);
 
         // Apply filters
         $query = $this->applyFilters($query, $filters);
@@ -47,7 +47,7 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
         ];
     }
 
-    public function save(ModuleRecord $record): ModuleRecord
+    public function save(ModuleRecordEntity $record): ModuleRecordEntity
     {
         $data = [
             'module_id' => $record->moduleId(),
@@ -57,12 +57,12 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
 
         if ($record->id()) {
             // Update existing record
-            $model = ModuleRecordModel::findOrFail($record->id());
+            $model = ModuleRecord::findOrFail($record->id());
             $model->update($data);
         } else {
             // Create new record
             $data['created_by'] = $record->createdBy();
-            $model = ModuleRecordModel::create($data);
+            $model = ModuleRecord::create($data);
         }
 
         return $this->toDomain($model->fresh());
@@ -70,7 +70,7 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
 
     public function delete(int $moduleId, int $recordId): bool
     {
-        $model = ModuleRecordModel::where('module_id', $moduleId)
+        $model = ModuleRecord::where('module_id', $moduleId)
             ->find($recordId);
 
         if (! $model) {
@@ -82,14 +82,14 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
 
     public function bulkDelete(int $moduleId, array $recordIds): int
     {
-        return ModuleRecordModel::where('module_id', $moduleId)
+        return ModuleRecord::where('module_id', $moduleId)
             ->whereIn('id', $recordIds)
             ->delete();
     }
 
     public function count(int $moduleId, array $filters = []): int
     {
-        $query = ModuleRecordModel::where('module_id', $moduleId);
+        $query = ModuleRecord::where('module_id', $moduleId);
         $query = $this->applyFilters($query, $filters);
 
         return $query->count();
@@ -97,7 +97,7 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
 
     public function exists(int $moduleId, int $recordId): bool
     {
-        return ModuleRecordModel::where('module_id', $moduleId)
+        return ModuleRecord::where('module_id', $moduleId)
             ->where('id', $recordId)
             ->exists();
     }
@@ -108,7 +108,7 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
             return [];
         }
 
-        $models = ModuleRecordModel::where('module_id', $moduleId)
+        $models = ModuleRecord::where('module_id', $moduleId)
             ->whereIn('id', $recordIds)
             ->get();
 
@@ -217,12 +217,57 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
         return $query;
     }
 
+    public function calculateMetric(
+        int $moduleId,
+        string $field,
+        string $aggregation,
+        array $filters = []
+    ): float {
+        $query = ModuleRecord::where('module_id', $moduleId);
+
+        // Apply filters
+        foreach ($filters as $filter) {
+            $filterField = $filter['field'] ?? null;
+            $operator = $filter['operator'] ?? 'equals';
+            $value = $filter['value'] ?? null;
+
+            if (!$filterField) {
+                continue;
+            }
+
+            $dbField = "data->{$filterField}";
+
+            $query = match ($operator) {
+                'equals' => $query->whereRaw('data->>? = ?', [$filterField, $value]),
+                'not_equals' => $query->whereRaw('data->>? != ?', [$filterField, $value]),
+                'contains' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$filterField, "%".mb_strtolower($value)."%"]),
+                'greater_than' => $query->whereRaw('CAST(data->>? AS NUMERIC) > ?', [$filterField, $value]),
+                'less_than' => $query->whereRaw('CAST(data->>? AS NUMERIC) < ?', [$filterField, $value]),
+                'greater_or_equal' => $query->whereRaw('CAST(data->>? AS NUMERIC) >= ?', [$filterField, $value]),
+                'less_or_equal' => $query->whereRaw('CAST(data->>? AS NUMERIC) <= ?', [$filterField, $value]),
+                'is_empty' => $query->whereNull($dbField),
+                'is_not_empty' => $query->whereNotNull($dbField),
+                default => $query,
+            };
+        }
+
+        return match ($aggregation) {
+            'count' => (float) $query->count(),
+            'sum' => (float) $query->selectRaw('SUM(CAST(data->>? AS NUMERIC))', [$field])->value('sum') ?? 0,
+            'avg' => (float) $query->selectRaw('AVG(CAST(data->>? AS NUMERIC))', [$field])->value('avg') ?? 0,
+            'min' => (float) $query->selectRaw('MIN(CAST(data->>? AS NUMERIC))', [$field])->value('min') ?? 0,
+            'max' => (float) $query->selectRaw('MAX(CAST(data->>? AS NUMERIC))', [$field])->value('max') ?? 0,
+            'count_distinct' => (float) $query->selectRaw('COUNT(DISTINCT data->>?)', [$field])->value('count') ?? 0,
+            default => (float) $query->count(),
+        };
+    }
+
     /**
      * Convert Eloquent model to domain entity.
      */
-    private function toDomain(ModuleRecordModel $model): ModuleRecord
+    private function toDomain(ModuleRecord $model): ModuleRecordEntity
     {
-        return new ModuleRecord(
+        return new ModuleRecordEntity(
             id: $model->id,
             moduleId: $model->module_id,
             data: $model->data ?? [],

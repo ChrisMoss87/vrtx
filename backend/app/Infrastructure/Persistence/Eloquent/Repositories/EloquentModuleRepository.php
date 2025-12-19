@@ -4,25 +4,25 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
-use App\Domain\Modules\Entities\Module;
+use App\Domain\Modules\Entities\Module as ModuleEntity;
 use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
 use App\Domain\Modules\ValueObjects\ModuleSettings;
-use App\Infrastructure\Persistence\Eloquent\Models\ModuleModel;
+use App\Models\Module;
 use DateTimeImmutable;
 
 final class EloquentModuleRepository implements ModuleRepositoryInterface
 {
-    public function findById(int $id): ?Module
+    public function findById(int $id): ?ModuleEntity
     {
-        $model = ModuleModel::with(['blocks.fields.options', 'fields.options'])
+        $model = Module::with(['blocks.fields.options', 'fields.options'])
             ->find($id);
 
         return $model ? $this->toDomain($model) : null;
     }
 
-    public function findByApiName(string $apiName): ?Module
+    public function findByApiName(string $apiName): ?ModuleEntity
     {
-        $model = ModuleModel::with(['blocks.fields.options', 'fields.options'])
+        $model = Module::with(['blocks.fields.options', 'fields.options'])
             ->where('api_name', $apiName)
             ->first();
 
@@ -31,24 +31,24 @@ final class EloquentModuleRepository implements ModuleRepositoryInterface
 
     public function findAll(): array
     {
-        return ModuleModel::with(['blocks.fields.options', 'fields.options'])
+        return Module::with(['blocks.fields.options', 'fields.options'])
             ->orderBy('display_order')
             ->get()
-            ->map(fn (ModuleModel $model): Module => $this->toDomain($model))
+            ->map(fn (Module $model): ModuleEntity => $this->toDomain($model))
             ->all();
     }
 
     public function findActive(): array
     {
-        return ModuleModel::with(['blocks.fields.options', 'fields.options'])
+        return Module::with(['blocks.fields.options', 'fields.options'])
             ->where('is_active', true)
             ->orderBy('display_order')
             ->get()
-            ->map(fn (ModuleModel $model): Module => $this->toDomain($model))
+            ->map(fn (Module $model): ModuleEntity => $this->toDomain($model))
             ->all();
     }
 
-    public function save(Module $module): Module
+    public function save(ModuleEntity $module): ModuleEntity
     {
         $data = [
             'name' => $module->name(),
@@ -62,9 +62,9 @@ final class EloquentModuleRepository implements ModuleRepositoryInterface
         ];
 
         if ($module->id() === null) {
-            $model = ModuleModel::create($data);
+            $model = Module::create($data);
         } else {
-            $model = ModuleModel::findOrFail($module->id());
+            $model = Module::findOrFail($module->id());
             $model->update($data);
         }
 
@@ -73,12 +73,12 @@ final class EloquentModuleRepository implements ModuleRepositoryInterface
 
     public function delete(int $id): bool
     {
-        return (bool) ModuleModel::destroy($id);
+        return (bool) Module::destroy($id);
     }
 
     public function existsByName(string $name, ?int $excludeId = null): bool
     {
-        $query = ModuleModel::where('name', $name);
+        $query = Module::where('name', $name);
 
         if ($excludeId !== null) {
             $query->where('id', '!=', $excludeId);
@@ -89,7 +89,7 @@ final class EloquentModuleRepository implements ModuleRepositoryInterface
 
     public function existsByApiName(string $apiName, ?int $excludeId = null): bool
     {
-        $query = ModuleModel::where('api_name', $apiName);
+        $query = Module::where('api_name', $apiName);
 
         if ($excludeId !== null) {
             $query->where('id', '!=', $excludeId);
@@ -98,9 +98,9 @@ final class EloquentModuleRepository implements ModuleRepositoryInterface
         return $query->exists();
     }
 
-    private function toDomain(ModuleModel $model): Module
+    private function toDomain(Module $model): ModuleEntity
     {
-        $module = new Module(
+        $entity = new ModuleEntity(
             id: $model->id,
             name: $model->name,
             singularName: $model->singular_name,
@@ -119,17 +119,17 @@ final class EloquentModuleRepository implements ModuleRepositoryInterface
         if ($model->relationLoaded('blocks')) {
             $blockRepo = new EloquentBlockRepository();
             foreach ($model->blocks as $blockModel) {
-                $module->addBlock($blockRepo->toDomain($blockModel));
+                $entity->addBlock($blockRepo->toDomain($blockModel));
             }
         }
 
         if ($model->relationLoaded('fields')) {
             $fieldRepo = new EloquentFieldRepository();
             foreach ($model->fields as $fieldModel) {
-                $module->addField($fieldRepo->toDomain($fieldModel));
+                $entity->addField($fieldRepo->toDomain($fieldModel));
             }
         }
 
-        return $module;
+        return $entity;
     }
 }

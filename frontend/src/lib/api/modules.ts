@@ -396,3 +396,12 @@ export async function getModuleById(id: number): Promise<Module> {
 export async function getModuleByApiName(apiName: string): Promise<Module> {
 	return modulesApi.getByApiName(apiName);
 }
+
+export async function getModuleFields(apiName: string): Promise<Field[]> {
+	const module = await modulesApi.getByApiName(apiName);
+	// Extract fields from all blocks
+	if (module.blocks) {
+		return module.blocks.flatMap((block) => block.fields || []);
+	}
+	return module.fields || [];
+}

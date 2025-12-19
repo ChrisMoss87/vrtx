@@ -4,20 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\User\Services\UserService;
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
-use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
     use AuthorizesRequests;
+
+    public function __construct(
+        private UserService $userService,
+    ) {}
 
     /**
      * List all users with pagination and filtering.
@@ -29,32 +30,14 @@ class UserController extends Controller
             'role' => 'nullable|string|exists:roles,name',
             'status' => 'nullable|in:active,inactive',
             'per_page' => 'nullable|integer|min:1|max:100',
-            'page' => 'nullable|integer|min:1',
         ]);
 
-        $query = User::with('roles');
-
-        // Search filter
-        if (!empty($validated['search'])) {
-            $search = $validated['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'ilike', "%{$search}%")
-                    ->orWhere('email', 'ilike', "%{$search}%");
-            });
-        }
-
-        // Role filter
-        if (!empty($validated['role'])) {
-            $query->role($validated['role']);
-        }
-
-        // Status filter (using is_active field if exists, otherwise skip)
-        if (!empty($validated['status']) && $this->hasIsActiveColumn()) {
-            $query->where('is_active', $validated['status'] === 'active');
-        }
-
-        $perPage = $validated['per_page'] ?? 25;
-        $users = $query->orderBy('name')->paginate($perPage);
+        $users = $this->userService->listUsers(
+            search: $validated['search'] ?? null,
+            role: $validated['role'] ?? null,
+            status: $validated['status'] ?? null,
+            perPage: $validated['per_page'] ?? 25,
+        );
 
         return response()->json([
             'data' => $users->items(),
@@ -72,23 +55,13 @@ class UserController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $user = User::with('roles')->findOrFail($id);
+        $user = $this->userService->getUser($id);
 
-        return response()->json([
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'email_verified_at' => $user->email_verified_at,
-                'is_active' => $user->is_active ?? true,
-                'created_at' => $user->created_at,
-                'updated_at' => $user->updated_at,
-                'roles' => $user->roles->map(fn ($role) => [
-                    'id' => $role->id,
-                    'name' => $role->name,
-                ]),
-            ],
-        ]);
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        return response()->json(['data' => $user]);
     }
 
     /**
@@ -105,37 +78,19 @@ class UserController extends Controller
             'send_invite' => 'nullable|boolean',
         ]);
 
-        // Generate a random password if not provided
-        $password = $validated['password'] ?? Str::random(16);
-
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($password),
-        ]);
-
-        // Assign roles if provided
-        if (!empty($validated['roles'])) {
-            $roleNames = Role::whereIn('id', $validated['roles'])->pluck('name')->toArray();
-            $user->syncRoles($roleNames);
-        }
-
-        // TODO: If send_invite is true, send invitation email with password reset link
-        // if ($validated['send_invite'] ?? false) {
-        //     $user->sendPasswordResetNotification($token);
-        // }
+        $user = $this->userService->createUser(
+            data: [
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => $validated['password'] ?? null,
+            ],
+            roleIds: $validated['roles'] ?? null,
+            sendInvite: $validated['send_invite'] ?? false,
+        );
 
         return response()->json([
             'message' => 'User created successfully',
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'roles' => $user->fresh()->roles->map(fn ($role) => [
-                    'id' => $role->id,
-                    'name' => $role->name,
-                ]),
-            ],
+            'data' => $user,
         ], 201);
     }
 
@@ -144,7 +99,9 @@ class UserController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $user = User::findOrFail($id);
+        if (!$this->userService->userExists($id)) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -157,35 +114,18 @@ class UserController extends Controller
             'roles.*' => 'integer|exists:roles,id',
         ]);
 
-        if (isset($validated['name'])) {
-            $user->name = $validated['name'];
-        }
-
-        if (isset($validated['email'])) {
-            $user->email = $validated['email'];
-            // Reset email verification when email changes
-            $user->email_verified_at = null;
-        }
-
-        $user->save();
-
-        // Update roles if provided
-        if (isset($validated['roles'])) {
-            $roleNames = Role::whereIn('id', $validated['roles'])->pluck('name')->toArray();
-            $user->syncRoles($roleNames);
-        }
+        $user = $this->userService->updateUser(
+            id: $id,
+            data: [
+                'name' => $validated['name'] ?? null,
+                'email' => $validated['email'] ?? null,
+            ],
+            roleIds: $validated['roles'] ?? null,
+        );
 
         return response()->json([
             'message' => 'User updated successfully',
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'roles' => $user->fresh()->roles->map(fn ($role) => [
-                    'id' => $role->id,
-                    'name' => $role->name,
-                ]),
-            ],
+            'data' => $user,
         ]);
     }
 
@@ -194,20 +134,17 @@ class UserController extends Controller
      */
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $user = User::findOrFail($id);
-
-        // Prevent deleting yourself
-        if ($request->user()->id === $user->id) {
+        if ($request->user()->id === $id) {
             return response()->json([
                 'message' => 'You cannot delete your own account',
             ], 422);
         }
 
-        $user->delete();
+        if (!$this->userService->deleteUser($id)) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
-        return response()->json([
-            'message' => 'User deleted successfully',
-        ]);
+        return response()->json(['message' => 'User deleted successfully']);
     }
 
     /**
@@ -215,88 +152,53 @@ class UserController extends Controller
      */
     public function toggleStatus(int $id): JsonResponse
     {
-        $user = User::findOrFail($id);
+        try {
+            $result = $this->userService->toggleUserStatus($id);
 
-        if (!$this->hasIsActiveColumn()) {
             return response()->json([
-                'message' => 'User status toggle is not available',
-            ], 422);
+                'message' => $result['is_active'] ? 'User activated successfully' : 'User deactivated successfully',
+                'data' => $result,
+            ]);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        $user->is_active = !$user->is_active;
-        $user->save();
-
-        return response()->json([
-            'message' => $user->is_active ? 'User activated successfully' : 'User deactivated successfully',
-            'data' => [
-                'id' => $user->id,
-                'is_active' => $user->is_active,
-            ],
-        ]);
     }
 
     /**
-     * Reset user password (generates a new password or sends reset email).
+     * Reset user password.
      */
     public function resetPassword(Request $request, int $id): JsonResponse
     {
-        $user = User::findOrFail($id);
+        if (!$this->userService->userExists($id)) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
         $validated = $request->validate([
             'new_password' => ['nullable', 'string', Password::defaults()],
             'send_email' => 'nullable|boolean',
         ]);
 
-        if (!empty($validated['new_password'])) {
-            // Set the new password directly
-            $user->password = Hash::make($validated['new_password']);
-            $user->save();
+        $result = $this->userService->resetPassword(
+            id: $id,
+            newPassword: $validated['new_password'] ?? null,
+            sendEmail: $validated['send_email'] ?? true,
+        );
 
-            return response()->json([
-                'message' => 'Password updated successfully',
-            ]);
-        }
-
-        // Generate a random temporary password
-        $tempPassword = Str::random(12);
-        $user->password = Hash::make($tempPassword);
-        $user->save();
-
-        // TODO: Send password reset email if requested
-        // if ($validated['send_email'] ?? true) {
-        //     $user->notify(new PasswordResetNotification($tempPassword));
-        // }
-
-        return response()->json([
-            'message' => 'Password reset successfully',
-            'data' => [
-                'temporary_password' => $tempPassword,
-            ],
-        ]);
+        return response()->json($result);
     }
 
     /**
-     * Get user activity/sessions.
+     * Get user sessions.
      */
     public function sessions(int $id): JsonResponse
     {
-        $user = User::findOrFail($id);
+        if (!$this->userService->userExists($id)) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
-        // Get active sessions from the sessions table
-        $sessions = \DB::table('sessions')
-            ->where('user_id', $user->id)
-            ->orderByDesc('last_activity')
-            ->get()
-            ->map(fn ($session) => [
-                'id' => $session->id,
-                'ip_address' => $session->ip_address,
-                'user_agent' => $session->user_agent,
-                'last_activity' => date('Y-m-d H:i:s', $session->last_activity),
-            ]);
+        $sessions = $this->userService->getUserSessions($id);
 
-        return response()->json([
-            'data' => $sessions,
-        ]);
+        return response()->json(['data' => $sessions]);
     }
 
     /**
@@ -304,16 +206,13 @@ class UserController extends Controller
      */
     public function revokeSession(int $id, string $sessionId): JsonResponse
     {
-        $user = User::findOrFail($id);
+        if (!$this->userService->userExists($id)) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
-        \DB::table('sessions')
-            ->where('user_id', $user->id)
-            ->where('id', $sessionId)
-            ->delete();
+        $this->userService->revokeSession($id, $sessionId);
 
-        return response()->json([
-            'message' => 'Session revoked successfully',
-        ]);
+        return response()->json(['message' => 'Session revoked successfully']);
     }
 
     /**
@@ -321,25 +220,12 @@ class UserController extends Controller
      */
     public function revokeAllSessions(int $id): JsonResponse
     {
-        $user = User::findOrFail($id);
+        if (!$this->userService->userExists($id)) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
-        \DB::table('sessions')
-            ->where('user_id', $user->id)
-            ->delete();
+        $this->userService->revokeAllSessions($id);
 
-        // Also revoke all API tokens
-        $user->tokens()->delete();
-
-        return response()->json([
-            'message' => 'All sessions revoked successfully',
-        ]);
-    }
-
-    /**
-     * Check if the users table has is_active column.
-     */
-    private function hasIsActiveColumn(): bool
-    {
-        return \Schema::hasColumn('users', 'is_active');
+        return response()->json(['message' => 'All sessions revoked successfully']);
     }
 }

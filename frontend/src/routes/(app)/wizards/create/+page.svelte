@@ -170,12 +170,14 @@
 	}
 
 	async function handleSave() {
+		console.log('handleSave called', { name, wizardType, moduleId, steps });
 		if (!name.trim()) {
 			toast.error('Please enter a wizard name');
 			return;
 		}
 
 		if (wizardType !== 'standalone' && !moduleId) {
+			console.log('Validation failed: no module selected');
 			toast.error('Please select a module');
 			return;
 		}
@@ -243,7 +245,7 @@
 					<Eye class="mr-2 h-4 w-4" />
 					Preview
 				</Button>
-				<Button onclick={handleSave} disabled={saving}>
+				<Button type="button" onclick={() => handleSave()} disabled={saving}>
 					<Save class="mr-2 h-4 w-4" />
 					{saving ? 'Saving...' : 'Save Wizard'}
 				</Button>

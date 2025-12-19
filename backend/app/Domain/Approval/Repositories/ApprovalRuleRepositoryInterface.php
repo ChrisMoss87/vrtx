@@ -14,6 +14,8 @@ interface ApprovalRuleRepositoryInterface
 
     public function findActiveByModuleId(int $moduleId): array;
 
+    public function findMatchingRule(string $entityType, array $data): ?ApprovalRule;
+
     public function save(ApprovalRule $rule): ApprovalRule;
 
     public function delete(int $id): bool;

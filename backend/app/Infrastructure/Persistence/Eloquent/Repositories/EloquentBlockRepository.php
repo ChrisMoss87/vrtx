@@ -4,32 +4,32 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
-use App\Domain\Modules\Entities\Block;
+use App\Domain\Modules\Entities\Block as BlockEntity;
 use App\Domain\Modules\Repositories\BlockRepositoryInterface;
 use App\Domain\Modules\ValueObjects\BlockType;
-use App\Infrastructure\Persistence\Eloquent\Models\BlockModel;
+use App\Models\Block;
 use DateTimeImmutable;
 
 final class EloquentBlockRepository implements BlockRepositoryInterface
 {
-    public function findById(int $id): ?Block
+    public function findById(int $id): ?BlockEntity
     {
-        $model = BlockModel::with(['fields.options'])->find($id);
+        $model = Block::with(['fields.options'])->find($id);
 
         return $model ? $this->toDomain($model) : null;
     }
 
     public function findByModuleId(int $moduleId): array
     {
-        $models = BlockModel::where('module_id', $moduleId)
+        $models = Block::where('module_id', $moduleId)
             ->with(['fields.options'])
             ->orderBy('display_order')
             ->get();
 
-        return array_map(fn (BlockModel $model) => $this->toDomain($model), $models->all());
+        return array_map(fn (Block $model) => $this->toDomain($model), $models->all());
     }
 
-    public function save(Block $block): Block
+    public function save(BlockEntity $block): BlockEntity
     {
         $data = [
             'module_id' => $block->moduleId(),
@@ -40,10 +40,10 @@ final class EloquentBlockRepository implements BlockRepositoryInterface
         ];
 
         if ($block->id()) {
-            $model = BlockModel::findOrFail($block->id());
+            $model = Block::findOrFail($block->id());
             $model->update($data);
         } else {
-            $model = BlockModel::create($data);
+            $model = Block::create($data);
         }
 
         return $this->toDomain($model->fresh(['fields.options']));
@@ -51,12 +51,12 @@ final class EloquentBlockRepository implements BlockRepositoryInterface
 
     public function delete(int $id): bool
     {
-        return BlockModel::destroy($id) > 0;
+        return Block::destroy($id) > 0;
     }
 
-    public function toDomain(BlockModel $model): Block
+    public function toDomain(Block $model): BlockEntity
     {
-        $block = new Block(
+        $entity = new BlockEntity(
             id: $model->id,
             moduleId: $model->module_id,
             name: $model->name,
@@ -70,10 +70,10 @@ final class EloquentBlockRepository implements BlockRepositoryInterface
         if ($model->relationLoaded('fields')) {
             $fieldRepo = new EloquentFieldRepository();
             foreach ($model->fields as $fieldModel) {
-                $block->addField($fieldRepo->toDomain($fieldModel));
+                $entity->addField($fieldRepo->toDomain($fieldModel));
             }
         }
 
-        return $block;
+        return $entity;
     }
 }
