@@ -4,21 +4,19 @@ declare(strict_types=1);
 
 namespace App\Application\Services\Portal;
 
-use App\Models\PortalAccessToken;
-use App\Models\PortalActivityLog;
-use App\Models\PortalAnnouncement;
-use App\Models\PortalDocumentShare;
-use App\Models\PortalInvitation;
-use App\Models\PortalNotification;
-use App\Models\PortalUser;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
+use App\Domain\Portal\Repositories\PortalUserRepositoryInterface;
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class PortalApplicationService
 {
+    public function __construct(
+        private readonly PortalUserRepositoryInterface $repository,
+        private readonly AuthContextInterface $authContext
+    ) {}
+
     // =========================================================================
     // QUERY USE CASES - PORTAL USERS
     // =========================================================================
@@ -26,101 +24,54 @@ class PortalApplicationService
     /**
      * List portal users with filtering and pagination.
      */
-    public function listUsers(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listUsers(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = PortalUser::query();
-
-        // Filter by status
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
-        // Filter by account
-        if (!empty($filters['account_id'])) {
-            $query->where('account_id', $filters['account_id']);
-        }
-
-        // Filter by contact module
-        if (!empty($filters['contact_module'])) {
-            $query->where('contact_module', $filters['contact_module']);
-        }
-
-        // Filter by email verified
-        if (isset($filters['email_verified'])) {
-            if ($filters['email_verified']) {
-                $query->whereNotNull('email_verified_at');
-            } else {
-                $query->whereNull('email_verified_at');
-            }
-        }
-
-        // Search
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->repository->list($filters, $perPage);
     }
 
     /**
      * Get a single portal user by ID.
      */
-    public function getUser(int $id): ?PortalUser
+    public function getUser(int $id): ?array
     {
-        return PortalUser::with([
+        return $this->repository->findById($id, [
             'accessTokens',
             'activityLogs' => fn($q) => $q->latest()->limit(20),
             'documentShares',
             'notifications' => fn($q) => $q->latest()->limit(10)
-        ])->find($id);
+        ]);
     }
 
     /**
      * Get a portal user by email.
      */
-    public function getUserByEmail(string $email): ?PortalUser
+    public function getUserByEmail(string $email): ?array
     {
-        return PortalUser::where('email', $email)->first();
+        return $this->repository->findByEmail($email);
     }
 
     /**
      * Get users by account.
      */
-    public function getUsersByAccount(int $accountId): Collection
+    public function getUsersByAccount(int $accountId): array
     {
-        return PortalUser::where('account_id', $accountId)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return $this->repository->findByAccountId($accountId);
     }
 
     /**
      * Get active portal users.
      */
-    public function getActiveUsers(): Collection
+    public function getActiveUsers(): array
     {
-        return PortalUser::where('status', PortalUser::STATUS_ACTIVE)
-            ->orderBy('last_login_at', 'desc')
-            ->get();
+        return $this->repository->getActiveUsers();
     }
 
     /**
      * Get pending portal users.
      */
-    public function getPendingUsers(): Collection
+    public function getPendingUsers(): array
     {
-        return PortalUser::where('status', PortalUser::STATUS_PENDING)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return $this->repository->getPendingUsers();
     }
 
     // =========================================================================
@@ -130,58 +81,25 @@ class PortalApplicationService
     /**
      * List invitations with filtering and pagination.
      */
-    public function listInvitations(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listInvitations(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = PortalInvitation::query()->with(['inviter:id,name,email']);
-
-        // Filter by account
-        if (!empty($filters['account_id'])) {
-            $query->where('account_id', $filters['account_id']);
-        }
-
-        // Filter by status
-        if (!empty($filters['status'])) {
-            switch ($filters['status']) {
-                case 'pending':
-                    $query->whereNull('accepted_at')
-                        ->where('expires_at', '>', now());
-                    break;
-                case 'accepted':
-                    $query->whereNotNull('accepted_at');
-                    break;
-                case 'expired':
-                    $query->whereNull('accepted_at')
-                        ->where('expires_at', '<=', now());
-                    break;
-            }
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->repository->listInvitations($filters, $perPage);
     }
 
     /**
      * Get pending invitations for an account.
      */
-    public function getPendingInvitations(int $accountId): Collection
+    public function getPendingInvitations(int $accountId): array
     {
-        return PortalInvitation::where('account_id', $accountId)
-            ->whereNull('accepted_at')
-            ->where('expires_at', '>', now())
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return $this->repository->getPendingInvitations($accountId);
     }
 
     /**
      * Get invitation by token.
      */
-    public function getInvitationByToken(string $token): ?PortalInvitation
+    public function getInvitationByToken(string $token): ?array
     {
-        return PortalInvitation::where('token', $token)->first();
+        return $this->repository->findInvitationByToken($token);
     }
 
     // =========================================================================
@@ -191,38 +109,25 @@ class PortalApplicationService
     /**
      * Get activity logs for a portal user.
      */
-    public function getActivityLogs(int $portalUserId, int $limit = 50): Collection
+    public function getActivityLogs(int $portalUserId, int $limit = 50): array
     {
-        return PortalActivityLog::where('portal_user_id', $portalUserId)
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
+        return $this->repository->getActivityLogs($portalUserId, $limit);
     }
 
     /**
      * Get activity logs for an account.
      */
-    public function getAccountActivityLogs(int $accountId, int $limit = 100): Collection
+    public function getAccountActivityLogs(int $accountId, int $limit = 100): array
     {
-        return PortalActivityLog::whereHas('portalUser', function ($q) use ($accountId) {
-            $q->where('account_id', $accountId);
-        })
-            ->with('portalUser:id,name,email')
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
+        return $this->repository->getAccountActivityLogs($accountId, $limit);
     }
 
     /**
      * Get recent logins.
      */
-    public function getRecentLogins(int $days = 30): Collection
+    public function getRecentLogins(int $days = 30): array
     {
-        return PortalActivityLog::where('action', 'login')
-            ->where('created_at', '>=', now()->subDays($days))
-            ->with('portalUser:id,name,email')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return $this->repository->getRecentLogins($days);
     }
 
     // =========================================================================
@@ -232,37 +137,25 @@ class PortalApplicationService
     /**
      * Get document shares for a portal user.
      */
-    public function getDocumentShares(int $portalUserId): Collection
+    public function getDocumentShares(int $portalUserId): array
     {
-        return PortalDocumentShare::where('portal_user_id', $portalUserId)
-            ->with('sharer:id,name,email')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return $this->repository->getDocumentShares($portalUserId);
     }
 
     /**
      * Get document shares by type.
      */
-    public function getDocumentSharesByType(int $portalUserId, string $documentType): Collection
+    public function getDocumentSharesByType(int $portalUserId, string $documentType): array
     {
-        return PortalDocumentShare::where('portal_user_id', $portalUserId)
-            ->where('document_type', $documentType)
-            ->with('sharer:id,name,email')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return $this->repository->getDocumentSharesByType($portalUserId, $documentType);
     }
 
     /**
      * Get documents requiring signature.
      */
-    public function getDocumentsRequiringSignature(int $portalUserId): Collection
+    public function getDocumentsRequiringSignature(int $portalUserId): array
     {
-        return PortalDocumentShare::where('portal_user_id', $portalUserId)
-            ->where('requires_signature', true)
-            ->whereNull('signed_at')
-            ->with('sharer:id,name,email')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return $this->repository->getDocumentsRequiringSignature($portalUserId);
     }
 
     // =========================================================================
@@ -272,23 +165,17 @@ class PortalApplicationService
     /**
      * Get notifications for a portal user.
      */
-    public function getNotifications(int $portalUserId, int $limit = 50): Collection
+    public function getNotifications(int $portalUserId, int $limit = 50): array
     {
-        return PortalNotification::where('portal_user_id', $portalUserId)
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
+        return $this->repository->getNotifications($portalUserId, $limit);
     }
 
     /**
      * Get unread notifications.
      */
-    public function getUnreadNotifications(int $portalUserId): Collection
+    public function getUnreadNotifications(int $portalUserId): array
     {
-        return PortalNotification::where('portal_user_id', $portalUserId)
-            ->whereNull('read_at')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return $this->repository->getUnreadNotifications($portalUserId);
     }
 
     /**
@@ -296,9 +183,7 @@ class PortalApplicationService
      */
     public function getUnreadNotificationCount(int $portalUserId): int
     {
-        return PortalNotification::where('portal_user_id', $portalUserId)
-            ->whereNull('read_at')
-            ->count();
+        return $this->repository->getUnreadNotificationCount($portalUserId);
     }
 
     // =========================================================================
@@ -308,40 +193,17 @@ class PortalApplicationService
     /**
      * Get active announcements for a portal user.
      */
-    public function getActiveAnnouncements(?int $accountId = null): Collection
+    public function getActiveAnnouncements(?int $accountId = null): array
     {
-        $query = PortalAnnouncement::active();
-
-        if ($accountId) {
-            $query->forAccount($accountId);
-        }
-
-        return $query->orderBy('created_at', 'desc')->get();
+        return $this->repository->getActiveAnnouncements($accountId);
     }
 
     /**
      * List all announcements with filtering.
      */
-    public function listAnnouncements(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listAnnouncements(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = PortalAnnouncement::query()->with(['creator:id,name,email']);
-
-        // Filter by active
-        if (isset($filters['is_active'])) {
-            $query->where('is_active', $filters['is_active']);
-        }
-
-        // Filter by type
-        if (!empty($filters['type'])) {
-            $query->where('type', $filters['type']);
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->repository->listAnnouncements($filters, $perPage);
     }
 
     // =========================================================================
@@ -351,10 +213,10 @@ class PortalApplicationService
     /**
      * Create a portal user.
      */
-    public function createUser(array $data): PortalUser
+    public function createUser(array $data): array
     {
         return DB::transaction(function () use ($data) {
-            $user = PortalUser::create([
+            $userData = [
                 'email' => $data['email'],
                 'password' => $data['password'] ?? null,
                 'name' => $data['name'],
@@ -363,15 +225,21 @@ class PortalApplicationService
                 'contact_id' => $data['contact_id'] ?? null,
                 'contact_module' => $data['contact_module'] ?? null,
                 'account_id' => $data['account_id'] ?? null,
-                'status' => $data['status'] ?? PortalUser::STATUS_PENDING,
+                'status' => $data['status'] ?? 'pending',
                 'verification_token' => $data['verification_token'] ?? bin2hex(random_bytes(32)),
                 'preferences' => $data['preferences'] ?? [],
                 'timezone' => $data['timezone'] ?? config('app.timezone'),
                 'locale' => $data['locale'] ?? config('app.locale'),
-            ]);
+            ];
+
+            $user = $this->repository->create($userData);
 
             // Log creation
-            $user->logActivity('account_created');
+            $this->repository->createActivityLog($user['id'], [
+                'action' => 'account_created',
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+            ]);
 
             return $user;
         });
@@ -380,10 +248,8 @@ class PortalApplicationService
     /**
      * Update a portal user.
      */
-    public function updateUser(int $id, array $data): PortalUser
+    public function updateUser(int $id, array $data): array
     {
-        $user = PortalUser::findOrFail($id);
-
         $updateData = array_filter([
             'name' => $data['name'] ?? null,
             'phone' => $data['phone'] ?? null,
@@ -397,9 +263,7 @@ class PortalApplicationService
             $updateData['password'] = $data['password'];
         }
 
-        $user->update($updateData);
-
-        return $user->fresh();
+        return $this->repository->update($id, $updateData);
     }
 
     /**
@@ -407,73 +271,114 @@ class PortalApplicationService
      */
     public function deleteUser(int $id): bool
     {
-        $user = PortalUser::findOrFail($id);
-        return $user->delete();
+        return $this->repository->delete($id);
     }
 
     /**
      * Activate a portal user.
      */
-    public function activateUser(int $id): PortalUser
+    public function activateUser(int $id): array
     {
         return DB::transaction(function () use ($id) {
-            $user = PortalUser::findOrFail($id);
-            $user->activate();
-            $user->logActivity('account_activated');
-            return $user->fresh();
+            $user = $this->repository->update($id, [
+                'status' => 'active',
+                'email_verified_at' => now(),
+                'verification_token' => null,
+            ]);
+
+            $this->repository->createActivityLog($id, [
+                'action' => 'account_activated',
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return $user;
         });
     }
 
     /**
      * Suspend a portal user.
      */
-    public function suspendUser(int $id, ?string $reason = null): PortalUser
+    public function suspendUser(int $id, ?string $reason = null): array
     {
         return DB::transaction(function () use ($id, $reason) {
-            $user = PortalUser::findOrFail($id);
-            $user->suspend();
-            $user->logActivity('account_suspended', null, null, ['reason' => $reason]);
-            return $user->fresh();
+            $user = $this->repository->update($id, ['status' => 'suspended']);
+
+            $this->repository->createActivityLog($id, [
+                'action' => 'account_suspended',
+                'metadata' => ['reason' => $reason],
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return $user;
         });
     }
 
     /**
      * Verify email for a portal user.
      */
-    public function verifyEmail(string $token): PortalUser
+    public function verifyEmail(string $token): array
     {
         return DB::transaction(function () use ($token) {
-            $user = PortalUser::where('verification_token', $token)->firstOrFail();
-            $user->activate();
-            return $user;
+            $user = $this->repository->findByVerificationToken($token);
+
+            if (!$user) {
+                throw new \InvalidArgumentException('Invalid verification token');
+            }
+
+            return $this->repository->update($user['id'], [
+                'status' => 'active',
+                'email_verified_at' => now(),
+                'verification_token' => null,
+            ]);
         });
     }
 
     /**
      * Change password for a portal user.
      */
-    public function changePassword(int $id, string $currentPassword, string $newPassword): PortalUser
+    public function changePassword(int $id, string $currentPassword, string $newPassword): array
     {
-        $user = PortalUser::findOrFail($id);
+        $user = $this->repository->findById($id);
 
-        if (!Hash::check($currentPassword, $user->password)) {
+        if (!$user) {
+            throw new \InvalidArgumentException('User not found');
+        }
+
+        if (!Hash::check($currentPassword, $user['password'])) {
             throw new \InvalidArgumentException('Current password is incorrect');
         }
 
-        $user->update(['password' => $newPassword]);
-        $user->logActivity('change_password');
+        $updatedUser = $this->repository->update($id, ['password' => $newPassword]);
 
-        return $user->fresh();
+        $this->repository->createActivityLog($id, [
+            'action' => 'change_password',
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        return $updatedUser;
     }
 
     /**
      * Record a login for a portal user.
      */
-    public function recordLogin(int $id, string $ipAddress): PortalUser
+    public function recordLogin(int $id, string $ipAddress): array
     {
-        $user = PortalUser::findOrFail($id);
-        $user->recordLogin($ipAddress);
-        return $user->fresh();
+        $user = $this->repository->update($id, [
+            'last_login_at' => now(),
+            'last_login_ip' => $ipAddress,
+        ]);
+
+        $this->repository->createActivityLog($id, [
+            'action' => 'login',
+            'metadata' => ['ip' => $ipAddress],
+            'ip_address' => $ipAddress,
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        return $user;
     }
 
     // =========================================================================
@@ -483,48 +388,58 @@ class PortalApplicationService
     /**
      * Create an invitation.
      */
-    public function createInvitation(array $data): PortalInvitation
+    public function createInvitation(array $data): array
     {
-        return PortalInvitation::create([
+        $invitationData = [
             'email' => $data['email'],
-            'token' => PortalInvitation::generateToken(),
+            'token' => bin2hex(random_bytes(32)),
             'contact_id' => $data['contact_id'] ?? null,
             'account_id' => $data['account_id'] ?? null,
             'role' => $data['role'] ?? 'user',
-            'invited_by' => Auth::id(),
+            'invited_by' => $this->authContext->userId(),
             'expires_at' => $data['expires_at'] ?? now()->addDays(7),
-        ]);
+        ];
+
+        return $this->repository->createInvitation($invitationData);
     }
 
     /**
      * Accept an invitation.
      */
-    public function acceptInvitation(string $token, array $userData): PortalUser
+    public function acceptInvitation(string $token, array $userData): array
     {
         return DB::transaction(function () use ($token, $userData) {
-            $invitation = PortalInvitation::where('token', $token)->firstOrFail();
+            $invitation = $this->repository->findInvitationByToken($token);
 
-            if ($invitation->isExpired()) {
+            if (!$invitation) {
+                throw new \InvalidArgumentException('Invalid invitation token');
+            }
+
+            // Check if expired
+            if ($invitation['expires_at'] && now()->greaterThan($invitation['expires_at'])) {
                 throw new \InvalidArgumentException('Invitation has expired');
             }
 
-            if ($invitation->isAccepted()) {
+            // Check if already accepted
+            if ($invitation['accepted_at']) {
                 throw new \InvalidArgumentException('Invitation has already been accepted');
             }
 
             // Create portal user
             $user = $this->createUser([
-                'email' => $invitation->email,
+                'email' => $invitation['email'],
                 'password' => $userData['password'],
                 'name' => $userData['name'],
                 'phone' => $userData['phone'] ?? null,
-                'contact_id' => $invitation->contact_id,
-                'account_id' => $invitation->account_id,
-                'status' => PortalUser::STATUS_ACTIVE,
+                'contact_id' => $invitation['contact_id'],
+                'account_id' => $invitation['account_id'],
+                'status' => 'active',
             ]);
 
             // Mark invitation as accepted
-            $invitation->accept();
+            $this->repository->updateInvitation($invitation['id'], [
+                'accepted_at' => now(),
+            ]);
 
             return $user;
         });
@@ -533,18 +448,20 @@ class PortalApplicationService
     /**
      * Resend an invitation.
      */
-    public function resendInvitation(int $id): PortalInvitation
+    public function resendInvitation(int $id): array
     {
-        $invitation = PortalInvitation::findOrFail($id);
+        $invitation = $this->repository->findInvitationByToken(
+            $this->repository->findInvitationByToken('')['token'] ?? ''
+        );
 
-        if ($invitation->isAccepted()) {
+        if ($invitation && $invitation['accepted_at']) {
             throw new \InvalidArgumentException('Invitation has already been accepted');
         }
 
         // Update expiration date
-        $invitation->update(['expires_at' => now()->addDays(7)]);
-
-        return $invitation->fresh();
+        return $this->repository->updateInvitation($id, [
+            'expires_at' => now()->addDays(7)
+        ]);
     }
 
     /**
@@ -552,8 +469,7 @@ class PortalApplicationService
      */
     public function cancelInvitation(int $id): bool
     {
-        $invitation = PortalInvitation::findOrFail($id);
-        return $invitation->delete();
+        return $this->repository->deleteInvitation($id);
     }
 
     // =========================================================================
@@ -563,10 +479,21 @@ class PortalApplicationService
     /**
      * Create an access token for a portal user.
      */
-    public function createAccessToken(int $portalUserId, string $name, array $abilities = ['*'], ?\DateTime $expiresAt = null): PortalAccessToken
+    public function createAccessToken(int $portalUserId, string $name, array $abilities = ['*'], ?\DateTime $expiresAt = null): array
     {
-        $user = PortalUser::findOrFail($portalUserId);
-        return $user->createToken($name, $abilities, $expiresAt);
+        $plainToken = bin2hex(random_bytes(32));
+
+        $tokenData = [
+            'name' => $name,
+            'token' => hash('sha256', $plainToken),
+            'abilities' => json_encode($abilities),
+            'expires_at' => $expiresAt,
+        ];
+
+        $token = $this->repository->createAccessToken($portalUserId, $tokenData);
+        $token['plain_text_token'] = $plainToken;
+
+        return $token;
     }
 
     /**
@@ -574,8 +501,7 @@ class PortalApplicationService
      */
     public function revokeAccessToken(int $tokenId): bool
     {
-        $token = PortalAccessToken::findOrFail($tokenId);
-        return $token->delete();
+        return $this->repository->deleteAccessToken($tokenId);
     }
 
     /**
@@ -583,7 +509,7 @@ class PortalApplicationService
      */
     public function revokeAllAccessTokens(int $portalUserId): int
     {
-        return PortalAccessToken::where('portal_user_id', $portalUserId)->delete();
+        return $this->repository->deleteAllAccessTokens($portalUserId);
     }
 
     // =========================================================================
@@ -593,10 +519,10 @@ class PortalApplicationService
     /**
      * Share a document with a portal user.
      */
-    public function shareDocument(int $portalUserId, array $data): PortalDocumentShare
+    public function shareDocument(int $portalUserId, array $data): array
     {
         return DB::transaction(function () use ($portalUserId, $data) {
-            $share = PortalDocumentShare::create([
+            $shareData = [
                 'portal_user_id' => $portalUserId,
                 'account_id' => $data['account_id'] ?? null,
                 'document_type' => $data['document_type'],
@@ -604,8 +530,10 @@ class PortalApplicationService
                 'can_download' => $data['can_download'] ?? true,
                 'requires_signature' => $data['requires_signature'] ?? false,
                 'expires_at' => $data['expires_at'] ?? null,
-                'shared_by' => Auth::id(),
-            ]);
+                'shared_by' => $this->authContext->userId(),
+            ];
+
+            $share = $this->repository->createDocumentShare($shareData);
 
             // Notify portal user
             $this->createNotification($portalUserId, [
@@ -622,35 +550,49 @@ class PortalApplicationService
     /**
      * Record document view.
      */
-    public function recordDocumentView(int $shareId): PortalDocumentShare
+    public function recordDocumentView(int $shareId): array
     {
-        $share = PortalDocumentShare::findOrFail($shareId);
-        $share->recordView();
-        return $share->fresh();
+        $share = $this->repository->findDocumentShare($shareId);
+
+        if (!$share) {
+            throw new \InvalidArgumentException('Document share not found');
+        }
+
+        $updates = ['view_count' => ($share['view_count'] ?? 0) + 1];
+
+        if (!$share['first_viewed_at']) {
+            $updates['first_viewed_at'] = now();
+        }
+
+        $updates['last_viewed_at'] = now();
+
+        return $this->repository->updateDocumentShare($shareId, $updates);
     }
 
     /**
      * Sign a document.
      */
-    public function signDocument(int $shareId, string $ipAddress): PortalDocumentShare
+    public function signDocument(int $shareId, string $ipAddress): array
     {
         return DB::transaction(function () use ($shareId, $ipAddress) {
-            $share = PortalDocumentShare::findOrFail($shareId);
+            $share = $this->repository->findDocumentShare($shareId);
 
-            if (!$share->requires_signature) {
+            if (!$share) {
+                throw new \InvalidArgumentException('Document share not found');
+            }
+
+            if (!$share['requires_signature']) {
                 throw new \InvalidArgumentException('Document does not require signature');
             }
 
-            if ($share->isSigned()) {
+            if ($share['signed_at']) {
                 throw new \InvalidArgumentException('Document has already been signed');
             }
 
-            $share->sign($ipAddress);
-
-            // Notify the sharer
-            // Could send email notification here
-
-            return $share->fresh();
+            return $this->repository->updateDocumentShare($shareId, [
+                'signed_at' => now(),
+                'signed_ip' => $ipAddress,
+            ]);
         });
     }
 
@@ -659,8 +601,7 @@ class PortalApplicationService
      */
     public function revokeDocumentShare(int $shareId): bool
     {
-        $share = PortalDocumentShare::findOrFail($shareId);
-        return $share->delete();
+        return $this->repository->deleteDocumentShare($shareId);
     }
 
     // =========================================================================
@@ -670,26 +611,28 @@ class PortalApplicationService
     /**
      * Create a notification for a portal user.
      */
-    public function createNotification(int $portalUserId, array $data): PortalNotification
+    public function createNotification(int $portalUserId, array $data): array
     {
-        return PortalNotification::create([
+        $notificationData = [
             'portal_user_id' => $portalUserId,
             'type' => $data['type'],
             'title' => $data['title'],
             'message' => $data['message'],
             'action_url' => $data['action_url'] ?? null,
             'data' => $data['data'] ?? [],
-        ]);
+        ];
+
+        return $this->repository->createNotification($notificationData);
     }
 
     /**
      * Mark a notification as read.
      */
-    public function markNotificationAsRead(int $notificationId): PortalNotification
+    public function markNotificationAsRead(int $notificationId): array
     {
-        $notification = PortalNotification::findOrFail($notificationId);
-        $notification->markAsRead();
-        return $notification->fresh();
+        return $this->repository->updateNotification($notificationId, [
+            'read_at' => now()
+        ]);
     }
 
     /**
@@ -697,9 +640,7 @@ class PortalApplicationService
      */
     public function markAllNotificationsAsRead(int $portalUserId): int
     {
-        return PortalNotification::where('portal_user_id', $portalUserId)
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+        return $this->repository->markAllNotificationsAsRead($portalUserId);
     }
 
     /**
@@ -707,8 +648,7 @@ class PortalApplicationService
      */
     public function deleteNotification(int $notificationId): bool
     {
-        $notification = PortalNotification::findOrFail($notificationId);
-        return $notification->delete();
+        return $this->repository->deleteNotification($notificationId);
     }
 
     // =========================================================================
@@ -718,9 +658,9 @@ class PortalApplicationService
     /**
      * Create an announcement.
      */
-    public function createAnnouncement(array $data): PortalAnnouncement
+    public function createAnnouncement(array $data): array
     {
-        return PortalAnnouncement::create([
+        $announcementData = [
             'title' => $data['title'],
             'content' => $data['content'],
             'type' => $data['type'] ?? 'info',
@@ -729,18 +669,18 @@ class PortalApplicationService
             'starts_at' => $data['starts_at'] ?? null,
             'ends_at' => $data['ends_at'] ?? null,
             'target_accounts' => $data['target_accounts'] ?? [],
-            'created_by' => Auth::id(),
-        ]);
+            'created_by' => $this->authContext->userId(),
+        ];
+
+        return $this->repository->createAnnouncement($announcementData);
     }
 
     /**
      * Update an announcement.
      */
-    public function updateAnnouncement(int $id, array $data): PortalAnnouncement
+    public function updateAnnouncement(int $id, array $data): array
     {
-        $announcement = PortalAnnouncement::findOrFail($id);
-
-        $announcement->update(array_filter([
+        $updateData = array_filter([
             'title' => $data['title'] ?? null,
             'content' => $data['content'] ?? null,
             'type' => $data['type'] ?? null,
@@ -749,9 +689,9 @@ class PortalApplicationService
             'starts_at' => $data['starts_at'] ?? null,
             'ends_at' => $data['ends_at'] ?? null,
             'target_accounts' => $data['target_accounts'] ?? null,
-        ], fn($value) => $value !== null));
+        ], fn($value) => $value !== null);
 
-        return $announcement->fresh();
+        return $this->repository->updateAnnouncement($id, $updateData);
     }
 
     /**
@@ -759,8 +699,7 @@ class PortalApplicationService
      */
     public function deleteAnnouncement(int $id): bool
     {
-        $announcement = PortalAnnouncement::findOrFail($id);
-        return $announcement->delete();
+        return $this->repository->deleteAnnouncement($id);
     }
 
     // =========================================================================
@@ -772,28 +711,7 @@ class PortalApplicationService
      */
     public function getUserStatistics(): array
     {
-        $totalUsers = PortalUser::count();
-        $activeUsers = PortalUser::where('status', PortalUser::STATUS_ACTIVE)->count();
-        $pendingUsers = PortalUser::where('status', PortalUser::STATUS_PENDING)->count();
-        $suspendedUsers = PortalUser::where('status', PortalUser::STATUS_SUSPENDED)->count();
-
-        $recentLogins = PortalUser::whereNotNull('last_login_at')
-            ->where('last_login_at', '>=', now()->subDays(30))
-            ->count();
-
-        $emailVerified = PortalUser::whereNotNull('email_verified_at')->count();
-
-        return [
-            'total_users' => $totalUsers,
-            'active_users' => $activeUsers,
-            'pending_users' => $pendingUsers,
-            'suspended_users' => $suspendedUsers,
-            'recent_logins_30d' => $recentLogins,
-            'email_verified_count' => $emailVerified,
-            'email_verified_rate' => $totalUsers > 0
-                ? round(($emailVerified / $totalUsers) * 100, 2)
-                : 0,
-        ];
+        return $this->repository->getUserStatistics();
     }
 
     /**
@@ -801,32 +719,7 @@ class PortalApplicationService
      */
     public function getDocumentShareStatistics(?int $accountId = null): array
     {
-        $query = PortalDocumentShare::query();
-
-        if ($accountId) {
-            $query->where('account_id', $accountId);
-        }
-
-        $totalShares = $query->count();
-        $requiresSignature = $query->where('requires_signature', true)->count();
-        $signed = $query->whereNotNull('signed_at')->count();
-        $pendingSignature = $query->where('requires_signature', true)
-            ->whereNull('signed_at')
-            ->count();
-
-        $sharesByType = PortalDocumentShare::when($accountId, fn($q) => $q->where('account_id', $accountId))
-            ->selectRaw('document_type, COUNT(*) as count')
-            ->groupBy('document_type')
-            ->pluck('count', 'document_type')
-            ->toArray();
-
-        return [
-            'total_shares' => $totalShares,
-            'requires_signature' => $requiresSignature,
-            'signed' => $signed,
-            'pending_signature' => $pendingSignature,
-            'shares_by_type' => $sharesByType,
-        ];
+        return $this->repository->getDocumentShareStatistics($accountId);
     }
 
     /**
@@ -834,36 +727,7 @@ class PortalApplicationService
      */
     public function getUserActivitySummary(int $portalUserId, int $days = 30): array
     {
-        $user = PortalUser::findOrFail($portalUserId);
-
-        $activityCount = PortalActivityLog::where('portal_user_id', $portalUserId)
-            ->where('created_at', '>=', now()->subDays($days))
-            ->count();
-
-        $activityByType = PortalActivityLog::where('portal_user_id', $portalUserId)
-            ->where('created_at', '>=', now()->subDays($days))
-            ->selectRaw('action, COUNT(*) as count')
-            ->groupBy('action')
-            ->pluck('count', 'action')
-            ->toArray();
-
-        $documentsViewed = PortalDocumentShare::where('portal_user_id', $portalUserId)
-            ->whereNotNull('first_viewed_at')
-            ->count();
-
-        $documentsSigned = PortalDocumentShare::where('portal_user_id', $portalUserId)
-            ->whereNotNull('signed_at')
-            ->count();
-
-        return [
-            'user_id' => $portalUserId,
-            'period_days' => $days,
-            'total_activities' => $activityCount,
-            'activities_by_type' => $activityByType,
-            'documents_viewed' => $documentsViewed,
-            'documents_signed' => $documentsSigned,
-            'last_login' => $user->last_login_at?->format('Y-m-d H:i:s'),
-        ];
+        return $this->repository->getUserActivitySummary($portalUserId, $days);
     }
 
     /**
@@ -871,29 +735,6 @@ class PortalApplicationService
      */
     public function getInvitationStatistics(?int $accountId = null): array
     {
-        $query = PortalInvitation::query();
-
-        if ($accountId) {
-            $query->where('account_id', $accountId);
-        }
-
-        $totalInvitations = $query->count();
-        $accepted = $query->whereNotNull('accepted_at')->count();
-        $pending = $query->whereNull('accepted_at')
-            ->where('expires_at', '>', now())
-            ->count();
-        $expired = $query->whereNull('accepted_at')
-            ->where('expires_at', '<=', now())
-            ->count();
-
-        return [
-            'total_invitations' => $totalInvitations,
-            'accepted' => $accepted,
-            'pending' => $pending,
-            'expired' => $expired,
-            'acceptance_rate' => $totalInvitations > 0
-                ? round(($accepted / $totalInvitations) * 100, 2)
-                : 0,
-        ];
+        return $this->repository->getInvitationStatistics($accountId);
     }
 }

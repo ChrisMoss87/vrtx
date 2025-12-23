@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import { Table as TableIcon, TrendingUp, TrendingDown } from 'lucide-svelte';
+	import { Table as TableIcon, TrendingUp, TrendingDown, ExternalLink } from 'lucide-svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import {
 		presets,
@@ -9,6 +9,8 @@
 		formatStyleToInline,
 		type FormatCondition
 	} from './conditionalFormatting';
+	import type { WidgetConfig } from '$lib/api/dashboards';
+	import { navigateToRecord } from '$lib/stores/dashboardNavigation.svelte';
 
 	type ColumnFormatting = {
 		type: 'traffic_light' | 'reverse_traffic_light' | 'progress' | 'trend' | 'status' | 'custom';
@@ -23,12 +25,29 @@
 			data?: Record<string, any>[];
 			total_count?: number;
 			column_formatting?: Record<string, ColumnFormatting>;
+			module_api_name?: string;
 		} | null;
+		config?: WidgetConfig;
 		loading?: boolean;
 		maxRows?: number;
 	}
 
-	let { title, data, loading = false, maxRows = 10 }: Props = $props();
+	let { title, data, config, loading = false, maxRows = 10 }: Props = $props();
+
+	// Check if click-through is enabled
+	const isClickable = $derived(
+		config?.module_id && config?.click_enabled !== false && data?.module_api_name
+	);
+
+	function handleRowClick(row: Record<string, any>) {
+		if (!isClickable || !data?.module_api_name) return;
+
+		// Try to find record ID in common field names
+		const recordId = row.id || row.record_id || row._id;
+		if (recordId) {
+			navigateToRecord(data.module_api_name, recordId);
+		}
+	}
 
 	const columns = $derived(() => {
 		if (data?.columns && data.columns.length > 0) {
@@ -116,7 +135,7 @@
 	}
 </script>
 
-<Card.Root class="h-full">
+<Card.Root class="h-full group">
 	<Card.Header class="pb-2">
 		<div class="flex items-center justify-between">
 			<div class="flex items-center gap-2">
@@ -156,7 +175,10 @@
 					</Table.Header>
 					<Table.Body>
 						{#each rows() as row}
-							<Table.Row>
+							<Table.Row
+								class="{isClickable ? 'cursor-pointer hover:bg-muted/50' : ''}"
+								onclick={() => handleRowClick(row)}
+							>
 								{#each columns() as col}
 									{@const cellFormat = getCellFormatting(col, row[col])}
 									<Table.Cell class="text-sm">
@@ -173,6 +195,11 @@
 										</span>
 									</Table.Cell>
 								{/each}
+								{#if isClickable}
+									<Table.Cell class="w-8">
+										<ExternalLink class="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+									</Table.Cell>
+								{/if}
 							</Table.Row>
 						{/each}
 					</Table.Body>

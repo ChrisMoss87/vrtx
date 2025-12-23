@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Entities;
 
 use App\Domain\Billing\ValueObjects\Money;
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
 /**
@@ -12,7 +13,7 @@ use DateTimeImmutable;
  *
  * Represents a product or service that can be sold.
  */
-final class Product
+final class Product implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -214,5 +215,18 @@ final class Product
     public function getUpdatedAt(): ?DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->getId() === null) {
+            return false;
+        }
+
+        return $this->id === $other->getId();
     }
 }

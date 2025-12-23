@@ -6,9 +6,10 @@ namespace App\Domain\Analytics\Entities;
 
 use App\Domain\Analytics\ValueObjects\AlertType;
 use App\Domain\Analytics\ValueObjects\CheckFrequency;
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class AnalyticsAlert
+final class AnalyticsAlert implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -238,5 +239,14 @@ final class AnalyticsAlert
             'created_at' => $this->createdAt?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updatedAt?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null && $this->id === $other->id;
     }
 }

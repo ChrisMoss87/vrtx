@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\CMS\Entities;
 
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class CmsFormSubmission
+final class CmsFormSubmission implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -104,5 +105,16 @@ final class CmsFormSubmission
     public function getFieldValue(string $fieldName): mixed
     {
         return $this->data[$fieldName] ?? null;
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null
+            && $other->id !== null
+            && $this->id === $other->id;
     }
 }

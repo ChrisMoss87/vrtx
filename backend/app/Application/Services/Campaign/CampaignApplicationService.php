@@ -5,24 +5,15 @@ declare(strict_types=1);
 namespace App\Application\Services\Campaign;
 
 use App\Domain\Campaign\Repositories\CampaignRepositoryInterface;
-use App\Models\Campaign;
-use App\Models\CampaignAsset;
-use App\Models\CampaignAudience;
-use App\Models\CampaignAudienceMember;
-use App\Models\CampaignClick;
-use App\Models\CampaignConversion;
-use App\Models\CampaignMetric;
-use App\Models\CampaignSend;
-use App\Models\CampaignUnsubscribe;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use Illuminate\Support\Facades\DB;
 
 class CampaignApplicationService
 {
     public function __construct(
         private CampaignRepositoryInterface $repository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -32,97 +23,33 @@ class CampaignApplicationService
     /**
      * List campaigns with filtering and pagination.
      */
-    public function listCampaigns(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listCampaigns(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = Campaign::query()
-            ->with(['owner:id,name,email', 'module:id,name']);
-
-        // Filter by type
-        if (!empty($filters['type'])) {
-            $query->byType($filters['type']);
-        }
-
-        // Filter by status
-        if (!empty($filters['status'])) {
-            $query->byStatus($filters['status']);
-        }
-
-        // Filter by module
-        if (!empty($filters['module_id'])) {
-            $query->where('module_id', $filters['module_id']);
-        }
-
-        // Filter by owner
-        if (!empty($filters['owner_id'])) {
-            $query->where('owner_id', $filters['owner_id']);
-        }
-
-        // Filter active only
-        if (!empty($filters['active'])) {
-            $query->active();
-        }
-
-        // Filter by date range
-        if (!empty($filters['from_date'])) {
-            $query->where('start_date', '>=', $filters['from_date']);
-        }
-        if (!empty($filters['to_date'])) {
-            $query->where('end_date', '<=', $filters['to_date']);
-        }
-
-        // Search
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            });
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->repository->findWithFilters($filters, $perPage);
     }
 
     /**
      * Get a single campaign by ID.
      */
-    public function getCampaign(int $id): ?Campaign
+    public function getCampaign(int $id): ?array
     {
-        return Campaign::with(['owner:id,name,email', 'creator:id,name', 'module', 'audiences', 'assets'])->find($id);
+        return $this->repository->findByIdWithRelations($id);
     }
 
     /**
      * Get campaign with full details including metrics.
      */
-    public function getCampaignWithMetrics(int $id): ?Campaign
+    public function getCampaignWithMetrics(int $id): ?array
     {
-        $campaign = $this->getCampaign($id);
-
-        if (!$campaign) {
-            return null;
-        }
-
-        // Load aggregate metrics
-        $campaign->load(['metrics' => function ($q) {
-            $q->orderBy('date', 'desc')->limit(30);
-        }]);
-
-        return $campaign;
+        return $this->repository->findCampaignWithMetrics($id);
     }
 
     /**
      * Get active campaigns.
      */
-    public function getActiveCampaigns(): Collection
+    public function getActiveCampaigns(): array
     {
-        return Campaign::active()
-            ->with(['owner:id,name,email'])
-            ->orderBy('start_date')
-            ->get();
+        return $this->repository->findActive();
     }
 
     /**
@@ -130,31 +57,7 @@ class CampaignApplicationService
      */
     public function getCampaignPerformance(int $campaignId): array
     {
-        $campaign = Campaign::findOrFail($campaignId);
-
-        $sends = $campaign->sends();
-        $totalSends = $sends->count();
-        $delivered = (clone $sends)->where('status', CampaignSend::STATUS_DELIVERED)->count();
-        $opened = (clone $sends)->whereNotNull('opened_at')->count();
-        $clicked = (clone $sends)->whereNotNull('clicked_at')->count();
-        $bounced = (clone $sends)->where('status', CampaignSend::STATUS_BOUNCED)->count();
-
-        $conversions = $campaign->conversions()->count();
-        $totalRevenue = $campaign->conversions()->sum('revenue') ?? 0;
-
-        return [
-            'total_sends' => $totalSends,
-            'delivered' => $delivered,
-            'opened' => $opened,
-            'clicked' => $clicked,
-            'bounced' => $bounced,
-            'conversions' => $conversions,
-            'total_revenue' => $totalRevenue,
-            'open_rate' => $delivered > 0 ? round(($opened / $delivered) * 100, 2) : 0,
-            'click_rate' => $delivered > 0 ? round(($clicked / $delivered) * 100, 2) : 0,
-            'bounce_rate' => $totalSends > 0 ? round(($bounced / $totalSends) * 100, 2) : 0,
-            'conversion_rate' => $clicked > 0 ? round(($conversions / $clicked) * 100, 2) : 0,
-        ];
+        return $this->repository->getCampaignPerformance($campaignId);
     }
 
     // =========================================================================
@@ -164,45 +67,47 @@ class CampaignApplicationService
     /**
      * Create a new campaign.
      */
-    public function createCampaign(array $data): Campaign
+    public function createCampaign(array $data): array
     {
-        return Campaign::create([
+        return $this->repository->create([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
-            'type' => $data['type'] ?? Campaign::TYPE_EMAIL,
-            'status' => Campaign::STATUS_DRAFT,
+            'type' => $data['type'] ?? 'email',
+            'status' => 'draft',
             'module_id' => $data['module_id'] ?? null,
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
             'budget' => $data['budget'] ?? null,
             'settings' => $data['settings'] ?? [],
             'goals' => $data['goals'] ?? [],
-            'created_by' => Auth::id(),
-            'owner_id' => $data['owner_id'] ?? Auth::id(),
+            'created_by' => $this->authContext->userId(),
+            'owner_id' => $data['owner_id'] ?? $this->authContext->userId(),
         ]);
     }
 
     /**
      * Update a campaign.
      */
-    public function updateCampaign(int $id, array $data): Campaign
+    public function updateCampaign(int $id, array $data): array
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = $this->repository->findById($id);
 
-        $campaign->update([
-            'name' => $data['name'] ?? $campaign->name,
-            'description' => $data['description'] ?? $campaign->description,
-            'type' => $data['type'] ?? $campaign->type,
-            'module_id' => $data['module_id'] ?? $campaign->module_id,
-            'start_date' => $data['start_date'] ?? $campaign->start_date,
-            'end_date' => $data['end_date'] ?? $campaign->end_date,
-            'budget' => $data['budget'] ?? $campaign->budget,
-            'settings' => array_merge($campaign->settings ?? [], $data['settings'] ?? []),
-            'goals' => $data['goals'] ?? $campaign->goals,
-            'owner_id' => $data['owner_id'] ?? $campaign->owner_id,
+        if (!$campaign) {
+            throw new \InvalidArgumentException('Campaign not found');
+        }
+
+        return $this->repository->update($id, [
+            'name' => $data['name'] ?? $campaign['name'],
+            'description' => $data['description'] ?? $campaign['description'],
+            'type' => $data['type'] ?? $campaign['type'],
+            'module_id' => $data['module_id'] ?? $campaign['module_id'],
+            'start_date' => $data['start_date'] ?? $campaign['start_date'],
+            'end_date' => $data['end_date'] ?? $campaign['end_date'],
+            'budget' => $data['budget'] ?? $campaign['budget'],
+            'settings' => array_merge($campaign['settings'] ?? [], $data['settings'] ?? []),
+            'goals' => $data['goals'] ?? $campaign['goals'],
+            'owner_id' => $data['owner_id'] ?? $campaign['owner_id'],
         ]);
-
-        return $campaign->fresh();
     }
 
     /**
@@ -210,61 +115,63 @@ class CampaignApplicationService
      */
     public function deleteCampaign(int $id): bool
     {
-        $campaign = Campaign::findOrFail($id);
-
-        if ($campaign->isActive()) {
+        if ($this->repository->isActive($id)) {
             throw new \InvalidArgumentException('Cannot delete an active campaign');
         }
 
-        return $campaign->delete();
+        return $this->repository->delete($id);
     }
 
     /**
      * Duplicate a campaign.
      */
-    public function duplicateCampaign(int $id): Campaign
+    public function duplicateCampaign(int $id): array
     {
-        $original = Campaign::with(['audiences', 'assets'])->findOrFail($id);
+        $original = $this->repository->findByIdWithRelations($id);
+
+        if (!$original) {
+            throw new \InvalidArgumentException('Campaign not found');
+        }
 
         return DB::transaction(function () use ($original) {
             // Create the campaign copy
-            $newCampaign = Campaign::create([
-                'name' => $original->name . ' (Copy)',
-                'description' => $original->description,
-                'type' => $original->type,
-                'status' => Campaign::STATUS_DRAFT,
-                'module_id' => $original->module_id,
-                'budget' => $original->budget,
-                'settings' => $original->settings,
-                'goals' => $original->goals,
-                'created_by' => Auth::id(),
-                'owner_id' => Auth::id(),
+            $newCampaign = $this->repository->create([
+                'name' => $original['name'] . ' (Copy)',
+                'description' => $original['description'],
+                'type' => $original['type'],
+                'status' => 'draft',
+                'module_id' => $original['module_id'],
+                'budget' => $original['budget'],
+                'settings' => $original['settings'],
+                'goals' => $original['goals'],
+                'created_by' => $this->authContext->userId(),
+                'owner_id' => $this->authContext->userId(),
             ]);
 
             // Copy audiences
-            foreach ($original->audiences as $audience) {
-                CampaignAudience::create([
-                    'campaign_id' => $newCampaign->id,
-                    'name' => $audience->name,
-                    'description' => $audience->description,
-                    'module_id' => $audience->module_id,
-                    'segment_rules' => $audience->segment_rules,
-                    'is_dynamic' => $audience->is_dynamic,
+            foreach ($original['audiences'] ?? [] as $audience) {
+                $this->repository->createAudience([
+                    'campaign_id' => $newCampaign['id'],
+                    'name' => $audience['name'],
+                    'description' => $audience['description'],
+                    'module_id' => $audience['module_id'],
+                    'segment_rules' => $audience['segment_rules'],
+                    'is_dynamic' => $audience['is_dynamic'],
                 ]);
             }
 
             // Copy assets
-            foreach ($original->assets as $asset) {
-                CampaignAsset::create([
-                    'campaign_id' => $newCampaign->id,
-                    'name' => $asset->name,
-                    'type' => $asset->type,
-                    'content' => $asset->content,
-                    'settings' => $asset->settings,
+            foreach ($original['assets'] ?? [] as $asset) {
+                $this->repository->createAsset([
+                    'campaign_id' => $newCampaign['id'],
+                    'name' => $asset['name'],
+                    'type' => $asset['type'],
+                    'content' => $asset['content'],
+                    'settings' => $asset['settings'],
                 ]);
             }
 
-            return $newCampaign->load(['audiences', 'assets']);
+            return $this->repository->findByIdWithRelations($newCampaign['id']);
         });
     }
 
@@ -275,115 +182,105 @@ class CampaignApplicationService
     /**
      * Start/activate a campaign.
      */
-    public function startCampaign(int $id): Campaign
+    public function startCampaign(int $id): array
     {
-        $campaign = Campaign::findOrFail($id);
-
-        if (!$campaign->canBeStarted()) {
+        if (!$this->repository->canBeStarted($id)) {
             throw new \InvalidArgumentException('Campaign cannot be started in its current state');
         }
 
         // Validate campaign has required components
-        if ($campaign->audiences()->count() === 0) {
+        if ($this->repository->countAudiences($id) === 0) {
             throw new \InvalidArgumentException('Campaign must have at least one audience');
         }
 
-        if ($campaign->assets()->count() === 0) {
+        if ($this->repository->countAssets($id) === 0) {
             throw new \InvalidArgumentException('Campaign must have at least one asset');
         }
 
-        $campaign->update([
-            'status' => Campaign::STATUS_ACTIVE,
-            'start_date' => $campaign->start_date ?? now(),
-        ]);
+        $campaign = $this->repository->findById($id);
 
-        return $campaign->fresh();
+        return $this->repository->update($id, [
+            'status' => 'active',
+            'start_date' => $campaign['start_date'] ?? now(),
+        ]);
     }
 
     /**
      * Pause a campaign.
      */
-    public function pauseCampaign(int $id): Campaign
+    public function pauseCampaign(int $id): array
     {
-        $campaign = Campaign::findOrFail($id);
-
-        if (!$campaign->canBePaused()) {
+        if (!$this->repository->canBePaused($id)) {
             throw new \InvalidArgumentException('Campaign cannot be paused in its current state');
         }
 
-        $campaign->update(['status' => Campaign::STATUS_PAUSED]);
-
-        return $campaign->fresh();
+        return $this->repository->update($id, ['status' => 'paused']);
     }
 
     /**
      * Resume a paused campaign.
      */
-    public function resumeCampaign(int $id): Campaign
+    public function resumeCampaign(int $id): array
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = $this->repository->findById($id);
 
-        if ($campaign->status !== Campaign::STATUS_PAUSED) {
+        if (!$campaign) {
+            throw new \InvalidArgumentException('Campaign not found');
+        }
+
+        if ($campaign['status'] !== 'paused') {
             throw new \InvalidArgumentException('Only paused campaigns can be resumed');
         }
 
-        $campaign->update(['status' => Campaign::STATUS_ACTIVE]);
-
-        return $campaign->fresh();
+        return $this->repository->update($id, ['status' => 'active']);
     }
 
     /**
      * Complete a campaign.
      */
-    public function completeCampaign(int $id): Campaign
+    public function completeCampaign(int $id): array
     {
-        $campaign = Campaign::findOrFail($id);
-
-        $campaign->update([
-            'status' => Campaign::STATUS_COMPLETED,
+        return $this->repository->update($id, [
+            'status' => 'completed',
             'end_date' => now(),
         ]);
-
-        return $campaign->fresh();
     }
 
     /**
      * Cancel a campaign.
      */
-    public function cancelCampaign(int $id): Campaign
+    public function cancelCampaign(int $id): array
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = $this->repository->findById($id);
 
-        if ($campaign->status === Campaign::STATUS_COMPLETED) {
+        if (!$campaign) {
+            throw new \InvalidArgumentException('Campaign not found');
+        }
+
+        if ($campaign['status'] === 'completed') {
             throw new \InvalidArgumentException('Cannot cancel a completed campaign');
         }
 
-        $campaign->update([
-            'status' => Campaign::STATUS_CANCELLED,
+        return $this->repository->update($id, [
+            'status' => 'cancelled',
             'end_date' => now(),
         ]);
-
-        return $campaign->fresh();
     }
 
     /**
      * Schedule a campaign.
      */
-    public function scheduleCampaign(int $id, \DateTimeInterface $startDate, ?\DateTimeInterface $endDate = null): Campaign
+    public function scheduleCampaign(int $id, \DateTimeInterface $startDate, ?\DateTimeInterface $endDate = null): array
     {
-        $campaign = Campaign::findOrFail($id);
-
-        if (!$campaign->isDraft()) {
+        if (!$this->repository->isDraft($id)) {
             throw new \InvalidArgumentException('Only draft campaigns can be scheduled');
         }
 
-        $campaign->update([
-            'status' => Campaign::STATUS_SCHEDULED,
+        return $this->repository->update($id, [
+            'status' => 'scheduled',
             'start_date' => $startDate,
             'end_date' => $endDate,
         ]);
-
-        return $campaign->fresh();
     }
 
     // =========================================================================
@@ -393,22 +290,17 @@ class CampaignApplicationService
     /**
      * List audiences for a campaign.
      */
-    public function listAudiences(int $campaignId): Collection
+    public function listAudiences(int $campaignId): array
     {
-        return CampaignAudience::where('campaign_id', $campaignId)
-            ->with('module:id,name')
-            ->orderBy('name')
-            ->get();
+        return $this->repository->findAudiences($campaignId);
     }
 
     /**
      * Create an audience for a campaign.
      */
-    public function createAudience(int $campaignId, array $data): CampaignAudience
+    public function createAudience(int $campaignId, array $data): array
     {
-        $campaign = Campaign::findOrFail($campaignId);
-
-        $audience = CampaignAudience::create([
+        $audience = $this->repository->createAudience([
             'campaign_id' => $campaignId,
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
@@ -418,32 +310,34 @@ class CampaignApplicationService
         ]);
 
         // Refresh count
-        $audience->refreshCount();
-
-        return $audience->fresh();
+        return $this->repository->refreshAudienceCount($audience['id']);
     }
 
     /**
      * Update an audience.
      */
-    public function updateAudience(int $audienceId, array $data): CampaignAudience
+    public function updateAudience(int $audienceId, array $data): array
     {
-        $audience = CampaignAudience::findOrFail($audienceId);
+        $audience = $this->repository->findAudienceById($audienceId);
 
-        $audience->update([
-            'name' => $data['name'] ?? $audience->name,
-            'description' => $data['description'] ?? $audience->description,
-            'module_id' => $data['module_id'] ?? $audience->module_id,
-            'segment_rules' => $data['segment_rules'] ?? $audience->segment_rules,
-            'is_dynamic' => $data['is_dynamic'] ?? $audience->is_dynamic,
+        if (!$audience) {
+            throw new \InvalidArgumentException('Audience not found');
+        }
+
+        $updated = $this->repository->updateAudience($audienceId, [
+            'name' => $data['name'] ?? $audience['name'],
+            'description' => $data['description'] ?? $audience['description'],
+            'module_id' => $data['module_id'] ?? $audience['module_id'],
+            'segment_rules' => $data['segment_rules'] ?? $audience['segment_rules'],
+            'is_dynamic' => $data['is_dynamic'] ?? $audience['is_dynamic'],
         ]);
 
         // Refresh count if rules changed
         if (isset($data['segment_rules'])) {
-            $audience->refreshCount();
+            return $this->repository->refreshAudienceCount($audienceId);
         }
 
-        return $audience->fresh();
+        return $updated;
     }
 
     /**
@@ -451,18 +345,15 @@ class CampaignApplicationService
      */
     public function deleteAudience(int $audienceId): bool
     {
-        $audience = CampaignAudience::findOrFail($audienceId);
-        return $audience->delete();
+        return $this->repository->deleteAudience($audienceId);
     }
 
     /**
      * Refresh audience count.
      */
-    public function refreshAudienceCount(int $audienceId): CampaignAudience
+    public function refreshAudienceCount(int $audienceId): array
     {
-        $audience = CampaignAudience::findOrFail($audienceId);
-        $audience->refreshCount();
-        return $audience->fresh();
+        return $this->repository->refreshAudienceCount($audienceId);
     }
 
     /**
@@ -470,25 +361,19 @@ class CampaignApplicationService
      */
     public function addAudienceMembers(int $audienceId, array $recordIds): int
     {
-        $audience = CampaignAudience::findOrFail($audienceId);
+        $audience = $this->repository->findAudienceById($audienceId);
 
-        if ($audience->is_dynamic) {
+        if (!$audience) {
+            throw new \InvalidArgumentException('Audience not found');
+        }
+
+        if ($audience['is_dynamic']) {
             throw new \InvalidArgumentException('Cannot manually add members to a dynamic audience');
         }
 
-        $added = 0;
-        foreach ($recordIds as $recordId) {
-            $created = CampaignAudienceMember::firstOrCreate([
-                'campaign_audience_id' => $audienceId,
-                'record_id' => $recordId,
-            ]);
+        $added = $this->repository->addAudienceMembers($audienceId, $recordIds);
 
-            if ($created->wasRecentlyCreated) {
-                $added++;
-            }
-        }
-
-        $audience->refreshCount();
+        $this->repository->refreshAudienceCount($audienceId);
 
         return $added;
     }
@@ -498,17 +383,19 @@ class CampaignApplicationService
      */
     public function removeAudienceMembers(int $audienceId, array $recordIds): int
     {
-        $audience = CampaignAudience::findOrFail($audienceId);
+        $audience = $this->repository->findAudienceById($audienceId);
 
-        if ($audience->is_dynamic) {
+        if (!$audience) {
+            throw new \InvalidArgumentException('Audience not found');
+        }
+
+        if ($audience['is_dynamic']) {
             throw new \InvalidArgumentException('Cannot manually remove members from a dynamic audience');
         }
 
-        $removed = CampaignAudienceMember::where('campaign_audience_id', $audienceId)
-            ->whereIn('record_id', $recordIds)
-            ->delete();
+        $removed = $this->repository->removeAudienceMembers($audienceId, $recordIds);
 
-        $audience->refreshCount();
+        $this->repository->refreshAudienceCount($audienceId);
 
         return $removed;
     }
@@ -520,19 +407,17 @@ class CampaignApplicationService
     /**
      * List assets for a campaign.
      */
-    public function listAssets(int $campaignId): Collection
+    public function listAssets(int $campaignId): array
     {
-        return CampaignAsset::where('campaign_id', $campaignId)
-            ->orderBy('created_at')
-            ->get();
+        return $this->repository->findAssets($campaignId);
     }
 
     /**
      * Create a campaign asset.
      */
-    public function createAsset(int $campaignId, array $data): CampaignAsset
+    public function createAsset(int $campaignId, array $data): array
     {
-        return CampaignAsset::create([
+        return $this->repository->createAsset([
             'campaign_id' => $campaignId,
             'name' => $data['name'],
             'type' => $data['type'],
@@ -544,18 +429,20 @@ class CampaignApplicationService
     /**
      * Update a campaign asset.
      */
-    public function updateAsset(int $assetId, array $data): CampaignAsset
+    public function updateAsset(int $assetId, array $data): array
     {
-        $asset = CampaignAsset::findOrFail($assetId);
+        $asset = $this->repository->findAssetById($assetId);
 
-        $asset->update([
-            'name' => $data['name'] ?? $asset->name,
-            'type' => $data['type'] ?? $asset->type,
-            'content' => $data['content'] ?? $asset->content,
-            'settings' => array_merge($asset->settings ?? [], $data['settings'] ?? []),
+        if (!$asset) {
+            throw new \InvalidArgumentException('Asset not found');
+        }
+
+        return $this->repository->updateAsset($assetId, [
+            'name' => $data['name'] ?? $asset['name'],
+            'type' => $data['type'] ?? $asset['type'],
+            'content' => $data['content'] ?? $asset['content'],
+            'settings' => array_merge($asset['settings'] ?? [], $data['settings'] ?? []),
         ]);
-
-        return $asset->fresh();
     }
 
     /**
@@ -563,8 +450,7 @@ class CampaignApplicationService
      */
     public function deleteAsset(int $assetId): bool
     {
-        $asset = CampaignAsset::findOrFail($assetId);
-        return $asset->delete();
+        return $this->repository->deleteAsset($assetId);
     }
 
     // =========================================================================
@@ -576,30 +462,26 @@ class CampaignApplicationService
      */
     public function queueSends(int $campaignId, ?\DateTimeInterface $scheduledAt = null): int
     {
-        $campaign = Campaign::with('audiences')->findOrFail($campaignId);
-
-        if (!$campaign->isActive()) {
+        if (!$this->repository->isActive($campaignId)) {
             throw new \InvalidArgumentException('Campaign must be active to queue sends');
         }
 
+        $audiences = $this->repository->findAudiences($campaignId);
+
         $queued = 0;
 
-        foreach ($campaign->audiences as $audience) {
-            $records = $audience->getMatchingRecords()->get();
+        foreach ($audiences as $audience) {
+            $records = $this->repository->getMatchingRecords($audience['id']);
 
             foreach ($records as $record) {
                 // Check if not already sent
-                $exists = CampaignSend::where('campaign_id', $campaignId)
-                    ->where('record_id', $record->id)
-                    ->exists();
-
-                if (!$exists) {
-                    CampaignSend::create([
+                if (!$this->repository->sendExists($campaignId, $record['id'])) {
+                    $this->repository->createSend([
                         'campaign_id' => $campaignId,
-                        'record_id' => $record->id,
-                        'channel' => CampaignSend::CHANNEL_EMAIL,
-                        'recipient' => $record->data['email'] ?? null,
-                        'status' => CampaignSend::STATUS_PENDING,
+                        'record_id' => $record['id'],
+                        'channel' => 'email',
+                        'recipient' => $record['data']['email'] ?? null,
+                        'status' => 'pending',
                         'scheduled_at' => $scheduledAt ?? now(),
                     ]);
                     $queued++;
@@ -613,97 +495,121 @@ class CampaignApplicationService
     /**
      * Get pending sends ready for dispatch.
      */
-    public function getPendingSends(int $limit = 100): Collection
+    public function getPendingSends(int $limit = 100): array
     {
-        return CampaignSend::pending()
-            ->scheduledBefore(now())
-            ->with(['campaign', 'record', 'asset'])
-            ->orderBy('scheduled_at')
-            ->limit($limit)
-            ->get();
+        return $this->repository->findPendingSends($limit);
     }
 
     /**
      * Mark a send as sent.
      */
-    public function markSent(int $sendId): CampaignSend
+    public function markSent(int $sendId): array
     {
-        $send = CampaignSend::findOrFail($sendId);
-        $send->markSent();
+        $send = $this->repository->updateSend($sendId, [
+            'status' => 'sent',
+            'sent_at' => now(),
+        ]);
 
         // Update daily metrics
-        $this->incrementDailyMetric($send->campaign_id, 'sends');
+        $this->incrementDailyMetric($send['campaign_id'], 'sends');
 
-        return $send->fresh();
+        return $send;
     }
 
     /**
      * Mark a send as delivered.
      */
-    public function markDelivered(int $sendId): CampaignSend
+    public function markDelivered(int $sendId): array
     {
-        $send = CampaignSend::findOrFail($sendId);
-        $send->markDelivered();
+        $send = $this->repository->updateSend($sendId, [
+            'status' => 'delivered',
+            'delivered_at' => now(),
+        ]);
 
-        $this->incrementDailyMetric($send->campaign_id, 'delivered');
+        $this->incrementDailyMetric($send['campaign_id'], 'delivered');
 
-        return $send->fresh();
+        return $send;
     }
 
     /**
      * Track an email open.
      */
-    public function trackOpen(int $sendId): CampaignSend
+    public function trackOpen(int $sendId): array
     {
-        $send = CampaignSend::findOrFail($sendId);
-        $wasFirstOpen = $send->opened_at === null;
+        $send = $this->repository->findSendById($sendId);
 
-        $send->markOpened();
-
-        $this->incrementDailyMetric($send->campaign_id, 'opens');
-        if ($wasFirstOpen) {
-            $this->incrementDailyMetric($send->campaign_id, 'unique_opens');
+        if (!$send) {
+            throw new \InvalidArgumentException('Send not found');
         }
 
-        return $send->fresh();
+        $wasFirstOpen = $send['opened_at'] === null;
+
+        $updated = $this->repository->updateSend($sendId, [
+            'status' => 'opened',
+            'opened_at' => $send['opened_at'] ?? now(),
+        ]);
+
+        $this->incrementDailyMetric($send['campaign_id'], 'opens');
+        if ($wasFirstOpen) {
+            $this->incrementDailyMetric($send['campaign_id'], 'unique_opens');
+        }
+
+        return $updated;
     }
 
     /**
      * Track a click.
      */
-    public function trackClick(int $sendId, string $url): CampaignSend
+    public function trackClick(int $sendId, string $url): array
     {
-        $send = CampaignSend::findOrFail($sendId);
-        $wasFirstClick = $send->clicked_at === null;
+        $send = $this->repository->findSendById($sendId);
 
-        $send->markClicked();
+        if (!$send) {
+            throw new \InvalidArgumentException('Send not found');
+        }
+
+        $wasFirstClick = $send['clicked_at'] === null;
+
+        // Mark as opened if not already
+        if (!$send['opened_at']) {
+            $send = $this->repository->updateSend($sendId, [
+                'opened_at' => now(),
+            ]);
+        }
+
+        $updated = $this->repository->updateSend($sendId, [
+            'status' => 'clicked',
+            'clicked_at' => $send['clicked_at'] ?? now(),
+        ]);
 
         // Log the click
-        CampaignClick::create([
+        $this->repository->createClick([
             'campaign_send_id' => $sendId,
             'url' => $url,
             'clicked_at' => now(),
         ]);
 
-        $this->incrementDailyMetric($send->campaign_id, 'clicks');
+        $this->incrementDailyMetric($send['campaign_id'], 'clicks');
         if ($wasFirstClick) {
-            $this->incrementDailyMetric($send->campaign_id, 'unique_clicks');
+            $this->incrementDailyMetric($send['campaign_id'], 'unique_clicks');
         }
 
-        return $send->fresh();
+        return $updated;
     }
 
     /**
      * Mark a send as bounced.
      */
-    public function markBounced(int $sendId, string $reason = null): CampaignSend
+    public function markBounced(int $sendId, string $reason = null): array
     {
-        $send = CampaignSend::findOrFail($sendId);
-        $send->markBounced($reason);
+        $send = $this->repository->updateSend($sendId, [
+            'status' => 'bounced',
+            'error_message' => $reason,
+        ]);
 
-        $this->incrementDailyMetric($send->campaign_id, 'bounces');
+        $this->incrementDailyMetric($send['campaign_id'], 'bounces');
 
-        return $send->fresh();
+        return $send;
     }
 
     /**
@@ -711,24 +617,28 @@ class CampaignApplicationService
      */
     public function trackUnsubscribe(int $sendId, ?string $reason = null): void
     {
-        $send = CampaignSend::findOrFail($sendId);
+        $send = $this->repository->findSendById($sendId);
 
-        CampaignUnsubscribe::create([
-            'campaign_id' => $send->campaign_id,
-            'record_id' => $send->record_id,
-            'email' => $send->recipient,
+        if (!$send) {
+            throw new \InvalidArgumentException('Send not found');
+        }
+
+        $this->repository->createUnsubscribe([
+            'campaign_id' => $send['campaign_id'],
+            'record_id' => $send['record_id'],
+            'email' => $send['recipient'],
             'reason' => $reason,
         ]);
 
-        $this->incrementDailyMetric($send->campaign_id, 'unsubscribes');
+        $this->incrementDailyMetric($send['campaign_id'], 'unsubscribes');
     }
 
     /**
      * Track a conversion.
      */
-    public function trackConversion(int $campaignId, int $recordId, string $type, float $revenue = 0, ?array $metadata = null): CampaignConversion
+    public function trackConversion(int $campaignId, int $recordId, string $type, float $revenue = 0, ?array $metadata = null): array
     {
-        $conversion = CampaignConversion::create([
+        $conversion = $this->repository->createConversion([
             'campaign_id' => $campaignId,
             'record_id' => $recordId,
             'type' => $type,
@@ -739,11 +649,11 @@ class CampaignApplicationService
         $this->incrementDailyMetric($campaignId, 'conversions');
 
         if ($revenue > 0) {
-            $metric = CampaignMetric::getOrCreateForDate($campaignId, now()->toDateString());
-            $metric->addRevenue($revenue);
+            $metric = $this->repository->getOrCreateMetricForDate($campaignId, now()->toDateString());
+            $this->repository->addRevenue($metric['id'], $revenue);
 
             // Update campaign spent
-            Campaign::where('id', $campaignId)->increment('spent', $revenue);
+            $this->repository->incrementCampaignSpent($campaignId, $revenue);
         }
 
         return $conversion;
@@ -758,30 +668,25 @@ class CampaignApplicationService
      */
     public function getAnalytics(int $campaignId, ?string $fromDate = null, ?string $toDate = null): array
     {
-        $campaign = Campaign::findOrFail($campaignId);
+        $campaign = $this->repository->findById($campaignId);
 
-        $query = CampaignMetric::where('campaign_id', $campaignId);
-
-        if ($fromDate) {
-            $query->where('date', '>=', $fromDate);
-        }
-        if ($toDate) {
-            $query->where('date', '<=', $toDate);
+        if (!$campaign) {
+            throw new \InvalidArgumentException('Campaign not found');
         }
 
-        $metrics = $query->orderBy('date')->get();
+        $metrics = $this->repository->findMetrics($campaignId, $fromDate, $toDate);
 
         $totals = [
-            'sends' => $metrics->sum('sends'),
-            'delivered' => $metrics->sum('delivered'),
-            'opens' => $metrics->sum('opens'),
-            'unique_opens' => $metrics->sum('unique_opens'),
-            'clicks' => $metrics->sum('clicks'),
-            'unique_clicks' => $metrics->sum('unique_clicks'),
-            'bounces' => $metrics->sum('bounces'),
-            'unsubscribes' => $metrics->sum('unsubscribes'),
-            'conversions' => $metrics->sum('conversions'),
-            'revenue' => $metrics->sum('revenue'),
+            'sends' => array_sum(array_column($metrics, 'sends')),
+            'delivered' => array_sum(array_column($metrics, 'delivered')),
+            'opens' => array_sum(array_column($metrics, 'opens')),
+            'unique_opens' => array_sum(array_column($metrics, 'unique_opens')),
+            'clicks' => array_sum(array_column($metrics, 'clicks')),
+            'unique_clicks' => array_sum(array_column($metrics, 'unique_clicks')),
+            'bounces' => array_sum(array_column($metrics, 'bounces')),
+            'unsubscribes' => array_sum(array_column($metrics, 'unsubscribes')),
+            'conversions' => array_sum(array_column($metrics, 'conversions')),
+            'revenue' => array_sum(array_column($metrics, 'revenue')),
         ];
 
         $totals['open_rate'] = $totals['delivered'] > 0 ? round(($totals['unique_opens'] / $totals['delivered']) * 100, 2) : 0;
@@ -793,9 +698,9 @@ class CampaignApplicationService
             'campaign' => $campaign,
             'totals' => $totals,
             'daily_metrics' => $metrics,
-            'budget' => $campaign->budget,
-            'spent' => $campaign->spent,
-            'roi' => $campaign->spent > 0 ? round((($totals['revenue'] - $campaign->spent) / $campaign->spent) * 100, 2) : 0,
+            'budget' => $campaign['budget'],
+            'spent' => $campaign['spent'],
+            'roi' => $campaign['spent'] > 0 ? round((($totals['revenue'] - $campaign['spent']) / $campaign['spent']) * 100, 2) : 0,
         ];
     }
 
@@ -804,38 +709,7 @@ class CampaignApplicationService
      */
     public function getAggregateAnalytics(array $filters = []): array
     {
-        $query = Campaign::query();
-
-        if (!empty($filters['type'])) {
-            $query->byType($filters['type']);
-        }
-
-        if (!empty($filters['from_date'])) {
-            $query->where('start_date', '>=', $filters['from_date']);
-        }
-
-        if (!empty($filters['to_date'])) {
-            $query->where('end_date', '<=', $filters['to_date']);
-        }
-
-        $campaignIds = $query->pluck('id');
-
-        $metricsQuery = CampaignMetric::whereIn('campaign_id', $campaignIds);
-
-        return [
-            'total_campaigns' => $campaignIds->count(),
-            'total_sends' => $metricsQuery->sum('sends'),
-            'total_delivered' => (clone $metricsQuery)->sum('delivered'),
-            'total_opens' => (clone $metricsQuery)->sum('unique_opens'),
-            'total_clicks' => (clone $metricsQuery)->sum('unique_clicks'),
-            'total_conversions' => (clone $metricsQuery)->sum('conversions'),
-            'total_revenue' => (clone $metricsQuery)->sum('revenue'),
-            'by_type' => $query->selectRaw('type, COUNT(*) as count')->groupBy('type')->pluck('count', 'type'),
-            'by_status' => Campaign::whereIn('id', $campaignIds)
-                ->selectRaw('status, COUNT(*) as count')
-                ->groupBy('status')
-                ->pluck('count', 'status'),
-        ];
+        return $this->repository->getAggregateAnalytics($filters);
     }
 
     // =========================================================================
@@ -847,7 +721,7 @@ class CampaignApplicationService
      */
     private function incrementDailyMetric(int $campaignId, string $metric, int $amount = 1): void
     {
-        $dailyMetric = CampaignMetric::getOrCreateForDate($campaignId, now()->toDateString());
-        $dailyMetric->incrementMetric($metric, $amount);
+        $dailyMetric = $this->repository->getOrCreateMetricForDate($campaignId, now()->toDateString());
+        $this->repository->incrementMetric($dailyMetric['id'], $metric, $amount);
     }
 }

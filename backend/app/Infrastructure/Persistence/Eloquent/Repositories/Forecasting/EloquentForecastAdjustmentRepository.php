@@ -9,82 +9,95 @@ use App\Domain\Forecasting\Repositories\ForecastAdjustmentRepositoryInterface;
 use App\Domain\Forecasting\ValueObjects\AdjustmentType;
 use App\Domain\Shared\ValueObjects\Timestamp;
 use App\Domain\Shared\ValueObjects\UserId;
-use App\Models\ForecastAdjustment as ForecastAdjustmentModel;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class EloquentForecastAdjustmentRepository implements ForecastAdjustmentRepositoryInterface
 {
+    private const TABLE = 'forecast_adjustments';
+
     public function findById(int $id): ?ForecastAdjustment
     {
-        $model = ForecastAdjustmentModel::find($id);
-        return $model ? $this->toDomainEntity($model) : null;
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
+
+        return $row ? $this->toDomainEntity($row) : null;
     }
 
     public function findByRecord(int $moduleRecordId): array
     {
-        $models = ForecastAdjustmentModel::where('module_record_id', $moduleRecordId)
-            ->orderBy('created_at', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('module_record_id', $moduleRecordId)
+            ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findByRecordAndType(
         int $moduleRecordId,
         AdjustmentType $type
     ): array {
-        $models = ForecastAdjustmentModel::where('module_record_id', $moduleRecordId)
+        $rows = DB::table(self::TABLE)
+            ->where('module_record_id', $moduleRecordId)
             ->where('adjustment_type', $type->value)
-            ->orderBy('created_at', 'desc')
+            ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findByUser(int $userId): array
     {
-        $models = ForecastAdjustmentModel::where('user_id', $userId)
-            ->orderBy('created_at', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('user_id', $userId)
+            ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function save(ForecastAdjustment $adjustment): ForecastAdjustment
     {
-        $data = $this->toModelData($adjustment);
+        $data = $this->toRowData($adjustment);
 
         if ($adjustment->getId() !== null) {
-            $model = ForecastAdjustmentModel::findOrFail($adjustment->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $adjustment->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $adjustment->getId();
         } else {
-            $model = ForecastAdjustmentModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomainEntity($model->fresh());
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        $model = ForecastAdjustmentModel::find($id);
-        return $model ? ($model->delete() ?? false) : false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
-    private function toDomainEntity(ForecastAdjustmentModel $model): ForecastAdjustment
+    private function toDomainEntity(stdClass $row): ForecastAdjustment
     {
         return ForecastAdjustment::reconstitute(
-            id: $model->id,
-            userId: UserId::fromInt($model->user_id),
-            moduleRecordId: $model->module_record_id,
-            adjustmentType: AdjustmentType::from($model->adjustment_type),
-            oldValue: $model->old_value,
-            newValue: $model->new_value,
-            reason: $model->reason,
-            createdAt: $model->created_at ? Timestamp::fromDateTime($model->created_at) : null,
-            updatedAt: $model->updated_at ? Timestamp::fromDateTime($model->updated_at) : null,
+            id: (int) $row->id,
+            userId: UserId::fromInt((int) $row->user_id),
+            moduleRecordId: (int) $row->module_record_id,
+            adjustmentType: AdjustmentType::from($row->adjustment_type),
+            oldValue: $row->old_value !== null ? (float) $row->old_value : null,
+            newValue: $row->new_value !== null ? (float) $row->new_value : null,
+            reason: $row->reason,
+            createdAt: $row->created_at ? Timestamp::fromString($row->created_at) : null,
+            updatedAt: $row->updated_at ? Timestamp::fromString($row->updated_at) : null,
         );
     }
 
-    private function toModelData(ForecastAdjustment $adjustment): array
+    private function toRowData(ForecastAdjustment $adjustment): array
     {
         return [
             'user_id' => $adjustment->userId()->value(),

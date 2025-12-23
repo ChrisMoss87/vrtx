@@ -178,7 +178,13 @@
       "Bash(__NEW_LINE__ echo -e \"\\n\\n=== Update Schedule ===\")",
       "Bash(__NEW_LINE__ echo -e \"\\n\\n=== Verify Schedule ===\")",
       "Bash(__NEW_LINE__ echo \"=== Update Preferences (correct format) ===\")",
-      "Bash(__NEW_LINE__ echo -e \"\\n\\n=== Verify Preferences ===\")"
+      "Bash(__NEW_LINE__ echo -e \"\\n\\n=== Verify Preferences ===\")",
+      "Bash(timeout 90 pnpm exec svelte-check:*)",
+      "Bash(do php -l \"$f\")",
+      "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Domain/Call/Repositories/CallRepositoryInterface.php\" )",
+      "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Infrastructure/Persistence/Eloquent/Repositories/Call/EloquentCallRepository.php\" )",
+      "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Domain/Campaign/Repositories/CampaignRepositoryInterface.php\" )",
+      "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Infrastructure/Persistence/Eloquent/Repositories/Campaign/EloquentCampaignRepository.php\")"
     ],
     "deny": [],
     "ask": []

@@ -119,6 +119,55 @@ class Report extends Model
     }
 
     /**
+     * Get the shares for this report.
+     */
+    public function shares(): HasMany
+    {
+        return $this->hasMany(ReportShare::class);
+    }
+
+    /**
+     * Get the users this report is shared with directly.
+     */
+    public function sharedWithUsers()
+    {
+        return $this->belongsToMany(User::class, 'report_shares')
+            ->withPivot(['permission', 'shared_by', 'created_at'])
+            ->wherePivotNull('team_id');
+    }
+
+    /**
+     * Get the teams this report is shared with.
+     */
+    public function sharedWithTeams()
+    {
+        return $this->belongsToMany(Team::class, 'report_shares')
+            ->withPivot(['permission', 'shared_by', 'created_at'])
+            ->wherePivotNull('user_id');
+    }
+
+    /**
+     * Check if a user has access to this report via sharing.
+     */
+    public function isSharedWith(int $userId): bool
+    {
+        return $this->shares()
+            ->forUser($userId)
+            ->exists();
+    }
+
+    /**
+     * Check if a user can edit this report via sharing.
+     */
+    public function canUserEdit(int $userId): bool
+    {
+        return $this->shares()
+            ->forUser($userId)
+            ->where('permission', 'edit')
+            ->exists();
+    }
+
+    /**
      * Scope to public reports.
      */
     public function scopePublic($query)
@@ -135,13 +184,16 @@ class Report extends Model
     }
 
     /**
-     * Scope to reports accessible by a user.
+     * Scope to reports accessible by a user (owner, public, or shared).
      */
     public function scopeAccessibleBy($query, int $userId)
     {
         return $query->where(function ($q) use ($userId) {
             $q->where('user_id', $userId)
-              ->orWhere('is_public', true);
+              ->orWhere('is_public', true)
+              ->orWhereHas('shares', function ($shareQuery) use ($userId) {
+                  $shareQuery->forUser($userId);
+              });
         });
     }
 

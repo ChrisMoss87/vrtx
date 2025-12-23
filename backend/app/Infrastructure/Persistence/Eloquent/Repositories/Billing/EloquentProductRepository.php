@@ -7,102 +7,110 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories\Billing;
 use App\Domain\Billing\Entities\Product;
 use App\Domain\Billing\Repositories\ProductRepositoryInterface;
 use App\Domain\Billing\ValueObjects\Money;
-use App\Models\Product as ProductModel;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 /**
- * Eloquent implementation of the ProductRepository.
+ * Query Builder implementation of the ProductRepository.
  */
 class EloquentProductRepository implements ProductRepositoryInterface
 {
+    private const TABLE = 'products';
+
     public function findById(int $id): ?Product
     {
-        $model = ProductModel::find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findBySku(string $sku): ?Product
     {
-        $model = ProductModel::where('sku', $sku)->first();
+        $row = DB::table(self::TABLE)->where('sku', $sku)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findAll(): array
     {
-        $models = ProductModel::orderBy('name')->get();
+        $rows = DB::table(self::TABLE)->orderBy('name')->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findActive(): array
     {
-        $models = ProductModel::where('is_active', true)
+        $rows = DB::table(self::TABLE)
+            ->where('is_active', true)
             ->orderBy('name')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findByCategoryId(int $categoryId): array
     {
-        $models = ProductModel::where('category_id', $categoryId)
+        $rows = DB::table(self::TABLE)
+            ->where('category_id', $categoryId)
             ->orderBy('name')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function search(string $query): array
     {
-        $models = ProductModel::where(function ($q) use ($query) {
-            $q->where('name', 'ilike', "%{$query}%")
-                ->orWhere('sku', 'ilike', "%{$query}%")
-                ->orWhere('description', 'ilike', "%{$query}%");
-        })
+        $rows = DB::table(self::TABLE)
+            ->where(function ($q) use ($query) {
+                $q->where('name', 'ilike', "%{$query}%")
+                    ->orWhere('sku', 'ilike', "%{$query}%")
+                    ->orWhere('description', 'ilike', "%{$query}%");
+            })
             ->orderBy('name')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function save(Product $product): Product
     {
-        $data = $this->toModelData($product);
+        $data = $this->toRowData($product);
 
         if ($product->getId() !== null) {
-            $model = ProductModel::findOrFail($product->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $product->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $product->getId();
         } else {
-            $model = ProductModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomainEntity($model->fresh());
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        $model = ProductModel::find($id);
-
-        if (!$model) {
-            return false;
-        }
-
-        return $model->delete() ?? false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
     public function skuExists(string $sku, ?int $excludeId = null): bool
     {
-        $query = ProductModel::where('sku', $sku);
+        $query = DB::table(self::TABLE)->where('sku', $sku);
 
         if ($excludeId !== null) {
             $query->where('id', '!=', $excludeId);
@@ -111,40 +119,118 @@ class EloquentProductRepository implements ProductRepositoryInterface
         return $query->exists();
     }
 
-    /**
-     * Convert an Eloquent model to a domain entity.
-     */
-    private function toDomainEntity(ProductModel $model): Product
+    public function searchPaginated(
+        array $filters = [],
+        array $orderBy = ['name' => 'asc'],
+        int $page = 1,
+        int $perPage = 25
+    ): PaginatedResult {
+        $query = DB::table(self::TABLE);
+
+        // Apply filters
+        if (!empty($filters['is_active'])) {
+            $query->where('is_active', $filters['is_active']);
+        }
+
+        if (!empty($filters['category_id'])) {
+            $query->where('category_id', $filters['category_id']);
+        }
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'ilike', "%{$search}%")
+                    ->orWhere('sku', 'ilike', "%{$search}%")
+                    ->orWhere('description', 'ilike', "%{$search}%");
+            });
+        }
+
+        // Apply ordering
+        foreach ($orderBy as $field => $direction) {
+            $query->orderBy($field, $direction);
+        }
+
+        $total = $query->count();
+
+        $rows = $query
+            ->offset(($page - 1) * $perPage)
+            ->limit($perPage)
+            ->get();
+
+        $items = $rows->map(fn($row) => $this->toDomainEntity($row))->all();
+
+        return PaginatedResult::create(
+            items: $items,
+            total: $total,
+            perPage: $perPage,
+            currentPage: $page
+        );
+    }
+
+    public function getAllAsArray(): array
     {
-        $currency = $model->currency ?? 'USD';
+        $rows = DB::table(self::TABLE)->orderBy('name')->get();
+
+        return $rows->map(fn($row) => $this->rowToArray($row))->all();
+    }
+
+    public function getByFiltersAsArray(array $filters): array
+    {
+        $query = DB::table(self::TABLE);
+
+        // Apply filters
+        if (!empty($filters['is_active'])) {
+            $query->where('is_active', $filters['is_active']);
+        }
+
+        if (!empty($filters['category_id'])) {
+            $query->where('category_id', $filters['category_id']);
+        }
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'ilike', "%{$search}%")
+                    ->orWhere('sku', 'ilike', "%{$search}%")
+                    ->orWhere('description', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $query->orderBy('name')->get();
+
+        return $rows->map(fn($row) => $this->rowToArray($row))->all();
+    }
+
+    /**
+     * Convert a database row to a domain entity.
+     */
+    private function toDomainEntity(stdClass $row): Product
+    {
+        $currency = $row->currency ?? 'USD';
 
         return Product::reconstitute(
-            id: $model->id,
-            name: $model->name,
-            sku: $model->sku,
-            description: $model->description,
-            unitPrice: new Money((float) $model->unit_price, $currency),
+            id: (int) $row->id,
+            name: $row->name,
+            sku: $row->sku,
+            description: $row->description,
+            unitPrice: new Money((float) $row->unit_price, $currency),
             currency: $currency,
-            taxRate: (float) $model->tax_rate,
-            isActive: (bool) $model->is_active,
-            categoryId: $model->category_id,
-            unit: $model->unit ?? 'unit',
-            settings: $model->settings ?? [],
-            createdAt: $model->created_at
-                ? new DateTimeImmutable($model->created_at->format('Y-m-d H:i:s'))
-                : null,
-            updatedAt: $model->updated_at
-                ? new DateTimeImmutable($model->updated_at->format('Y-m-d H:i:s'))
-                : null,
+            taxRate: (float) ($row->tax_rate ?? 0),
+            isActive: (bool) $row->is_active,
+            categoryId: $row->category_id ? (int) $row->category_id : null,
+            unit: $row->unit ?? 'unit',
+            settings: $row->settings ? (is_string($row->settings) ? json_decode($row->settings, true) : $row->settings) : [],
+            createdAt: $row->created_at ? new DateTimeImmutable($row->created_at) : null,
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
         );
     }
 
     /**
-     * Convert a domain entity to model data.
+     * Convert a domain entity to row data.
      *
      * @return array<string, mixed>
      */
-    private function toModelData(Product $product): array
+    private function toRowData(Product $product): array
     {
         return [
             'name' => $product->getName(),
@@ -156,7 +242,31 @@ class EloquentProductRepository implements ProductRepositoryInterface
             'is_active' => $product->isActive(),
             'category_id' => $product->getCategoryId(),
             'unit' => $product->getUnit(),
-            'settings' => $product->getSettings(),
+            'settings' => json_encode($product->getSettings()),
+        ];
+    }
+
+    /**
+     * Convert a database row to array.
+     *
+     * @return array<string, mixed>
+     */
+    private function rowToArray(stdClass $row): array
+    {
+        return [
+            'id' => $row->id,
+            'name' => $row->name,
+            'sku' => $row->sku,
+            'description' => $row->description,
+            'unit_price' => (float) $row->unit_price,
+            'currency' => $row->currency,
+            'tax_rate' => (float) ($row->tax_rate ?? 0),
+            'is_active' => (bool) $row->is_active,
+            'category_id' => $row->category_id,
+            'unit' => $row->unit,
+            'settings' => $row->settings ? (is_string($row->settings) ? json_decode($row->settings, true) : $row->settings) : [],
+            'created_at' => $row->created_at,
+            'updated_at' => $row->updated_at,
         ];
     }
 }

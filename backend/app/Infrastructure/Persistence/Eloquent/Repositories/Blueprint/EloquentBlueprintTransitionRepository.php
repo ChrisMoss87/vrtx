@@ -6,36 +6,42 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories\Blueprint;
 
 use App\Domain\Blueprint\Entities\BlueprintTransition;
 use App\Domain\Blueprint\Repositories\BlueprintTransitionRepositoryInterface;
-use App\Models\BlueprintTransition as BlueprintTransitionModel;
+use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class EloquentBlueprintTransitionRepository implements BlueprintTransitionRepositoryInterface
 {
+    private const TABLE = 'blueprint_transitions';
+    private const TABLE_CONDITIONS = 'blueprint_transition_conditions';
+    private const TABLE_REQUIREMENTS = 'blueprint_transition_requirements';
+    private const TABLE_ACTIONS = 'blueprint_transition_actions';
+    private const TABLE_APPROVALS = 'blueprint_transition_approvals';
+
     public function findById(int $id): ?BlueprintTransition
     {
-        $model = BlueprintTransitionModel::with(['conditions', 'requirements', 'actions', 'approval'])
-            ->find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toEntity($model);
+        return $this->toDomainEntityWithRelations($row);
     }
 
     public function findByBlueprintId(int $blueprintId): array
     {
-        $models = BlueprintTransitionModel::with(['conditions', 'requirements', 'actions', 'approval'])
+        $rows = DB::table(self::TABLE)
             ->where('blueprint_id', $blueprintId)
             ->orderBy('display_order')
             ->get();
 
-        return $models->map(fn($m) => $this->toEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findFromState(int $blueprintId, ?int $fromStateId): array
     {
-        $query = BlueprintTransitionModel::with(['conditions', 'requirements', 'actions', 'approval'])
-            ->where('blueprint_id', $blueprintId);
+        $query = DB::table(self::TABLE)->where('blueprint_id', $blueprintId);
 
         if ($fromStateId === null) {
             $query->whereNull('from_state_id');
@@ -43,14 +49,14 @@ class EloquentBlueprintTransitionRepository implements BlueprintTransitionReposi
             $query->where('from_state_id', $fromStateId);
         }
 
-        $models = $query->orderBy('display_order')->get();
+        $rows = $query->orderBy('display_order')->get();
 
-        return $models->map(fn($m) => $this->toEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findActiveFromState(int $blueprintId, ?int $fromStateId): array
     {
-        $query = BlueprintTransitionModel::with(['conditions', 'requirements', 'actions', 'approval'])
+        $query = DB::table(self::TABLE)
             ->where('blueprint_id', $blueprintId)
             ->where('is_active', true);
 
@@ -60,18 +66,113 @@ class EloquentBlueprintTransitionRepository implements BlueprintTransitionReposi
             $query->where('from_state_id', $fromStateId);
         }
 
-        $models = $query->orderBy('display_order')->get();
+        $rows = $query->orderBy('display_order')->get();
 
-        return $models->map(fn($m) => $this->toEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function save(BlueprintTransition $transition): BlueprintTransition
     {
-        $model = $transition->getId()
-            ? BlueprintTransitionModel::find($transition->getId())
-            : new BlueprintTransitionModel();
+        $data = $this->toRowData($transition);
 
-        $model->fill([
+        if ($transition->getId() !== null) {
+            DB::table(self::TABLE)
+                ->where('id', $transition->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $transition->getId();
+        } else {
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
+        }
+
+        return $this->findById($id);
+    }
+
+    public function delete(int $id): bool
+    {
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
+    }
+
+    public function deleteByBlueprintId(int $blueprintId): int
+    {
+        return DB::table(self::TABLE)->where('blueprint_id', $blueprintId)->delete();
+    }
+
+    private function toDomainEntityWithRelations(stdClass $row): BlueprintTransition
+    {
+        $transition = BlueprintTransition::reconstitute(
+            id: (int) $row->id,
+            blueprintId: (int) $row->blueprint_id,
+            fromStateId: $row->from_state_id ? (int) $row->from_state_id : null,
+            toStateId: $row->to_state_id ? (int) $row->to_state_id : null,
+            name: $row->name,
+            description: $row->description,
+            buttonLabel: $row->button_label,
+            displayOrder: (int) ($row->display_order ?? 0),
+            isActive: (bool) ($row->is_active ?? true),
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
+        );
+
+        // Load conditions
+        $conditions = DB::table(self::TABLE_CONDITIONS)
+            ->where('transition_id', $row->id)
+            ->get()
+            ->map(fn($c) => [
+                'field_id' => $c->field_id,
+                'operator' => $c->operator,
+                'value' => $c->value,
+            ])
+            ->all();
+        $transition->setConditions($conditions);
+
+        // Load requirements
+        $requirements = DB::table(self::TABLE_REQUIREMENTS)
+            ->where('transition_id', $row->id)
+            ->get()
+            ->map(fn($r) => [
+                'type' => $r->type,
+                'field_id' => $r->field_id,
+                'is_required' => (bool) $r->is_required,
+                'config' => $r->config ? (is_string($r->config) ? json_decode($r->config, true) : $r->config) : [],
+            ])
+            ->all();
+        $transition->setRequirements($requirements);
+
+        // Load actions
+        $actions = DB::table(self::TABLE_ACTIONS)
+            ->where('transition_id', $row->id)
+            ->get()
+            ->map(fn($a) => [
+                'type' => $a->action_type,
+                'config' => $a->action_config ? (is_string($a->action_config) ? json_decode($a->action_config, true) : $a->action_config) : [],
+            ])
+            ->all();
+        $transition->setActions($actions);
+
+        // Load approval config
+        $approval = DB::table(self::TABLE_APPROVALS)
+            ->where('transition_id', $row->id)
+            ->first();
+
+        if ($approval) {
+            $transition->setApprovalConfig([
+                'type' => $approval->approval_type,
+                'approvers' => $approval->approvers ? (is_string($approval->approvers) ? json_decode($approval->approvers, true) : $approval->approvers) : [],
+                'config' => $approval->config ? (is_string($approval->config) ? json_decode($approval->config, true) : $approval->config) : [],
+            ]);
+        }
+
+        return $transition;
+    }
+
+    private function toRowData(BlueprintTransition $transition): array
+    {
+        return [
             'blueprint_id' => $transition->getBlueprintId(),
             'from_state_id' => $transition->getFromStateId(),
             'to_state_id' => $transition->getToStateId(),
@@ -80,81 +181,6 @@ class EloquentBlueprintTransitionRepository implements BlueprintTransitionReposi
             'button_label' => $transition->getButtonLabel(),
             'display_order' => $transition->getDisplayOrder(),
             'is_active' => $transition->isActive(),
-        ]);
-
-        $model->save();
-
-        // Reload with relationships
-        $model->load(['conditions', 'requirements', 'actions', 'approval']);
-
-        return $this->toEntity($model);
-    }
-
-    public function delete(int $id): bool
-    {
-        return BlueprintTransitionModel::destroy($id) > 0;
-    }
-
-    public function deleteByBlueprintId(int $blueprintId): int
-    {
-        return BlueprintTransitionModel::where('blueprint_id', $blueprintId)->delete();
-    }
-
-    private function toEntity(BlueprintTransitionModel $model): BlueprintTransition
-    {
-        $transition = BlueprintTransition::reconstitute(
-            id: $model->id,
-            blueprintId: $model->blueprint_id,
-            fromStateId: $model->from_state_id,
-            toStateId: $model->to_state_id,
-            name: $model->name,
-            description: $model->description,
-            buttonLabel: $model->button_label,
-            displayOrder: $model->display_order ?? 0,
-            isActive: $model->is_active ?? true,
-            createdAt: new \DateTimeImmutable($model->created_at),
-            updatedAt: $model->updated_at ? new \DateTimeImmutable($model->updated_at) : null,
-        );
-
-        // Load conditions from relationship if exists
-        if ($model->relationLoaded('conditions')) {
-            $conditions = $model->conditions->map(fn($c) => [
-                'field_id' => $c->field_id,
-                'operator' => $c->operator,
-                'value' => $c->value,
-            ])->all();
-            $transition->setConditions($conditions);
-        }
-
-        // Load requirements from relationship if exists
-        if ($model->relationLoaded('requirements')) {
-            $requirements = $model->requirements->map(fn($r) => [
-                'type' => $r->type,
-                'field_id' => $r->field_id,
-                'is_required' => $r->is_required,
-                'config' => $r->config,
-            ])->all();
-            $transition->setRequirements($requirements);
-        }
-
-        // Load actions from relationship if exists
-        if ($model->relationLoaded('actions')) {
-            $actions = $model->actions->map(fn($a) => [
-                'type' => $a->action_type,
-                'config' => $a->action_config,
-            ])->all();
-            $transition->setActions($actions);
-        }
-
-        // Load approval config if exists
-        if ($model->relationLoaded('approval') && $model->approval) {
-            $transition->setApprovalConfig([
-                'type' => $model->approval->approval_type,
-                'approvers' => $model->approval->approvers,
-                'config' => $model->approval->config,
-            ]);
-        }
-
-        return $transition;
+        ];
     }
 }

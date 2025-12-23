@@ -7,26 +7,35 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 use App\Domain\Modules\Entities\Block as BlockEntity;
 use App\Domain\Modules\Repositories\BlockRepositoryInterface;
 use App\Domain\Modules\ValueObjects\BlockType;
-use App\Models\Block;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 final class EloquentBlockRepository implements BlockRepositoryInterface
 {
+    private const TABLE = 'blocks';
+    private const TABLE_FIELDS = 'fields';
+    private const TABLE_FIELD_OPTIONS = 'field_options';
+
     public function findById(int $id): ?BlockEntity
     {
-        $model = Block::with(['fields.options'])->find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        return $model ? $this->toDomain($model) : null;
+        if (!$row) {
+            return null;
+        }
+
+        return $this->toDomainEntityWithFields($row);
     }
 
     public function findByModuleId(int $moduleId): array
     {
-        $models = Block::where('module_id', $moduleId)
-            ->with(['fields.options'])
+        $rows = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
             ->orderBy('display_order')
             ->get();
 
-        return array_map(fn (Block $model) => $this->toDomain($model), $models->all());
+        return $rows->map(fn ($row) => $this->toDomainEntityWithFields($row))->all();
     }
 
     public function save(BlockEntity $block): BlockEntity
@@ -36,44 +45,76 @@ final class EloquentBlockRepository implements BlockRepositoryInterface
             'name' => $block->name(),
             'type' => $block->type()->value,
             'display_order' => $block->displayOrder(),
-            'settings' => $block->settings(),
+            'settings' => json_encode($block->settings()),
         ];
 
         if ($block->id()) {
-            $model = Block::findOrFail($block->id());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $block->id())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $block->id();
         } else {
-            $model = Block::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomain($model->fresh(['fields.options']));
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        return Block::destroy($id) > 0;
+        // Get all field IDs for this block
+        $fieldIds = DB::table(self::TABLE_FIELDS)
+            ->where('block_id', $id)
+            ->pluck('id')
+            ->all();
+
+        // Delete field options
+        if (!empty($fieldIds)) {
+            DB::table(self::TABLE_FIELD_OPTIONS)->whereIn('field_id', $fieldIds)->delete();
+        }
+
+        // Delete fields
+        DB::table(self::TABLE_FIELDS)->where('block_id', $id)->delete();
+
+        // Delete block
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
-    public function toDomain(Block $model): BlockEntity
+    private function toDomainEntityWithFields(stdClass $row): BlockEntity
     {
-        $entity = new BlockEntity(
-            id: $model->id,
-            moduleId: $model->module_id,
-            name: $model->name,
-            type: BlockType::from($model->type),
-            displayOrder: $model->display_order,
-            settings: $model->settings ?? [],
-            createdAt: new DateTimeImmutable($model->created_at->toDateTimeString()),
-            updatedAt: $model->updated_at ? new DateTimeImmutable($model->updated_at->toDateTimeString()) : null,
-        );
+        $entity = $this->toDomainEntity($row);
 
-        if ($model->relationLoaded('fields')) {
-            $fieldRepo = new EloquentFieldRepository();
-            foreach ($model->fields as $fieldModel) {
-                $entity->addField($fieldRepo->toDomain($fieldModel));
-            }
+        // Load fields with options
+        $fieldRepo = new EloquentFieldRepository();
+        $fields = $fieldRepo->findByBlockId((int) $row->id);
+
+        foreach ($fields as $field) {
+            $entity->addField($field);
         }
 
         return $entity;
+    }
+
+    public function toDomainEntity(stdClass $row): BlockEntity
+    {
+        $settings = $row->settings
+            ? (is_string($row->settings) ? json_decode($row->settings, true) : $row->settings)
+            : [];
+
+        return new BlockEntity(
+            id: (int) $row->id,
+            moduleId: (int) $row->module_id,
+            name: $row->name,
+            type: BlockType::from($row->type),
+            displayOrder: (int) $row->display_order,
+            settings: $settings,
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
+        );
     }
 }

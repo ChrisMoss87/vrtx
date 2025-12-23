@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Repositories;
 
 use App\Domain\Billing\Entities\Product;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 
 /**
  * Repository interface for Product entity.
@@ -48,6 +49,34 @@ interface ProductRepositoryInterface
      * @return array<Product>
      */
     public function search(string $query): array;
+
+    /**
+     * Search products with filters and pagination.
+     *
+     * @param array<string, mixed> $filters
+     * @param array<string, string> $orderBy ['field' => 'asc|desc']
+     */
+    public function searchPaginated(
+        array $filters = [],
+        array $orderBy = ['name' => 'asc'],
+        int $page = 1,
+        int $perPage = 25
+    ): PaginatedResult;
+
+    /**
+     * Get all products as array data.
+     *
+     * @return array<array<string, mixed>>
+     */
+    public function getAllAsArray(): array;
+
+    /**
+     * Get products by filters as array data.
+     *
+     * @param array<string, mixed> $filters
+     * @return array<array<string, mixed>>
+     */
+    public function getByFiltersAsArray(array $filters): array;
 
     /**
      * Save a product (insert or update).

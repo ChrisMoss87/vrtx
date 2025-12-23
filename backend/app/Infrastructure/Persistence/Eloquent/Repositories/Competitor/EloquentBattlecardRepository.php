@@ -6,100 +6,105 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories\Competitor;
 
 use App\Domain\Competitor\Entities\Battlecard;
 use App\Domain\Competitor\Repositories\BattlecardRepositoryInterface;
-use App\Models\Battlecard as BattlecardModel;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class EloquentBattlecardRepository implements BattlecardRepositoryInterface
 {
+    private const TABLE = 'battlecards';
+
     public function findById(int $id): ?Battlecard
     {
-        $model = BattlecardModel::find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findByCompetitorId(int $competitorId): array
     {
-        $models = BattlecardModel::where('competitor_id', $competitorId)
-            ->orderBy('created_at', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('competitor_id', $competitorId)
+            ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findPublished(): array
     {
-        $models = BattlecardModel::where('is_published', true)
-            ->orderBy('created_at', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('is_published', true)
+            ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function save(Battlecard $battlecard): Battlecard
     {
-        $data = $this->toModelData($battlecard);
+        $data = $this->toRowData($battlecard);
 
         if ($battlecard->getId() !== null) {
-            $model = BattlecardModel::findOrFail($battlecard->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $battlecard->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $battlecard->getId();
         } else {
-            $model = BattlecardModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomainEntity($model->fresh());
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        $model = BattlecardModel::find($id);
-
-        if (!$model) {
-            return false;
-        }
-
-        return $model->delete() ?? false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
     /**
-     * Convert an Eloquent model to a domain entity.
+     * Convert a database row to a domain entity.
      */
-    private function toDomainEntity(BattlecardModel $model): Battlecard
+    private function toDomainEntity(stdClass $row): Battlecard
     {
         return Battlecard::reconstitute(
-            id: $model->id,
-            competitorId: $model->competitor_id,
-            title: $model->title,
-            sections: $model->sections ?? [],
-            talkingPoints: $model->talking_points ?? [],
-            objectionHandlers: $model->objection_handlers ?? [],
-            isPublished: $model->is_published,
-            createdBy: $model->created_by,
-            createdAt: new DateTimeImmutable($model->created_at->toDateTimeString()),
-            updatedAt: $model->updated_at
-                ? new DateTimeImmutable($model->updated_at->toDateTimeString())
-                : null,
+            id: (int) $row->id,
+            competitorId: (int) $row->competitor_id,
+            title: $row->title,
+            sections: $row->sections ? (is_string($row->sections) ? json_decode($row->sections, true) : $row->sections) : [],
+            talkingPoints: $row->talking_points ? (is_string($row->talking_points) ? json_decode($row->talking_points, true) : $row->talking_points) : [],
+            objectionHandlers: $row->objection_handlers ? (is_string($row->objection_handlers) ? json_decode($row->objection_handlers, true) : $row->objection_handlers) : [],
+            isPublished: (bool) $row->is_published,
+            createdBy: $row->created_by ? (int) $row->created_by : null,
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
         );
     }
 
     /**
-     * Convert a domain entity to model data.
+     * Convert a domain entity to row data.
      *
      * @return array<string, mixed>
      */
-    private function toModelData(Battlecard $battlecard): array
+    private function toRowData(Battlecard $battlecard): array
     {
         return [
             'competitor_id' => $battlecard->getCompetitorId(),
             'title' => $battlecard->getTitle(),
-            'sections' => $battlecard->getSections(),
-            'talking_points' => $battlecard->getTalkingPoints(),
-            'objection_handlers' => $battlecard->getObjectionHandlers(),
+            'sections' => json_encode($battlecard->getSections()),
+            'talking_points' => json_encode($battlecard->getTalkingPoints()),
+            'objection_handlers' => json_encode($battlecard->getObjectionHandlers()),
             'is_published' => $battlecard->isPublished(),
+            'created_by' => $battlecard->getCreatedBy(),
         ];
     }
 }

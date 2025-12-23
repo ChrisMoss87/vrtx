@@ -89,12 +89,22 @@ export interface Report {
 
 export interface ReportSchedule {
 	enabled: boolean;
-	frequency: 'daily' | 'weekly' | 'monthly';
-	time: string;
+	frequency?: 'hourly' | 'daily' | 'weekly' | 'monthly';
+	time?: string;
 	day_of_week?: number;
 	day_of_month?: number;
-	recipients: string[];
-	format: 'csv' | 'pdf' | 'xlsx';
+	recipients?: string[];
+	format?: 'csv' | 'pdf' | 'xlsx';
+}
+
+export interface UpdateScheduleRequest {
+	enabled: boolean;
+	frequency?: 'hourly' | 'daily' | 'weekly' | 'monthly';
+	time?: string;
+	day_of_week?: number;
+	day_of_month?: number;
+	recipients?: string[];
+	format?: 'csv' | 'pdf' | 'xlsx';
 }
 
 export interface ReportResult {
@@ -159,6 +169,22 @@ export interface KpiRequest {
 	filters?: ReportFilter[];
 	date_range?: ReportDateRange;
 	compare_range?: ReportDateRange;
+}
+
+export interface ReportShare {
+	id: number;
+	type: 'user' | 'team';
+	user: { id: number; name: string; email: string } | null;
+	team: { id: number; name: string } | null;
+	permission: 'view' | 'edit';
+	shared_by: { id: number; name: string } | null;
+	created_at: string;
+}
+
+export interface ShareRequest {
+	type: 'user' | 'team';
+	id: number;
+	permission: 'view' | 'edit';
 }
 
 // API Functions
@@ -298,6 +324,44 @@ export const reportsApi = {
 	async calculateKpi(data: KpiRequest): Promise<KpiResult> {
 		const response = await apiClient.post<{ data: KpiResult }>('/reports/kpi', data);
 		return response.data;
+	},
+
+	/**
+	 * Get report schedule
+	 */
+	async getSchedule(id: number): Promise<ReportSchedule> {
+		const response = await apiClient.get<{ data: { schedule: ReportSchedule } }>(`/reports/${id}/schedule`);
+		return response.data.schedule;
+	},
+
+	/**
+	 * Update report schedule
+	 */
+	async updateSchedule(id: number, data: UpdateScheduleRequest): Promise<ReportSchedule> {
+		const response = await apiClient.put<{ data: { schedule: ReportSchedule } }>(`/reports/${id}/schedule`, data);
+		return response.data.schedule;
+	},
+
+	/**
+	 * Get shares for a report
+	 */
+	async getShares(id: number): Promise<ReportShare[]> {
+		const response = await apiClient.get<{ data: ReportShare[] }>(`/reports/${id}/shares`);
+		return response.data;
+	},
+
+	/**
+	 * Share a report with users or teams
+	 */
+	async share(id: number, shares: ShareRequest[]): Promise<void> {
+		await apiClient.post(`/reports/${id}/share`, { shares });
+	},
+
+	/**
+	 * Remove a share from a report
+	 */
+	async unshare(id: number, type: 'user' | 'team', targetId: number): Promise<void> {
+		await apiClient.delete(`/reports/${id}/share`, { data: { type, id: targetId } });
 	}
 };
 

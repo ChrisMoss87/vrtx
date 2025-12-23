@@ -420,7 +420,174 @@ class PluginsSeeder extends Seeder
         ];
 
         // ============================================
-        // TIER 6: AI/ML FEATURES
+        // TIER 6: THIRD-PARTY INTEGRATIONS
+        // ============================================
+        $integrationPlugins = [
+            // Accounting
+            [
+                'slug' => 'integration-quickbooks',
+                'name' => 'QuickBooks Online',
+                'description' => 'Sync invoices, contacts, and payments with QuickBooks',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'calculator',
+                'features' => ['Contact sync', 'Invoice sync', 'Payment tracking', 'Bi-directional'],
+                'display_order' => 60,
+            ],
+            [
+                'slug' => 'integration-xero',
+                'name' => 'Xero',
+                'description' => 'Sync invoices, contacts, and payments with Xero',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'file-spreadsheet',
+                'features' => ['Contact sync', 'Invoice sync', 'Payment tracking', 'Bi-directional'],
+                'display_order' => 61,
+            ],
+            // Payments
+            [
+                'slug' => 'integration-stripe',
+                'name' => 'Stripe',
+                'description' => 'Process payments and manage subscriptions via Stripe',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 25.00,
+                'price_yearly' => 240.00,
+                'icon' => 'credit-card',
+                'features' => ['Payment processing', 'Subscription billing', 'Customer sync', 'Webhooks'],
+                'display_order' => 62,
+            ],
+            [
+                'slug' => 'integration-paypal',
+                'name' => 'PayPal',
+                'description' => 'Accept payments via PayPal',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 20.00,
+                'price_yearly' => 192.00,
+                'icon' => 'wallet',
+                'features' => ['Payment processing', 'Invoice payments', 'Checkout integration'],
+                'display_order' => 63,
+            ],
+            // E-Signature
+            [
+                'slug' => 'integration-docusign',
+                'name' => 'DocuSign',
+                'description' => 'Send documents for electronic signature via DocuSign',
+                'category' => Plugin::CATEGORY_DOCUMENTS,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 20.00,
+                'price_yearly' => 192.00,
+                'icon' => 'file-signature',
+                'features' => ['Send for signature', 'Template library', 'Status tracking', 'Signed document storage'],
+                'display_order' => 64,
+            ],
+            [
+                'slug' => 'integration-pandadoc',
+                'name' => 'PandaDoc',
+                'description' => 'Create proposals and collect signatures via PandaDoc',
+                'category' => Plugin::CATEGORY_DOCUMENTS,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_PER_USER,
+                'price_monthly' => 20.00,
+                'price_yearly' => 192.00,
+                'icon' => 'file-text',
+                'features' => ['Document creation', 'E-signatures', 'Templates', 'Analytics'],
+                'display_order' => 65,
+            ],
+            // Calendar & Scheduling
+            [
+                'slug' => 'integration-calendly',
+                'name' => 'Calendly',
+                'description' => 'Auto-create contacts when meetings are booked',
+                'category' => Plugin::CATEGORY_SALES,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 10.00,
+                'price_yearly' => 96.00,
+                'icon' => 'calendar-check',
+                'features' => ['Meeting webhooks', 'Contact creation', 'Activity logging', 'Task creation'],
+                'display_order' => 66,
+            ],
+            // Communication
+            [
+                'slug' => 'integration-slack',
+                'name' => 'Slack',
+                'description' => 'Get CRM notifications in Slack channels',
+                'category' => Plugin::CATEGORY_COMMUNICATION,
+                'tier' => Plugin::TIER_CORE,
+                'pricing_model' => Plugin::PRICING_INCLUDED,
+                'icon' => 'hash',
+                'features' => ['Deal notifications', 'Task alerts', 'Channel posting', 'Slash commands'],
+                'display_order' => 67,
+            ],
+            [
+                'slug' => 'integration-zoom',
+                'name' => 'Zoom',
+                'description' => 'Schedule and track Zoom meetings',
+                'category' => Plugin::CATEGORY_COMMUNICATION,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'video',
+                'features' => ['Create meetings', 'Sync participants', 'Recording links', 'Activity logging'],
+                'display_order' => 68,
+            ],
+            // Marketing
+            [
+                'slug' => 'integration-mailchimp',
+                'name' => 'Mailchimp',
+                'description' => 'Sync contacts and campaigns with Mailchimp',
+                'category' => Plugin::CATEGORY_MARKETING,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 15.00,
+                'price_yearly' => 144.00,
+                'icon' => 'mail',
+                'features' => ['Contact sync', 'Campaign tracking', 'List management', 'Engagement data'],
+                'display_order' => 69,
+            ],
+            // Storage
+            [
+                'slug' => 'integration-google-drive',
+                'name' => 'Google Drive',
+                'description' => 'Attach and access files from Google Drive',
+                'category' => Plugin::CATEGORY_DOCUMENTS,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 10.00,
+                'price_yearly' => 96.00,
+                'icon' => 'hard-drive',
+                'features' => ['File attachments', 'Folder browsing', 'Document preview', 'Quick upload'],
+                'display_order' => 70,
+            ],
+            [
+                'slug' => 'integration-dropbox',
+                'name' => 'Dropbox',
+                'description' => 'Attach and access files from Dropbox',
+                'category' => Plugin::CATEGORY_DOCUMENTS,
+                'tier' => Plugin::TIER_PROFESSIONAL,
+                'pricing_model' => Plugin::PRICING_FLAT,
+                'price_monthly' => 10.00,
+                'price_yearly' => 96.00,
+                'icon' => 'box',
+                'features' => ['File attachments', 'Folder browsing', 'Document preview', 'Quick upload'],
+                'display_order' => 71,
+            ],
+        ];
+
+        // ============================================
+        // TIER 7: AI/ML FEATURES
         // ============================================
         $aiPlugins = [
             [
@@ -471,6 +638,7 @@ class PluginsSeeder extends Seeder
             $advancedPlugins,
             $communicationPlugins,
             $marketingPlugins,
+            $integrationPlugins,
             $aiPlugins
         );
 
@@ -536,6 +704,28 @@ class PluginsSeeder extends Seeder
                 'discount_percent' => 24,
                 'icon' => 'bot',
                 'display_order' => 5,
+            ],
+            [
+                'slug' => 'accounting-pack',
+                'name' => 'Accounting Integration Pack',
+                'description' => 'Connect your CRM to accounting software',
+                'plugins' => ['integration-quickbooks', 'integration-xero', 'integration-stripe', 'integration-paypal'],
+                'price_monthly' => 50.00,
+                'price_yearly' => 480.00,
+                'discount_percent' => 20,
+                'icon' => 'calculator',
+                'display_order' => 6,
+            ],
+            [
+                'slug' => 'signature-pack',
+                'name' => 'E-Signature Pack',
+                'description' => 'Send documents for electronic signatures',
+                'plugins' => ['integration-docusign', 'integration-pandadoc'],
+                'price_monthly' => 30.00,
+                'price_yearly' => 288.00,
+                'discount_percent' => 20,
+                'icon' => 'pen-tool',
+                'display_order' => 7,
             ],
         ];
 

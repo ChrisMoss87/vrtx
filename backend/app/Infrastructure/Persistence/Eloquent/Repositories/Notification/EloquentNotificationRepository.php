@@ -6,25 +6,47 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories\Notification;
 
 use App\Domain\Notification\Entities\Notification as NotificationEntity;
 use App\Domain\Notification\Repositories\NotificationRepositoryInterface;
-use App\Models\Notification;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 final class EloquentNotificationRepository implements NotificationRepositoryInterface
 {
+    private const TABLE = 'notifications';
+
     public function findById(int $id): ?NotificationEntity
     {
-        $model = Notification::find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        return $model ? $this->toDomain($model) : null;
+        return $row ? $this->toDomainEntity($row) : null;
+    }
+
+    public function findByIdAsArray(int $id): ?array
+    {
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
+
+        return $row ? $this->rowToArray($row) : null;
     }
 
     public function findByIdForUser(int $id, int $userId): ?NotificationEntity
     {
-        $model = Notification::where('id', $id)
+        $row = DB::table(self::TABLE)
+            ->where('id', $id)
             ->where('user_id', $userId)
             ->first();
 
-        return $model ? $this->toDomain($model) : null;
+        return $row ? $this->toDomainEntity($row) : null;
+    }
+
+    public function findByIdForUserAsArray(int $id, int $userId): ?array
+    {
+        $row = DB::table(self::TABLE)
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
+
+        return $row ? $this->rowToArray($row) : null;
     }
 
     public function getForUser(
@@ -34,31 +56,91 @@ final class EloquentNotificationRepository implements NotificationRepositoryInte
         int $limit = 50,
         int $offset = 0
     ): array {
-        $query = Notification::where('user_id', $userId)
-            ->active()
+        $query = DB::table(self::TABLE)
+            ->where('user_id', $userId)
+            ->whereNull('archived_at')
             ->orderByDesc('created_at');
 
         if ($category !== null) {
-            $query->forCategory($category);
+            $query->where('category', $category);
         }
 
         if ($unreadOnly) {
-            $query->unread();
+            $query->whereNull('read_at');
         }
 
-        $models = $query->skip($offset)->take($limit)->get();
+        $rows = $query->offset($offset)->limit($limit)->get();
 
-        return $models->map(fn ($model) => $this->toDomain($model))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
+    }
+
+    public function getForUserAsArrays(
+        int $userId,
+        ?string $category = null,
+        bool $unreadOnly = false,
+        int $limit = 50,
+        int $offset = 0
+    ): array {
+        $query = DB::table(self::TABLE)
+            ->where('user_id', $userId)
+            ->whereNull('archived_at')
+            ->orderByDesc('created_at');
+
+        if ($category !== null) {
+            $query->where('category', $category);
+        }
+
+        if ($unreadOnly) {
+            $query->whereNull('read_at');
+        }
+
+        return $query->offset($offset)->limit($limit)->get()->map(fn($row) => $this->rowToArray($row))->all();
+    }
+
+    public function getPaginatedForUser(
+        int $userId,
+        ?string $category = null,
+        bool $unreadOnly = false,
+        int $perPage = 25,
+        int $page = 1
+    ): PaginatedResult {
+        $query = DB::table(self::TABLE)
+            ->where('user_id', $userId)
+            ->whereNull('archived_at')
+            ->orderByDesc('created_at');
+
+        if ($category !== null) {
+            $query->where('category', $category);
+        }
+
+        if ($unreadOnly) {
+            $query->whereNull('read_at');
+        }
+
+        $total = $query->count();
+
+        $rows = $query
+            ->offset(($page - 1) * $perPage)
+            ->limit($perPage)
+            ->get();
+
+        return PaginatedResult::create(
+            items: $rows->map(fn($row) => $this->rowToArray($row))->all(),
+            total: $total,
+            perPage: $perPage,
+            currentPage: $page
+        );
     }
 
     public function getUnreadCount(int $userId, ?string $category = null): int
     {
-        $query = Notification::where('user_id', $userId)
-            ->active()
-            ->unread();
+        $query = DB::table(self::TABLE)
+            ->where('user_id', $userId)
+            ->whereNull('archived_at')
+            ->whereNull('read_at');
 
         if ($category !== null) {
-            $query->forCategory($category);
+            $query->where('category', $category);
         }
 
         return $query->count();
@@ -78,73 +160,125 @@ final class EloquentNotificationRepository implements NotificationRepositoryInte
             'action_label' => $entity->getActionLabel(),
             'notifiable_type' => $entity->getNotifiableType(),
             'notifiable_id' => $entity->getNotifiableId(),
-            'data' => $entity->getData(),
+            'data' => json_encode($entity->getData()),
             'read_at' => $entity->getReadAt()?->format('Y-m-d H:i:s'),
             'archived_at' => $entity->getArchivedAt()?->format('Y-m-d H:i:s'),
         ];
 
         if ($entity->getId() !== null) {
-            $model = Notification::findOrFail($entity->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $entity->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $entity->getId();
         } else {
-            $model = Notification::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomain($model->fresh());
+        return $this->findById($id);
+    }
+
+    public function create(array $data): array
+    {
+        if (isset($data['data']) && is_array($data['data'])) {
+            $data['data'] = json_encode($data['data']);
+        }
+
+        $id = DB::table(self::TABLE)->insertGetId(
+            array_merge($data, [
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])
+        );
+
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
+
+        return $this->rowToArray($row);
     }
 
     public function markAsRead(int $id, int $userId): bool
     {
-        return Notification::where('id', $id)
+        return DB::table(self::TABLE)
+            ->where('id', $id)
             ->where('user_id', $userId)
-            ->update(['read_at' => now()]) > 0;
+            ->update(['read_at' => now(), 'updated_at' => now()]) > 0;
     }
 
     public function markAllAsRead(int $userId, ?string $category = null): int
     {
-        $query = Notification::where('user_id', $userId)
+        $query = DB::table(self::TABLE)
+            ->where('user_id', $userId)
             ->whereNull('read_at');
 
         if ($category !== null) {
-            $query->forCategory($category);
+            $query->where('category', $category);
         }
 
-        return $query->update(['read_at' => now()]);
+        return $query->update(['read_at' => now(), 'updated_at' => now()]);
     }
 
     public function archive(int $id, int $userId): bool
     {
-        return Notification::where('id', $id)
+        return DB::table(self::TABLE)
+            ->where('id', $id)
             ->where('user_id', $userId)
-            ->update(['archived_at' => now()]) > 0;
+            ->update(['archived_at' => now(), 'updated_at' => now()]) > 0;
     }
 
     public function deleteOlderThan(int $days): int
     {
-        return Notification::where('created_at', '<', now()->subDays($days))
+        return DB::table(self::TABLE)
+            ->where('created_at', '<', now()->subDays($days))
             ->delete();
     }
 
-    private function toDomain(Notification $model): NotificationEntity
+    private function toDomainEntity(stdClass $row): NotificationEntity
     {
         return NotificationEntity::reconstitute(
-            id: $model->id,
-            userId: $model->user_id,
-            type: $model->type,
-            category: $model->category,
-            title: $model->title,
-            body: $model->body,
-            icon: $model->icon,
-            iconColor: $model->icon_color,
-            actionUrl: $model->action_url,
-            actionLabel: $model->action_label,
-            notifiableType: $model->notifiable_type,
-            notifiableId: $model->notifiable_id,
-            data: $model->data ?? [],
-            readAt: $model->read_at ? new DateTimeImmutable($model->read_at->toDateTimeString()) : null,
-            archivedAt: $model->archived_at ? new DateTimeImmutable($model->archived_at->toDateTimeString()) : null,
-            createdAt: new DateTimeImmutable($model->created_at->toDateTimeString()),
-            updatedAt: $model->updated_at ? new DateTimeImmutable($model->updated_at->toDateTimeString()) : null,
+            id: (int) $row->id,
+            userId: (int) $row->user_id,
+            type: $row->type,
+            category: $row->category,
+            title: $row->title,
+            body: $row->body,
+            icon: $row->icon,
+            iconColor: $row->icon_color,
+            actionUrl: $row->action_url,
+            actionLabel: $row->action_label,
+            notifiableType: $row->notifiable_type,
+            notifiableId: $row->notifiable_id ? (int) $row->notifiable_id : null,
+            data: $row->data ? (is_string($row->data) ? json_decode($row->data, true) : $row->data) : [],
+            readAt: $row->read_at ? new DateTimeImmutable($row->read_at) : null,
+            archivedAt: $row->archived_at ? new DateTimeImmutable($row->archived_at) : null,
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
         );
+    }
+
+    private function rowToArray(stdClass $row): array
+    {
+        return [
+            'id' => $row->id,
+            'user_id' => $row->user_id,
+            'type' => $row->type,
+            'category' => $row->category,
+            'title' => $row->title,
+            'body' => $row->body,
+            'icon' => $row->icon,
+            'icon_color' => $row->icon_color,
+            'action_url' => $row->action_url,
+            'action_label' => $row->action_label,
+            'notifiable_type' => $row->notifiable_type,
+            'notifiable_id' => $row->notifiable_id,
+            'data' => $row->data ? (is_string($row->data) ? json_decode($row->data, true) : $row->data) : [],
+            'read_at' => $row->read_at,
+            'archived_at' => $row->archived_at,
+            'created_at' => $row->created_at,
+            'updated_at' => $row->updated_at,
+        ];
     }
 }

@@ -14,6 +14,20 @@ use App\Infrastructure\Persistence\Eloquent\Repositories\EloquentFieldRepository
 use App\Infrastructure\Persistence\Eloquent\Repositories\EloquentModuleRecordRepository;
 use App\Infrastructure\Persistence\Eloquent\Repositories\EloquentModuleRepository;
 
+// Shared Domain Contracts
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\Contracts\EventDispatcherInterface;
+use App\Domain\Shared\Contracts\HasherInterface;
+use App\Domain\Shared\Contracts\LoggerInterface;
+use App\Domain\Shared\Contracts\StringHelperInterface;
+use App\Domain\Shared\Contracts\ValidatorInterface;
+use App\Infrastructure\Services\LaravelAuthContext;
+use App\Infrastructure\Services\LaravelEventDispatcher;
+use App\Infrastructure\Services\LaravelHasher;
+use App\Infrastructure\Services\LaravelLogger;
+use App\Infrastructure\Services\LaravelStringHelper;
+use App\Infrastructure\Services\LaravelValidator;
+
 // Workflow Domain
 use App\Domain\Workflow\Repositories\WorkflowExecutionRepositoryInterface;
 use App\Domain\Workflow\Repositories\WorkflowRepositoryInterface;
@@ -223,6 +237,12 @@ use App\Domain\Analytics\Repositories\AnalyticsAlertHistoryRepositoryInterface;
 use App\Infrastructure\Persistence\Eloquent\Repositories\Analytics\EloquentAnalyticsAlertRepository;
 use App\Infrastructure\Persistence\Eloquent\Repositories\Analytics\EloquentAnalyticsAlertHistoryRepository;
 
+// Integration Domain
+use App\Domain\Integration\Repositories\IntegrationConnectionRepositoryInterface;
+use App\Domain\Integration\Services\IntegrationOAuthServiceInterface;
+use App\Infrastructure\Persistence\Eloquent\Repositories\Integration\EloquentIntegrationConnectionRepository;
+use App\Infrastructure\Services\Integration\IntegrationOAuthService;
+
 use Illuminate\Support\ServiceProvider;
 
 class RepositoryServiceProvider extends ServiceProvider
@@ -232,6 +252,7 @@ class RepositoryServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->registerSharedInfrastructure();
         $this->registerModuleRepositories();
         $this->registerWorkflowRepositories();
         $this->registerBlueprintRepositories();
@@ -240,6 +261,7 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->registerBillingRepositories();
         $this->registerSchedulingRepositories();
         $this->registerEmailRepositories();
+        $this->registerCommunicationRepositories();
         $this->registerApprovalRepositories();
         $this->registerCompetitorRepositories();
         $this->registerDealRoomRepositories();
@@ -273,7 +295,18 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->registerUserRepositories();
         $this->registerWizardRepositories();
         $this->registerAnalyticsRepositories();
+        $this->registerIntegrationRepositories();
         $this->registerWorkflowDomainServices();
+    }
+
+    private function registerSharedInfrastructure(): void
+    {
+        $this->app->bind(AuthContextInterface::class, LaravelAuthContext::class);
+        $this->app->bind(EventDispatcherInterface::class, LaravelEventDispatcher::class);
+        $this->app->bind(LoggerInterface::class, LaravelLogger::class);
+        $this->app->bind(ValidatorInterface::class, LaravelValidator::class);
+        $this->app->bind(HasherInterface::class, LaravelHasher::class);
+        $this->app->bind(StringHelperInterface::class, LaravelStringHelper::class);
     }
 
     private function registerModuleRepositories(): void
@@ -333,6 +366,47 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(EmailMessageRepositoryInterface::class, EloquentEmailMessageRepository::class);
         $this->app->bind(EmailTemplateRepositoryInterface::class, EloquentEmailTemplateRepository::class);
         $this->app->bind(EmailAccountRepositoryInterface::class, EloquentEmailAccountRepository::class);
+
+        // OAuth Authorization Service
+        $this->app->bind(
+            \App\Domain\Email\Services\OAuthAuthorizationServiceInterface::class,
+            \App\Infrastructure\Services\OAuth\OAuthAuthorizationService::class
+        );
+    }
+
+    private function registerCommunicationRepositories(): void
+    {
+        // Unified Conversation Repository
+        $this->app->bind(
+            \App\Domain\Communication\Repositories\UnifiedConversationRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\Repositories\Communication\EloquentUnifiedConversationRepository::class
+        );
+
+        // Communication Aggregator Service (singleton for channel registration)
+        $this->app->singleton(
+            \App\Domain\Communication\Services\CommunicationAggregatorService::class,
+            function ($app) {
+                $aggregator = new \App\Domain\Communication\Services\CommunicationAggregatorService(
+                    $app->make(\App\Domain\Communication\Repositories\UnifiedConversationRepositoryInterface::class)
+                );
+
+                // Register available channel adapters
+                $aggregator->registerChannel(
+                    $app->make(\App\Infrastructure\Communication\Adapters\EmailChannelAdapter::class)
+                );
+                $aggregator->registerChannel(
+                    $app->make(\App\Infrastructure\Communication\Adapters\ChatChannelAdapter::class)
+                );
+                $aggregator->registerChannel(
+                    $app->make(\App\Infrastructure\Communication\Adapters\WhatsAppChannelAdapter::class)
+                );
+                $aggregator->registerChannel(
+                    $app->make(\App\Infrastructure\Communication\Adapters\SmsChannelAdapter::class)
+                );
+
+                return $aggregator;
+            }
+        );
     }
 
     private function registerApprovalRepositories(): void
@@ -506,6 +580,12 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(AnalyticsAlertHistoryRepositoryInterface::class, EloquentAnalyticsAlertHistoryRepository::class);
     }
 
+    private function registerIntegrationRepositories(): void
+    {
+        $this->app->bind(IntegrationConnectionRepositoryInterface::class, EloquentIntegrationConnectionRepository::class);
+        $this->app->bind(IntegrationOAuthServiceInterface::class, IntegrationOAuthService::class);
+    }
+
     private function registerWorkflowDomainServices(): void
     {
         $this->app->singleton(ConditionEvaluationService::class);
@@ -519,6 +599,8 @@ class RepositoryServiceProvider extends ServiceProvider
                 $app->make(WorkflowExecutionRepositoryInterface::class),
                 $app->make(ConditionEvaluationService::class),
                 $app->make(ActionDispatcherService::class),
+                $app->make(EventDispatcherInterface::class),
+                $app->make(LoggerInterface::class),
             );
         });
     }

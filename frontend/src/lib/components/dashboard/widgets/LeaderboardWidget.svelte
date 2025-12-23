@@ -1,7 +1,12 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
-	import { Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-svelte';
+	import { Trophy, TrendingUp, TrendingDown, Minus, ExternalLink } from 'lucide-svelte';
 	import { Avatar, AvatarFallback, AvatarImage } from '$lib/components/ui/avatar';
+	import type { WidgetConfig } from '$lib/api/dashboards';
+	import {
+		navigateToRecords,
+		buildFiltersFromLeaderboardClick
+	} from '$lib/stores/dashboardNavigation.svelte';
 
 	interface LeaderboardItem {
 		id: number;
@@ -11,6 +16,7 @@
 		previous_rank?: number;
 		avatar_url?: string;
 		subtitle?: string;
+		user_id?: number;
 	}
 
 	interface Props {
@@ -19,11 +25,26 @@
 			items: LeaderboardItem[];
 			label?: string;
 			value_label?: string;
+			module_api_name?: string;
 		} | null;
+		config?: WidgetConfig;
 		loading?: boolean;
 	}
 
-	let { title, data, loading = false }: Props = $props();
+	let { title, data, config, loading = false }: Props = $props();
+
+	// Check if click-through is enabled
+	const isClickable = $derived(
+		config?.module_id && config?.click_enabled !== false && data?.module_api_name
+	);
+
+	function handleRowClick(item: LeaderboardItem) {
+		if (!isClickable || !data?.module_api_name) return;
+
+		const userId = item.user_id || item.id;
+		const filters = buildFiltersFromLeaderboardClick(config || {}, userId);
+		navigateToRecords(data.module_api_name, filters);
+	}
 
 	function formatValue(value: number): string {
 		if (value >= 1000000) {
@@ -64,7 +85,7 @@
 	}
 </script>
 
-<Card.Root class="flex h-full flex-col">
+<Card.Root class="flex h-full flex-col group">
 	<Card.Header class="pb-2">
 		<div class="flex items-center gap-2">
 			<Trophy class="h-4 w-4 text-muted-foreground" />
@@ -92,8 +113,11 @@
 			<div class="space-y-2">
 				{#each data.items as item (item.id)}
 					{@const rankChange = getRankChange(item)}
-					<div
-						class="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50"
+					<button
+						type="button"
+						class="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50 {isClickable ? 'cursor-pointer' : ''}"
+						onclick={() => handleRowClick(item)}
+						disabled={!isClickable}
 					>
 						<!-- Rank badge -->
 						<div
@@ -130,8 +154,11 @@
 							{:else if rankChange === 'same'}
 								<Minus class="h-4 w-4 text-muted-foreground" />
 							{/if}
+							{#if isClickable}
+								<ExternalLink class="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
+							{/if}
 						</div>
-					</div>
+					</button>
 				{/each}
 			</div>
 		{:else}

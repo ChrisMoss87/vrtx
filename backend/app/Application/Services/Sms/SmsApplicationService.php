@@ -4,21 +4,15 @@ declare(strict_types=1);
 
 namespace App\Application\Services\Sms;
 
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\Sms\Repositories\SmsMessageRepositoryInterface;
-use App\Models\SmsCampaign;
-use App\Models\SmsConnection;
-use App\Models\SmsMessage;
-use App\Models\SmsOptOut;
-use App\Models\SmsTemplate;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class SmsApplicationService
 {
     public function __construct(
         private SmsMessageRepositoryInterface $repository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -28,96 +22,34 @@ class SmsApplicationService
     /**
      * List SMS messages with filtering and pagination.
      */
-    public function listMessages(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listMessages(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = SmsMessage::query()
-            ->with(['connection:id,name,phone_number', 'sender:id,name', 'template:id,name']);
-
-        // Filter by direction
-        if (!empty($filters['direction'])) {
-            if ($filters['direction'] === 'inbound') {
-                $query->inbound();
-            } else {
-                $query->outbound();
-            }
-        }
-
-        // Filter by status
-        if (!empty($filters['status'])) {
-            $query->byStatus($filters['status']);
-        }
-
-        // Filter by phone number
-        if (!empty($filters['phone'])) {
-            $query->forPhone($filters['phone']);
-        }
-
-        // Filter by connection
-        if (!empty($filters['connection_id'])) {
-            $query->where('connection_id', $filters['connection_id']);
-        }
-
-        // Filter by campaign
-        if (!empty($filters['campaign_id'])) {
-            $query->where('campaign_id', $filters['campaign_id']);
-        }
-
-        // Filter by module record
-        if (!empty($filters['module_api_name']) && !empty($filters['module_record_id'])) {
-            $query->forRecord($filters['module_api_name'], $filters['module_record_id']);
-        }
-
-        // Filter by date range
-        if (!empty($filters['from_date'])) {
-            $query->where('created_at', '>=', $filters['from_date']);
-        }
-        if (!empty($filters['to_date'])) {
-            $query->where('created_at', '<=', $filters['to_date']);
-        }
-
-        // Search content
-        if (!empty($filters['search'])) {
-            $query->where('content', 'like', "%{$filters['search']}%");
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        $page = $filters['page'] ?? 1;
+        return $this->repository->listMessages($filters, $perPage, $page);
     }
 
     /**
      * Get a single message by ID.
      */
-    public function getMessage(int $id): ?SmsMessage
+    public function getMessage(int $id): ?array
     {
-        return SmsMessage::with(['connection', 'sender', 'template', 'campaign', 'moduleRecord'])->find($id);
+        return $this->repository->findById($id);
     }
 
     /**
      * Get conversation history for a phone number.
      */
-    public function getConversation(string $phoneNumber, int $limit = 100): Collection
+    public function getConversation(string $phoneNumber, int $limit = 100): array
     {
-        return SmsMessage::forPhone($phoneNumber)
-            ->with(['sender:id,name'])
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
+        return $this->repository->getConversation($phoneNumber, $limit);
     }
 
     /**
      * Get messages for a module record.
      */
-    public function getRecordMessages(string $moduleApiName, int $recordId, int $limit = 50): Collection
+    public function getRecordMessages(string $moduleApiName, int $recordId, int $limit = 50): array
     {
-        return SmsMessage::forRecord($moduleApiName, $recordId)
-            ->with(['sender:id,name', 'template:id,name'])
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
+        return $this->repository->getRecordMessages($moduleApiName, $recordId, $limit);
     }
 
     /**
@@ -125,38 +57,7 @@ class SmsApplicationService
      */
     public function getStats(?int $connectionId = null, ?string $period = 'today'): array
     {
-        $query = SmsMessage::query();
-
-        if ($connectionId) {
-            $query->where('connection_id', $connectionId);
-        }
-
-        $startDate = match ($period) {
-            'today' => now()->startOfDay(),
-            'week' => now()->startOfWeek(),
-            'month' => now()->startOfMonth(),
-            default => now()->startOfDay(),
-        };
-
-        $query->where('created_at', '>=', $startDate);
-
-        $total = (clone $query)->count();
-        $sent = (clone $query)->outbound()->count();
-        $received = (clone $query)->inbound()->count();
-        $delivered = (clone $query)->byStatus('delivered')->count();
-        $failed = (clone $query)->whereIn('status', ['failed', 'undelivered'])->count();
-        $totalCost = (clone $query)->outbound()->sum('cost');
-
-        return [
-            'total' => $total,
-            'sent' => $sent,
-            'received' => $received,
-            'delivered' => $delivered,
-            'failed' => $failed,
-            'delivery_rate' => $sent > 0 ? round(($delivered / $sent) * 100, 1) : 0,
-            'total_cost' => $totalCost,
-            'period' => $period,
-        ];
+        return $this->repository->getStats($connectionId, $period);
     }
 
     // =========================================================================
@@ -166,20 +67,25 @@ class SmsApplicationService
     /**
      * Send an SMS message.
      */
-    public function sendSms(array $data): SmsMessage
+    public function sendSms(array $data): array
     {
-        $connection = SmsConnection::active()->findOrFail($data['connection_id']);
+        $connection = $this->repository->findActiveConnectionById($data['connection_id']);
+
+        if (!$connection) {
+            throw new \InvalidArgumentException('Active connection not found');
+        }
 
         // Check limits
-        if (!$connection->isWithinDailyLimit()) {
+        $usage = $this->repository->getConnectionUsage($connection['id']);
+        if ($usage['daily_remaining'] <= 0) {
             throw new \InvalidArgumentException('Daily SMS limit reached');
         }
-        if (!$connection->isWithinMonthlyLimit()) {
+        if ($usage['monthly_remaining'] <= 0) {
             throw new \InvalidArgumentException('Monthly SMS limit reached');
         }
 
         // Check opt-out status
-        if ($this->isOptedOut($data['to_number'], $connection->id)) {
+        if ($this->repository->isOptedOut($data['to_number'], $connection['id'])) {
             throw new \InvalidArgumentException('Recipient has opted out of SMS messages');
         }
 
@@ -188,30 +94,35 @@ class SmsApplicationService
         $templateId = null;
 
         if (!empty($data['template_id'])) {
-            $template = SmsTemplate::findOrFail($data['template_id']);
-            $content = $template->render($data['merge_data'] ?? []);
-            $template->incrementUsage();
-            $templateId = $template->id;
+            $template = $this->repository->findTemplateById($data['template_id']);
+
+            if (!$template) {
+                throw new \InvalidArgumentException('Template not found');
+            }
+
+            $content = $this->renderTemplate($template['content'], $data['merge_data'] ?? []);
+            $this->repository->incrementTemplateUsage($template['id']);
+            $templateId = $template['id'];
         }
 
         // Create the message
-        $message = SmsMessage::create([
-            'connection_id' => $connection->id,
+        $message = $this->repository->create([
+            'connection_id' => $connection['id'],
             'template_id' => $templateId,
             'direction' => 'outbound',
-            'from_number' => $connection->phone_number,
+            'from_number' => $connection['phone_number'],
             'to_number' => $data['to_number'],
             'content' => $content,
             'status' => 'pending',
-            'segment_count' => SmsTemplate::calculateSegments($content),
+            'segment_count' => $this->calculateSegments($content),
             'module_record_id' => $data['module_record_id'] ?? null,
             'module_api_name' => $data['module_api_name'] ?? null,
             'campaign_id' => $data['campaign_id'] ?? null,
-            'sent_by' => Auth::id(),
+            'sent_by' => $this->authContext->userId(),
         ]);
 
         // Update connection last used
-        $connection->update(['last_used_at' => now()]);
+        $this->repository->updateConnection($connection['id'], ['last_used_at' => now()]);
 
         return $message;
     }
@@ -219,12 +130,12 @@ class SmsApplicationService
     /**
      * Record an inbound SMS message (from webhook).
      */
-    public function recordInboundSms(array $data): SmsMessage
+    public function recordInboundSms(array $data): array
     {
-        $connection = SmsConnection::where('phone_number', $data['to_number'])->first();
+        $connection = $this->repository->findConnectionByPhoneNumber($data['to_number']);
 
-        return SmsMessage::create([
-            'connection_id' => $connection?->id,
+        return $this->repository->create([
+            'connection_id' => $connection['id'] ?? null,
             'direction' => 'inbound',
             'from_number' => $data['from_number'],
             'to_number' => $data['to_number'],
@@ -238,9 +149,9 @@ class SmsApplicationService
     /**
      * Update message status (delivery callback).
      */
-    public function updateMessageStatus(string $providerMessageId, string $status, ?array $extra = null): ?SmsMessage
+    public function updateMessageStatus(string $providerMessageId, string $status, ?array $extra = null): ?array
     {
-        $message = SmsMessage::where('provider_message_id', $providerMessageId)->first();
+        $message = $this->repository->findByProviderMessageId($providerMessageId);
 
         if (!$message) {
             return null;
@@ -261,9 +172,7 @@ class SmsApplicationService
             $updateData['cost'] = $extra['cost'];
         }
 
-        $message->update($updateData);
-
-        return $message->fresh();
+        return $this->repository->update($message['id'], $updateData);
     }
 
     /**
@@ -304,39 +213,17 @@ class SmsApplicationService
     /**
      * List SMS templates.
      */
-    public function listTemplates(array $filters = []): Collection
+    public function listTemplates(array $filters = []): array
     {
-        $query = SmsTemplate::query()->with('creator:id,name');
-
-        if (!empty($filters['category'])) {
-            $query->byCategory($filters['category']);
-        }
-
-        if (isset($filters['is_active'])) {
-            if ($filters['is_active']) {
-                $query->active();
-            } else {
-                $query->where('is_active', false);
-            }
-        }
-
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('content', 'like', "%{$search}%");
-            });
-        }
-
-        return $query->orderBy('name')->get();
+        return $this->repository->listTemplates($filters);
     }
 
     /**
      * Get a template by ID.
      */
-    public function getTemplate(int $id): ?SmsTemplate
+    public function getTemplate(int $id): ?array
     {
-        return SmsTemplate::with('creator:id,name')->find($id);
+        return $this->repository->findTemplateById($id);
     }
 
     // =========================================================================
@@ -346,32 +233,34 @@ class SmsApplicationService
     /**
      * Create an SMS template.
      */
-    public function createTemplate(array $data): SmsTemplate
+    public function createTemplate(array $data): array
     {
-        return SmsTemplate::create([
+        return $this->repository->createTemplate([
             'name' => $data['name'],
             'content' => $data['content'],
             'category' => $data['category'] ?? 'general',
             'is_active' => $data['is_active'] ?? true,
-            'created_by' => Auth::id(),
+            'created_by' => $this->authContext->userId(),
         ]);
     }
 
     /**
      * Update an SMS template.
      */
-    public function updateTemplate(int $id, array $data): SmsTemplate
+    public function updateTemplate(int $id, array $data): ?array
     {
-        $template = SmsTemplate::findOrFail($id);
+        $template = $this->repository->findTemplateById($id);
 
-        $template->update([
-            'name' => $data['name'] ?? $template->name,
-            'content' => $data['content'] ?? $template->content,
-            'category' => $data['category'] ?? $template->category,
-            'is_active' => $data['is_active'] ?? $template->is_active,
+        if (!$template) {
+            throw new \InvalidArgumentException('Template not found');
+        }
+
+        return $this->repository->updateTemplate($id, [
+            'name' => $data['name'] ?? $template['name'],
+            'content' => $data['content'] ?? $template['content'],
+            'category' => $data['category'] ?? $template['category'],
+            'is_active' => $data['is_active'] ?? $template['is_active'],
         ]);
-
-        return $template->fresh();
     }
 
     /**
@@ -379,8 +268,13 @@ class SmsApplicationService
      */
     public function deleteTemplate(int $id): bool
     {
-        $template = SmsTemplate::findOrFail($id);
-        return $template->delete();
+        $template = $this->repository->findTemplateById($id);
+
+        if (!$template) {
+            throw new \InvalidArgumentException('Template not found');
+        }
+
+        return $this->repository->deleteTemplate($id);
     }
 
     /**
@@ -388,14 +282,19 @@ class SmsApplicationService
      */
     public function previewTemplate(int $id, array $sampleData): array
     {
-        $template = SmsTemplate::findOrFail($id);
-        $rendered = $template->render($sampleData);
+        $template = $this->repository->findTemplateById($id);
+
+        if (!$template) {
+            throw new \InvalidArgumentException('Template not found');
+        }
+
+        $rendered = $this->renderTemplate($template['content'], $sampleData);
 
         return [
             'rendered' => $rendered,
             'character_count' => strlen($rendered),
-            'segment_count' => SmsTemplate::calculateSegments($rendered),
-            'merge_fields' => $template->merge_fields,
+            'segment_count' => $this->calculateSegments($rendered),
+            'merge_fields' => $template['merge_fields'] ?? [],
         ];
     }
 
@@ -406,23 +305,17 @@ class SmsApplicationService
     /**
      * List SMS connections.
      */
-    public function listConnections(bool $activeOnly = false): Collection
+    public function listConnections(bool $activeOnly = false): array
     {
-        $query = SmsConnection::query();
-
-        if ($activeOnly) {
-            $query->active();
-        }
-
-        return $query->orderBy('name')->get();
+        return $this->repository->listConnections($activeOnly);
     }
 
     /**
      * Get a connection by ID.
      */
-    public function getConnection(int $id): ?SmsConnection
+    public function getConnection(int $id): ?array
     {
-        return SmsConnection::find($id);
+        return $this->repository->findConnectionById($id);
     }
 
     /**
@@ -430,17 +323,7 @@ class SmsApplicationService
      */
     public function getConnectionUsage(int $connectionId): array
     {
-        $connection = SmsConnection::findOrFail($connectionId);
-
-        return [
-            'connection' => $connection,
-            'today_count' => $connection->getTodayMessageCount(),
-            'month_count' => $connection->getMonthMessageCount(),
-            'daily_limit' => $connection->daily_limit,
-            'monthly_limit' => $connection->monthly_limit,
-            'daily_remaining' => max(0, $connection->daily_limit - $connection->getTodayMessageCount()),
-            'monthly_remaining' => max(0, $connection->monthly_limit - $connection->getMonthMessageCount()),
-        ];
+        return $this->repository->getConnectionUsage($connectionId);
     }
 
     // =========================================================================
@@ -450,9 +333,9 @@ class SmsApplicationService
     /**
      * Create an SMS connection.
      */
-    public function createConnection(array $data): SmsConnection
+    public function createConnection(array $data): array
     {
-        return SmsConnection::create([
+        return $this->repository->createConnection([
             'name' => $data['name'],
             'provider' => $data['provider'],
             'phone_number' => $data['phone_number'],
@@ -470,28 +353,30 @@ class SmsApplicationService
     /**
      * Update an SMS connection.
      */
-    public function updateConnection(int $id, array $data): SmsConnection
+    public function updateConnection(int $id, array $data): ?array
     {
-        $connection = SmsConnection::findOrFail($id);
+        $connection = $this->repository->findConnectionById($id);
+
+        if (!$connection) {
+            throw new \InvalidArgumentException('Connection not found');
+        }
 
         $updateData = [
-            'name' => $data['name'] ?? $connection->name,
-            'phone_number' => $data['phone_number'] ?? $connection->phone_number,
-            'messaging_service_sid' => $data['messaging_service_sid'] ?? $connection->messaging_service_sid,
-            'is_active' => $data['is_active'] ?? $connection->is_active,
-            'capabilities' => $data['capabilities'] ?? $connection->capabilities,
-            'settings' => array_merge($connection->settings ?? [], $data['settings'] ?? []),
-            'daily_limit' => $data['daily_limit'] ?? $connection->daily_limit,
-            'monthly_limit' => $data['monthly_limit'] ?? $connection->monthly_limit,
+            'name' => $data['name'] ?? $connection['name'],
+            'phone_number' => $data['phone_number'] ?? $connection['phone_number'],
+            'messaging_service_sid' => $data['messaging_service_sid'] ?? $connection['messaging_service_sid'],
+            'is_active' => $data['is_active'] ?? $connection['is_active'],
+            'capabilities' => $data['capabilities'] ?? $connection['capabilities'],
+            'settings' => array_merge($connection['settings'] ?? [], $data['settings'] ?? []),
+            'daily_limit' => $data['daily_limit'] ?? $connection['daily_limit'],
+            'monthly_limit' => $data['monthly_limit'] ?? $connection['monthly_limit'],
         ];
 
         if (!empty($data['auth_token'])) {
             $updateData['auth_token'] = $data['auth_token'];
         }
 
-        $connection->update($updateData);
-
-        return $connection->fresh();
+        return $this->repository->updateConnection($id, $updateData);
     }
 
     /**
@@ -499,13 +384,17 @@ class SmsApplicationService
      */
     public function deleteConnection(int $id): bool
     {
-        $connection = SmsConnection::findOrFail($id);
+        $connection = $this->repository->findConnectionById($id);
 
-        if ($connection->messages()->exists()) {
+        if (!$connection) {
+            throw new \InvalidArgumentException('Connection not found');
+        }
+
+        if ($this->repository->connectionHasMessages($id)) {
             throw new \InvalidArgumentException('Cannot delete connection with existing messages');
         }
 
-        return $connection->delete();
+        return $this->repository->deleteConnection($id);
     }
 
     /**
@@ -513,15 +402,19 @@ class SmsApplicationService
      */
     public function verifyConnection(int $id): array
     {
-        $connection = SmsConnection::findOrFail($id);
+        $connection = $this->repository->findConnectionById($id);
+
+        if (!$connection) {
+            throw new \InvalidArgumentException('Connection not found');
+        }
 
         // This would typically make an API call to verify credentials
         // For now, just mark as verified
-        $connection->update(['is_verified' => true]);
+        $updatedConnection = $this->repository->updateConnection($id, ['is_verified' => true]);
 
         return [
             'verified' => true,
-            'connection' => $connection->fresh(),
+            'connection' => $updatedConnection,
         ];
     }
 
@@ -534,33 +427,15 @@ class SmsApplicationService
      */
     public function isOptedOut(string $phoneNumber, ?int $connectionId = null): bool
     {
-        $query = SmsOptOut::where('phone_number', $phoneNumber);
-
-        if ($connectionId) {
-            $query->where(function ($q) use ($connectionId) {
-                $q->whereNull('connection_id')
-                    ->orWhere('connection_id', $connectionId);
-            });
-        }
-
-        return $query->exists();
+        return $this->repository->isOptedOut($phoneNumber, $connectionId);
     }
 
     /**
      * Record an opt-out.
      */
-    public function recordOptOut(string $phoneNumber, ?int $connectionId = null, ?string $reason = null): SmsOptOut
+    public function recordOptOut(string $phoneNumber, ?int $connectionId = null, ?string $reason = null): array
     {
-        return SmsOptOut::firstOrCreate(
-            [
-                'phone_number' => $phoneNumber,
-                'connection_id' => $connectionId,
-            ],
-            [
-                'reason' => $reason,
-                'opted_out_at' => now(),
-            ]
-        );
+        return $this->repository->recordOptOut($phoneNumber, $connectionId, $reason);
     }
 
     /**
@@ -568,27 +443,15 @@ class SmsApplicationService
      */
     public function removeOptOut(string $phoneNumber, ?int $connectionId = null): bool
     {
-        $query = SmsOptOut::where('phone_number', $phoneNumber);
-
-        if ($connectionId) {
-            $query->where('connection_id', $connectionId);
-        }
-
-        return $query->delete() > 0;
+        return $this->repository->removeOptOut($phoneNumber, $connectionId);
     }
 
     /**
      * List opt-outs.
      */
-    public function listOptOuts(?int $connectionId = null, int $perPage = 50): LengthAwarePaginator
+    public function listOptOuts(?int $connectionId = null, int $perPage = 50): PaginatedResult
     {
-        $query = SmsOptOut::query();
-
-        if ($connectionId) {
-            $query->where('connection_id', $connectionId);
-        }
-
-        return $query->orderBy('opted_out_at', 'desc')->paginate($perPage);
+        return $this->repository->listOptOuts($connectionId, $perPage);
     }
 
     // =========================================================================
@@ -598,40 +461,26 @@ class SmsApplicationService
     /**
      * List SMS campaigns.
      */
-    public function listCampaigns(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listCampaigns(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = SmsCampaign::query()
-            ->with(['connection:id,name,phone_number', 'template:id,name']);
-
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
-        if (!empty($filters['connection_id'])) {
-            $query->where('connection_id', $filters['connection_id']);
-        }
-
-        if (!empty($filters['search'])) {
-            $query->where('name', 'like', "%{$filters['search']}%");
-        }
-
-        return $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $page = $filters['page'] ?? 1;
+        return $this->repository->listCampaigns($filters, $perPage, $page);
     }
 
     /**
      * Get a campaign by ID.
      */
-    public function getCampaign(int $id): ?SmsCampaign
+    public function getCampaign(int $id): ?array
     {
-        return SmsCampaign::with(['connection', 'template', 'messages'])->find($id);
+        return $this->repository->findCampaignById($id);
     }
 
     /**
      * Create an SMS campaign.
      */
-    public function createCampaign(array $data): SmsCampaign
+    public function createCampaign(array $data): array
     {
-        return SmsCampaign::create([
+        return $this->repository->createCampaign([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'connection_id' => $data['connection_id'],
@@ -640,7 +489,7 @@ class SmsApplicationService
             'recipient_list' => $data['recipient_list'] ?? [],
             'status' => 'draft',
             'scheduled_at' => $data['scheduled_at'] ?? null,
-            'created_by' => Auth::id(),
+            'created_by' => $this->authContext->userId(),
         ]);
     }
 
@@ -649,24 +498,35 @@ class SmsApplicationService
      */
     public function startCampaign(int $campaignId): array
     {
-        $campaign = SmsCampaign::findOrFail($campaignId);
+        $campaign = $this->repository->findCampaignById($campaignId);
 
-        if ($campaign->status !== 'draft' && $campaign->status !== 'scheduled') {
+        if (!$campaign) {
+            throw new \InvalidArgumentException('Campaign not found');
+        }
+
+        if ($campaign['status'] !== 'draft' && $campaign['status'] !== 'scheduled') {
             throw new \InvalidArgumentException('Campaign cannot be started');
         }
 
-        $campaign->update(['status' => 'sending', 'started_at' => now()]);
+        $this->repository->updateCampaign($campaignId, ['status' => 'sending', 'started_at' => now()]);
+
+        // Get template content if template_id is set
+        $content = $campaign['content'];
+        if (!$content && !empty($campaign['template_id'])) {
+            $template = $this->repository->findTemplateById($campaign['template_id']);
+            $content = $template['content'] ?? '';
+        }
 
         // Send to recipients
         $results = $this->bulkSend(
-            $campaign->recipient_list,
-            $campaign->content ?? $campaign->template?->content,
-            $campaign->connection_id,
-            $campaign->template_id
+            $campaign['recipient_list'],
+            $content,
+            $campaign['connection_id'],
+            $campaign['template_id']
         );
 
         // Update campaign stats
-        $campaign->update([
+        $this->repository->updateCampaign($campaignId, [
             'status' => 'completed',
             'completed_at' => now(),
             'total_sent' => $results['sent'],
@@ -681,22 +541,44 @@ class SmsApplicationService
      */
     public function getCampaignStats(int $campaignId): array
     {
-        $campaign = SmsCampaign::findOrFail($campaignId);
+        return $this->repository->getCampaignStats($campaignId);
+    }
 
-        $messages = $campaign->messages();
-        $total = $messages->count();
-        $delivered = (clone $messages)->byStatus('delivered')->count();
-        $failed = (clone $messages)->whereIn('status', ['failed', 'undelivered'])->count();
-        $totalCost = (clone $messages)->sum('cost');
+    // =========================================================================
+    // HELPER METHODS
+    // =========================================================================
 
-        return [
-            'campaign' => $campaign,
-            'total_messages' => $total,
-            'delivered' => $delivered,
-            'failed' => $failed,
-            'pending' => $total - $delivered - $failed,
-            'delivery_rate' => $total > 0 ? round(($delivered / $total) * 100, 1) : 0,
-            'total_cost' => $totalCost,
-        ];
+    /**
+     * Calculate number of SMS segments needed for the message.
+     */
+    private function calculateSegments(string $content): int
+    {
+        $length = strlen($content);
+
+        // Check if message contains non-GSM characters (requires UCS-2 encoding)
+        $isUnicode = preg_match('/[^\x00-\x7F]/', $content);
+
+        if ($isUnicode) {
+            // UCS-2: 70 chars per segment, 67 for multipart
+            return $length <= 70 ? 1 : (int) ceil($length / 67);
+        }
+
+        // GSM-7: 160 chars per segment, 153 for multipart
+        return $length <= 160 ? 1 : (int) ceil($length / 153);
+    }
+
+    /**
+     * Render template with data.
+     */
+    private function renderTemplate(string $content, array $data): string
+    {
+        foreach ($data as $key => $value) {
+            $content = str_replace('{{' . $key . '}}', $value ?? '', $content);
+        }
+
+        // Remove any unmatched merge fields
+        $content = preg_replace('/\{\{\w+\}\}/', '', $content);
+
+        return trim($content);
     }
 }

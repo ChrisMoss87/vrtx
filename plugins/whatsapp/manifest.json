@@ -1,0 +1,37 @@
+{
+    "slug": "whatsapp",
+    "name": "WhatsApp Business Integration",
+    "version": "1.0.0",
+    "description": "Send and receive WhatsApp messages directly from your CRM. Includes message templates, automated workflows, and conversation tracking.",
+    "category": "communication",
+    "service_provider": "Plugins\\WhatsApp\\WhatsAppPluginServiceProvider",
+    "dependencies": [],
+    "routes": {
+        "prefix": "whatsapp",
+        "file": "src/Http/routes.php"
+    },
+    "migrations": [
+        "database/migrations"
+    ],
+    "permissions": [
+        "whatsapp.view",
+        "whatsapp.send",
+        "whatsapp.manage_connections",
+        "whatsapp.manage_templates"
+    ],
+    "communication_channel": "whatsapp",
+    "usage_metrics": [
+        {
+            "name": "messages_sent",
+            "display_name": "Messages Sent",
+            "unit": "messages",
+            "reset_period": "monthly"
+        },
+        {
+            "name": "conversations",
+            "display_name": "Active Conversations",
+            "unit": "conversations",
+            "reset_period": "monthly"
+        }
+    ]
+}

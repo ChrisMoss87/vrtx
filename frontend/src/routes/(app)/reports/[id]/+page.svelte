@@ -27,7 +27,8 @@
 		FileText,
 		Settings,
 		Users,
-		LayoutGrid
+		LayoutGrid,
+		Share2
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -38,6 +39,7 @@
 	} from '$lib/api/reports';
 	import ReportBuilder from '$lib/components/reporting/ReportBuilder.svelte';
 	import ReportPreview from '$lib/components/reporting/ReportPreview.svelte';
+	import ShareReportDialog from '$lib/components/reporting/ShareReportDialog.svelte';
 
 	let report = $state<Report | null>(null);
 	let result = $state<ReportResult | null>(null);
@@ -47,6 +49,7 @@
 	let lastRunAt = $state<string | null>(null);
 	let editMode = $state(false);
 	let activeTab = $state('results');
+	let showShareDialog = $state(false);
 
 	const reportId = $derived(Number($page.params.id));
 
@@ -265,6 +268,10 @@
 								<Copy class="mr-2 h-4 w-4" />
 								Duplicate
 							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => (showShareDialog = true)}>
+								<Share2 class="mr-2 h-4 w-4" />
+								Share
+							</DropdownMenu.Item>
 							<DropdownMenu.Sub>
 								<DropdownMenu.SubTrigger>
 									<Download class="mr-2 h-4 w-4" />
@@ -406,3 +413,8 @@
 		{/if}
 	{/if}
 </div>
+
+<!-- Share Dialog -->
+{#if report}
+	<ShareReportDialog reportId={report.id} bind:open={showShareDialog} />
+{/if}

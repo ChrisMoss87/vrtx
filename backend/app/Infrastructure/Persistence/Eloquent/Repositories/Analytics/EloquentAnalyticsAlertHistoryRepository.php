@@ -7,33 +7,42 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories\Analytics;
 use App\Domain\Analytics\Entities\AnalyticsAlertHistory as AnalyticsAlertHistoryEntity;
 use App\Domain\Analytics\Repositories\AnalyticsAlertHistoryRepositoryInterface;
 use App\Domain\Analytics\ValueObjects\AlertHistoryStatus;
-use App\Models\AnalyticsAlertHistory;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 final class EloquentAnalyticsAlertHistoryRepository implements AnalyticsAlertHistoryRepositoryInterface
 {
+    private const TABLE = 'analytics_alert_history';
+    private const TABLE_ALERTS = 'analytics_alerts';
+
+    private const STATUS_TRIGGERED = 'triggered';
+    private const STATUS_RESOLVED = 'resolved';
+
     public function findById(int $id): ?AnalyticsAlertHistoryEntity
     {
-        $model = AnalyticsAlertHistory::with('alert')->find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        return $model ? $this->toDomain($model) : null;
+        return $row ? $this->toDomainEntity($row) : null;
     }
 
     public function getForAlert(int $alertId, int $limit = 50): array
     {
-        $models = AnalyticsAlertHistory::where('alert_id', $alertId)
-            ->orderBy('created_at', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('alert_id', $alertId)
+            ->orderByDesc('created_at')
             ->limit($limit)
             ->get();
 
-        return $models->map(fn ($model) => $this->toDomain($model))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function getHistoricalValues(int $alertId, int $periods): array
     {
-        return AnalyticsAlertHistory::where('alert_id', $alertId)
+        return DB::table(self::TABLE)
+            ->where('alert_id', $alertId)
             ->whereNotNull('metric_value')
-            ->orderBy('created_at', 'desc')
+            ->orderByDesc('created_at')
             ->limit($periods)
             ->pluck('metric_value')
             ->reverse()
@@ -43,24 +52,33 @@ final class EloquentAnalyticsAlertHistoryRepository implements AnalyticsAlertHis
 
     public function getUnacknowledgedForUser(int $userId): array
     {
-        $models = AnalyticsAlertHistory::unacknowledged()
-            ->whereHas('alert', function ($q) use ($userId) {
+        // Get alert IDs for this user
+        $alertIds = DB::table(self::TABLE_ALERTS)
+            ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                     ->orWhereRaw("notification_config->'recipients' @> ?", [json_encode([$userId])]);
             })
-            ->with('alert')
-            ->orderBy('created_at', 'desc')
+            ->pluck('id');
+
+        $rows = DB::table(self::TABLE)
+            ->whereIn('alert_id', $alertIds)
+            ->whereNull('acknowledged_at')
+            ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn ($model) => $this->toDomain($model))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function getTriggeredTodayCount(?int $userId = null): int
     {
-        $query = AnalyticsAlertHistory::whereDate('created_at', today());
+        $query = DB::table(self::TABLE)
+            ->whereDate('created_at', now()->toDateString());
 
         if ($userId !== null) {
-            $query->whereHas('alert', fn ($q) => $q->where('user_id', $userId));
+            $alertIds = DB::table(self::TABLE_ALERTS)
+                ->where('user_id', $userId)
+                ->pluck('id');
+            $query->whereIn('alert_id', $alertIds);
         }
 
         return $query->count();
@@ -68,10 +86,13 @@ final class EloquentAnalyticsAlertHistoryRepository implements AnalyticsAlertHis
 
     public function getUnacknowledgedCount(?int $userId = null): int
     {
-        $query = AnalyticsAlertHistory::unacknowledged();
+        $query = DB::table(self::TABLE)->whereNull('acknowledged_at');
 
         if ($userId !== null) {
-            $query->whereHas('alert', fn ($q) => $q->where('user_id', $userId));
+            $alertIds = DB::table(self::TABLE_ALERTS)
+                ->where('user_id', $userId)
+                ->pluck('id');
+            $query->whereIn('alert_id', $alertIds);
         }
 
         return $query->count();
@@ -79,10 +100,11 @@ final class EloquentAnalyticsAlertHistoryRepository implements AnalyticsAlertHis
 
     public function calculateBaseline(int $alertId, int $periods): float
     {
-        $historicalValues = AnalyticsAlertHistory::where('alert_id', $alertId)
-            ->where('status', AnalyticsAlertHistory::STATUS_RESOLVED)
+        $historicalValues = DB::table(self::TABLE)
+            ->where('alert_id', $alertId)
+            ->where('status', self::STATUS_RESOLVED)
             ->whereNotNull('metric_value')
-            ->orderBy('created_at', 'desc')
+            ->orderByDesc('created_at')
             ->limit($periods)
             ->pluck('metric_value')
             ->toArray();
@@ -96,75 +118,91 @@ final class EloquentAnalyticsAlertHistoryRepository implements AnalyticsAlertHis
 
     public function getComparisonValue(int $alertId, int $periodDays): ?float
     {
-        $model = AnalyticsAlertHistory::where('alert_id', $alertId)
+        $row = DB::table(self::TABLE)
+            ->where('alert_id', $alertId)
             ->whereNotNull('metric_value')
             ->whereBetween('created_at', [
                 now()->subDays($periodDays + 1),
                 now()->subDays($periodDays - 1),
             ])
-            ->orderBy('created_at', 'desc')
+            ->orderByDesc('created_at')
             ->first();
 
-        return $model?->metric_value;
+        return $row?->metric_value;
     }
 
     public function save(AnalyticsAlertHistoryEntity $entity): AnalyticsAlertHistoryEntity
     {
-        $data = [
+        $data = $this->toRowData($entity);
+
+        if ($entity->getId() !== null) {
+            DB::table(self::TABLE)
+                ->where('id', $entity->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $entity->getId();
+        } else {
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
+        }
+
+        return $this->findById($id);
+    }
+
+    public function acknowledge(int $id, int $userId, ?string $note = null): void
+    {
+        DB::table(self::TABLE)
+            ->where('id', $id)
+            ->update([
+                'acknowledged_by' => $userId,
+                'acknowledged_at' => now(),
+                'acknowledgment_note' => $note,
+                'updated_at' => now(),
+            ]);
+    }
+
+    private function toDomainEntity(stdClass $row): AnalyticsAlertHistoryEntity
+    {
+        return AnalyticsAlertHistoryEntity::reconstitute(
+            id: (int) $row->id,
+            alertId: (int) $row->alert_id,
+            status: AlertHistoryStatus::from($row->status),
+            metricValue: $row->metric_value !== null ? (float) $row->metric_value : null,
+            thresholdValue: $row->threshold_value !== null ? (float) $row->threshold_value : null,
+            baselineValue: $row->baseline_value !== null ? (float) $row->baseline_value : null,
+            deviationPercent: $row->deviation_percent !== null ? (float) $row->deviation_percent : null,
+            context: $row->context ? (is_string($row->context) ? json_decode($row->context, true) : $row->context) : [],
+            message: $row->message,
+            acknowledgedBy: $row->acknowledged_by ? (int) $row->acknowledged_by : null,
+            acknowledgedAt: $row->acknowledged_at ? new DateTimeImmutable($row->acknowledged_at) : null,
+            acknowledgmentNote: $row->acknowledgment_note,
+            notificationsSent: $row->notifications_sent ? (is_string($row->notifications_sent) ? json_decode($row->notifications_sent, true) : $row->notifications_sent) : [],
+            createdAt: $row->created_at ? new DateTimeImmutable($row->created_at) : null,
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function toRowData(AnalyticsAlertHistoryEntity $entity): array
+    {
+        return [
             'alert_id' => $entity->getAlertId(),
             'status' => $entity->getStatus()->value,
             'metric_value' => $entity->getMetricValue(),
             'threshold_value' => $entity->getThresholdValue(),
             'baseline_value' => $entity->getBaselineValue(),
             'deviation_percent' => $entity->getDeviationPercent(),
-            'context' => $entity->getContext(),
+            'context' => json_encode($entity->getContext()),
             'message' => $entity->getMessage(),
             'acknowledged_by' => $entity->getAcknowledgedBy(),
             'acknowledged_at' => $entity->getAcknowledgedAt()?->format('Y-m-d H:i:s'),
             'acknowledgment_note' => $entity->getAcknowledgmentNote(),
-            'notifications_sent' => $entity->getNotificationsSent(),
+            'notifications_sent' => json_encode($entity->getNotificationsSent()),
         ];
-
-        if ($entity->getId() !== null) {
-            $model = AnalyticsAlertHistory::findOrFail($entity->getId());
-            $model->update($data);
-        } else {
-            $model = AnalyticsAlertHistory::create($data);
-        }
-
-        return $this->toDomain($model->fresh());
-    }
-
-    public function acknowledge(int $id, int $userId, ?string $note = null): void
-    {
-        $model = AnalyticsAlertHistory::findOrFail($id);
-        $model->acknowledge($userId, $note);
-    }
-
-    private function toDomain(AnalyticsAlertHistory $model): AnalyticsAlertHistoryEntity
-    {
-        return AnalyticsAlertHistoryEntity::reconstitute(
-            id: $model->id,
-            alertId: $model->alert_id,
-            status: AlertHistoryStatus::from($model->status),
-            metricValue: $model->metric_value !== null ? (float) $model->metric_value : null,
-            thresholdValue: $model->threshold_value !== null ? (float) $model->threshold_value : null,
-            baselineValue: $model->baseline_value !== null ? (float) $model->baseline_value : null,
-            deviationPercent: $model->deviation_percent !== null ? (float) $model->deviation_percent : null,
-            context: $model->context ?? [],
-            message: $model->message,
-            acknowledgedBy: $model->acknowledged_by,
-            acknowledgedAt: $model->acknowledged_at
-                ? new DateTimeImmutable($model->acknowledged_at->toDateTimeString())
-                : null,
-            acknowledgmentNote: $model->acknowledgment_note,
-            notificationsSent: $model->notifications_sent ?? [],
-            createdAt: $model->created_at
-                ? new DateTimeImmutable($model->created_at->toDateTimeString())
-                : null,
-            updatedAt: $model->updated_at
-                ? new DateTimeImmutable($model->updated_at->toDateTimeString())
-                : null,
-        );
     }
 }

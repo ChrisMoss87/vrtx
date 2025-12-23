@@ -5,26 +5,24 @@ declare(strict_types=1);
 namespace App\Application\Services\Document;
 
 use App\Domain\Document\Repositories\SignatureRequestRepositoryInterface;
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Models\DocumentSendLog;
 use App\Models\DocumentTemplate;
 use App\Models\GeneratedDocument;
 use App\Models\ModuleRecord;
-use App\Models\SignatureAuditLog;
-use App\Models\SignatureField;
-use App\Models\SignatureRequest;
-use App\Models\SignatureSigner;
 use App\Models\SignatureTemplate;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentApplicationService
 {
     public function __construct(
-        private SignatureRequestRepositoryInterface $repository,
+        private SignatureRequestRepositoryInterface $signatureRequestRepository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -302,203 +300,75 @@ class DocumentApplicationService
     /**
      * List signature requests
      */
-    public function listSignatureRequests(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function listSignatureRequests(array $filters = [], int $perPage = 15, int $page = 1): PaginatedResult
     {
-        $query = SignatureRequest::query()->with(['document', 'createdBy', 'signers']);
-
-        // Filter by status
-        if (!empty($filters['status'])) {
-            $query->status($filters['status']);
-        }
-
-        // Pending only
-        if (!empty($filters['pending_only'])) {
-            $query->pending();
-        }
-
-        // Filter by source
-        if (!empty($filters['source_type'])) {
-            $query->where('source_type', $filters['source_type']);
-        }
-        if (!empty($filters['source_id'])) {
-            $query->where('source_id', $filters['source_id']);
-        }
-
-        // Filter by created_by
-        if (!empty($filters['created_by'])) {
-            $query->where('created_by', $filters['created_by']);
-        }
-
-        // Filter expired
-        if (!empty($filters['expired_only'])) {
-            $query->expired();
-        }
-
-        // Sort
-        $sortField = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortField, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->signatureRequestRepository->listSignatureRequests($filters, $perPage, $page);
     }
 
     /**
      * Get a signature request
      */
-    public function getSignatureRequest(int $requestId): ?SignatureRequest
+    public function getSignatureRequest(int $requestId): ?array
     {
-        return SignatureRequest::with([
-            'document',
-            'createdBy',
-            'signers',
-            'fields',
-            'auditLogs' => fn($q) => $q->latest()->limit(50),
-        ])->find($requestId);
+        return $this->signatureRequestRepository->getSignatureRequestWithRelations($requestId);
     }
 
     /**
      * Get signature request by UUID (for public signing)
      */
-    public function getSignatureRequestByUuid(string $uuid): ?SignatureRequest
+    public function getSignatureRequestByUuid(string $uuid): ?array
     {
-        return SignatureRequest::with(['document', 'signers', 'fields'])
-            ->where('uuid', $uuid)
-            ->first();
+        return $this->signatureRequestRepository->getSignatureRequestByUuid($uuid);
     }
 
     /**
      * Create a signature request
      */
-    public function createSignatureRequest(array $data): SignatureRequest
+    public function createSignatureRequest(array $data): array
     {
-        return DB::transaction(function () use ($data) {
-            $request = SignatureRequest::create([
-                'title' => $data['title'],
-                'description' => $data['description'] ?? null,
-                'document_id' => $data['document_id'] ?? null,
-                'source_type' => $data['source_type'] ?? null,
-                'source_id' => $data['source_id'] ?? null,
-                'file_path' => $data['file_path'] ?? null,
-                'file_url' => $data['file_url'] ?? null,
-                'expires_at' => $data['expires_at'] ?? now()->addDays(30),
-                'settings' => $data['settings'] ?? [],
-                'created_by' => Auth::id(),
-            ]);
+        $userId = $this->authContext->userId();
+        if (!$userId) {
+            throw new \RuntimeException('User must be authenticated');
+        }
 
-            // Add signers
-            if (!empty($data['signers'])) {
-                foreach ($data['signers'] as $index => $signerData) {
-                    $request->signers()->create([
-                        'name' => $signerData['name'],
-                        'email' => $signerData['email'],
-                        'role' => $signerData['role'] ?? 'signer',
-                        'sign_order' => $signerData['sign_order'] ?? $index + 1,
-                        'access_code' => $signerData['access_code'] ?? null,
-                    ]);
-                }
-            }
-
-            // Add signature fields
-            if (!empty($data['fields'])) {
-                foreach ($data['fields'] as $fieldData) {
-                    $request->fields()->create([
-                        'signer_id' => $fieldData['signer_id'] ?? null,
-                        'field_type' => $fieldData['field_type'],
-                        'label' => $fieldData['label'] ?? null,
-                        'required' => $fieldData['required'] ?? true,
-                        'page_number' => $fieldData['page_number'] ?? 1,
-                        'position_x' => $fieldData['position_x'],
-                        'position_y' => $fieldData['position_y'],
-                        'width' => $fieldData['width'] ?? null,
-                        'height' => $fieldData['height'] ?? null,
-                    ]);
-                }
-            }
-
-            $request->logEvent('created', 'Signature request created');
-
-            return $request->load(['signers', 'fields']);
-        });
+        return $this->signatureRequestRepository->createSignatureRequest($data, $userId);
     }
 
     /**
      * Update a signature request (only in draft status)
      */
-    public function updateSignatureRequest(int $requestId, array $data): SignatureRequest
+    public function updateSignatureRequest(int $requestId, array $data): array
     {
-        $request = SignatureRequest::findOrFail($requestId);
-
-        if (!$request->isEditable()) {
-            throw new \RuntimeException('Signature request cannot be edited');
-        }
-
-        $request->update([
-            'title' => $data['title'] ?? $request->title,
-            'description' => $data['description'] ?? $request->description,
-            'expires_at' => $data['expires_at'] ?? $request->expires_at,
-            'settings' => $data['settings'] ?? $request->settings,
-        ]);
-
-        return $request->fresh(['signers', 'fields']);
+        return $this->signatureRequestRepository->updateSignatureRequest($requestId, $data);
     }
 
     /**
      * Send signature request
      */
-    public function sendSignatureRequest(int $requestId): SignatureRequest
+    public function sendSignatureRequest(int $requestId): array
     {
-        $request = SignatureRequest::with(['signers'])->findOrFail($requestId);
-
-        if ($request->signers->isEmpty()) {
-            throw new \RuntimeException('Cannot send request without signers');
-        }
-
-        $request->send();
-
         // Here you would dispatch emails to signers
-        // foreach ($request->signers as $signer) {
-        //     SendSignatureRequestEmail::dispatch($request, $signer);
+        // foreach ($result['signers'] as $signer) {
+        //     SendSignatureRequestEmail::dispatch($result, $signer);
         // }
 
-        return $request->fresh(['signers']);
+        return $this->signatureRequestRepository->sendSignatureRequest($requestId);
     }
 
     /**
      * Void signature request
      */
-    public function voidSignatureRequest(int $requestId, string $reason): SignatureRequest
+    public function voidSignatureRequest(int $requestId, string $reason): array
     {
-        $request = SignatureRequest::findOrFail($requestId);
-
-        if (!$request->canBeVoided()) {
-            throw new \RuntimeException('Signature request cannot be voided');
-        }
-
-        $request->void($reason);
-
-        return $request;
+        return $this->signatureRequestRepository->voidSignatureRequest($requestId, $reason);
     }
 
     /**
      * Add signer to request
      */
-    public function addSigner(int $requestId, array $data): SignatureSigner
+    public function addSigner(int $requestId, array $data): array
     {
-        $request = SignatureRequest::findOrFail($requestId);
-
-        if (!$request->isEditable()) {
-            throw new \RuntimeException('Cannot add signer to non-draft request');
-        }
-
-        $maxOrder = $request->signers()->max('sign_order') ?? 0;
-
-        return $request->signers()->create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'role' => $data['role'] ?? 'signer',
-            'sign_order' => $data['sign_order'] ?? $maxOrder + 1,
-            'access_code' => $data['access_code'] ?? null,
-        ]);
+        return $this->signatureRequestRepository->addSigner($requestId, $data);
     }
 
     /**
@@ -506,118 +376,44 @@ class DocumentApplicationService
      */
     public function removeSigner(int $signerId): bool
     {
-        $signer = SignatureSigner::with(['request'])->findOrFail($signerId);
-
-        if (!$signer->request->isEditable()) {
-            throw new \RuntimeException('Cannot remove signer from non-draft request');
-        }
-
-        return $signer->delete();
+        return $this->signatureRequestRepository->removeSigner($signerId);
     }
 
     /**
      * Record signature (for public signing)
      */
-    public function recordSignature(string $requestUuid, string $signerEmail, array $signatureData): SignatureSigner
+    public function recordSignature(string $requestUuid, string $signerEmail, array $signatureData): array
     {
-        $request = SignatureRequest::where('uuid', $requestUuid)->firstOrFail();
+        // Here you would dispatch email to next signer if sequential
+        // SendSignatureRequestEmail::dispatch($request, $nextSigner);
 
-        if ($request->isExpired()) {
-            throw new \RuntimeException('Signature request has expired');
-        }
-
-        $signer = $request->signers()->where('email', $signerEmail)->firstOrFail();
-
-        if ($signer->status === SignatureSigner::STATUS_SIGNED) {
-            throw new \RuntimeException('Already signed');
-        }
-
-        // Verify access code if required
-        if ($signer->access_code && ($signatureData['access_code'] ?? '') !== $signer->access_code) {
-            throw new \RuntimeException('Invalid access code');
-        }
-
-        return DB::transaction(function () use ($request, $signer, $signatureData) {
-            $signer->sign(
-                $signatureData['signature_data'],
-                $signatureData['signature_image_url'] ?? null
-            );
-
-            $request->logEvent('signed', "Signed by {$signer->name}", $signer);
-
-            // Update field values
-            if (!empty($signatureData['field_values'])) {
-                foreach ($signatureData['field_values'] as $fieldId => $value) {
-                    SignatureField::where('id', $fieldId)
-                        ->where('signer_id', $signer->id)
-                        ->update(['value' => $value]);
-                }
-            }
-
-            // Check if all signers have completed
-            $request->checkCompletion();
-
-            // Send to next signer if sequential
-            $nextSigner = $request->getNextSigner();
-            if ($nextSigner) {
-                $nextSigner->update(['sent_at' => now()]);
-                // SendSignatureRequestEmail::dispatch($request, $nextSigner);
-            }
-
-            return $signer->fresh();
-        });
+        return $this->signatureRequestRepository->recordSignature($requestUuid, $signerEmail, $signatureData);
     }
 
     /**
      * Decline to sign
      */
-    public function declineSignature(string $requestUuid, string $signerEmail, string $reason): SignatureSigner
+    public function declineSignature(string $requestUuid, string $signerEmail, string $reason): array
     {
-        $request = SignatureRequest::where('uuid', $requestUuid)->firstOrFail();
-        $signer = $request->signers()->where('email', $signerEmail)->firstOrFail();
-
-        return DB::transaction(function () use ($request, $signer, $reason) {
-            $signer->decline($reason);
-
-            $request->status = SignatureRequest::STATUS_DECLINED;
-            $request->save();
-
-            $request->logEvent('declined', "Declined by {$signer->name}: {$reason}", $signer);
-
-            return $signer->fresh();
-        });
+        return $this->signatureRequestRepository->declineSignature($requestUuid, $signerEmail, $reason);
     }
 
     /**
      * Get audit trail for a signature request
      */
-    public function getSignatureAuditTrail(int $requestId): Collection
+    public function getSignatureAuditTrail(int $requestId): array
     {
-        return SignatureAuditLog::where('request_id', $requestId)
-            ->with(['signer'])
-            ->orderBy('created_at')
-            ->get();
+        return $this->signatureRequestRepository->getAuditTrail($requestId);
     }
 
     /**
      * Send reminder to pending signer
      */
-    public function sendSignatureReminder(int $requestId, int $signerId): SignatureSigner
+    public function sendSignatureReminder(int $requestId, int $signerId): array
     {
-        $request = SignatureRequest::findOrFail($requestId);
-        $signer = SignatureSigner::findOrFail($signerId);
-
-        if ($signer->status !== SignatureSigner::STATUS_PENDING) {
-            throw new \RuntimeException('Signer has already completed');
-        }
-
-        $signer->update(['reminder_sent_at' => now()]);
-
-        $request->logEvent('reminder_sent', "Reminder sent to {$signer->name}", $signer);
-
         // SendSignatureReminderEmail::dispatch($request, $signer);
 
-        return $signer->fresh();
+        return $this->signatureRequestRepository->sendReminder($requestId, $signerId);
     }
 
     // =========================================================================
@@ -720,8 +516,7 @@ class DocumentApplicationService
      */
     public function markExpiredSignatureRequests(): int
     {
-        return SignatureRequest::expired()
-            ->update(['status' => SignatureRequest::STATUS_EXPIRED]);
+        return $this->signatureRequestRepository->markExpiredRequests();
     }
 
     // =========================================================================

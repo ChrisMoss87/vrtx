@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Modules\DTOs;
 
-use App\Models\FieldOption;
 use JsonSerializable;
 
 /**
@@ -36,28 +35,6 @@ readonly class FieldOptionDefinitionDTO implements JsonSerializable
         public \DateTimeInterface $createdAt,
         public \DateTimeInterface $updatedAt,
     ) {}
-
-    /**
-     * Create from Eloquent model.
-     *
-     * @param FieldOption $option
-     * @return self
-     */
-    public static function fromModel(FieldOption $option): self
-    {
-        return new self(
-            id: $option->id,
-            fieldId: $option->field_id,
-            label: $option->label,
-            value: $option->value,
-            color: $option->color,
-            isActive: $option->is_active,
-            displayOrder: $option->display_order,
-            metadata: $option->metadata,
-            createdAt: $option->created_at,
-            updatedAt: $option->updated_at,
-        );
-    }
 
     /**
      * JSON serialize the DTO.

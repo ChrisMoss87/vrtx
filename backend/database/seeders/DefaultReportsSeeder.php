@@ -84,7 +84,7 @@ class DefaultReportsSeeder extends Seeder
             'aggregations' => [
                 ['function' => 'sum', 'field' => 'amount', 'alias' => 'revenue']
             ],
-            'date_range' => ['field' => 'close_date', 'range' => 'this_year'],
+            'date_range' => ['field' => 'close_date', 'type' => 'this_year'],
             'config' => ['folder' => 'Sales'],
         ]);
 
@@ -128,7 +128,7 @@ class DefaultReportsSeeder extends Seeder
                 ['function' => 'sum', 'field' => 'amount', 'alias' => 'revenue'],
                 ['function' => 'count', 'field' => '*', 'alias' => 'deals_won']
             ],
-            'date_range' => ['field' => 'close_date', 'range' => 'this_quarter'],
+            'date_range' => ['field' => 'close_date', 'type' => 'this_quarter'],
             'config' => ['folder' => 'Sales'],
         ]);
 
@@ -150,7 +150,7 @@ class DefaultReportsSeeder extends Seeder
                 ['function' => 'count', 'field' => '*', 'alias' => 'deal_count'],
                 ['function' => 'sum', 'field' => 'amount', 'alias' => 'total_value']
             ],
-            'date_range' => ['field' => 'close_date', 'range' => 'this_quarter'],
+            'date_range' => ['field' => 'close_date', 'type' => 'this_quarter'],
             'config' => ['folder' => 'Sales'],
         ]);
 
@@ -172,7 +172,7 @@ class DefaultReportsSeeder extends Seeder
             'aggregations' => [
                 ['function' => 'sum', 'field' => 'amount', 'alias' => 'revenue']
             ],
-            'date_range' => ['field' => 'close_date', 'range' => 'this_year'],
+            'date_range' => ['field' => 'close_date', 'type' => 'this_year'],
             'config' => ['folder' => 'Sales'],
         ]);
 
@@ -218,7 +218,7 @@ class DefaultReportsSeeder extends Seeder
                 'aggregations' => [
                     ['function' => 'count', 'field' => '*', 'alias' => 'new_contacts']
                 ],
-                'date_range' => ['field' => 'created_at', 'range' => 'last_90_days'],
+                'date_range' => ['field' => 'created_at', 'type' => 'last_90_days'],
                 'config' => ['folder' => 'Customers'],
             ]);
 
@@ -326,7 +326,7 @@ class DefaultReportsSeeder extends Seeder
             'aggregations' => [
                 ['function' => 'count', 'field' => '*', 'alias' => 'new_cases']
             ],
-            'date_range' => ['field' => 'created_at', 'range' => 'last_90_days'],
+            'date_range' => ['field' => 'created_at', 'type' => 'last_90_days'],
             'config' => ['folder' => 'Support'],
         ]);
 
@@ -395,7 +395,7 @@ class DefaultReportsSeeder extends Seeder
             'aggregations' => [
                 ['function' => 'count', 'field' => '*', 'alias' => 'activity_count']
             ],
-            'date_range' => ['field' => 'start_datetime', 'range' => 'this_month'],
+            'date_range' => ['field' => 'start_datetime', 'type' => 'this_month'],
             'config' => ['folder' => 'Activities'],
         ]);
 
@@ -414,7 +414,7 @@ class DefaultReportsSeeder extends Seeder
             'aggregations' => [
                 ['function' => 'count', 'field' => '*', 'alias' => 'activity_count']
             ],
-            'date_range' => ['field' => 'start_datetime', 'range' => 'this_week'],
+            'date_range' => ['field' => 'start_datetime', 'type' => 'this_week'],
             'config' => ['folder' => 'Activities'],
         ]);
 
@@ -436,7 +436,7 @@ class DefaultReportsSeeder extends Seeder
             'aggregations' => [
                 ['function' => 'count', 'field' => '*', 'alias' => 'call_count']
             ],
-            'date_range' => ['field' => 'start_datetime', 'range' => 'this_month'],
+            'date_range' => ['field' => 'start_datetime', 'type' => 'this_month'],
             'config' => ['folder' => 'Activities'],
         ]);
 
@@ -455,7 +455,7 @@ class DefaultReportsSeeder extends Seeder
             'aggregations' => [
                 ['function' => 'count', 'field' => '*', 'alias' => 'activities']
             ],
-            'date_range' => ['field' => 'start_datetime', 'range' => 'last_30_days'],
+            'date_range' => ['field' => 'start_datetime', 'type' => 'last_30_days'],
             'config' => ['folder' => 'Activities'],
         ]);
 
@@ -508,7 +508,7 @@ class DefaultReportsSeeder extends Seeder
                 'aggregations' => [
                     ['function' => 'sum', 'field' => 'amount_paid', 'alias' => 'collected']
                 ],
-                'date_range' => ['field' => 'payment_date', 'range' => 'this_year'],
+                'date_range' => ['field' => 'payment_date', 'type' => 'this_year'],
                 'config' => ['folder' => 'Financial'],
             ]);
 
@@ -568,7 +568,7 @@ class DefaultReportsSeeder extends Seeder
                     ['function' => 'count', 'field' => '*', 'alias' => 'quote_count'],
                     ['function' => 'sum', 'field' => 'total', 'alias' => 'total_value']
                 ],
-                'date_range' => ['field' => 'quote_date', 'range' => 'this_quarter'],
+                'date_range' => ['field' => 'quote_date', 'type' => 'this_quarter'],
                 'config' => ['folder' => 'Financial'],
             ]);
 
@@ -681,7 +681,7 @@ class DefaultReportsSeeder extends Seeder
                 ['field' => 'due_date', 'direction' => 'asc'],
                 ['field' => 'priority', 'direction' => 'desc']
             ],
-            'date_range' => ['field' => 'due_date', 'range' => 'this_week'],
+            'date_range' => ['field' => 'due_date', 'type' => 'this_week'],
             'config' => [
                 'folder' => 'Tasks',
                 'columns' => ['subject', 'priority', 'due_date', 'status', 'assigned_to']

@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Application\Services\ImportExport;
 
 use App\Domain\ImportExport\Repositories\ImportRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Models\Export;
 use App\Models\ExportTemplate;
 use App\Models\Import;
@@ -13,14 +17,16 @@ use App\Models\Module;
 use App\Models\ModuleRecord;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ImportExportApplicationService
 {
     public function __construct(
-        private ImportRepositoryInterface $repository,
+        private ImportRepositoryInterface $importRepository,
+        private AuthContextInterface $authContext,
+        private ModuleRepositoryInterface $moduleRepository,
+        private ModuleRecordRepositoryInterface $moduleRecordRepository,
     ) {}
 
     // ==========================================
@@ -30,92 +36,43 @@ class ImportExportApplicationService
     /**
      * List imports with filtering and pagination.
      */
-    public function listImports(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function listImports(array $filters = [], int $perPage = 15): PaginatedResult
     {
-        $query = Import::query()
-            ->with(['module', 'user']);
-
-        if (!empty($filters['module_id'])) {
-            $query->where('module_id', $filters['module_id']);
-        }
-
-        if (!empty($filters['user_id'])) {
-            $query->where('user_id', $filters['user_id']);
-        }
-
-        if (!empty($filters['status'])) {
-            $query->byStatus($filters['status']);
-        }
-
-        if (!empty($filters['file_type'])) {
-            $query->where('file_type', $filters['file_type']);
-        }
-
-        if (!empty($filters['search'])) {
-            $query->where('name', 'like', "%{$filters['search']}%");
-        }
-
-        if (!empty($filters['date_from'])) {
-            $query->whereDate('created_at', '>=', $filters['date_from']);
-        }
-
-        if (!empty($filters['date_to'])) {
-            $query->whereDate('created_at', '<=', $filters['date_to']);
-        }
-
-        $sortField = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortField, $sortDir);
-
-        return $query->paginate($perPage);
+        $page = $filters['page'] ?? 1;
+        return $this->importRepository->listImports($filters, $perPage, $page);
     }
 
     /**
      * Get a single import by ID.
      */
-    public function getImport(int $id): ?Import
+    public function getImport(int $id): ?array
     {
-        return Import::with(['module', 'user'])->find($id);
+        return $this->importRepository->findById($id);
     }
 
     /**
      * Get import with all rows.
      */
-    public function getImportWithRows(int $id): ?Import
+    public function getImportWithRows(int $id): ?array
     {
-        return Import::with(['module', 'user', 'rows'])->find($id);
+        return $this->importRepository->findByIdWithRows($id);
     }
 
     /**
      * Get import rows with pagination.
      */
-    public function getImportRows(int $importId, array $filters = [], int $perPage = 50): LengthAwarePaginator
+    public function getImportRows(int $importId, array $filters = [], int $perPage = 50): PaginatedResult
     {
-        $query = ImportRow::where('import_id', $importId);
-
-        if (!empty($filters['status'])) {
-            $query->byStatus($filters['status']);
-        }
-
-        if (!empty($filters['has_errors'])) {
-            $query->whereNotNull('errors')
-                ->where('errors', '!=', '[]');
-        }
-
-        $query->orderBy('row_number', 'asc');
-
-        return $query->paginate($perPage);
+        $page = $filters['page'] ?? 1;
+        return $this->importRepository->getImportRows($importId, $filters, $perPage, $page);
     }
 
     /**
      * Get failed rows for an import.
      */
-    public function getFailedRows(int $importId): Collection
+    public function getFailedRows(int $importId): array
     {
-        return ImportRow::where('import_id', $importId)
-            ->failed()
-            ->orderBy('row_number')
-            ->get();
+        return $this->importRepository->getFailedRows($importId);
     }
 
     /**
@@ -123,35 +80,15 @@ class ImportExportApplicationService
      */
     public function getImportStats(int $importId): array
     {
-        $import = Import::findOrFail($importId);
-
-        return [
-            'total_rows' => $import->total_rows,
-            'processed_rows' => $import->processed_rows,
-            'successful_rows' => $import->successful_rows,
-            'failed_rows' => $import->failed_rows,
-            'skipped_rows' => $import->skipped_rows,
-            'progress_percentage' => $import->getProgressPercentage(),
-            'status' => $import->status,
-            'duration' => $import->started_at && $import->completed_at
-                ? $import->completed_at->diffInSeconds($import->started_at)
-                : null,
-            'rows_per_second' => $import->started_at && $import->completed_at && $import->processed_rows > 0
-                ? round($import->processed_rows / max(1, $import->completed_at->diffInSeconds($import->started_at)), 2)
-                : null,
-        ];
+        return $this->importRepository->getImportStats($importId);
     }
 
     /**
      * Get user's import history.
      */
-    public function getUserImportHistory(int $userId, int $limit = 10): Collection
+    public function getUserImportHistory(int $userId, int $limit = 10): array
     {
-        return Import::where('user_id', $userId)
-            ->with('module')
-            ->orderByDesc('created_at')
-            ->limit($limit)
-            ->get();
+        return $this->importRepository->getUserImportHistory($userId, $limit);
     }
 
     /**
@@ -211,11 +148,11 @@ class ImportExportApplicationService
     /**
      * Create a new import.
      */
-    public function createImport(array $data): Import
+    public function createImport(array $data): array
     {
-        return Import::create([
+        return $this->importRepository->create([
             'module_id' => $data['module_id'],
-            'user_id' => Auth::id(),
+            'user_id' => $this->authContext->userId(),
             'name' => $data['name'] ?? 'Import ' . now()->format('Y-m-d H:i'),
             'file_name' => $data['file_name'],
             'file_path' => $data['file_path'],
@@ -233,22 +170,24 @@ class ImportExportApplicationService
     /**
      * Update import settings (before starting).
      */
-    public function updateImportSettings(int $id, array $data): Import
+    public function updateImportSettings(int $id, array $data): array
     {
-        $import = Import::findOrFail($id);
+        $import = $this->importRepository->findById($id);
 
-        if ($import->status !== Import::STATUS_PENDING) {
+        if (!$import) {
+            throw new \InvalidArgumentException('Import not found');
+        }
+
+        if ($import['status'] !== Import::STATUS_PENDING) {
             throw new \InvalidArgumentException('Cannot update settings for an import that has already started');
         }
 
-        $import->update([
-            'name' => $data['name'] ?? $import->name,
-            'column_mapping' => $data['column_mapping'] ?? $import->column_mapping,
-            'import_options' => $data['import_options'] ?? $import->import_options,
-            'field_transformations' => $data['field_transformations'] ?? $import->field_transformations,
+        return $this->importRepository->update($id, [
+            'name' => $data['name'] ?? $import['name'],
+            'column_mapping' => $data['column_mapping'] ?? $import['column_mapping'],
+            'import_options' => $data['import_options'] ?? $import['import_options'],
+            'field_transformations' => $data['field_transformations'] ?? $import['field_transformations'],
         ]);
-
-        return $import->fresh();
     }
 
     /**
@@ -321,50 +260,66 @@ class ImportExportApplicationService
     /**
      * Start processing the import.
      */
-    public function startImport(int $id): Import
+    public function startImport(int $id): array
     {
-        $import = Import::findOrFail($id);
+        $import = $this->importRepository->findById($id);
 
-        if (!in_array($import->status, [Import::STATUS_PENDING, Import::STATUS_VALIDATED])) {
+        if (!$import) {
+            throw new \InvalidArgumentException('Import not found');
+        }
+
+        if (!in_array($import['status'], [Import::STATUS_PENDING, Import::STATUS_VALIDATED])) {
             throw new \InvalidArgumentException('Import is not in a valid state to start');
         }
 
-        $import->markAsStarted();
+        $this->importRepository->markAsStarted($id);
 
         // In production, this would dispatch a job
         // For now, process synchronously
-        $this->processImport($import);
+        $this->processImport($id);
 
-        return $import->fresh();
+        return $this->importRepository->findById($id);
     }
 
     /**
      * Process import rows.
      */
-    public function processImport(Import $import): void
+    public function processImport(int $importId): void
     {
         DB::beginTransaction();
 
         try {
-            $rows = $import->rows()->where('status', ImportRow::STATUS_PENDING)->get();
+            $import = $this->importRepository->findById($importId);
+            if (!$import) {
+                throw new \InvalidArgumentException('Import not found');
+            }
+
+            $rows = $this->importRepository->getPendingRows($importId);
 
             foreach ($rows as $row) {
                 try {
                     $recordId = $this->processImportRow($import, $row);
-                    $row->markAsSuccess($recordId);
-                    $import->incrementProcessed(ImportRow::STATUS_SUCCESS);
+
+                    // Mark row as success using Eloquent directly (repository doesn't manage ImportRow state)
+                    $rowModel = ImportRow::find($row['id']);
+                    $rowModel?->markAsSuccess($recordId);
+
+                    $this->importRepository->incrementProcessed($importId, ImportRow::STATUS_SUCCESS);
                 } catch (\Exception $e) {
-                    $row->markAsFailed(['exception' => $e->getMessage()]);
-                    $import->incrementProcessed(ImportRow::STATUS_FAILED);
+                    // Mark row as failed using Eloquent directly
+                    $rowModel = ImportRow::find($row['id']);
+                    $rowModel?->markAsFailed(['exception' => $e->getMessage()]);
+
+                    $this->importRepository->incrementProcessed($importId, ImportRow::STATUS_FAILED);
                 }
             }
 
-            $import->markAsCompleted();
+            $this->importRepository->markAsCompleted($importId);
             DB::commit();
 
         } catch (\Exception $e) {
             DB::rollBack();
-            $import->markAsFailed($e->getMessage());
+            $this->importRepository->markAsFailed($importId, $e->getMessage());
             throw $e;
         }
     }
@@ -372,17 +327,23 @@ class ImportExportApplicationService
     /**
      * Cancel an import.
      */
-    public function cancelImport(int $id): Import
+    public function cancelImport(int $id): array
     {
-        $import = Import::findOrFail($id);
+        $import = $this->importRepository->findById($id);
 
-        if (!$import->canBeCancelled()) {
+        if (!$import) {
+            throw new \InvalidArgumentException('Import not found');
+        }
+
+        // Check if can be cancelled (not in terminal state)
+        $terminalStates = [Import::STATUS_COMPLETED, Import::STATUS_FAILED, Import::STATUS_CANCELLED];
+        if (in_array($import['status'], $terminalStates)) {
             throw new \InvalidArgumentException('This import cannot be cancelled');
         }
 
-        $import->markAsCancelled();
+        $this->importRepository->markAsCancelled($id);
 
-        return $import;
+        return $this->importRepository->findById($id);
     }
 
     /**
@@ -390,16 +351,7 @@ class ImportExportApplicationService
      */
     public function deleteImport(int $id): void
     {
-        $import = Import::findOrFail($id);
-
-        // Delete the file if it exists
-        if ($import->file_path && Storage::disk('imports')->exists($import->file_path)) {
-            Storage::disk('imports')->delete($import->file_path);
-        }
-
-        // Delete rows first
-        $import->rows()->delete();
-        $import->delete();
+        $this->importRepository->delete($id);
     }
 
     /**
@@ -777,21 +729,16 @@ class ImportExportApplicationService
             default => now()->subMonth(),
         };
 
-        $importQuery = Import::where('created_at', '>=', $dateFrom);
-        $exportQuery = Export::where('created_at', '>=', $dateFrom);
+        $imports = $this->importRepository->getActivitySummary($userId, $period);
 
+        // Keep Export queries as-is for now since we're only refactoring Import
+        $exportQuery = Export::where('created_at', '>=', $dateFrom);
         if ($userId) {
-            $importQuery->where('user_id', $userId);
             $exportQuery->where('user_id', $userId);
         }
 
         return [
-            'imports' => [
-                'total' => $importQuery->count(),
-                'completed' => (clone $importQuery)->where('status', Import::STATUS_COMPLETED)->count(),
-                'failed' => (clone $importQuery)->where('status', Import::STATUS_FAILED)->count(),
-                'total_records' => (clone $importQuery)->sum('successful_rows'),
-            ],
+            'imports' => $imports,
             'exports' => [
                 'total' => $exportQuery->count(),
                 'completed' => (clone $exportQuery)->where('status', Export::STATUS_COMPLETED)->count(),
@@ -809,42 +756,7 @@ class ImportExportApplicationService
      */
     public function getImportErrorAnalysis(int $importId): array
     {
-        $import = Import::findOrFail($importId);
-        $failedRows = $import->failedRows()->get();
-
-        $errorTypes = [];
-        $fieldErrors = [];
-
-        foreach ($failedRows as $row) {
-            $errors = $row->errors ?? [];
-            foreach ($errors as $field => $messages) {
-                if (!isset($fieldErrors[$field])) {
-                    $fieldErrors[$field] = 0;
-                }
-                $fieldErrors[$field]++;
-
-                foreach ((array) $messages as $message) {
-                    $type = $this->categorizeError($message);
-                    if (!isset($errorTypes[$type])) {
-                        $errorTypes[$type] = 0;
-                    }
-                    $errorTypes[$type]++;
-                }
-            }
-        }
-
-        arsort($errorTypes);
-        arsort($fieldErrors);
-
-        return [
-            'total_failed_rows' => $failedRows->count(),
-            'error_types' => $errorTypes,
-            'field_errors' => $fieldErrors,
-            'sample_errors' => $failedRows->take(10)->map(fn ($row) => [
-                'row_number' => $row->row_number,
-                'errors' => $row->errors,
-            ])->toArray(),
-        ];
+        return $this->importRepository->getImportErrorAnalysis($importId);
     }
 
     // ==========================================
@@ -891,23 +803,26 @@ class ImportExportApplicationService
     /**
      * Process a single import row.
      */
-    private function processImportRow(Import $import, ImportRow $row): ?int
+    private function processImportRow(array $import, array $row): ?int
     {
-        $module = $import->module;
-        $data = $row->mapped_data;
+        $data = $row['mapped_data'];
+        $moduleId = $import['module']['id'] ?? $import['module_id'];
 
         // Check for duplicates if configured
-        if ($import->getDuplicateCheckField()) {
-            $checkField = $import->getDuplicateCheckField();
-            $existing = ModuleRecord::where('module_id', $module->id)
-                ->whereRaw("data->>'{$checkField}' = ?", [$data[$checkField] ?? null])
+        $importOptions = $import['import_options'] ?? [];
+        $duplicateCheckField = $importOptions['duplicate_check_field'] ?? null;
+
+        if ($duplicateCheckField) {
+            $existing = ModuleRecord::where('module_id', $moduleId)
+                ->whereRaw("data->>'{$duplicateCheckField}' = ?", [$data[$duplicateCheckField] ?? null])
                 ->first();
 
             if ($existing) {
-                $handling = $import->getDuplicateHandling();
+                $handling = $importOptions['duplicate_handling'] ?? Import::DUPLICATE_SKIP;
 
                 if ($handling === Import::DUPLICATE_SKIP) {
-                    $row->markAsSkipped('Duplicate record found');
+                    $rowModel = ImportRow::find($row['id']);
+                    $rowModel?->markAsSkipped('Duplicate record found');
                     return null;
                 }
 
@@ -920,9 +835,9 @@ class ImportExportApplicationService
 
         // Create new record
         $record = ModuleRecord::create([
-            'module_id' => $module->id,
+            'module_id' => $moduleId,
             'data' => $data,
-            'created_by' => $import->user_id,
+            'created_by' => $import['user_id'],
         ]);
 
         return $record->id;

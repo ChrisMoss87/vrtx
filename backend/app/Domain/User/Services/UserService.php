@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace App\Domain\User\Services;
 
+use App\Domain\Shared\Contracts\HasherInterface;
+use App\Domain\Shared\Contracts\StringHelperInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\User\Repositories\UserRepositoryInterface;
 use App\Domain\User\Repositories\SessionRepositoryInterface;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class UserService
 {
     public function __construct(
         private UserRepositoryInterface $userRepository,
         private SessionRepositoryInterface $sessionRepository,
+        private HasherInterface $hasher,
+        private StringHelperInterface $stringHelper,
     ) {}
 
     /**
@@ -26,7 +27,7 @@ class UserService
         ?string $role = null,
         ?string $status = null,
         int $perPage = 25
-    ): LengthAwarePaginator {
+    ): PaginatedResult {
         $isActive = null;
         if ($status !== null && $this->userRepository->hasActiveStatusColumn()) {
             $isActive = $status === 'active';
@@ -48,12 +49,12 @@ class UserService
      */
     public function createUser(array $data, ?array $roleIds = null, bool $sendInvite = false): array
     {
-        $password = $data['password'] ?? Str::random(16);
+        $password = $data['password'] ?? $this->stringHelper->random(16);
 
         $userData = $this->userRepository->create([
             'name' => $data['name'],
             'email' => $data['email'],
-            'password' => Hash::make($password),
+            'password' => $this->hasher->make($password),
         ]);
 
         if (!empty($roleIds)) {
@@ -123,15 +124,15 @@ class UserService
     public function resetPassword(int $id, ?string $newPassword = null, bool $sendEmail = true): array
     {
         if ($newPassword !== null) {
-            $this->userRepository->updatePassword($id, Hash::make($newPassword));
+            $this->userRepository->updatePassword($id, $this->hasher->make($newPassword));
 
             return [
                 'message' => 'Password updated successfully',
             ];
         }
 
-        $tempPassword = Str::random(12);
-        $this->userRepository->updatePassword($id, Hash::make($tempPassword));
+        $tempPassword = $this->stringHelper->random(12);
+        $this->userRepository->updatePassword($id, $this->hasher->make($tempPassword));
 
         // TODO: Send password reset email if requested
 
@@ -144,7 +145,7 @@ class UserService
     /**
      * Get user sessions.
      */
-    public function getUserSessions(int $id): Collection
+    public function getUserSessions(int $id): array
     {
         return $this->sessionRepository->getForUser($id);
     }

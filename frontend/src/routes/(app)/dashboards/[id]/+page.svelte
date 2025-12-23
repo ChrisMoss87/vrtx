@@ -35,9 +35,17 @@
 		PanelRightOpen,
 		Grid3x3,
 		Link,
-		Globe
+		Globe,
+		Share2,
+		Play,
+		Bell,
+		MessageSquare
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
+	import QuickFiltersBar from '$lib/components/dashboard/QuickFiltersBar.svelte';
+	import ShareDashboardDialog from '$lib/components/dashboard/ShareDashboardDialog.svelte';
+	import AlertHistoryPanel from '$lib/components/dashboard/AlertHistoryPanel.svelte';
+	import { onFilterChange, clearGlobalFilters, buildFilterQueryParams } from '$lib/stores/dashboardFilterContext.svelte';
 	import {
 		dashboardsApi,
 		type Dashboard,
@@ -86,6 +94,11 @@
 	let widgetConfig = $state<WidgetConfig>({});
 	let textContent = $state('');
 	let reports = $state<Report[]>([]);
+
+	// Dashboard feature dialogs
+	let shareDialogOpen = $state(false);
+	let alertPanelOpen = $state(false);
+	let showQuickFilters = $state(true);
 
 	const dashboardId = $derived(Number($page.params.id));
 
@@ -226,14 +239,26 @@
 		return categories;
 	});
 
-	onMount(async () => {
+	let unsubscribeFilters: (() => void) | null = null;
+
+	onMount(() => {
 		const urlParams = new URLSearchParams(window.location.search);
 		if (urlParams.get('edit') === 'true') {
 			editMode = true;
 		}
 
-		await loadDashboard();
-		await loadReports();
+		loadDashboard();
+		loadReports();
+
+		// Subscribe to filter changes for cross-widget filtering
+		unsubscribeFilters = onFilterChange(() => {
+			loadWidgetData();
+		});
+
+		return () => {
+			unsubscribeFilters?.();
+			clearGlobalFilters();
+		};
 	});
 
 	async function loadDashboard() {
@@ -254,10 +279,20 @@
 		if (!dashboard) return;
 
 		try {
-			widgetData = await dashboardsApi.getAllWidgetData(dashboard.id);
+			// Build filter params from global filter context
+			const filterParams = buildFilterQueryParams();
+			widgetData = await dashboardsApi.getAllWidgetData(dashboard.id, filterParams);
 		} catch (error) {
 			console.error('Failed to load widget data:', error);
 		}
+	}
+
+	function handleFiltersChange() {
+		loadWidgetData();
+	}
+
+	function handlePresentationMode() {
+		goto(`/dashboards/${dashboardId}/present`);
 	}
 
 	async function loadReports() {
@@ -496,6 +531,22 @@
 				{#if savingLayout}
 					<span class="text-sm text-muted-foreground">Saving...</span>
 				{/if}
+
+				<!-- Alert History Button -->
+				<Button variant="outline" size="icon" onclick={() => (alertPanelOpen = true)} title="View Alerts">
+					<Bell class="h-4 w-4" />
+				</Button>
+
+				<!-- Presentation Mode Button -->
+				<Button variant="outline" size="icon" onclick={handlePresentationMode} title="Presentation Mode">
+					<Play class="h-4 w-4" />
+				</Button>
+
+				<!-- Share Button -->
+				<Button variant="outline" size="icon" onclick={() => (shareDialogOpen = true)} title="Share Dashboard">
+					<Share2 class="h-4 w-4" />
+				</Button>
+
 				<Button variant="outline" onclick={handleRefresh} disabled={refreshing}>
 					<RefreshCw class="mr-2 h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
 					Refresh
@@ -522,6 +573,13 @@
 				{/if}
 			</div>
 		</div>
+
+		<!-- Quick Filters Bar -->
+		{#if showQuickFilters}
+			<div class="mb-4">
+				<QuickFiltersBar onFiltersChange={handleFiltersChange} />
+			</div>
+		{/if}
 
 		<!-- Widgets Grid -->
 		{#if !dashboard.widgets || dashboard.widgets.length === 0}
@@ -552,27 +610,28 @@
 				{#snippet children(widget, data)}
 					{@const widgetDataItem = widgetData[widget.id]}
 					{#if widget.type === 'kpi'}
-						<KPIWidget title={widget.title} data={widgetDataItem} />
+						<KPIWidget title={widget.title} data={widgetDataItem} config={widget.config} />
 					{:else if widget.type === 'goal_kpi'}
-						<GoalKPIWidget title={widget.title} data={widgetDataItem} />
+						<GoalKPIWidget title={widget.title} data={widgetDataItem} config={widget.config} />
 					{:else if widget.type === 'table' || widget.type === 'report'}
-						<TableWidget title={widget.title} data={widgetDataItem} />
+						<TableWidget title={widget.title} data={widgetDataItem} config={widget.config} />
 					{:else if widget.type === 'chart'}
 						<ChartWidget
 							title={widget.title}
 							data={widgetDataItem}
+							config={widget.config}
 							chartType={widgetDataItem?.chart_type || 'bar'}
 						/>
 					{:else if widget.type === 'funnel'}
-						<FunnelWidget title={widget.title} data={widgetDataItem} />
+						<FunnelWidget title={widget.title} data={widgetDataItem} config={widget.config} />
 					{:else if widget.type === 'leaderboard'}
-						<LeaderboardWidget title={widget.title} data={widgetDataItem} />
+						<LeaderboardWidget title={widget.title} data={widgetDataItem} config={widget.config} />
 					{:else if widget.type === 'progress'}
-						<ProgressWidget title={widget.title} data={widgetDataItem} />
+						<ProgressWidget title={widget.title} data={widgetDataItem} config={widget.config} />
 					{:else if widget.type === 'recent_records'}
 						<RecentRecordsWidget title={widget.title} data={widgetDataItem} />
 					{:else if widget.type === 'heatmap'}
-						<HeatmapWidget title={widget.title} data={widgetDataItem} />
+						<HeatmapWidget title={widget.title} data={widgetDataItem} config={widget.config} />
 					{:else if widget.type === 'text'}
 						<TextWidget title={widget.title} content={widget.config?.content || ''} />
 					{:else if widget.type === 'quick_links'}
@@ -810,3 +869,19 @@
 	onClose={() => (widgetPaletteOpen = false)}
 	onWidgetSelect={handleWidgetPaletteSelect}
 />
+
+<!-- Share Dashboard Dialog -->
+{#if dashboard}
+	<ShareDashboardDialog
+		dashboardId={dashboard.id}
+		bind:open={shareDialogOpen}
+	/>
+{/if}
+
+<!-- Alert History Panel -->
+{#if dashboard}
+	<AlertHistoryPanel
+		dashboardId={dashboard.id}
+		bind:open={alertPanelOpen}
+	/>
+{/if}

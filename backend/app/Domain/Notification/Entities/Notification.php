@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Notification\Entities;
 
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class Notification
+final class Notification implements Entity
 {
     // Categories
     public const CATEGORY_APPROVALS = 'approvals';
@@ -155,6 +156,14 @@ final class Notification
     public function getArchivedAt(): ?DateTimeImmutable { return $this->archivedAt; }
     public function getCreatedAt(): ?DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?DateTimeImmutable { return $this->updatedAt; }
+
+    public function equals(Entity $other): bool
+    {
+        return $other instanceof self
+            && $this->id !== null
+            && $other->id !== null
+            && $this->id === $other->id;
+    }
 
     // Domain actions
     public function markAsRead(): void

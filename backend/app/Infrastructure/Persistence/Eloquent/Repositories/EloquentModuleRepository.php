@@ -7,78 +7,97 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 use App\Domain\Modules\Entities\Module as ModuleEntity;
 use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
 use App\Domain\Modules\ValueObjects\ModuleSettings;
-use App\Models\Module;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 final class EloquentModuleRepository implements ModuleRepositoryInterface
 {
+    private const TABLE = 'modules';
+    private const TABLE_BLOCKS = 'blocks';
+    private const TABLE_FIELDS = 'fields';
+
     public function findById(int $id): ?ModuleEntity
     {
-        $model = Module::with(['blocks.fields.options', 'fields.options'])
-            ->find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        return $model ? $this->toDomain($model) : null;
+        if (!$row) {
+            return null;
+        }
+
+        return $this->toDomainEntityWithRelations($row);
     }
 
     public function findByApiName(string $apiName): ?ModuleEntity
     {
-        $model = Module::with(['blocks.fields.options', 'fields.options'])
+        $row = DB::table(self::TABLE)
             ->where('api_name', $apiName)
             ->first();
 
-        return $model ? $this->toDomain($model) : null;
+        if (!$row) {
+            return null;
+        }
+
+        return $this->toDomainEntityWithRelations($row);
     }
 
     public function findAll(): array
     {
-        return Module::with(['blocks.fields.options', 'fields.options'])
+        $rows = DB::table(self::TABLE)
             ->orderBy('display_order')
-            ->get()
-            ->map(fn (Module $model): ModuleEntity => $this->toDomain($model))
-            ->all();
+            ->get();
+
+        return $rows->map(fn ($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findActive(): array
     {
-        return Module::with(['blocks.fields.options', 'fields.options'])
+        $rows = DB::table(self::TABLE)
             ->where('is_active', true)
             ->orderBy('display_order')
-            ->get()
-            ->map(fn (Module $model): ModuleEntity => $this->toDomain($model))
-            ->all();
+            ->get();
+
+        return $rows->map(fn ($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function save(ModuleEntity $module): ModuleEntity
     {
         $data = [
-            'name' => $module->name(),
-            'singular_name' => $module->singularName(),
-            'api_name' => $module->apiName(),
-            'icon' => $module->icon(),
-            'description' => $module->description(),
+            'name' => $module->getName(),
+            'singular_name' => $module->getSingularName(),
+            'api_name' => $module->getApiName(),
+            'icon' => $module->getIcon(),
+            'description' => $module->getDescription(),
             'is_active' => $module->isActive(),
-            'settings' => $module->settings()->jsonSerialize(),
-            'display_order' => $module->displayOrder(),
+            'settings' => json_encode($module->getSettings()->jsonSerialize()),
+            'display_order' => $module->getDisplayOrder(),
         ];
 
-        if ($module->id() === null) {
-            $model = Module::create($data);
+        if ($module->getId() === null) {
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         } else {
-            $model = Module::findOrFail($module->id());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $module->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $module->getId();
         }
 
-        return $this->toDomain($model->load(['blocks.fields.options', 'fields.options']));
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        return (bool) Module::destroy($id);
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
     public function existsByName(string $name, ?int $excludeId = null): bool
     {
-        $query = Module::where('name', $name);
+        $query = DB::table(self::TABLE)->where('name', $name);
 
         if ($excludeId !== null) {
             $query->where('id', '!=', $excludeId);
@@ -89,7 +108,7 @@ final class EloquentModuleRepository implements ModuleRepositoryInterface
 
     public function existsByApiName(string $apiName, ?int $excludeId = null): bool
     {
-        $query = Module::where('api_name', $apiName);
+        $query = DB::table(self::TABLE)->where('api_name', $apiName);
 
         if ($excludeId !== null) {
             $query->where('id', '!=', $excludeId);
@@ -98,38 +117,41 @@ final class EloquentModuleRepository implements ModuleRepositoryInterface
         return $query->exists();
     }
 
-    private function toDomain(Module $model): ModuleEntity
+    private function toDomainEntityWithRelations(stdClass $row): ModuleEntity
     {
-        $entity = new ModuleEntity(
-            id: $model->id,
-            name: $model->name,
-            singularName: $model->singular_name,
-            apiName: $model->api_name,
-            icon: $model->icon,
-            description: $model->description,
-            isActive: $model->is_active,
-            settings: ModuleSettings::fromArray($model->settings ?? []),
-            displayOrder: $model->display_order,
-            createdAt: new DateTimeImmutable($model->created_at->toDateTimeString()),
-            updatedAt: $model->updated_at ? new DateTimeImmutable($model->updated_at->toDateTimeString()) : null,
-            deletedAt: $model->deleted_at ? new DateTimeImmutable($model->deleted_at->toDateTimeString()) : null,
+        $blockRepo = new EloquentBlockRepository();
+        $fieldRepo = new EloquentFieldRepository();
+
+        // Load blocks with fields
+        $blocks = $blockRepo->findByModuleId((int) $row->id);
+
+        // Load standalone fields (not in blocks)
+        $fields = $fieldRepo->findByModuleId((int) $row->id);
+
+        return $this->toDomainEntity($row, $blocks, $fields);
+    }
+
+    private function toDomainEntity(stdClass $row, array $blocks = [], array $fields = []): ModuleEntity
+    {
+        $settings = $row->settings
+            ? (is_string($row->settings) ? json_decode($row->settings, true) : $row->settings)
+            : [];
+
+        return ModuleEntity::reconstitute(
+            id: (int) $row->id,
+            name: $row->name,
+            singularName: $row->singular_name,
+            apiName: $row->api_name,
+            icon: $row->icon,
+            description: $row->description,
+            isActive: (bool) $row->is_active,
+            settings: ModuleSettings::fromArray($settings),
+            displayOrder: (int) $row->display_order,
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
+            deletedAt: $row->deleted_at ? new DateTimeImmutable($row->deleted_at) : null,
+            blocks: $blocks,
+            fields: $fields,
         );
-
-        // Load blocks and fields if present
-        if ($model->relationLoaded('blocks')) {
-            $blockRepo = new EloquentBlockRepository();
-            foreach ($model->blocks as $blockModel) {
-                $entity->addBlock($blockRepo->toDomain($blockModel));
-            }
-        }
-
-        if ($model->relationLoaded('fields')) {
-            $fieldRepo = new EloquentFieldRepository();
-            foreach ($model->fields as $fieldModel) {
-                $entity->addField($fieldRepo->toDomain($fieldModel));
-            }
-        }
-
-        return $entity;
     }
 }

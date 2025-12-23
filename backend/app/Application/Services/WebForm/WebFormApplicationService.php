@@ -4,14 +4,9 @@ declare(strict_types=1);
 
 namespace App\Application\Services\WebForm;
 
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\WebForm\Repositories\WebFormRepositoryInterface;
-use App\Models\WebForm;
-use App\Models\WebFormField;
-use App\Models\WebFormSubmission;
-use App\Models\WebFormAnalytics;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
@@ -19,6 +14,7 @@ class WebFormApplicationService
 {
     public function __construct(
         private WebFormRepositoryInterface $repository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -28,78 +24,38 @@ class WebFormApplicationService
     /**
      * List web forms with filtering and pagination.
      */
-    public function listForms(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listForms(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = WebForm::query()
-            ->with(['creator:id,name,email', 'module:id,name', 'assignee:id,name,email']);
-
-        // Filter by module
-        if (!empty($filters['module_id'])) {
-            $query->where('module_id', $filters['module_id']);
-        }
-
-        // Filter by creator
-        if (!empty($filters['created_by'])) {
-            $query->where('created_by', $filters['created_by']);
-        }
-
-        // Filter active only
-        if (!empty($filters['active'])) {
-            $query->active();
-        }
-
-        // Search
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhere('slug', 'like', "%{$search}%");
-            });
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->repository->listForms($filters, $perPage);
     }
 
     /**
      * Get a web form by ID.
      */
-    public function getForm(int $id): ?WebForm
+    public function getForm(int $id): ?array
     {
-        return WebForm::with([
+        return $this->repository->findById($id, [
             'creator:id,name,email',
             'module:id,name',
             'assignee:id,name,email',
             'fields'
-        ])->find($id);
+        ]);
     }
 
     /**
      * Get a web form by slug.
      */
-    public function getFormBySlug(string $slug): ?WebForm
+    public function getFormBySlug(string $slug): ?array
     {
-        return WebForm::with(['fields', 'module:id,name'])
-            ->where('slug', $slug)
-            ->where('is_active', true)
-            ->first();
+        return $this->repository->findBySlug($slug, true, ['fields', 'module:id,name']);
     }
 
     /**
      * Get active forms for a module.
      */
-    public function getActiveFormsForModule(int $moduleId): Collection
+    public function getActiveFormsForModule(int $moduleId): array
     {
-        return WebForm::active()
-            ->where('module_id', $moduleId)
-            ->with('fields')
-            ->orderBy('name')
-            ->get();
+        return $this->repository->getActiveFormsForModule($moduleId, ['fields']);
     }
 
     // =========================================================================
@@ -109,55 +65,22 @@ class WebFormApplicationService
     /**
      * Create a new web form.
      */
-    public function createForm(array $data): WebForm
+    public function createForm(array $data): array
     {
-        return DB::transaction(function () use ($data) {
-            $form = WebForm::create([
-                'name' => $data['name'],
-                'slug' => $data['slug'] ?? null,
-                'description' => $data['description'] ?? null,
-                'module_id' => $data['module_id'],
-                'is_active' => $data['is_active'] ?? true,
-                'settings' => $data['settings'] ?? [],
-                'styling' => $data['styling'] ?? [],
-                'thank_you_config' => $data['thank_you_config'] ?? [],
-                'spam_protection' => $data['spam_protection'] ?? [],
-                'created_by' => Auth::id(),
-                'assign_to_user_id' => $data['assign_to_user_id'] ?? null,
-            ]);
+        $userId = $this->authContext->userId();
+        if (!$userId) {
+            throw new \RuntimeException('User must be authenticated to create a form');
+        }
 
-            // Create fields if provided
-            if (!empty($data['fields']) && is_array($data['fields'])) {
-                foreach ($data['fields'] as $index => $fieldData) {
-                    $this->createField($form->id, array_merge($fieldData, [
-                        'display_order' => $fieldData['display_order'] ?? $index,
-                    ]));
-                }
-            }
-
-            return $form->fresh(['creator', 'module', 'fields']);
-        });
+        return $this->repository->createForm($data, $userId);
     }
 
     /**
      * Update a web form.
      */
-    public function updateForm(int $id, array $data): WebForm
+    public function updateForm(int $id, array $data): array
     {
-        $form = WebForm::findOrFail($id);
-
-        $form->update([
-            'name' => $data['name'] ?? $form->name,
-            'description' => $data['description'] ?? $form->description,
-            'is_active' => $data['is_active'] ?? $form->is_active,
-            'settings' => array_merge($form->settings ?? [], $data['settings'] ?? []),
-            'styling' => array_merge($form->styling ?? [], $data['styling'] ?? []),
-            'thank_you_config' => array_merge($form->thank_you_config ?? [], $data['thank_you_config'] ?? []),
-            'spam_protection' => array_merge($form->spam_protection ?? [], $data['spam_protection'] ?? []),
-            'assign_to_user_id' => $data['assign_to_user_id'] ?? $form->assign_to_user_id,
-        ]);
-
-        return $form->fresh();
+        return $this->repository->updateForm($id, $data);
     }
 
     /**
@@ -165,51 +88,20 @@ class WebFormApplicationService
      */
     public function deleteForm(int $id): bool
     {
-        $form = WebForm::findOrFail($id);
-        return $form->delete();
+        return $this->repository->deleteForm($id);
     }
 
     /**
      * Duplicate a web form.
      */
-    public function duplicateForm(int $id): WebForm
+    public function duplicateForm(int $id): array
     {
-        $original = WebForm::with('fields')->findOrFail($id);
+        $userId = $this->authContext->userId();
+        if (!$userId) {
+            throw new \RuntimeException('User must be authenticated to duplicate a form');
+        }
 
-        return DB::transaction(function () use ($original) {
-            $newForm = WebForm::create([
-                'name' => $original->name . ' (Copy)',
-                'slug' => null, // Will be auto-generated
-                'description' => $original->description,
-                'module_id' => $original->module_id,
-                'is_active' => false, // Start as inactive
-                'settings' => $original->settings,
-                'styling' => $original->styling,
-                'thank_you_config' => $original->thank_you_config,
-                'spam_protection' => $original->spam_protection,
-                'created_by' => Auth::id(),
-                'assign_to_user_id' => $original->assign_to_user_id,
-            ]);
-
-            // Copy fields
-            foreach ($original->fields as $field) {
-                WebFormField::create([
-                    'web_form_id' => $newForm->id,
-                    'field_type' => $field->field_type,
-                    'label' => $field->label,
-                    'name' => $field->name,
-                    'placeholder' => $field->placeholder,
-                    'is_required' => $field->is_required,
-                    'module_field_id' => $field->module_field_id,
-                    'options' => $field->options,
-                    'validation_rules' => $field->validation_rules,
-                    'display_order' => $field->display_order,
-                    'settings' => $field->settings,
-                ]);
-            }
-
-            return $newForm->fresh(['fields']);
-        });
+        return $this->repository->duplicateForm($id, $userId);
     }
 
     // =========================================================================
@@ -219,20 +111,17 @@ class WebFormApplicationService
     /**
      * List fields for a form.
      */
-    public function listFields(int $formId): Collection
+    public function listFields(int $formId): array
     {
-        return WebFormField::where('web_form_id', $formId)
-            ->with('moduleField')
-            ->ordered()
-            ->get();
+        return $this->repository->listFields($formId, ['moduleField']);
     }
 
     /**
      * Get a field by ID.
      */
-    public function getField(int $id): ?WebFormField
+    public function getField(int $id): ?array
     {
-        return WebFormField::with(['webForm', 'moduleField'])->find($id);
+        return $this->repository->findFieldById($id, ['webForm', 'moduleField']);
     }
 
     // =========================================================================
@@ -242,44 +131,17 @@ class WebFormApplicationService
     /**
      * Create a form field.
      */
-    public function createField(int $formId, array $data): WebFormField
+    public function createField(int $formId, array $data): array
     {
-        return WebFormField::create([
-            'web_form_id' => $formId,
-            'field_type' => $data['field_type'],
-            'label' => $data['label'],
-            'name' => $data['name'] ?? null,
-            'placeholder' => $data['placeholder'] ?? null,
-            'is_required' => $data['is_required'] ?? false,
-            'module_field_id' => $data['module_field_id'] ?? null,
-            'options' => $data['options'] ?? [],
-            'validation_rules' => $data['validation_rules'] ?? [],
-            'display_order' => $data['display_order'] ?? 0,
-            'settings' => $data['settings'] ?? [],
-        ]);
+        return $this->repository->createField($formId, $data);
     }
 
     /**
      * Update a form field.
      */
-    public function updateField(int $id, array $data): WebFormField
+    public function updateField(int $id, array $data): array
     {
-        $field = WebFormField::findOrFail($id);
-
-        $field->update([
-            'field_type' => $data['field_type'] ?? $field->field_type,
-            'label' => $data['label'] ?? $field->label,
-            'name' => $data['name'] ?? $field->name,
-            'placeholder' => $data['placeholder'] ?? $field->placeholder,
-            'is_required' => $data['is_required'] ?? $field->is_required,
-            'module_field_id' => $data['module_field_id'] ?? $field->module_field_id,
-            'options' => $data['options'] ?? $field->options,
-            'validation_rules' => $data['validation_rules'] ?? $field->validation_rules,
-            'display_order' => $data['display_order'] ?? $field->display_order,
-            'settings' => array_merge($field->settings ?? [], $data['settings'] ?? []),
-        ]);
-
-        return $field->fresh();
+        return $this->repository->updateField($id, $data);
     }
 
     /**
@@ -287,8 +149,7 @@ class WebFormApplicationService
      */
     public function deleteField(int $id): bool
     {
-        $field = WebFormField::findOrFail($id);
-        return $field->delete();
+        return $this->repository->deleteField($id);
     }
 
     /**
@@ -296,14 +157,7 @@ class WebFormApplicationService
      */
     public function reorderFields(int $formId, array $fieldIdsInOrder): bool
     {
-        return DB::transaction(function () use ($formId, $fieldIdsInOrder) {
-            foreach ($fieldIdsInOrder as $index => $fieldId) {
-                WebFormField::where('id', $fieldId)
-                    ->where('web_form_id', $formId)
-                    ->update(['display_order' => $index]);
-            }
-            return true;
-        });
+        return $this->repository->reorderFields($formId, $fieldIdsInOrder);
     }
 
     // =========================================================================
@@ -313,71 +167,25 @@ class WebFormApplicationService
     /**
      * List submissions for a form with filtering.
      */
-    public function listSubmissions(int $formId, array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listSubmissions(int $formId, array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = WebFormSubmission::where('web_form_id', $formId)
-            ->with(['webForm:id,name', 'record']);
-
-        // Filter by status
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
-        // Filter by date range
-        if (!empty($filters['from_date'])) {
-            $query->where('submitted_at', '>=', $filters['from_date']);
-        }
-        if (!empty($filters['to_date'])) {
-            $query->where('submitted_at', '<=', $filters['to_date']);
-        }
-
-        // Filter processed only
-        if (!empty($filters['processed'])) {
-            $query->processed();
-        }
-
-        // Filter failed only
-        if (!empty($filters['failed'])) {
-            $query->failed();
-        }
-
-        // Filter spam only
-        if (!empty($filters['spam'])) {
-            $query->spam();
-        }
-
-        // Search in submission data
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where('submission_data', 'like', "%{$search}%");
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'submitted_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->repository->listSubmissions($formId, $filters, $perPage);
     }
 
     /**
      * Get a submission by ID.
      */
-    public function getSubmission(int $id): ?WebFormSubmission
+    public function getSubmission(int $id): ?array
     {
-        return WebFormSubmission::with(['webForm.fields', 'record'])->find($id);
+        return $this->repository->findSubmissionById($id, ['webForm.fields', 'record']);
     }
 
     /**
      * Get recent submissions for a form.
      */
-    public function getRecentSubmissions(int $formId, int $limit = 10): Collection
+    public function getRecentSubmissions(int $formId, int $limit = 10): array
     {
-        return WebFormSubmission::where('web_form_id', $formId)
-            ->processed()
-            ->orderBy('submitted_at', 'desc')
-            ->limit($limit)
-            ->get();
+        return $this->repository->getRecentSubmissions($formId, $limit);
     }
 
     // =========================================================================
@@ -387,86 +195,82 @@ class WebFormApplicationService
     /**
      * Process a form submission.
      */
-    public function submitForm(int $formId, array $data, ?array $metadata = null): WebFormSubmission
+    public function submitForm(int $formId, array $data, ?array $metadata = null): array
     {
-        $form = WebForm::with('fields')->findOrFail($formId);
+        $form = $this->repository->findById($formId, ['fields']);
 
-        if (!$form->is_active) {
+        if (!$form) {
+            throw new \InvalidArgumentException('Form not found');
+        }
+
+        if (!$form['is_active']) {
             throw new \InvalidArgumentException('Form is not active');
         }
 
-        return DB::transaction(function () use ($form, $data, $metadata) {
+        return DB::transaction(function () use ($form, $formId, $data, $metadata) {
             // Validate submission data
-            $validationRules = $this->buildValidationRules($form);
+            $validationRules = $this->buildValidationRules($form['fields']);
             $validator = Validator::make($data, $validationRules);
 
-            $submission = WebFormSubmission::create([
-                'web_form_id' => $form->id,
-                'submission_data' => $data,
-                'ip_address' => $metadata['ip_address'] ?? request()->ip(),
-                'user_agent' => $metadata['user_agent'] ?? request()->userAgent(),
-                'referrer' => $metadata['referrer'] ?? request()->header('referer'),
-                'utm_params' => $metadata['utm_params'] ?? [],
-                'status' => WebFormSubmission::STATUS_PENDING,
-                'submitted_at' => now(),
-            ]);
+            // Create initial submission
+            $submission = $this->repository->createSubmission($formId, $data, $metadata);
 
             if ($validator->fails()) {
-                $submission->update([
-                    'status' => WebFormSubmission::STATUS_FAILED,
+                $submission = $this->repository->updateSubmission($submission['id'], [
+                    'status' => 'failed',
                     'error_message' => $validator->errors()->first(),
                 ]);
 
-                WebFormAnalytics::incrementSubmissions($form->id, false);
+                $this->repository->incrementSubmissions($formId, false);
 
-                return $submission->fresh();
+                return $submission;
             }
 
             // Check spam protection
-            if ($form->hasSpamProtection() && $this->isSpam($data, $form)) {
-                $submission->update(['status' => WebFormSubmission::STATUS_SPAM]);
-                WebFormAnalytics::incrementSpamBlocked($form->id);
+            if ($this->hasSpamProtection($form) && $this->isSpam($data, $form)) {
+                $submission = $this->repository->updateSubmission($submission['id'], [
+                    'status' => 'spam',
+                ]);
+                $this->repository->incrementSpamBlocked($formId);
 
-                return $submission->fresh();
+                return $submission;
             }
 
             // Process submission and create record
             try {
-                $recordData = $this->mapSubmissionToRecord($form, $data);
+                $recordData = $this->mapSubmissionToRecord($form['fields'], $data);
 
                 // TODO: Create module record
                 // $record = ModuleRecord::create([...]);
-                // $submission->update(['record_id' => $record->id]);
+                // $submission = $this->repository->updateSubmission($submission['id'], ['record_id' => $record->id]);
 
-                $submission->update(['status' => WebFormSubmission::STATUS_PROCESSED]);
-                WebFormAnalytics::incrementSubmissions($form->id, true);
+                $submission = $this->repository->updateSubmission($submission['id'], [
+                    'status' => 'processed',
+                ]);
+                $this->repository->incrementSubmissions($formId, true);
 
                 // TODO: Send notifications
                 // TODO: Trigger workflows
 
             } catch (\Exception $e) {
-                $submission->update([
-                    'status' => WebFormSubmission::STATUS_FAILED,
+                $submission = $this->repository->updateSubmission($submission['id'], [
+                    'status' => 'failed',
                     'error_message' => $e->getMessage(),
                 ]);
 
-                WebFormAnalytics::incrementSubmissions($form->id, false);
+                $this->repository->incrementSubmissions($formId, false);
             }
 
-            return $submission->fresh(['webForm', 'record']);
+            return $this->repository->findSubmissionById($submission['id'], ['webForm', 'record']);
         });
     }
 
     /**
      * Mark submission as spam.
      */
-    public function markAsSpam(int $submissionId): WebFormSubmission
+    public function markAsSpam(int $submissionId): array
     {
-        $submission = WebFormSubmission::findOrFail($submissionId);
-
-        $submission->update(['status' => WebFormSubmission::STATUS_SPAM]);
-
-        return $submission->fresh();
+        return $this->repository->markSubmissionAsSpam($submissionId);
     }
 
     /**
@@ -474,8 +278,7 @@ class WebFormApplicationService
      */
     public function deleteSubmission(int $id): bool
     {
-        $submission = WebFormSubmission::findOrFail($id);
-        return $submission->delete();
+        return $this->repository->deleteSubmission($id);
     }
 
     // =========================================================================
@@ -487,32 +290,7 @@ class WebFormApplicationService
      */
     public function getFormAnalytics(int $formId, ?string $fromDate = null, ?string $toDate = null): array
     {
-        $from = $fromDate ?? now()->subDays(30)->toDateString();
-        $to = $toDate ?? now()->toDateString();
-
-        $summary = WebFormAnalytics::getSummary($formId, $from, $to);
-
-        // Get submission status breakdown
-        $submissions = WebFormSubmission::where('web_form_id', $formId)
-            ->whereBetween('submitted_at', [$from, $to])
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
-            ->pluck('count', 'status')
-            ->toArray();
-
-        // Get source breakdown (UTM sources)
-        $sources = WebFormSubmission::where('web_form_id', $formId)
-            ->whereBetween('submitted_at', [$from, $to])
-            ->whereNotNull('utm_params')
-            ->get()
-            ->groupBy(fn($s) => $s->getUtmParam('utm_source') ?? 'Direct')
-            ->map(fn($group) => $group->count())
-            ->toArray();
-
-        return array_merge($summary, [
-            'by_status' => $submissions,
-            'by_source' => $sources,
-        ]);
+        return $this->repository->getFormAnalytics($formId, $fromDate, $toDate);
     }
 
     /**
@@ -520,40 +298,23 @@ class WebFormApplicationService
      */
     public function trackView(int $formId): void
     {
-        WebFormAnalytics::incrementViews($formId);
+        $this->repository->trackView($formId);
     }
 
     /**
      * Get daily analytics for a form.
      */
-    public function getDailyAnalytics(int $formId, int $days = 30): Collection
+    public function getDailyAnalytics(int $formId, int $days = 30): array
     {
-        return WebFormAnalytics::where('web_form_id', $formId)
-            ->where('date', '>=', now()->subDays($days)->toDateString())
-            ->orderBy('date')
-            ->get();
+        return $this->repository->getDailyAnalytics($formId, $days);
     }
 
     /**
      * Get top performing forms.
      */
-    public function getTopPerformingForms(int $days = 30, int $limit = 10): Collection
+    public function getTopPerformingForms(int $days = 30, int $limit = 10): array
     {
-        $fromDate = now()->subDays($days)->toDateString();
-
-        return WebForm::query()
-            ->withCount([
-                'submissions as total_submissions' => function ($q) use ($fromDate) {
-                    $q->where('submitted_at', '>=', $fromDate);
-                },
-                'submissions as successful_submissions' => function ($q) use ($fromDate) {
-                    $q->processed()->where('submitted_at', '>=', $fromDate);
-                },
-            ])
-            ->having('total_submissions', '>', 0)
-            ->orderBy('total_submissions', 'desc')
-            ->limit($limit)
-            ->get();
+        return $this->repository->getTopPerformingForms($days, $limit);
     }
 
     /**
@@ -561,29 +322,7 @@ class WebFormApplicationService
      */
     public function getConversionFunnel(int $formId, int $days = 30): array
     {
-        $fromDate = now()->subDays($days)->toDateString();
-
-        $views = WebFormAnalytics::where('web_form_id', $formId)
-            ->where('date', '>=', $fromDate)
-            ->sum('views');
-
-        $submissions = WebFormSubmission::where('web_form_id', $formId)
-            ->where('submitted_at', '>=', $fromDate)
-            ->count();
-
-        $successful = WebFormSubmission::where('web_form_id', $formId)
-            ->processed()
-            ->where('submitted_at', '>=', $fromDate)
-            ->count();
-
-        return [
-            'views' => $views,
-            'submissions' => $submissions,
-            'successful' => $successful,
-            'view_to_submit_rate' => $views > 0 ? round(($submissions / $views) * 100, 2) : 0,
-            'submit_to_success_rate' => $submissions > 0 ? round(($successful / $submissions) * 100, 2) : 0,
-            'overall_conversion_rate' => $views > 0 ? round(($successful / $views) * 100, 2) : 0,
-        ];
+        return $this->repository->getConversionFunnel($formId, $days);
     }
 
     /**
@@ -591,29 +330,7 @@ class WebFormApplicationService
      */
     public function compareFormPerformance(array $formIds, int $days = 30): array
     {
-        $fromDate = now()->subDays($days)->toDateString();
-
-        $comparison = [];
-
-        foreach ($formIds as $formId) {
-            $form = WebForm::find($formId);
-            if (!$form) {
-                continue;
-            }
-
-            $analytics = $this->getFormAnalytics($formId, $fromDate);
-
-            $comparison[] = [
-                'form_id' => $formId,
-                'form_name' => $form->name,
-                'views' => $analytics['total_views'],
-                'submissions' => $analytics['total_submissions'],
-                'successful' => $analytics['successful_submissions'],
-                'conversion_rate' => $analytics['conversion_rate'],
-            ];
-        }
-
-        return $comparison;
+        return $this->repository->compareFormPerformance($formIds, $days);
     }
 
     // =========================================================================
@@ -623,13 +340,71 @@ class WebFormApplicationService
     /**
      * Build validation rules from form fields.
      */
-    private function buildValidationRules(WebForm $form): array
+    private function buildValidationRules(array $fields): array
     {
         $rules = [];
 
-        foreach ($form->fields as $field) {
-            $fieldName = $field->field_name;
-            $rules[$fieldName] = $field->getValidationRulesArray();
+        foreach ($fields as $field) {
+            $fieldName = $field['name'] ?? \Illuminate\Support\Str::snake($field['label']);
+            $fieldRules = [];
+
+            // Required validation
+            if ($field['is_required']) {
+                $fieldRules[] = 'required';
+            } else {
+                $fieldRules[] = 'nullable';
+            }
+
+            // Type-specific rules
+            switch ($field['field_type']) {
+                case 'email':
+                    $fieldRules[] = 'email';
+                    break;
+                case 'url':
+                    $fieldRules[] = 'url';
+                    break;
+                case 'number':
+                case 'currency':
+                    $fieldRules[] = 'numeric';
+                    break;
+                case 'date':
+                case 'datetime':
+                    $fieldRules[] = 'date';
+                    break;
+                case 'file':
+                    $fieldRules[] = 'file';
+                    $maxSize = $field['validation_rules']['max_size'] ?? 10240;
+                    $fieldRules[] = "max:{$maxSize}";
+                    if (!empty($field['validation_rules']['allowed_types'])) {
+                        $fieldRules[] = 'mimes:' . implode(',', $field['validation_rules']['allowed_types']);
+                    }
+                    break;
+                case 'select':
+                case 'radio':
+                    if (!empty($field['options'])) {
+                        $values = array_column($field['options'], 'value');
+                        $fieldRules[] = 'in:' . implode(',', $values);
+                    }
+                    break;
+                case 'multi_select':
+                    $fieldRules[] = 'array';
+                    break;
+            }
+
+            // Custom validation rules
+            if (!empty($field['validation_rules'])) {
+                if (!empty($field['validation_rules']['min_length'])) {
+                    $fieldRules[] = 'min:' . $field['validation_rules']['min_length'];
+                }
+                if (!empty($field['validation_rules']['max_length'])) {
+                    $fieldRules[] = 'max:' . $field['validation_rules']['max_length'];
+                }
+                if (!empty($field['validation_rules']['pattern'])) {
+                    $fieldRules[] = 'regex:' . $field['validation_rules']['pattern'];
+                }
+            }
+
+            $rules[$fieldName] = $fieldRules;
         }
 
         return $rules;
@@ -638,15 +413,15 @@ class WebFormApplicationService
     /**
      * Map submission data to module record data.
      */
-    private function mapSubmissionToRecord(WebForm $form, array $submissionData): array
+    private function mapSubmissionToRecord(array $fields, array $submissionData): array
     {
         $recordData = [];
 
-        foreach ($form->fields as $field) {
-            if ($field->module_field_id) {
-                $fieldName = $field->field_name;
+        foreach ($fields as $field) {
+            if (!empty($field['module_field_id'])) {
+                $fieldName = $field['name'] ?? \Illuminate\Support\Str::snake($field['label']);
                 if (isset($submissionData[$fieldName])) {
-                    $recordData[$field->module_field_id] = $submissionData[$fieldName];
+                    $recordData[$field['module_field_id']] = $submissionData[$fieldName];
                 }
             }
         }
@@ -655,9 +430,17 @@ class WebFormApplicationService
     }
 
     /**
+     * Check if form has spam protection enabled.
+     */
+    private function hasSpamProtection(array $form): bool
+    {
+        return !empty($form['spam_protection']['enabled']);
+    }
+
+    /**
      * Check if submission is spam.
      */
-    private function isSpam(array $data, WebForm $form): bool
+    private function isSpam(array $data, array $form): bool
     {
         // Basic spam detection logic
         // TODO: Implement more sophisticated spam detection

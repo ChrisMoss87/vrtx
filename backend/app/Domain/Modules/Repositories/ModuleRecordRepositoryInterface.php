@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Modules\Repositories;
 
 use App\Domain\Modules\Entities\ModuleRecord;
+use DateTimeImmutable;
 
 interface ModuleRecordRepositoryInterface
 {
@@ -76,4 +77,16 @@ interface ModuleRecordRepositoryInterface
         string $aggregation,
         array $filters = []
     ): float;
+
+    /**
+     * Find records for a period by expected close date.
+     *
+     * @return array<array>
+     */
+    public function findByPeriod(
+        int $moduleId,
+        ?DateTimeImmutable $periodStart = null,
+        ?DateTimeImmutable $periodEnd = null,
+        ?int $userId = null
+    ): array;
 }

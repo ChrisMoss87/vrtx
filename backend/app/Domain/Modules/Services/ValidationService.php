@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace App\Domain\Modules\Services;
 
 use App\Domain\Modules\Entities\Module;
-use Illuminate\Support\Facades\Validator;
+use App\Domain\Shared\Contracts\ValidatorInterface;
 
 class ValidationService
 {
+    public function __construct(
+        private readonly ValidatorInterface $validator,
+    ) {}
+
     /**
      * Validate record data against module field definitions.
      */
@@ -17,7 +21,7 @@ class ValidationService
         $rules = [];
         $messages = [];
 
-        foreach ($module->fields() as $field) {
+        foreach ($module->getFields() as $field) {
             $fieldRules = [];
 
             // Required validation
@@ -49,11 +53,11 @@ class ValidationService
             }
         }
 
-        $validator = Validator::make($data, $rules, $messages);
+        $result = $this->validator->validate($data, $rules, $messages);
 
-        if ($validator->fails()) {
+        if ($result->fails()) {
             throw new \InvalidArgumentException(
-                'Validation failed: ' . json_encode($validator->errors()->toArray())
+                'Validation failed: ' . json_encode($result->errors())
             );
         }
     }

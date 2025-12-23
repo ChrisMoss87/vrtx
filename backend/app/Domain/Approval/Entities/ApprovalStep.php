@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Approval\Entities;
 
 use App\Domain\Approval\ValueObjects\StepStatus;
+use App\Domain\Shared\Contracts\Entity;
 
-final class ApprovalStep
+final class ApprovalStep implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -201,5 +202,16 @@ final class ApprovalStep
     public function isDelegated(): bool
     {
         return $this->delegatedToId !== null;
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null
+            && $other->id !== null
+            && $this->id === $other->id;
     }
 }

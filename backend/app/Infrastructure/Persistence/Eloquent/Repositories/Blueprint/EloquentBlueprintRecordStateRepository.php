@@ -6,92 +6,111 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories\Blueprint;
 
 use App\Domain\Blueprint\Entities\BlueprintRecordState;
 use App\Domain\Blueprint\Repositories\BlueprintRecordStateRepositoryInterface;
-use App\Models\BlueprintRecordState as BlueprintRecordStateModel;
+use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class EloquentBlueprintRecordStateRepository implements BlueprintRecordStateRepositoryInterface
 {
+    private const TABLE = 'blueprint_record_states';
+
     public function findById(int $id): ?BlueprintRecordState
     {
-        $model = BlueprintRecordStateModel::find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findByRecordId(int $blueprintId, int $recordId): ?BlueprintRecordState
     {
-        $model = BlueprintRecordStateModel::where('blueprint_id', $blueprintId)
+        $row = DB::table(self::TABLE)
+            ->where('blueprint_id', $blueprintId)
             ->where('record_id', $recordId)
             ->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findByStateId(int $stateId): array
     {
-        $models = BlueprintRecordStateModel::where('current_state_id', $stateId)->get();
+        $rows = DB::table(self::TABLE)->where('current_state_id', $stateId)->get();
 
-        return $models->map(fn($m) => $this->toEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findByBlueprintId(int $blueprintId): array
     {
-        $models = BlueprintRecordStateModel::where('blueprint_id', $blueprintId)->get();
+        $rows = DB::table(self::TABLE)->where('blueprint_id', $blueprintId)->get();
 
-        return $models->map(fn($m) => $this->toEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function save(BlueprintRecordState $recordState): BlueprintRecordState
     {
-        $model = $recordState->getId()
-            ? BlueprintRecordStateModel::find($recordState->getId())
-            : new BlueprintRecordStateModel();
+        $data = $this->toRowData($recordState);
 
-        $model->fill([
-            'blueprint_id' => $recordState->getBlueprintId(),
-            'record_id' => $recordState->getRecordId(),
-            'current_state_id' => $recordState->getCurrentStateId(),
-            'state_entered_at' => $recordState->getEnteredStateAt(),
-            'sla_instance_id' => $recordState->getSlaInstanceId(),
-            'metadata' => $recordState->getMetadata(),
-        ]);
+        if ($recordState->getId() !== null) {
+            DB::table(self::TABLE)
+                ->where('id', $recordState->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $recordState->getId();
+        } else {
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
+        }
 
-        $model->save();
-
-        return $this->toEntity($model);
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        return BlueprintRecordStateModel::destroy($id) > 0;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
     public function deleteByRecordId(int $blueprintId, int $recordId): bool
     {
-        return BlueprintRecordStateModel::where('blueprint_id', $blueprintId)
+        return DB::table(self::TABLE)
+            ->where('blueprint_id', $blueprintId)
             ->where('record_id', $recordId)
             ->delete() > 0;
     }
 
-    private function toEntity(BlueprintRecordStateModel $model): BlueprintRecordState
+    private function toDomainEntity(stdClass $row): BlueprintRecordState
     {
         return BlueprintRecordState::reconstitute(
-            id: $model->id,
-            blueprintId: $model->blueprint_id,
-            recordId: $model->record_id,
-            currentStateId: $model->current_state_id,
-            enteredStateAt: $model->state_entered_at ? new \DateTimeImmutable($model->state_entered_at) : new \DateTimeImmutable(),
-            slaInstanceId: $model->sla_instance_id ?? null,
-            metadata: $model->metadata ?? [],
-            createdAt: new \DateTimeImmutable($model->created_at),
-            updatedAt: $model->updated_at ? new \DateTimeImmutable($model->updated_at) : null,
+            id: (int) $row->id,
+            blueprintId: (int) $row->blueprint_id,
+            recordId: (int) $row->record_id,
+            currentStateId: (int) $row->current_state_id,
+            enteredStateAt: $row->state_entered_at ? new DateTimeImmutable($row->state_entered_at) : new DateTimeImmutable(),
+            slaInstanceId: $row->sla_instance_id ? (int) $row->sla_instance_id : null,
+            metadata: $row->metadata ? (is_string($row->metadata) ? json_decode($row->metadata, true) : $row->metadata) : [],
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
         );
+    }
+
+    private function toRowData(BlueprintRecordState $recordState): array
+    {
+        return [
+            'blueprint_id' => $recordState->getBlueprintId(),
+            'record_id' => $recordState->getRecordId(),
+            'current_state_id' => $recordState->getCurrentStateId(),
+            'state_entered_at' => $recordState->getEnteredStateAt()?->format('Y-m-d H:i:s'),
+            'sla_instance_id' => $recordState->getSlaInstanceId(),
+            'metadata' => json_encode($recordState->getMetadata()),
+        ];
     }
 }

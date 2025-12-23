@@ -6,18 +6,23 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
 use App\Domain\Modules\Entities\ModuleRecord as ModuleRecordEntity;
 use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
-use App\Models\ModuleRecord;
 use DateTimeImmutable;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInterface
 {
+    private const TABLE = 'module_records';
+
     public function findById(int $moduleId, int $recordId): ?ModuleRecordEntity
     {
-        $model = ModuleRecord::where('module_id', $moduleId)
-            ->find($recordId);
+        $row = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
+            ->where('id', $recordId)
+            ->whereNull('deleted_at')
+            ->first();
 
-        return $model ? $this->toDomain($model) : null;
+        return $row ? $this->toDomain($row) : null;
     }
 
     public function findAll(
@@ -27,7 +32,9 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
         int $page = 1,
         int $perPage = 15
     ): array {
-        $query = ModuleRecord::where('module_id', $moduleId);
+        $query = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
+            ->whereNull('deleted_at');
 
         // Apply filters
         $query = $this->applyFilters($query, $filters);
@@ -35,15 +42,23 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
         // Apply sorting
         $query = $this->applySorting($query, $sort);
 
+        // Get total count before pagination
+        $total = $query->count();
+
         // Get paginated results
-        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+        $rows = $query
+            ->offset(($page - 1) * $perPage)
+            ->limit($perPage)
+            ->get();
+
+        $lastPage = (int) ceil($total / $perPage);
 
         return [
-            'data' => array_map(fn ($model) => $this->toDomain($model), $paginator->items()),
-            'total' => $paginator->total(),
-            'per_page' => $paginator->perPage(),
-            'current_page' => $paginator->currentPage(),
-            'last_page' => $paginator->lastPage(),
+            'data' => array_map(fn($row) => $this->toDomain($row), $rows->all()),
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => $page,
+            'last_page' => $lastPage,
         ];
     }
 
@@ -51,45 +66,51 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
     {
         $data = [
             'module_id' => $record->moduleId(),
-            'data' => $record->data(),
+            'data' => json_encode($record->data()),
             'updated_by' => $record->updatedBy(),
         ];
 
         if ($record->id()) {
             // Update existing record
-            $model = ModuleRecord::findOrFail($record->id());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $record->id())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $record->id();
         } else {
             // Create new record
             $data['created_by'] = $record->createdBy();
-            $model = ModuleRecord::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomain($model->fresh());
+        return $this->findById($record->moduleId(), $id);
     }
 
     public function delete(int $moduleId, int $recordId): bool
     {
-        $model = ModuleRecord::where('module_id', $moduleId)
-            ->find($recordId);
-
-        if (! $model) {
-            return false;
-        }
-
-        return (bool) $model->delete();
+        return DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
+            ->where('id', $recordId)
+            ->update(['deleted_at' => now()]) > 0;
     }
 
     public function bulkDelete(int $moduleId, array $recordIds): int
     {
-        return ModuleRecord::where('module_id', $moduleId)
+        return DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
             ->whereIn('id', $recordIds)
-            ->delete();
+            ->update(['deleted_at' => now()]);
     }
 
     public function count(int $moduleId, array $filters = []): int
     {
-        $query = ModuleRecord::where('module_id', $moduleId);
+        $query = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
+            ->whereNull('deleted_at');
         $query = $this->applyFilters($query, $filters);
 
         return $query->count();
@@ -97,8 +118,10 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
 
     public function exists(int $moduleId, int $recordId): bool
     {
-        return ModuleRecord::where('module_id', $moduleId)
+        return DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
             ->where('id', $recordId)
+            ->whereNull('deleted_at')
             ->exists();
     }
 
@@ -108,20 +131,22 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
             return [];
         }
 
-        $models = ModuleRecord::where('module_id', $moduleId)
+        $rows = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
             ->whereIn('id', $recordIds)
+            ->whereNull('deleted_at')
             ->get();
 
-        return array_map(fn ($model) => $this->toDomain($model), $models->all());
+        return array_map(fn($row) => $this->toDomain($row), $rows->all());
     }
 
     /**
      * Apply filters to the query based on field types and operators.
      */
-    private function applyFilters(Builder $query, array $filters): Builder
+    private function applyFilters($query, array $filters)
     {
         foreach ($filters as $fieldName => $filterConfig) {
-            if (! is_array($filterConfig)) {
+            if (!is_array($filterConfig)) {
                 continue;
             }
 
@@ -157,10 +182,10 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
             match ($operator) {
                 'equals' => $query->whereRaw('data->>? = ?', [$fieldName, $stringValue]),
                 'not_equals' => $query->whereRaw('data->>? != ?', [$fieldName, $stringValue]),
-                'contains' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, '%'.mb_strtolower($stringValue).'%']),
-                'not_contains' => $query->whereRaw('LOWER(data->>?) NOT LIKE ?', [$fieldName, '%'.mb_strtolower($stringValue).'%']),
-                'starts_with' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, mb_strtolower($stringValue).'%']),
-                'ends_with' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, '%'.mb_strtolower($stringValue)]),
+                'contains' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, '%' . mb_strtolower($stringValue) . '%']),
+                'not_contains' => $query->whereRaw('LOWER(data->>?) NOT LIKE ?', [$fieldName, '%' . mb_strtolower($stringValue) . '%']),
+                'starts_with' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, mb_strtolower($stringValue) . '%']),
+                'ends_with' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$fieldName, '%' . mb_strtolower($stringValue)]),
                 'greater_than' => $query->whereRaw('CAST(data->>? AS NUMERIC) > ?', [$fieldName, $value]),
                 'less_than' => $query->whereRaw('CAST(data->>? AS NUMERIC) < ?', [$fieldName, $value]),
                 'greater_than_or_equal' => $query->whereRaw('CAST(data->>? AS NUMERIC) >= ?', [$fieldName, $value]),
@@ -170,11 +195,11 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
                     [$fieldName, $filterConfig['min'] ?? 0, $filterConfig['max'] ?? 0]
                 ),
                 'in' => $query->whereRaw(
-                    'data->>? IN ('.implode(',', array_fill(0, count($arrayValue), '?')).')',
+                    'data->>? IN (' . implode(',', array_fill(0, count($arrayValue), '?')) . ')',
                     array_merge([$fieldName], $arrayValue)
                 ),
                 'not_in' => $query->whereRaw(
-                    'data->>? NOT IN ('.implode(',', array_fill(0, count($arrayValue), '?')).')',
+                    'data->>? NOT IN (' . implode(',', array_fill(0, count($arrayValue), '?')) . ')',
                     array_merge([$fieldName], $arrayValue)
                 ),
                 'is_null' => $query->whereNull($jsonPath),
@@ -196,7 +221,7 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
     /**
      * Apply sorting to the query.
      */
-    private function applySorting(Builder $query, array $sort): Builder
+    private function applySorting($query, array $sort)
     {
         foreach ($sort as $fieldName => $direction) {
             // Handle direction that could be array or string
@@ -223,7 +248,9 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
         string $aggregation,
         array $filters = []
     ): float {
-        $query = ModuleRecord::where('module_id', $moduleId);
+        $query = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
+            ->whereNull('deleted_at');
 
         // Apply filters
         foreach ($filters as $filter) {
@@ -240,7 +267,7 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
             $query = match ($operator) {
                 'equals' => $query->whereRaw('data->>? = ?', [$filterField, $value]),
                 'not_equals' => $query->whereRaw('data->>? != ?', [$filterField, $value]),
-                'contains' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$filterField, "%".mb_strtolower($value)."%"]),
+                'contains' => $query->whereRaw('LOWER(data->>?) LIKE ?', [$filterField, "%" . mb_strtolower($value) . "%"]),
                 'greater_than' => $query->whereRaw('CAST(data->>? AS NUMERIC) > ?', [$filterField, $value]),
                 'less_than' => $query->whereRaw('CAST(data->>? AS NUMERIC) < ?', [$filterField, $value]),
                 'greater_or_equal' => $query->whereRaw('CAST(data->>? AS NUMERIC) >= ?', [$filterField, $value]),
@@ -263,19 +290,19 @@ final class EloquentModuleRecordRepository implements ModuleRecordRepositoryInte
     }
 
     /**
-     * Convert Eloquent model to domain entity.
+     * Convert database row to domain entity.
      */
-    private function toDomain(ModuleRecord $model): ModuleRecordEntity
+    private function toDomain(stdClass $row): ModuleRecordEntity
     {
         return new ModuleRecordEntity(
-            id: $model->id,
-            moduleId: $model->module_id,
-            data: $model->data ?? [],
-            createdBy: $model->created_by,
-            updatedBy: $model->updated_by,
-            createdAt: new DateTimeImmutable($model->created_at->toDateTimeString()),
-            updatedAt: $model->updated_at ? new DateTimeImmutable($model->updated_at->toDateTimeString()) : null,
-            deletedAt: $model->deleted_at ? new DateTimeImmutable($model->deleted_at->toDateTimeString()) : null,
+            id: (int) $row->id,
+            moduleId: (int) $row->module_id,
+            data: $row->data ? (is_string($row->data) ? json_decode($row->data, true) : $row->data) : [],
+            createdBy: $row->created_by ? (int) $row->created_by : null,
+            updatedBy: $row->updated_by ? (int) $row->updated_by : null,
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
+            deletedAt: $row->deleted_at ? new DateTimeImmutable($row->deleted_at) : null,
         );
     }
 }

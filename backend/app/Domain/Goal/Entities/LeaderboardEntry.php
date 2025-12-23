@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Goal\Entities;
 
-
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class LeaderboardEntry
+final class LeaderboardEntry implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -39,4 +39,17 @@ final class LeaderboardEntry
     public function getId(): ?int { return $this->id; }
     public function getCreatedAt(): ?DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?DateTimeImmutable { return $this->updatedAt; }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->id === null) {
+            return false;
+        }
+
+        return $this->id === $other->id;
+    }
 }

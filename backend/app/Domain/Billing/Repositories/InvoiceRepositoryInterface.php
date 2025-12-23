@@ -6,6 +6,7 @@ namespace App\Domain\Billing\Repositories;
 
 use App\Domain\Billing\Entities\Invoice;
 use App\Domain\Billing\ValueObjects\InvoiceStatus;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 
 /**
  * Repository interface for Invoice aggregate root.
@@ -82,6 +83,34 @@ interface InvoiceRepositoryInterface
      * @return array<Invoice>
      */
     public function findUnpaid(): array;
+
+    /**
+     * Search invoices with filters and pagination.
+     *
+     * @param array<string, mixed> $filters
+     * @param array<string, string> $orderBy ['field' => 'asc|desc']
+     */
+    public function search(
+        array $filters = [],
+        array $orderBy = ['created_at' => 'desc'],
+        int $page = 1,
+        int $perPage = 25
+    ): PaginatedResult;
+
+    /**
+     * Get all invoices as array data.
+     *
+     * @return array<array<string, mixed>>
+     */
+    public function getAllAsArray(): array;
+
+    /**
+     * Get invoices by filters as array data.
+     *
+     * @param array<string, mixed> $filters
+     * @return array<array<string, mixed>>
+     */
+    public function getByFiltersAsArray(array $filters): array;
 
     /**
      * Save an invoice (insert or update).

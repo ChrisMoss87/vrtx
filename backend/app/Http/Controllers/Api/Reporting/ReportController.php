@@ -331,6 +331,58 @@ class ReportController extends Controller
     }
 
     /**
+     * Update report schedule.
+     */
+    public function updateSchedule(Report $report, Request $request): JsonResponse
+    {
+        $this->authorize('update', $report);
+
+        $validated = $request->validate([
+            'enabled' => 'required|boolean',
+            'frequency' => 'required_if:enabled,true|string|in:hourly,daily,weekly,monthly',
+            'time' => 'required_if:enabled,true|string|date_format:H:i',
+            'day_of_week' => 'nullable|integer|between:0,6',
+            'day_of_month' => 'nullable|integer|between:1,28',
+            'recipients' => 'required_if:enabled,true|array',
+            'recipients.*' => 'email',
+            'format' => 'required_if:enabled,true|string|in:pdf,csv,xlsx',
+        ]);
+
+        $schedule = $validated['enabled'] ? [
+            'enabled' => true,
+            'frequency' => $validated['frequency'],
+            'time' => $validated['time'],
+            'day_of_week' => $validated['day_of_week'] ?? null,
+            'day_of_month' => $validated['day_of_month'] ?? null,
+            'recipients' => $validated['recipients'],
+            'format' => $validated['format'],
+        ] : ['enabled' => false];
+
+        $report->update(['schedule' => $schedule]);
+
+        return response()->json([
+            'message' => $validated['enabled'] ? 'Schedule enabled' : 'Schedule disabled',
+            'data' => [
+                'schedule' => $report->schedule,
+            ],
+        ]);
+    }
+
+    /**
+     * Get report schedule.
+     */
+    public function getSchedule(Report $report): JsonResponse
+    {
+        $this->authorize('view', $report);
+
+        return response()->json([
+            'data' => [
+                'schedule' => $report->schedule ?? ['enabled' => false],
+            ],
+        ]);
+    }
+
+    /**
      * Get KPI value.
      */
     public function kpi(Request $request): JsonResponse
@@ -347,5 +399,110 @@ class ReportController extends Controller
         $result = $this->reportService->calculateKpi($validated);
 
         return response()->json(['data' => $result]);
+    }
+
+    /**
+     * Get shares for a report.
+     */
+    public function getShares(Report $report): JsonResponse
+    {
+        $this->authorize('update', $report);
+
+        $shares = $report->shares()
+            ->with(['user:id,name,email', 'team:id,name', 'sharedByUser:id,name'])
+            ->get()
+            ->map(fn ($share) => [
+                'id' => $share->id,
+                'type' => $share->user_id ? 'user' : 'team',
+                'user' => $share->user ? [
+                    'id' => $share->user->id,
+                    'name' => $share->user->name,
+                    'email' => $share->user->email,
+                ] : null,
+                'team' => $share->team ? [
+                    'id' => $share->team->id,
+                    'name' => $share->team->name,
+                ] : null,
+                'permission' => $share->permission,
+                'shared_by' => $share->sharedByUser ? [
+                    'id' => $share->sharedByUser->id,
+                    'name' => $share->sharedByUser->name,
+                ] : null,
+                'created_at' => $share->created_at,
+            ]);
+
+        return response()->json(['data' => $shares]);
+    }
+
+    /**
+     * Share a report with users or teams.
+     */
+    public function share(Report $report, Request $request): JsonResponse
+    {
+        $this->authorize('update', $report);
+
+        $validated = $request->validate([
+            'shares' => 'required|array|min:1',
+            'shares.*.type' => 'required|in:user,team',
+            'shares.*.id' => 'required|integer',
+            'shares.*.permission' => 'required|in:view,edit',
+        ]);
+
+        $createdShares = [];
+
+        foreach ($validated['shares'] as $share) {
+            $data = [
+                'report_id' => $report->id,
+                'permission' => $share['permission'],
+                'shared_by' => Auth::id(),
+            ];
+
+            if ($share['type'] === 'user') {
+                $data['user_id'] = $share['id'];
+                $data['team_id'] = null;
+            } else {
+                $data['team_id'] = $share['id'];
+                $data['user_id'] = null;
+            }
+
+            $createdShares[] = $report->shares()->updateOrCreate(
+                $share['type'] === 'user'
+                    ? ['report_id' => $report->id, 'user_id' => $share['id']]
+                    : ['report_id' => $report->id, 'team_id' => $share['id']],
+                $data
+            );
+        }
+
+        return response()->json([
+            'message' => 'Report shared successfully',
+            'data' => $createdShares,
+        ], 201);
+    }
+
+    /**
+     * Remove a share from a report.
+     */
+    public function unshare(Report $report, Request $request): JsonResponse
+    {
+        $this->authorize('update', $report);
+
+        $validated = $request->validate([
+            'type' => 'required|in:user,team',
+            'id' => 'required|integer',
+        ]);
+
+        $query = $report->shares();
+
+        if ($validated['type'] === 'user') {
+            $query->where('user_id', $validated['id']);
+        } else {
+            $query->where('team_id', $validated['id']);
+        }
+
+        $deleted = $query->delete();
+
+        return response()->json([
+            'message' => $deleted ? 'Share removed' : 'Share not found',
+        ]);
     }
 }

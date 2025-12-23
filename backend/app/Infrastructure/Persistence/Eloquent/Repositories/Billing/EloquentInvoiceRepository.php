@@ -12,171 +12,176 @@ use App\Domain\Billing\ValueObjects\InvoiceStatus;
 use App\Domain\Billing\ValueObjects\Money;
 use App\Domain\Billing\ValueObjects\PaymentMethod;
 use App\Domain\Billing\ValueObjects\PaymentTerms;
-use App\Models\Invoice as InvoiceModel;
-use App\Models\InvoiceLineItem as InvoiceLineItemModel;
-use App\Models\InvoicePayment as InvoicePaymentModel;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 /**
- * Eloquent implementation of the InvoiceRepository.
+ * Query Builder implementation of the InvoiceRepository.
  */
 class EloquentInvoiceRepository implements InvoiceRepositoryInterface
 {
+    private const TABLE = 'invoices';
+    private const TABLE_LINE_ITEMS = 'invoice_line_items';
+    private const TABLE_PAYMENTS = 'invoice_payments';
+
     public function findById(int $id): ?Invoice
     {
-        $model = InvoiceModel::with(['lineItems', 'payments'])->find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntityWithRelations($row);
     }
 
     public function findByViewToken(string $viewToken): ?Invoice
     {
-        $model = InvoiceModel::with(['lineItems', 'payments'])
+        $row = DB::table(self::TABLE)
             ->where('view_token', $viewToken)
             ->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntityWithRelations($row);
     }
 
     public function findByInvoiceNumber(string $invoiceNumber): ?Invoice
     {
-        $model = InvoiceModel::with(['lineItems', 'payments'])
+        $row = DB::table(self::TABLE)
             ->where('invoice_number', $invoiceNumber)
             ->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntityWithRelations($row);
     }
 
     public function findAll(): array
     {
-        $models = InvoiceModel::with(['lineItems', 'payments'])
+        $rows = DB::table(self::TABLE)
             ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findByStatus(InvoiceStatus $status): array
     {
-        $models = InvoiceModel::with(['lineItems', 'payments'])
+        $rows = DB::table(self::TABLE)
             ->where('status', $status->value)
             ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findByQuoteId(int $quoteId): array
     {
-        $models = InvoiceModel::with(['lineItems', 'payments'])
+        $rows = DB::table(self::TABLE)
             ->where('quote_id', $quoteId)
             ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findByDealId(int $dealId): array
     {
-        $models = InvoiceModel::with(['lineItems', 'payments'])
+        $rows = DB::table(self::TABLE)
             ->where('deal_id', $dealId)
             ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findByContactId(int $contactId): array
     {
-        $models = InvoiceModel::with(['lineItems', 'payments'])
+        $rows = DB::table(self::TABLE)
             ->where('contact_id', $contactId)
             ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findByCompanyId(int $companyId): array
     {
-        $models = InvoiceModel::with(['lineItems', 'payments'])
+        $rows = DB::table(self::TABLE)
             ->where('company_id', $companyId)
             ->orderByDesc('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findOverdue(): array
     {
-        $models = InvoiceModel::with(['lineItems', 'payments'])
+        $rows = DB::table(self::TABLE)
             ->where('due_date', '<', now()->startOfDay())
             ->whereNotIn('status', [InvoiceStatus::PAID->value, InvoiceStatus::CANCELLED->value])
             ->orderBy('due_date')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findUnpaid(): array
     {
-        $models = InvoiceModel::with(['lineItems', 'payments'])
+        $rows = DB::table(self::TABLE)
             ->whereNotIn('status', [InvoiceStatus::PAID->value, InvoiceStatus::CANCELLED->value])
             ->orderBy('due_date')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function save(Invoice $invoice): Invoice
     {
-        $data = $this->toModelData($invoice);
+        $data = $this->toRowData($invoice);
 
         if ($invoice->getId() !== null) {
-            $model = InvoiceModel::findOrFail($invoice->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $invoice->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $invoice->getId();
         } else {
-            $model = InvoiceModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
         // Sync line items
-        $this->syncLineItems($model, $invoice->getLineItems());
+        $this->syncLineItems($id, $invoice->getLineItems());
 
         // Sync payments
-        $this->syncPayments($model, $invoice->getPayments());
+        $this->syncPayments($id, $invoice->getPayments());
 
-        return $this->toDomainEntity($model->fresh(['lineItems', 'payments']));
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        $model = InvoiceModel::find($id);
-
-        if (!$model) {
-            return false;
-        }
-
         // Delete related records first
-        $model->lineItems()->delete();
-        $model->payments()->delete();
+        DB::table(self::TABLE_LINE_ITEMS)->where('invoice_id', $id)->delete();
+        DB::table(self::TABLE_PAYMENTS)->where('invoice_id', $id)->delete();
 
-        return $model->delete() ?? false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
     public function invoiceNumberExists(string $invoiceNumber, ?int $excludeId = null): bool
     {
-        $query = InvoiceModel::where('invoice_number', $invoiceNumber);
+        $query = DB::table(self::TABLE)->where('invoice_number', $invoiceNumber);
 
         if ($excludeId !== null) {
             $query->where('id', '!=', $excludeId);
@@ -187,16 +192,16 @@ class EloquentInvoiceRepository implements InvoiceRepositoryInterface
 
     public function getStats(): array
     {
-        $total = InvoiceModel::count();
-        $draft = InvoiceModel::where('status', InvoiceStatus::DRAFT->value)->count();
-        $sent = InvoiceModel::whereIn('status', [InvoiceStatus::SENT->value, InvoiceStatus::VIEWED->value])->count();
-        $paid = InvoiceModel::where('status', InvoiceStatus::PAID->value)->count();
-        $partial = InvoiceModel::where('status', InvoiceStatus::PARTIAL->value)->count();
-        $overdue = InvoiceModel::where('status', InvoiceStatus::OVERDUE->value)->count();
+        $total = DB::table(self::TABLE)->count();
+        $draft = DB::table(self::TABLE)->where('status', InvoiceStatus::DRAFT->value)->count();
+        $sent = DB::table(self::TABLE)->whereIn('status', [InvoiceStatus::SENT->value, InvoiceStatus::VIEWED->value])->count();
+        $paid = DB::table(self::TABLE)->where('status', InvoiceStatus::PAID->value)->count();
+        $partial = DB::table(self::TABLE)->where('status', InvoiceStatus::PARTIAL->value)->count();
+        $overdue = DB::table(self::TABLE)->where('status', InvoiceStatus::OVERDUE->value)->count();
 
-        $totalAmount = InvoiceModel::whereNotIn('status', [InvoiceStatus::CANCELLED->value])->sum('total');
-        $paidAmount = InvoiceModel::whereNotIn('status', [InvoiceStatus::CANCELLED->value])->sum('amount_paid');
-        $outstandingAmount = InvoiceModel::whereNotIn('status', [InvoiceStatus::PAID->value, InvoiceStatus::CANCELLED->value])->sum('balance_due');
+        $totalAmount = DB::table(self::TABLE)->whereNotIn('status', [InvoiceStatus::CANCELLED->value])->sum('total');
+        $paidAmount = DB::table(self::TABLE)->whereNotIn('status', [InvoiceStatus::CANCELLED->value])->sum('amount_paid');
+        $outstandingAmount = DB::table(self::TABLE)->whereNotIn('status', [InvoiceStatus::PAID->value, InvoiceStatus::CANCELLED->value])->sum('balance_due');
 
         return [
             'total_count' => $total,
@@ -211,20 +216,129 @@ class EloquentInvoiceRepository implements InvoiceRepositoryInterface
         ];
     }
 
+    public function search(
+        array $filters = [],
+        array $orderBy = ['created_at' => 'desc'],
+        int $page = 1,
+        int $perPage = 25
+    ): PaginatedResult {
+        $query = DB::table(self::TABLE);
+
+        // Apply filters
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (!empty($filters['quote_id'])) {
+            $query->where('quote_id', $filters['quote_id']);
+        }
+
+        if (!empty($filters['deal_id'])) {
+            $query->where('deal_id', $filters['deal_id']);
+        }
+
+        if (!empty($filters['contact_id'])) {
+            $query->where('contact_id', $filters['contact_id']);
+        }
+
+        if (!empty($filters['company_id'])) {
+            $query->where('company_id', $filters['company_id']);
+        }
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_number', 'ilike', "%{$search}%")
+                    ->orWhere('title', 'ilike', "%{$search}%");
+            });
+        }
+
+        if (!empty($filters['created_by'])) {
+            $query->where('created_by', $filters['created_by']);
+        }
+
+        // Apply ordering
+        foreach ($orderBy as $field => $direction) {
+            $query->orderBy($field, $direction);
+        }
+
+        // Get total count
+        $total = $query->count();
+
+        // Get paginated rows
+        $rows = $query
+            ->offset(($page - 1) * $perPage)
+            ->limit($perPage)
+            ->get();
+
+        // Convert to domain entities
+        $domainEntities = $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
+
+        return PaginatedResult::create(
+            items: $domainEntities,
+            total: $total,
+            perPage: $perPage,
+            currentPage: $page
+        );
+    }
+
+    public function getAllAsArray(): array
+    {
+        $rows = DB::table(self::TABLE)
+            ->orderByDesc('created_at')
+            ->get();
+
+        return $rows->map(fn($row) => $this->toArrayWithRelations($row))->all();
+    }
+
+    public function getByFiltersAsArray(array $filters): array
+    {
+        $query = DB::table(self::TABLE);
+
+        // Apply filters
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (!empty($filters['quote_id'])) {
+            $query->where('quote_id', $filters['quote_id']);
+        }
+
+        if (!empty($filters['deal_id'])) {
+            $query->where('deal_id', $filters['deal_id']);
+        }
+
+        if (!empty($filters['contact_id'])) {
+            $query->where('contact_id', $filters['contact_id']);
+        }
+
+        if (!empty($filters['company_id'])) {
+            $query->where('company_id', $filters['company_id']);
+        }
+
+        if (!empty($filters['created_by'])) {
+            $query->where('created_by', $filters['created_by']);
+        }
+
+        $rows = $query->orderByDesc('created_at')->get();
+
+        return $rows->map(fn($row) => $this->toArrayWithRelations($row))->all();
+    }
+
     /**
      * Sync line items for an invoice.
      *
      * @param InvoiceLineItem[] $lineItems
      */
-    private function syncLineItems(InvoiceModel $model, array $lineItems): void
+    private function syncLineItems(int $invoiceId, array $lineItems): void
     {
         // Delete existing line items
-        $model->lineItems()->delete();
+        DB::table(self::TABLE_LINE_ITEMS)->where('invoice_id', $invoiceId)->delete();
 
         // Create new line items
         foreach ($lineItems as $index => $lineItem) {
-            InvoiceLineItemModel::create([
-                'invoice_id' => $model->id,
+            DB::table(self::TABLE_LINE_ITEMS)->insert([
+                'invoice_id' => $invoiceId,
                 'product_id' => $lineItem->getProductId(),
                 'name' => $lineItem->getDescription(),
                 'description' => $lineItem->getDescription(),
@@ -234,6 +348,8 @@ class EloquentInvoiceRepository implements InvoiceRepositoryInterface
                 'tax_rate' => $lineItem->getTaxRate(),
                 'line_total' => $lineItem->calculateSubtotal()->amount(),
                 'display_order' => $lineItem->getDisplayOrder() ?: $index,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
     }
@@ -243,107 +359,123 @@ class EloquentInvoiceRepository implements InvoiceRepositoryInterface
      *
      * @param InvoicePayment[] $payments
      */
-    private function syncPayments(InvoiceModel $model, array $payments): void
+    private function syncPayments(int $invoiceId, array $payments): void
     {
         // Delete existing payments
-        $model->payments()->delete();
+        DB::table(self::TABLE_PAYMENTS)->where('invoice_id', $invoiceId)->delete();
 
         // Create new payments
         foreach ($payments as $payment) {
-            InvoicePaymentModel::create([
-                'invoice_id' => $model->id,
+            DB::table(self::TABLE_PAYMENTS)->insert([
+                'invoice_id' => $invoiceId,
                 'amount' => $payment->getAmount()->amount(),
                 'payment_method' => $payment->getPaymentMethod()?->value,
                 'payment_date' => $payment->getPaymentDate()->format('Y-m-d'),
                 'reference' => $payment->getReference(),
                 'notes' => $payment->getNotes(),
                 'created_by' => $payment->getCreatedBy(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
     }
 
     /**
-     * Convert an Eloquent model to a domain entity.
+     * Get line items for an invoice.
      */
-    private function toDomainEntity(InvoiceModel $model): Invoice
+    private function getLineItemsForInvoice(int $invoiceId): array
     {
-        $currency = $model->currency ?? 'USD';
+        return DB::table(self::TABLE_LINE_ITEMS)
+            ->where('invoice_id', $invoiceId)
+            ->orderBy('display_order')
+            ->get()
+            ->all();
+    }
+
+    /**
+     * Get payments for an invoice.
+     */
+    private function getPaymentsForInvoice(int $invoiceId): array
+    {
+        return DB::table(self::TABLE_PAYMENTS)
+            ->where('invoice_id', $invoiceId)
+            ->orderBy('payment_date')
+            ->get()
+            ->all();
+    }
+
+    /**
+     * Convert a database row to a domain entity with relations.
+     */
+    private function toDomainEntityWithRelations(stdClass $row): Invoice
+    {
+        $currency = $row->currency ?? 'USD';
 
         $invoice = Invoice::reconstitute(
-            id: $model->id,
-            invoiceNumber: $model->invoice_number,
-            quoteId: $model->quote_id,
-            dealId: $model->deal_id,
-            contactId: $model->contact_id,
-            companyId: $model->company_id,
-            status: InvoiceStatus::from($model->status),
-            title: $model->title,
-            subtotal: new Money((float) $model->subtotal, $currency),
-            discountAmount: new Money((float) $model->discount_amount, $currency),
-            taxAmount: new Money((float) $model->tax_amount, $currency),
-            total: new Money((float) $model->total, $currency),
-            amountPaid: new Money((float) $model->amount_paid, $currency),
-            balanceDue: new Money((float) $model->balance_due, $currency),
+            id: (int) $row->id,
+            invoiceNumber: $row->invoice_number,
+            quoteId: $row->quote_id ? (int) $row->quote_id : null,
+            dealId: $row->deal_id ? (int) $row->deal_id : null,
+            contactId: $row->contact_id ? (int) $row->contact_id : null,
+            companyId: $row->company_id ? (int) $row->company_id : null,
+            status: InvoiceStatus::from($row->status),
+            title: $row->title,
+            subtotal: new Money((float) $row->subtotal, $currency),
+            discountAmount: new Money((float) $row->discount_amount, $currency),
+            taxAmount: new Money((float) $row->tax_amount, $currency),
+            total: new Money((float) $row->total, $currency),
+            amountPaid: new Money((float) $row->amount_paid, $currency),
+            balanceDue: new Money((float) $row->balance_due, $currency),
             currency: $currency,
-            issueDate: new DateTimeImmutable($model->issue_date->format('Y-m-d')),
-            dueDate: new DateTimeImmutable($model->due_date->format('Y-m-d')),
-            paymentTerms: PaymentTerms::from($model->payment_terms ?? 'net_30'),
-            notes: $model->notes,
-            internalNotes: $model->internal_notes,
-            templateId: $model->template_id,
-            viewToken: $model->view_token,
-            sentAt: $model->sent_at
-                ? new DateTimeImmutable($model->sent_at->format('Y-m-d H:i:s'))
-                : null,
-            sentToEmail: $model->sent_to_email,
-            viewedAt: $model->viewed_at
-                ? new DateTimeImmutable($model->viewed_at->format('Y-m-d H:i:s'))
-                : null,
-            paidAt: $model->paid_at
-                ? new DateTimeImmutable($model->paid_at->format('Y-m-d H:i:s'))
-                : null,
-            createdBy: $model->created_by,
-            createdAt: $model->created_at
-                ? new DateTimeImmutable($model->created_at->format('Y-m-d H:i:s'))
-                : null,
-            updatedAt: $model->updated_at
-                ? new DateTimeImmutable($model->updated_at->format('Y-m-d H:i:s'))
-                : null,
+            issueDate: new DateTimeImmutable($row->issue_date),
+            dueDate: new DateTimeImmutable($row->due_date),
+            paymentTerms: PaymentTerms::from($row->payment_terms ?? 'net_30'),
+            notes: $row->notes,
+            internalNotes: $row->internal_notes,
+            templateId: $row->template_id ? (int) $row->template_id : null,
+            viewToken: $row->view_token,
+            sentAt: $row->sent_at ? new DateTimeImmutable($row->sent_at) : null,
+            sentToEmail: $row->sent_to_email,
+            viewedAt: $row->viewed_at ? new DateTimeImmutable($row->viewed_at) : null,
+            paidAt: $row->paid_at ? new DateTimeImmutable($row->paid_at) : null,
+            createdBy: $row->created_by ? (int) $row->created_by : null,
+            createdAt: $row->created_at ? new DateTimeImmutable($row->created_at) : null,
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
         );
 
-        // Set line items
-        $lineItems = $model->lineItems->map(function ($item) use ($model, $currency) {
+        // Load line items
+        $lineItemRows = $this->getLineItemsForInvoice((int) $row->id);
+        $lineItems = array_map(function ($item) use ($row, $currency) {
             return InvoiceLineItem::reconstitute(
-                id: $item->id,
-                invoiceId: $model->id,
-                productId: $item->product_id,
+                id: (int) $item->id,
+                invoiceId: (int) $row->id,
+                productId: $item->product_id ? (int) $item->product_id : null,
                 description: $item->name ?? $item->description ?? '',
                 quantity: (float) $item->quantity,
                 unitPrice: new Money((float) $item->unit_price, $currency),
                 discountPercent: (float) $item->discount_percent,
                 taxRate: (float) $item->tax_rate,
-                displayOrder: $item->display_order ?? 0,
+                displayOrder: (int) ($item->display_order ?? 0),
             );
-        })->all();
+        }, $lineItemRows);
 
         $invoice->setLineItems($lineItems);
 
-        // Set payments
-        $payments = $model->payments->map(function ($payment) use ($model, $currency) {
+        // Load payments
+        $paymentRows = $this->getPaymentsForInvoice((int) $row->id);
+        $payments = array_map(function ($payment) use ($row, $currency) {
             return InvoicePayment::reconstitute(
-                id: $payment->id,
-                invoiceId: $model->id,
+                id: (int) $payment->id,
+                invoiceId: (int) $row->id,
                 amount: new Money((float) $payment->amount, $currency),
-                paymentDate: new DateTimeImmutable($payment->payment_date->format('Y-m-d')),
+                paymentDate: new DateTimeImmutable($payment->payment_date),
                 paymentMethod: $payment->payment_method ? PaymentMethod::tryFrom($payment->payment_method) : null,
                 reference: $payment->reference,
                 notes: $payment->notes,
-                createdBy: $payment->created_by ?? null,
-                createdAt: $payment->created_at
-                    ? new DateTimeImmutable($payment->created_at->format('Y-m-d H:i:s'))
-                    : null,
+                createdBy: $payment->created_by ? (int) $payment->created_by : null,
+                createdAt: $payment->created_at ? new DateTimeImmutable($payment->created_at) : null,
             );
-        })->all();
+        }, $paymentRows);
 
         $invoice->setPayments($payments);
 
@@ -351,11 +483,11 @@ class EloquentInvoiceRepository implements InvoiceRepositoryInterface
     }
 
     /**
-     * Convert a domain entity to model data.
+     * Convert a domain entity to row data.
      *
      * @return array<string, mixed>
      */
-    private function toModelData(Invoice $invoice): array
+    private function toRowData(Invoice $invoice): array
     {
         return [
             'invoice_number' => $invoice->getInvoiceNumber(),
@@ -384,6 +516,75 @@ class EloquentInvoiceRepository implements InvoiceRepositoryInterface
             'viewed_at' => $invoice->getViewedAt()?->format('Y-m-d H:i:s'),
             'paid_at' => $invoice->getPaidAt()?->format('Y-m-d H:i:s'),
             'created_by' => $invoice->getCreatedBy(),
+        ];
+    }
+
+    /**
+     * Convert a database row to array with relations.
+     *
+     * @return array<string, mixed>
+     */
+    private function toArrayWithRelations(stdClass $row): array
+    {
+        $lineItemRows = $this->getLineItemsForInvoice((int) $row->id);
+        $paymentRows = $this->getPaymentsForInvoice((int) $row->id);
+
+        return [
+            'id' => $row->id,
+            'invoice_number' => $row->invoice_number,
+            'quote_id' => $row->quote_id,
+            'deal_id' => $row->deal_id,
+            'contact_id' => $row->contact_id,
+            'company_id' => $row->company_id,
+            'status' => $row->status,
+            'title' => $row->title,
+            'subtotal' => (float) $row->subtotal,
+            'discount_amount' => (float) $row->discount_amount,
+            'tax_amount' => (float) $row->tax_amount,
+            'total' => (float) $row->total,
+            'amount_paid' => (float) $row->amount_paid,
+            'balance_due' => (float) $row->balance_due,
+            'currency' => $row->currency,
+            'issue_date' => $row->issue_date,
+            'due_date' => $row->due_date,
+            'payment_terms' => $row->payment_terms,
+            'notes' => $row->notes,
+            'internal_notes' => $row->internal_notes,
+            'template_id' => $row->template_id,
+            'view_token' => $row->view_token,
+            'sent_at' => $row->sent_at,
+            'sent_to_email' => $row->sent_to_email,
+            'viewed_at' => $row->viewed_at,
+            'paid_at' => $row->paid_at,
+            'created_by' => $row->created_by,
+            'created_at' => $row->created_at,
+            'updated_at' => $row->updated_at,
+            'line_items' => array_map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'name' => $item->name,
+                    'description' => $item->description,
+                    'quantity' => (float) $item->quantity,
+                    'unit_price' => (float) $item->unit_price,
+                    'discount_percent' => (float) $item->discount_percent,
+                    'tax_rate' => (float) $item->tax_rate,
+                    'line_total' => (float) $item->line_total,
+                    'display_order' => $item->display_order,
+                ];
+            }, $lineItemRows),
+            'payments' => array_map(function ($payment) {
+                return [
+                    'id' => $payment->id,
+                    'amount' => (float) $payment->amount,
+                    'payment_method' => $payment->payment_method,
+                    'payment_date' => $payment->payment_date,
+                    'reference' => $payment->reference,
+                    'notes' => $payment->notes,
+                    'created_by' => $payment->created_by,
+                    'created_at' => $payment->created_at,
+                ];
+            }, $paymentRows),
         ];
     }
 }

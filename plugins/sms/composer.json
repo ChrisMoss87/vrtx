@@ -1,0 +1,21 @@
+{
+    "name": "vrtx/sms-plugin",
+    "description": "SMS Business Integration for VRTX CRM",
+    "type": "vrtx-plugin",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "VRTX",
+            "email": "plugins@vrtx.io"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Plugins\\SMS\\": "src/"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "twilio/sdk": "^7.0"
+    }
+}

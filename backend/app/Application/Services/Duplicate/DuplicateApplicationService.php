@@ -5,18 +5,19 @@ declare(strict_types=1);
 namespace App\Application\Services\Duplicate;
 
 use App\Domain\Duplicate\Repositories\DuplicateCandidateRepositoryInterface;
-use App\Models\DuplicateCandidate;
-use App\Models\DuplicateRule;
-use App\Models\ModuleRecord;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
+use App\Domain\Duplicate\Repositories\DuplicateRuleRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use Illuminate\Support\Facades\DB;
 
 class DuplicateApplicationService
 {
     public function __construct(
-        private DuplicateCandidateRepositoryInterface $repository,
+        private DuplicateCandidateRepositoryInterface $candidateRepository,
+        private DuplicateRuleRepositoryInterface $ruleRepository,
+        private ModuleRecordRepositoryInterface $recordRepository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -26,67 +27,25 @@ class DuplicateApplicationService
     /**
      * List duplicate candidates with filtering and pagination.
      */
-    public function listCandidates(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listCandidates(array $filters = [], int $perPage = 25, int $page = 1): PaginatedResult
     {
-        $query = DuplicateCandidate::query()
-            ->with(['module:id,name,api_name', 'recordA', 'recordB', 'reviewer:id,name']);
-
-        // Filter by module
-        if (!empty($filters['module_id'])) {
-            $query->forModule($filters['module_id']);
-        }
-
-        // Filter by status
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        } else {
-            // Default to pending only
-            $query->pending();
-        }
-
-        // Filter by minimum score
-        if (!empty($filters['min_score'])) {
-            $query->where('match_score', '>=', $filters['min_score']);
-        }
-
-        // Filter by record ID
-        if (!empty($filters['record_id'])) {
-            $recordId = $filters['record_id'];
-            $query->where(function ($q) use ($recordId) {
-                $q->where('record_id_a', $recordId)
-                    ->orWhere('record_id_b', $recordId);
-            });
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'match_score';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->candidateRepository->listCandidates($filters, $perPage, $page);
     }
 
     /**
      * Get a single candidate by ID.
      */
-    public function getCandidate(int $id): ?DuplicateCandidate
+    public function getCandidate(int $id): ?array
     {
-        return DuplicateCandidate::with(['module', 'recordA', 'recordB', 'reviewer:id,name'])->find($id);
+        return $this->candidateRepository->findById($id);
     }
 
     /**
      * Get candidates for a specific record.
      */
-    public function getCandidatesForRecord(int $recordId): Collection
+    public function getCandidatesForRecord(int $recordId): array
     {
-        return DuplicateCandidate::pending()
-            ->where(function ($q) use ($recordId) {
-                $q->where('record_id_a', $recordId)
-                    ->orWhere('record_id_b', $recordId);
-            })
-            ->with(['recordA', 'recordB'])
-            ->highestMatch()
-            ->get();
+        return $this->candidateRepository->getCandidatesForRecord($recordId);
     }
 
     /**
@@ -94,14 +53,11 @@ class DuplicateApplicationService
      */
     public function getModuleStats(int $moduleId): array
     {
-        $candidates = DuplicateCandidate::forModule($moduleId);
-
-        $pending = (clone $candidates)->pending()->count();
-        $merged = (clone $candidates)->where('status', DuplicateCandidate::STATUS_MERGED)->count();
-        $dismissed = (clone $candidates)->where('status', DuplicateCandidate::STATUS_DISMISSED)->count();
-
-        $avgScore = (clone $candidates)->pending()->avg('match_score') ?? 0;
-        $highConfidence = (clone $candidates)->pending()->where('match_score', '>=', 0.9)->count();
+        $pending = $this->candidateRepository->countPendingForModule($moduleId);
+        $merged = $this->candidateRepository->countByStatus($moduleId, 'merged');
+        $dismissed = $this->candidateRepository->countByStatus($moduleId, 'dismissed');
+        $avgScore = $this->candidateRepository->getAverageScore($moduleId);
+        $highConfidence = $this->candidateRepository->countHighConfidence($moduleId, 0.9);
 
         return [
             'module_id' => $moduleId,
@@ -119,15 +75,14 @@ class DuplicateApplicationService
      */
     public function getOverallStats(): array
     {
-        $pending = DuplicateCandidate::pending()->count();
-        $merged = DuplicateCandidate::where('status', DuplicateCandidate::STATUS_MERGED)->count();
-        $dismissed = DuplicateCandidate::where('status', DuplicateCandidate::STATUS_DISMISSED)->count();
+        // Get counts by status across all modules
+        $allCandidates = $this->candidateRepository->findAll();
 
-        $byModule = DuplicateCandidate::pending()
-            ->selectRaw('module_id, COUNT(*) as count')
-            ->groupBy('module_id')
-            ->with('module:id,name')
-            ->get();
+        $pending = count(array_filter($allCandidates, fn($c) => $c['status'] === 'pending'));
+        $merged = count(array_filter($allCandidates, fn($c) => $c['status'] === 'merged'));
+        $dismissed = count(array_filter($allCandidates, fn($c) => $c['status'] === 'dismissed'));
+
+        $byModule = $this->candidateRepository->countByModule();
 
         return [
             'pending' => $pending,
@@ -147,17 +102,28 @@ class DuplicateApplicationService
      */
     public function mergeRecords(int $candidateId, int $masterRecordId, array $mergeConfig = []): array
     {
-        $candidate = DuplicateCandidate::findOrFail($candidateId);
+        $candidate = $this->candidateRepository->findById($candidateId);
+
+        if (!$candidate) {
+            throw new \RuntimeException("Candidate not found: {$candidateId}");
+        }
 
         // Determine which is master and which is duplicate
-        $duplicateRecordId = $candidate->record_id_a === $masterRecordId
-            ? $candidate->record_id_b
-            : $candidate->record_id_a;
+        $duplicateRecordId = $candidate['record_id_a'] === $masterRecordId
+            ? $candidate['record_id_b']
+            : $candidate['record_id_a'];
 
-        $masterRecord = ModuleRecord::findOrFail($masterRecordId);
-        $duplicateRecord = ModuleRecord::findOrFail($duplicateRecordId);
+        $moduleId = $candidate['module_id'];
 
-        return DB::transaction(function () use ($candidate, $masterRecord, $duplicateRecord, $mergeConfig) {
+        // Get records
+        $masterRecord = $this->recordRepository->findById($moduleId, $masterRecordId);
+        $duplicateRecord = $this->recordRepository->findById($moduleId, $duplicateRecordId);
+
+        if (!$masterRecord || !$duplicateRecord) {
+            throw new \RuntimeException("Records not found");
+        }
+
+        return DB::transaction(function () use ($candidateId, $masterRecord, $duplicateRecord, $mergeConfig, $duplicateRecordId, $moduleId) {
             // Merge field values based on config
             $mergedData = $this->mergeFieldValues(
                 $masterRecord->data ?? [],
@@ -166,29 +132,42 @@ class DuplicateApplicationService
             );
 
             // Update master record with merged data
-            $masterRecord->update(['data' => $mergedData]);
+            $masterRecord->data = $mergedData;
+            $this->recordRepository->save($masterRecord);
 
             // Transfer related records (activities, notes, etc.)
             $this->transferRelatedRecords($duplicateRecord->id, $masterRecord->id);
 
             // Soft delete the duplicate
-            $duplicateRecord->delete();
+            $this->recordRepository->delete($moduleId, $duplicateRecord->id);
 
             // Mark candidate as merged
-            $candidate->markAsMerged(Auth::id());
+            $userId = $this->authContext->userId();
+            if (!$userId) {
+                throw new \RuntimeException("User not authenticated");
+            }
+
+            $this->candidateRepository->markAsMerged($candidateId, $userId);
 
             // Also dismiss any other candidates involving the duplicate record
-            DuplicateCandidate::pending()
-                ->where(function ($q) use ($duplicateRecord) {
-                    $q->where('record_id_a', $duplicateRecord->id)
-                        ->orWhere('record_id_b', $duplicateRecord->id);
-                })
-                ->update([
-                    'status' => DuplicateCandidate::STATUS_DISMISSED,
-                    'reviewed_by' => Auth::id(),
+            $relatedCandidates = array_merge(
+                $this->candidateRepository->getCandidatesForRecord($duplicateRecordId),
+                []
+            );
+
+            $relatedIds = array_column(
+                array_filter($relatedCandidates, fn($c) => $c['status'] === 'pending'),
+                'id'
+            );
+
+            if (!empty($relatedIds)) {
+                $this->candidateRepository->bulkUpdate($relatedIds, [
+                    'status' => 'dismissed',
+                    'reviewed_by' => $userId,
                     'reviewed_at' => now(),
                     'dismiss_reason' => 'Record was merged in another duplicate set',
                 ]);
+            }
 
             return [
                 'master_record_id' => $masterRecord->id,
@@ -201,11 +180,15 @@ class DuplicateApplicationService
     /**
      * Dismiss a duplicate candidate.
      */
-    public function dismissCandidate(int $candidateId, ?string $reason = null): DuplicateCandidate
+    public function dismissCandidate(int $candidateId, ?string $reason = null): ?array
     {
-        $candidate = DuplicateCandidate::findOrFail($candidateId);
-        $candidate->markAsDismissed(Auth::id(), $reason);
-        return $candidate->fresh();
+        $userId = $this->authContext->userId();
+        if (!$userId) {
+            throw new \RuntimeException("User not authenticated");
+        }
+
+        $this->candidateRepository->markAsDismissed($candidateId, $userId, $reason);
+        return $this->candidateRepository->findById($candidateId);
     }
 
     /**
@@ -213,14 +196,30 @@ class DuplicateApplicationService
      */
     public function bulkDismiss(array $candidateIds, ?string $reason = null): int
     {
-        return DuplicateCandidate::whereIn('id', $candidateIds)
-            ->pending()
-            ->update([
-                'status' => DuplicateCandidate::STATUS_DISMISSED,
-                'reviewed_by' => Auth::id(),
-                'reviewed_at' => now(),
-                'dismiss_reason' => $reason,
-            ]);
+        $userId = $this->authContext->userId();
+        if (!$userId) {
+            throw new \RuntimeException("User not authenticated");
+        }
+
+        // Filter to only pending candidates
+        $pendingIds = [];
+        foreach ($candidateIds as $id) {
+            $candidate = $this->candidateRepository->findById($id);
+            if ($candidate && $candidate['status'] === 'pending') {
+                $pendingIds[] = $id;
+            }
+        }
+
+        if (empty($pendingIds)) {
+            return 0;
+        }
+
+        return $this->candidateRepository->bulkUpdate($pendingIds, [
+            'status' => 'dismissed',
+            'reviewed_by' => $userId,
+            'reviewed_at' => now(),
+            'dismiss_reason' => $reason,
+        ]);
     }
 
     /**

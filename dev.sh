@@ -2,6 +2,10 @@
 
 set -e
 
+# Get script directory and cd to it
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo "========================================="
 echo "  VRTX CRM Development Environment"
 echo "========================================="
@@ -36,6 +40,9 @@ cleanup() {
 
 # Trap SIGINT and SIGTERM
 trap cleanup SIGINT SIGTERM
+
+# Ensure logs directory exists
+mkdir -p logs
 
 # Kill any existing Laravel/Vite processes
 echo -e "${BLUE}Cleaning up existing processes...${NC}"

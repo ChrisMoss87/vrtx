@@ -5,17 +5,15 @@ declare(strict_types=1);
 namespace App\Application\Services\Activity;
 
 use App\Domain\Activity\Repositories\ActivityRepositoryInterface;
-use App\Models\Activity;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
+use DateTimeInterface;
 
 class ActivityApplicationService
 {
     public function __construct(
         private ActivityRepositoryInterface $repository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -25,211 +23,68 @@ class ActivityApplicationService
     /**
      * List activities with filtering and pagination.
      */
-    public function listActivities(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listActivities(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = Activity::query()
-            ->with(['user:id,name,email']);
-
-        // Filter by type
-        if (!empty($filters['type'])) {
-            $query->ofType($filters['type']);
-        }
-
-        // Filter by types (multiple)
-        if (!empty($filters['types']) && is_array($filters['types'])) {
-            $query->whereIn('type', $filters['types']);
-        }
-
-        // Filter by subject
-        if (!empty($filters['subject_type']) && !empty($filters['subject_id'])) {
-            $query->forSubject($filters['subject_type'], $filters['subject_id']);
-        }
-
-        // Filter by user
-        if (!empty($filters['user_id'])) {
-            $query->where('user_id', $filters['user_id']);
-        }
-
-        // Filter by date range
-        if (!empty($filters['from_date'])) {
-            $query->where('created_at', '>=', $filters['from_date']);
-        }
-        if (!empty($filters['to_date'])) {
-            $query->where('created_at', '<=', $filters['to_date']);
-        }
-
-        // Filter by scheduled date range
-        if (!empty($filters['scheduled_from'])) {
-            $query->where('scheduled_at', '>=', $filters['scheduled_from']);
-        }
-        if (!empty($filters['scheduled_to'])) {
-            $query->where('scheduled_at', '<=', $filters['scheduled_to']);
-        }
-
-        // Filter by completion status
-        if (isset($filters['completed'])) {
-            if ($filters['completed']) {
-                $query->whereNotNull('completed_at');
-            } else {
-                $query->whereNull('completed_at');
-            }
-        }
-
-        // Filter by pinned
-        if (!empty($filters['pinned'])) {
-            $query->pinned();
-        }
-
-        // Filter by system/user activities
-        if (isset($filters['is_system'])) {
-            if ($filters['is_system']) {
-                $query->systemActivities();
-            } else {
-                $query->userActivities();
-            }
-        }
-
-        // Search in title/description/content
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhere('content', 'like', "%{$search}%");
-            });
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'created_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        return $this->repository->findWithFilters($filters, $perPage);
     }
 
     /**
      * Get a single activity by ID.
      */
-    public function getActivity(int $id): ?Activity
+    public function getActivity(int $id): ?array
     {
-        return Activity::with(['user:id,name,email', 'subject', 'related'])->find($id);
+        return $this->repository->findByIdWithRelations($id);
     }
 
     /**
      * Get timeline for a subject (polymorphic entity).
      */
     public function getTimeline(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         ?int $limit = 50,
         ?string $type = null,
         bool $includeSystem = true
-    ): Collection {
-        $query = Activity::forSubject(get_class($subject), $subject->getKey())
-            ->with('user:id,name,email')
-            ->orderBy('created_at', 'desc');
-
-        if ($type) {
-            $query->ofType($type);
-        }
-
-        if (!$includeSystem) {
-            $query->userActivities();
-        }
-
-        if ($limit) {
-            $query->limit($limit);
-        }
-
-        return $query->get();
+    ): array {
+        return $this->repository->findForSubject(
+            $subjectType,
+            $subjectId,
+            $limit,
+            $type,
+            $includeSystem
+        );
     }
 
     /**
      * Get upcoming scheduled activities for a user.
      */
-    public function getUpcoming(?int $userId = null, int $days = 7): Collection
+    public function getUpcoming(?int $userId = null, int $days = 7): array
     {
-        $query = Activity::upcoming()
-            ->with(['user:id,name,email', 'subject'])
-            ->where('scheduled_at', '<=', now()->addDays($days))
-            ->orderBy('scheduled_at');
-
-        if ($userId) {
-            $query->where('user_id', $userId);
-        }
-
-        return $query->get();
+        return $this->repository->findUpcoming($userId, $days);
     }
 
     /**
      * Get overdue activities for a user.
      */
-    public function getOverdue(?int $userId = null): Collection
+    public function getOverdue(?int $userId = null): array
     {
-        $query = Activity::overdue()
-            ->with(['user:id,name,email', 'subject'])
-            ->orderBy('scheduled_at');
-
-        if ($userId) {
-            $query->where('user_id', $userId);
-        }
-
-        return $query->get();
+        return $this->repository->findOverdue($userId);
     }
 
     /**
      * Get activity statistics for a subject.
      */
-    public function getActivityStats(Model $subject): array
+    public function getActivityStats(string $subjectType, int $subjectId): array
     {
-        $subjectType = get_class($subject);
-        $subjectId = $subject->getKey();
-
-        $stats = Activity::forSubject($subjectType, $subjectId)
-            ->selectRaw('type, COUNT(*) as count')
-            ->groupBy('type')
-            ->pluck('count', 'type')
-            ->toArray();
-
-        $completedTasks = Activity::forSubject($subjectType, $subjectId)
-            ->whereIn('type', [Activity::TYPE_TASK, Activity::TYPE_CALL, Activity::TYPE_MEETING])
-            ->whereNotNull('completed_at')
-            ->count();
-
-        $pendingTasks = Activity::forSubject($subjectType, $subjectId)
-            ->whereIn('type', [Activity::TYPE_TASK, Activity::TYPE_CALL, Activity::TYPE_MEETING])
-            ->whereNull('completed_at')
-            ->whereNotNull('scheduled_at')
-            ->count();
-
-        $overdueCount = Activity::forSubject($subjectType, $subjectId)
-            ->overdue()
-            ->count();
-
-        return [
-            'by_type' => $stats,
-            'total' => array_sum($stats),
-            'completed' => $completedTasks,
-            'pending' => $pendingTasks,
-            'overdue' => $overdueCount,
-        ];
+        return $this->repository->getStatsBySubject($subjectType, $subjectId);
     }
 
     /**
      * Get daily activity count for dashboard.
      */
-    public function getDailyActivityCount(?int $userId = null, int $days = 30): Collection
+    public function getDailyActivityCount(?int $userId = null, int $days = 30): array
     {
-        $query = Activity::query()
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
-            ->where('created_at', '>=', now()->subDays($days))
-            ->groupBy('date')
-            ->orderBy('date');
-
-        if ($userId) {
-            $query->where('user_id', $userId);
-        }
-
-        return $query->get();
+        return $this->repository->getDailyCount($userId, $days);
     }
 
     // =========================================================================
@@ -240,18 +95,19 @@ class ActivityApplicationService
      * Create a note on a record.
      */
     public function createNote(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $content,
         ?string $title = null,
         bool $isInternal = false,
         bool $isPinned = false
-    ): Activity {
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_NOTE,
-            'action' => Activity::ACTION_CREATED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+    ): array {
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_NOTE,
+            'action' => ActivityRepositoryInterface::ACTION_CREATED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => $title ?? 'Note added',
             'content' => $content,
             'is_internal' => $isInternal,
@@ -262,22 +118,20 @@ class ActivityApplicationService
     /**
      * Update an existing note.
      */
-    public function updateNote(int $id, array $data): Activity
+    public function updateNote(int $id, array $data): array
     {
-        $activity = Activity::findOrFail($id);
+        $activity = $this->repository->findById($id);
 
-        if ($activity->type !== Activity::TYPE_NOTE) {
+        if (!$activity || $activity['type'] !== ActivityRepositoryInterface::TYPE_NOTE) {
             throw new \InvalidArgumentException('Activity is not a note');
         }
 
-        $activity->update([
-            'title' => $data['title'] ?? $activity->title,
-            'content' => $data['content'] ?? $activity->content,
-            'is_internal' => $data['is_internal'] ?? $activity->is_internal,
-            'is_pinned' => $data['is_pinned'] ?? $activity->is_pinned,
+        return $this->repository->update($id, [
+            'title' => $data['title'] ?? $activity['title'],
+            'content' => $data['content'] ?? $activity['content'],
+            'is_internal' => $data['is_internal'] ?? $activity['is_internal'],
+            'is_pinned' => $data['is_pinned'] ?? $activity['is_pinned'],
         ]);
-
-        return $activity->fresh();
     }
 
     // =========================================================================
@@ -288,19 +142,22 @@ class ActivityApplicationService
      * Log a call activity.
      */
     public function logCall(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $title,
         ?string $description = null,
         ?string $outcome = null,
         ?int $durationMinutes = null,
-        ?\DateTimeInterface $scheduledAt = null
-    ): Activity {
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_CALL,
-            'action' => $scheduledAt ? Activity::ACTION_SCHEDULED : Activity::ACTION_COMPLETED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+        ?DateTimeInterface $scheduledAt = null
+    ): array {
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_CALL,
+            'action' => $scheduledAt
+                ? ActivityRepositoryInterface::ACTION_SCHEDULED
+                : ActivityRepositoryInterface::ACTION_COMPLETED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => $title,
             'description' => $description,
             'outcome' => $outcome,
@@ -314,13 +171,22 @@ class ActivityApplicationService
      * Schedule a call.
      */
     public function scheduleCall(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $title,
-        \DateTimeInterface $scheduledAt,
+        DateTimeInterface $scheduledAt,
         ?string $description = null,
         ?int $durationMinutes = null
-    ): Activity {
-        return $this->logCall($subject, $title, $description, null, $durationMinutes, $scheduledAt);
+    ): array {
+        return $this->logCall(
+            $subjectType,
+            $subjectId,
+            $title,
+            $description,
+            null,
+            $durationMinutes,
+            $scheduledAt
+        );
     }
 
     /**
@@ -331,22 +197,20 @@ class ActivityApplicationService
         string $outcome,
         ?int $durationMinutes = null,
         ?string $notes = null
-    ): Activity {
-        $activity = Activity::findOrFail($activityId);
+    ): array {
+        $activity = $this->repository->findById($activityId);
 
-        if ($activity->type !== Activity::TYPE_CALL) {
+        if (!$activity || $activity['type'] !== ActivityRepositoryInterface::TYPE_CALL) {
             throw new \InvalidArgumentException('Activity is not a call');
         }
 
-        $activity->update([
-            'action' => Activity::ACTION_COMPLETED,
+        return $this->repository->update($activityId, [
+            'action' => ActivityRepositoryInterface::ACTION_COMPLETED,
             'outcome' => $outcome,
-            'duration_minutes' => $durationMinutes ?? $activity->duration_minutes,
-            'description' => $notes ?? $activity->description,
+            'duration_minutes' => $durationMinutes ?? $activity['duration_minutes'],
+            'description' => $notes ?? $activity['description'],
             'completed_at' => now(),
         ]);
-
-        return $activity->fresh();
     }
 
     // =========================================================================
@@ -357,19 +221,20 @@ class ActivityApplicationService
      * Schedule a meeting.
      */
     public function scheduleMeeting(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $title,
-        \DateTimeInterface $scheduledAt,
+        DateTimeInterface $scheduledAt,
         ?string $description = null,
         ?int $durationMinutes = null,
         ?array $metadata = null
-    ): Activity {
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_MEETING,
-            'action' => Activity::ACTION_SCHEDULED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+    ): array {
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_MEETING,
+            'action' => ActivityRepositoryInterface::ACTION_SCHEDULED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => $title,
             'description' => $description,
             'scheduled_at' => $scheduledAt,
@@ -386,67 +251,68 @@ class ActivityApplicationService
         ?string $outcome = null,
         ?string $notes = null,
         ?int $actualDuration = null
-    ): Activity {
-        $activity = Activity::findOrFail($activityId);
+    ): array {
+        $activity = $this->repository->findById($activityId);
 
-        if ($activity->type !== Activity::TYPE_MEETING) {
+        if (!$activity || $activity['type'] !== ActivityRepositoryInterface::TYPE_MEETING) {
             throw new \InvalidArgumentException('Activity is not a meeting');
         }
 
-        $activity->update([
-            'action' => Activity::ACTION_COMPLETED,
-            'outcome' => $outcome ?? Activity::OUTCOME_COMPLETED,
-            'description' => $notes ?? $activity->description,
-            'duration_minutes' => $actualDuration ?? $activity->duration_minutes,
+        return $this->repository->update($activityId, [
+            'action' => ActivityRepositoryInterface::ACTION_COMPLETED,
+            'outcome' => $outcome ?? ActivityRepositoryInterface::OUTCOME_COMPLETED,
+            'description' => $notes ?? $activity['description'],
+            'duration_minutes' => $actualDuration ?? $activity['duration_minutes'],
             'completed_at' => now(),
         ]);
-
-        return $activity->fresh();
     }
 
     /**
      * Cancel a scheduled meeting.
      */
-    public function cancelMeeting(int $activityId, ?string $reason = null): Activity
+    public function cancelMeeting(int $activityId, ?string $reason = null): array
     {
-        $activity = Activity::findOrFail($activityId);
+        $activity = $this->repository->findById($activityId);
 
-        if ($activity->type !== Activity::TYPE_MEETING) {
+        if (!$activity || $activity['type'] !== ActivityRepositoryInterface::TYPE_MEETING) {
             throw new \InvalidArgumentException('Activity is not a meeting');
         }
 
-        $activity->update([
-            'action' => Activity::ACTION_CANCELLED,
-            'outcome' => Activity::OUTCOME_CANCELLED,
-            'description' => $reason ? ($activity->description . "\n\nCancellation reason: " . $reason) : $activity->description,
-        ]);
+        $description = $activity['description'];
+        if ($reason) {
+            $description = $description . "\n\nCancellation reason: " . $reason;
+        }
 
-        return $activity->fresh();
+        return $this->repository->update($activityId, [
+            'action' => ActivityRepositoryInterface::ACTION_CANCELLED,
+            'outcome' => ActivityRepositoryInterface::OUTCOME_CANCELLED,
+            'description' => $description,
+        ]);
     }
 
     /**
      * Reschedule a meeting.
      */
-    public function rescheduleMeeting(int $activityId, \DateTimeInterface $newScheduledAt, ?string $reason = null): Activity
-    {
-        $activity = Activity::findOrFail($activityId);
+    public function rescheduleMeeting(
+        int $activityId,
+        DateTimeInterface $newScheduledAt,
+        ?string $reason = null
+    ): array {
+        $activity = $this->repository->findById($activityId);
 
-        if ($activity->type !== Activity::TYPE_MEETING) {
+        if (!$activity || $activity['type'] !== ActivityRepositoryInterface::TYPE_MEETING) {
             throw new \InvalidArgumentException('Activity is not a meeting');
         }
 
-        $oldScheduledAt = $activity->scheduled_at;
+        $metadata = $activity['metadata'] ?? [];
+        $metadata['rescheduled_from'] = $activity['scheduled_at'];
+        $metadata['reschedule_reason'] = $reason;
 
-        $activity->update([
+        return $this->repository->update($activityId, [
             'scheduled_at' => $newScheduledAt,
-            'outcome' => Activity::OUTCOME_RESCHEDULED,
-            'metadata' => array_merge($activity->metadata ?? [], [
-                'rescheduled_from' => $oldScheduledAt?->toIso8601String(),
-                'reschedule_reason' => $reason,
-            ]),
+            'outcome' => ActivityRepositoryInterface::OUTCOME_RESCHEDULED,
+            'metadata' => $metadata,
         ]);
-
-        return $activity->fresh();
     }
 
     // =========================================================================
@@ -457,17 +323,18 @@ class ActivityApplicationService
      * Create a task.
      */
     public function createTask(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $title,
         ?string $description = null,
-        ?\DateTimeInterface $dueAt = null
-    ): Activity {
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_TASK,
-            'action' => Activity::ACTION_CREATED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+        ?DateTimeInterface $dueAt = null
+    ): array {
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_TASK,
+            'action' => ActivityRepositoryInterface::ACTION_CREATED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => $title,
             'description' => $description,
             'scheduled_at' => $dueAt,
@@ -477,42 +344,38 @@ class ActivityApplicationService
     /**
      * Complete a task.
      */
-    public function completeTask(int $activityId, ?string $notes = null): Activity
+    public function completeTask(int $activityId, ?string $notes = null): array
     {
-        $activity = Activity::findOrFail($activityId);
+        $activity = $this->repository->findById($activityId);
 
-        if ($activity->type !== Activity::TYPE_TASK) {
+        if (!$activity || $activity['type'] !== ActivityRepositoryInterface::TYPE_TASK) {
             throw new \InvalidArgumentException('Activity is not a task');
         }
 
-        $activity->update([
-            'action' => Activity::ACTION_COMPLETED,
+        return $this->repository->update($activityId, [
+            'action' => ActivityRepositoryInterface::ACTION_COMPLETED,
             'completed_at' => now(),
-            'outcome' => Activity::OUTCOME_COMPLETED,
-            'description' => $notes ?? $activity->description,
+            'outcome' => ActivityRepositoryInterface::OUTCOME_COMPLETED,
+            'description' => $notes ?? $activity['description'],
         ]);
-
-        return $activity->fresh();
     }
 
     /**
      * Reopen a completed task.
      */
-    public function reopenTask(int $activityId): Activity
+    public function reopenTask(int $activityId): array
     {
-        $activity = Activity::findOrFail($activityId);
+        $activity = $this->repository->findById($activityId);
 
-        if ($activity->type !== Activity::TYPE_TASK) {
+        if (!$activity || $activity['type'] !== ActivityRepositoryInterface::TYPE_TASK) {
             throw new \InvalidArgumentException('Activity is not a task');
         }
 
-        $activity->update([
-            'action' => Activity::ACTION_CREATED,
+        return $this->repository->update($activityId, [
+            'action' => ActivityRepositoryInterface::ACTION_CREATED,
             'completed_at' => null,
             'outcome' => null,
         ]);
-
-        return $activity->fresh();
     }
 
     // =========================================================================
@@ -523,19 +386,21 @@ class ActivityApplicationService
      * Log an email activity.
      */
     public function logEmail(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $title,
-        ?Model $emailMessage = null,
+        ?string $relatedType = null,
+        ?int $relatedId = null,
         string $action = 'sent'
-    ): Activity {
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_EMAIL,
+    ): array {
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_EMAIL,
             'action' => $action,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
-            'related_type' => $emailMessage ? get_class($emailMessage) : null,
-            'related_id' => $emailMessage?->getKey(),
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
+            'related_type' => $relatedType,
+            'related_id' => $relatedId,
             'title' => $title,
             'is_system' => true,
         ]);
@@ -549,17 +414,18 @@ class ActivityApplicationService
      * Log a status change.
      */
     public function logStatusChange(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $field,
         mixed $oldValue,
         mixed $newValue
-    ): Activity {
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_STATUS_CHANGE,
-            'action' => Activity::ACTION_UPDATED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+    ): array {
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_STATUS_CHANGE,
+            'action' => ActivityRepositoryInterface::ACTION_UPDATED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => "Changed {$field}",
             'description' => "From \"{$oldValue}\" to \"{$newValue}\"",
             'metadata' => [
@@ -574,17 +440,20 @@ class ActivityApplicationService
     /**
      * Log field updates.
      */
-    public function logFieldUpdate(Model $subject, array $changes): Activity
-    {
+    public function logFieldUpdate(
+        string $subjectType,
+        int $subjectId,
+        array $changes
+    ): array {
         $fieldCount = count($changes);
         $fieldNames = array_keys($changes);
 
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_FIELD_UPDATE,
-            'action' => Activity::ACTION_UPDATED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_FIELD_UPDATE,
+            'action' => ActivityRepositoryInterface::ACTION_UPDATED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => $fieldCount === 1
                 ? "Updated {$fieldNames[0]}"
                 : "Updated {$fieldCount} fields",
@@ -596,16 +465,19 @@ class ActivityApplicationService
     /**
      * Log record creation.
      */
-    public function logCreated(Model $subject, ?string $title = null): Activity
-    {
-        $modelName = class_basename($subject);
+    public function logCreated(
+        string $subjectType,
+        int $subjectId,
+        ?string $title = null
+    ): array {
+        $modelName = class_basename($subjectType);
 
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_CREATED,
-            'action' => Activity::ACTION_CREATED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_CREATED,
+            'action' => ActivityRepositoryInterface::ACTION_CREATED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => $title ?? "{$modelName} created",
             'is_system' => true,
         ]);
@@ -614,16 +486,19 @@ class ActivityApplicationService
     /**
      * Log record deletion.
      */
-    public function logDeleted(Model $subject, ?string $title = null): Activity
-    {
-        $modelName = class_basename($subject);
+    public function logDeleted(
+        string $subjectType,
+        int $subjectId,
+        ?string $title = null
+    ): array {
+        $modelName = class_basename($subjectType);
 
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_DELETED,
-            'action' => Activity::ACTION_DELETED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_DELETED,
+            'action' => ActivityRepositoryInterface::ACTION_DELETED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => $title ?? "{$modelName} deleted",
             'is_system' => true,
         ]);
@@ -633,18 +508,20 @@ class ActivityApplicationService
      * Log a comment.
      */
     public function logComment(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $content,
-        ?Model $parentActivity = null
-    ): Activity {
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_COMMENT,
-            'action' => Activity::ACTION_CREATED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
-            'related_type' => $parentActivity ? get_class($parentActivity) : null,
-            'related_id' => $parentActivity?->getKey(),
+        ?string $parentActivityType = null,
+        ?int $parentActivityId = null
+    ): array {
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_COMMENT,
+            'action' => ActivityRepositoryInterface::ACTION_CREATED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
+            'related_type' => $parentActivityType,
+            'related_id' => $parentActivityId,
             'title' => 'Comment added',
             'content' => $content,
         ]);
@@ -654,16 +531,17 @@ class ActivityApplicationService
      * Log attachment added.
      */
     public function logAttachment(
-        Model $subject,
+        string $subjectType,
+        int $subjectId,
         string $fileName,
         ?array $fileInfo = null
-    ): Activity {
-        return Activity::create([
-            'user_id' => Auth::id(),
-            'type' => Activity::TYPE_ATTACHMENT,
-            'action' => Activity::ACTION_CREATED,
-            'subject_type' => get_class($subject),
-            'subject_id' => $subject->getKey(),
+    ): array {
+        return $this->repository->create([
+            'user_id' => $this->authContext->userId(),
+            'type' => ActivityRepositoryInterface::TYPE_ATTACHMENT,
+            'action' => ActivityRepositoryInterface::ACTION_CREATED,
+            'subject_type' => $subjectType,
+            'subject_id' => $subjectId,
             'title' => "Attachment added: {$fileName}",
             'metadata' => $fileInfo,
             'is_system' => true,
@@ -677,20 +555,22 @@ class ActivityApplicationService
     /**
      * Update an activity.
      */
-    public function updateActivity(int $id, array $data): Activity
+    public function updateActivity(int $id, array $data): array
     {
-        $activity = Activity::findOrFail($id);
+        $activity = $this->repository->findById($id);
 
-        $activity->update([
-            'title' => $data['title'] ?? $activity->title,
-            'description' => $data['description'] ?? $activity->description,
-            'content' => $data['content'] ?? $activity->content,
-            'scheduled_at' => $data['scheduled_at'] ?? $activity->scheduled_at,
-            'is_pinned' => $data['is_pinned'] ?? $activity->is_pinned,
-            'is_internal' => $data['is_internal'] ?? $activity->is_internal,
+        if (!$activity) {
+            throw new \InvalidArgumentException('Activity not found');
+        }
+
+        return $this->repository->update($id, [
+            'title' => $data['title'] ?? $activity['title'],
+            'description' => $data['description'] ?? $activity['description'],
+            'content' => $data['content'] ?? $activity['content'],
+            'scheduled_at' => $data['scheduled_at'] ?? $activity['scheduled_at'],
+            'is_pinned' => $data['is_pinned'] ?? $activity['is_pinned'],
+            'is_internal' => $data['is_internal'] ?? $activity['is_internal'],
         ]);
-
-        return $activity->fresh();
     }
 
     /**
@@ -698,28 +578,34 @@ class ActivityApplicationService
      */
     public function deleteActivity(int $id): bool
     {
-        $activity = Activity::findOrFail($id);
-        return $activity->delete();
+        return $this->repository->delete($id);
     }
 
     /**
      * Toggle pin status for an activity.
      */
-    public function togglePin(int $id): Activity
+    public function togglePin(int $id): array
     {
-        $activity = Activity::findOrFail($id);
-        $activity->togglePin();
-        return $activity->fresh();
+        $activity = $this->repository->findById($id);
+
+        if (!$activity) {
+            throw new \InvalidArgumentException('Activity not found');
+        }
+
+        return $this->repository->update($id, [
+            'is_pinned' => !$activity['is_pinned'],
+        ]);
     }
 
     /**
      * Mark activity as completed.
      */
-    public function markCompleted(int $id, ?string $outcome = null): Activity
+    public function markCompleted(int $id, ?string $outcome = null): array
     {
-        $activity = Activity::findOrFail($id);
-        $activity->markCompleted($outcome);
-        return $activity->fresh();
+        return $this->repository->update($id, [
+            'completed_at' => now(),
+            'outcome' => $outcome ?? ActivityRepositoryInterface::OUTCOME_COMPLETED,
+        ]);
     }
 
     /**
@@ -727,7 +613,7 @@ class ActivityApplicationService
      */
     public function bulkDelete(array $ids): int
     {
-        return Activity::whereIn('id', $ids)->delete();
+        return $this->repository->bulkDelete($ids);
     }
 
     /**
@@ -735,11 +621,9 @@ class ActivityApplicationService
      */
     public function bulkComplete(array $ids, ?string $outcome = null): int
     {
-        return Activity::whereIn('id', $ids)
-            ->whereNull('completed_at')
-            ->update([
-                'completed_at' => now(),
-                'outcome' => $outcome ?? Activity::OUTCOME_COMPLETED,
-            ]);
+        return $this->repository->bulkUpdate($ids, [
+            'completed_at' => now(),
+            'outcome' => $outcome ?? ActivityRepositoryInterface::OUTCOME_COMPLETED,
+        ]);
     }
 }

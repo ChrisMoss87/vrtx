@@ -260,8 +260,10 @@ export const dashboardsApi = {
 	/**
 	 * Get all widget data for a dashboard
 	 */
-	async getAllWidgetData(id: number): Promise<Record<number, ReportResult>> {
-		const response = await apiClient.get<{ data: Record<number, ReportResult> }>(`/dashboards/${id}/data`);
+	async getAllWidgetData(id: number, filterParams?: Record<string, string>): Promise<Record<number, ReportResult>> {
+		const response = await apiClient.get<{ data: Record<number, ReportResult> }>(`/dashboards/${id}/data`, {
+			params: filterParams
+		});
 		return response.data;
 	},
 

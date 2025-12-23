@@ -1,6 +1,12 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
-	import { Grid3x3 } from 'lucide-svelte';
+	import { Grid3x3, ExternalLink } from 'lucide-svelte';
+	import type { WidgetConfig } from '$lib/api/dashboards';
+	import {
+		navigateToRecords,
+		buildFiltersFromKpiConfig
+	} from '$lib/stores/dashboardNavigation.svelte';
+	import type { FilterConfig } from '$lib/types/filters';
 
 	interface HeatmapCell {
 		x: string | number;
@@ -17,11 +23,35 @@
 			min_value?: number;
 			max_value?: number;
 			value_label?: string;
+			module_api_name?: string;
+			x_field?: string;
+			y_field?: string;
 		} | null;
+		config?: WidgetConfig;
 		loading?: boolean;
 	}
 
-	let { title, data, loading = false }: Props = $props();
+	let { title, data, config, loading = false }: Props = $props();
+
+	// Check if click-through is enabled
+	const isClickable = $derived(
+		config?.module_id && config?.click_enabled !== false && data?.module_api_name
+	);
+
+	function handleCellClick(xLabel: string, yLabel: string) {
+		if (!isClickable || !data?.module_api_name) return;
+
+		const filters: FilterConfig[] = buildFiltersFromKpiConfig(config || {});
+
+		// Add filters for the clicked cell
+		const xField = data.x_field || config?.x_field || 'x';
+		const yField = data.y_field || config?.y_field || 'y';
+
+		filters.push({ field: xField, operator: 'equals', value: xLabel });
+		filters.push({ field: yField, operator: 'equals', value: yLabel });
+
+		navigateToRecords(data.module_api_name, filters);
+	}
 
 	const minValue = $derived(() => {
 		if (!data?.cells || data.cells.length === 0) return 0;
@@ -64,11 +94,16 @@
 	}
 </script>
 
-<Card.Root class="flex h-full flex-col">
+<Card.Root class="flex h-full flex-col group">
 	<Card.Header class="pb-2">
-		<div class="flex items-center gap-2">
-			<Grid3x3 class="h-4 w-4 text-muted-foreground" />
-			<Card.Title class="text-sm font-medium">{title}</Card.Title>
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-2">
+				<Grid3x3 class="h-4 w-4 text-muted-foreground" />
+				<Card.Title class="text-sm font-medium">{title}</Card.Title>
+			</div>
+			{#if isClickable}
+				<ExternalLink class="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+			{/if}
 		</div>
 	</Card.Header>
 	<Card.Content class="flex flex-1 flex-col overflow-auto">
@@ -106,16 +141,17 @@
 									{#each data.x_labels as xLabel}
 										{@const value = getCellValue(xLabel, yLabel)}
 										<td class="p-0.5">
-											<div
-												class="group relative flex h-6 min-w-6 items-center justify-center rounded text-xs transition-all hover:scale-110 hover:shadow-md {getCellColor(value)}"
+											<button
+												type="button"
+												class="cell-group relative flex h-6 min-w-6 items-center justify-center rounded text-xs transition-all hover:scale-110 hover:shadow-md {getCellColor(value)} {isClickable ? 'cursor-pointer' : ''}"
 												title="{yLabel} × {xLabel}: {formatValue(value)}"
+												onclick={() => handleCellClick(xLabel, yLabel)}
+												disabled={!isClickable}
 											>
-												<span
-													class="hidden text-[10px] font-medium text-white group-hover:block dark:text-white"
-												>
+												<span class="text-[10px] font-medium text-white opacity-0 hover:opacity-100 dark:text-white">
 													{value > 0 ? formatValue(value) : ''}
 												</span>
-											</div>
+											</button>
 										</td>
 									{/each}
 								</tr>

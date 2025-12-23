@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Approval\Entities;
 
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class ApprovalHistory
+final class ApprovalHistory implements Entity
 {
     // Action constants
     public const ACTION_SUBMITTED = 'submitted';
@@ -106,5 +107,16 @@ final class ApprovalHistory
             self::ACTION_STEP_SKIPPED => 'Step skipped',
             default => ucfirst(str_replace('_', ' ', $this->action)),
         };
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null
+            && $other->id !== null
+            && $this->id === $other->id;
     }
 }

@@ -12,8 +12,8 @@ use App\Domain\Blueprint\Events\SlaWarning;
 use App\Domain\Blueprint\Repositories\BlueprintRecordStateRepositoryInterface;
 use App\Domain\Blueprint\Repositories\BlueprintRepositoryInterface;
 use App\Domain\Blueprint\ValueObjects\SlaStatus;
-use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Log;
+use App\Domain\Shared\Contracts\EventDispatcherInterface;
+use App\Domain\Shared\Contracts\LoggerInterface;
 
 /**
  * Domain service for monitoring SLA compliance.
@@ -23,6 +23,8 @@ class SlaMonitoringService
     public function __construct(
         private readonly BlueprintRepositoryInterface $blueprintRepository,
         private readonly BlueprintRecordStateRepositoryInterface $recordStateRepository,
+        private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly LoggerInterface $logger,
     ) {}
 
     /**
@@ -73,7 +75,7 @@ class SlaMonitoringService
         if ($status === SlaStatus::BREACHED) {
             $hoursOverdue = $hoursInState - $sla->getDurationHours();
 
-            Event::dispatch(new SlaBreached(
+            $this->eventDispatcher->dispatch(new SlaBreached(
                 blueprintId: $blueprint->getId(),
                 slaId: $sla->getId(),
                 recordId: $recordState->getRecordId(),
@@ -81,7 +83,7 @@ class SlaMonitoringService
                 hoursOverdue: $hoursOverdue,
             ));
 
-            Log::warning('SLA breached', [
+            $this->logger->warning('SLA breached', [
                 'blueprint_id' => $blueprint->getId(),
                 'sla_id' => $sla->getId(),
                 'record_id' => $recordState->getRecordId(),
@@ -90,7 +92,7 @@ class SlaMonitoringService
         } elseif ($status === SlaStatus::WARNING) {
             $hoursRemaining = $sla->getDurationHours() - $hoursInState;
 
-            Event::dispatch(new SlaWarning(
+            $this->eventDispatcher->dispatch(new SlaWarning(
                 blueprintId: $blueprint->getId(),
                 slaId: $sla->getId(),
                 recordId: $recordState->getRecordId(),
@@ -98,7 +100,7 @@ class SlaMonitoringService
                 hoursRemaining: $hoursRemaining,
             ));
 
-            Log::info('SLA warning', [
+            $this->logger->info('SLA warning', [
                 'blueprint_id' => $blueprint->getId(),
                 'sla_id' => $sla->getId(),
                 'record_id' => $recordState->getRecordId(),

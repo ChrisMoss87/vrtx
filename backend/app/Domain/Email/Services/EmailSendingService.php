@@ -10,13 +10,14 @@ use App\Domain\Email\Events\EmailSent;
 use App\Domain\Email\Repositories\EmailMessageRepositoryInterface;
 use App\Domain\Email\Repositories\EmailTemplateRepositoryInterface;
 use App\Domain\Email\ValueObjects\EmailType;
-use Illuminate\Support\Facades\Event;
+use App\Domain\Shared\Contracts\EventDispatcherInterface;
 
 class EmailSendingService
 {
     public function __construct(
         private readonly EmailMessageRepositoryInterface $emailRepository,
         private readonly EmailTemplateRepositoryInterface $templateRepository,
+        private readonly EventDispatcherInterface $eventDispatcher,
     ) {}
 
     public function send(EmailMessage $email): EmailMessage
@@ -67,7 +68,7 @@ class EmailSendingService
         $email->markAsSent($messageId);
         $this->emailRepository->save($email);
 
-        Event::dispatch(new EmailSent(
+        $this->eventDispatcher->dispatch(new EmailSent(
             emailId: $email->getId(),
             accountId: $email->getAccountId(),
             messageId: $messageId,

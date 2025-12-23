@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\CMS\Entities;
 
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class CmsCategory
+final class CmsCategory implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -116,5 +117,16 @@ final class CmsCategory
     {
         $this->isActive = false;
         $this->updatedAt = new DateTimeImmutable();
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null
+            && $other->id !== null
+            && $this->id === $other->id;
     }
 }

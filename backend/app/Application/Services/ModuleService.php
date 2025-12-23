@@ -58,13 +58,13 @@ final class ModuleService
             // Create blocks if provided
             if (!empty($data['blocks'])) {
                 foreach ($data['blocks'] as $blockData) {
-                    $this->createBlockForModule($module->id(), $blockData);
+                    $this->createBlockForModule($module->getId(), $blockData);
                 }
             }
 
             DB::commit();
 
-            return $this->moduleRepository->findById($module->id());
+            return $this->moduleRepository->findById($module->getId());
         } catch (Exception $e) {
             DB::rollBack();
             throw new RuntimeException("Failed to create module: {$e->getMessage()}", 0, $e);
@@ -88,33 +88,33 @@ final class ModuleService
             }
 
             // Validate name if being changed
-            if (isset($data['name']) && $data['name'] !== $module->name()) {
+            if (isset($data['name']) && $data['name'] !== $module->getName()) {
                 if ($this->moduleRepository->existsByName($data['name'], $moduleId)) {
                     throw new RuntimeException("Module with name '{$data['name']}' already exists.");
                 }
             }
 
-            // Update module details
-            $module->updateDetails(
-                name: $data['name'] ?? $module->name(),
-                singularName: $data['singular_name'] ?? $module->singularName(),
-                icon: $data['icon'] ?? $module->icon(),
-                description: $data['description'] ?? $module->description()
+            // Update module details (immutable - returns new instance)
+            $module = $module->updateDetails(
+                name: $data['name'] ?? $module->getName(),
+                singularName: $data['singular_name'] ?? $module->getSingularName(),
+                icon: $data['icon'] ?? $module->getIcon(),
+                description: $data['description'] ?? $module->getDescription()
             );
 
             if (isset($data['settings'])) {
-                $module->updateSettings(ModuleSettings::fromArray($data['settings']));
+                $module = $module->updateSettings(ModuleSettings::fromArray($data['settings']));
             }
 
             if (isset($data['display_order'])) {
-                $module->updateDisplayOrder($data['display_order']);
+                $module = $module->updateDisplayOrder($data['display_order']);
             }
 
             $module = $this->moduleRepository->save($module);
 
             DB::commit();
 
-            return $this->moduleRepository->findById($module->id());
+            return $this->moduleRepository->findById($module->getId());
         } catch (Exception $e) {
             DB::rollBack();
             throw new RuntimeException("Failed to update module: {$e->getMessage()}", 0, $e);

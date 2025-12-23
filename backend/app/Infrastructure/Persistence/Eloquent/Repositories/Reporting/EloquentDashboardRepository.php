@@ -10,131 +10,143 @@ use App\Domain\Reporting\Repositories\DashboardRepositoryInterface;
 use App\Domain\Reporting\ValueObjects\WidgetType;
 use App\Domain\Shared\ValueObjects\Timestamp;
 use App\Domain\Shared\ValueObjects\UserId;
-use App\Models\Dashboard as DashboardModel;
-use App\Models\DashboardWidget as DashboardWidgetModel;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 /**
- * Eloquent implementation of the DashboardRepository.
+ * Query Builder implementation of the DashboardRepository.
  */
 class EloquentDashboardRepository implements DashboardRepositoryInterface
 {
+    private const TABLE = 'dashboards';
+    private const TABLE_WIDGETS = 'dashboard_widgets';
+
     public function findById(int $id, bool $includeWidgets = false): ?Dashboard
     {
-        $query = DashboardModel::query();
+        $row = DB::table(self::TABLE)
+            ->whereNull('deleted_at')
+            ->where('id', $id)
+            ->first();
 
-        if ($includeWidgets) {
-            $query->with('widgets');
-        }
-
-        $model = $query->find($id);
-
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model, $includeWidgets);
+        $widgets = [];
+        if ($includeWidgets) {
+            $widgets = $this->getWidgetsForDashboard($id);
+        }
+
+        return $this->toDomainEntity($row, $widgets);
     }
 
     public function findAll(): array
     {
-        $models = DashboardModel::orderBy('name')->get();
+        $rows = DB::table(self::TABLE)
+            ->whereNull('deleted_at')
+            ->orderBy('name')
+            ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findAccessibleByUser(int $userId): array
     {
-        $models = DashboardModel::where(function ($query) use ($userId) {
-            $query->where('user_id', $userId)
-                  ->orWhere('is_public', true);
-        })
-        ->orderBy('name')
-        ->get();
+        $rows = DB::table(self::TABLE)
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                      ->orWhere('is_public', true);
+            })
+            ->whereNull('deleted_at')
+            ->orderBy('name')
+            ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findPublic(): array
     {
-        $models = DashboardModel::where('is_public', true)
+        $rows = DB::table(self::TABLE)
+            ->where('is_public', true)
+            ->whereNull('deleted_at')
             ->orderBy('name')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findDefaultForUser(int $userId): ?Dashboard
     {
-        $model = DashboardModel::where('user_id', $userId)
+        $row = DB::table(self::TABLE)
+            ->where('user_id', $userId)
             ->where('is_default', true)
+            ->whereNull('deleted_at')
             ->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function save(Dashboard $dashboard): Dashboard
     {
-        $data = $this->toModelData($dashboard);
+        $data = $this->toRowData($dashboard);
 
         if ($dashboard->getId() !== null) {
-            $model = DashboardModel::findOrFail($dashboard->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $dashboard->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $dashboard->getId();
         } else {
-            $model = DashboardModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
         // Save widgets if present
         $widgets = $dashboard->widgets();
         if (!empty($widgets)) {
-            $this->saveWidgets($model, $widgets);
+            $this->saveWidgets($id, $widgets);
         }
 
-        return $this->toDomainEntity($model->fresh(['widgets']), !empty($widgets));
+        $savedWidgets = $this->getWidgetsForDashboard($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
+
+        return $this->toDomainEntity($row, $savedWidgets);
     }
 
     public function delete(int $id): bool
     {
-        $model = DashboardModel::find($id);
-
-        if (!$model) {
-            return false;
-        }
-
-        return $model->delete() ?? false;
+        return DB::table(self::TABLE)
+            ->where('id', $id)
+            ->update(['deleted_at' => now()]) > 0;
     }
 
     public function forceDelete(int $id): bool
     {
-        $model = DashboardModel::withTrashed()->find($id);
-
-        if (!$model) {
-            return false;
-        }
-
         // Delete widgets first
-        $model->widgets()->forceDelete();
+        DB::table(self::TABLE_WIDGETS)->where('dashboard_id', $id)->delete();
 
-        return $model->forceDelete() ?? false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
     public function restore(int $id): bool
     {
-        $model = DashboardModel::withTrashed()->find($id);
-
-        if (!$model || !$model->trashed()) {
-            return false;
-        }
-
-        return $model->restore() ?? false;
+        return DB::table(self::TABLE)
+            ->where('id', $id)
+            ->whereNotNull('deleted_at')
+            ->update(['deleted_at' => null]) > 0;
     }
 
     public function unsetDefaultForUser(int $userId, ?int $exceptDashboardId = null): void
     {
-        $query = DashboardModel::where('user_id', $userId)
+        $query = DB::table(self::TABLE)
+            ->where('user_id', $userId)
             ->where('is_default', true);
 
         if ($exceptDashboardId !== null) {
@@ -144,36 +156,38 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
         $query->update(['is_default' => false]);
     }
 
+    private function getWidgetsForDashboard(int $dashboardId): array
+    {
+        $rows = DB::table(self::TABLE_WIDGETS)
+            ->where('dashboard_id', $dashboardId)
+            ->orderBy('id')
+            ->get();
+
+        return $rows->map(fn ($row) => $this->widgetToDomainEntity($row))->all();
+    }
+
     /**
-     * Convert an Eloquent model to a domain entity.
+     * Convert a database row to a domain entity.
      */
-    private function toDomainEntity(DashboardModel $model, bool $includeWidgets = false): Dashboard
+    private function toDomainEntity(stdClass $row, array $widgets = []): Dashboard
     {
         $dashboard = Dashboard::reconstitute(
-            id: $model->id,
-            name: $model->name,
-            description: $model->description,
-            userId: $model->user_id ? UserId::fromInt($model->user_id) : null,
-            isDefault: $model->is_default,
-            isPublic: $model->is_public,
-            layout: $model->layout ?? [],
-            settings: $model->settings ?? [],
-            filters: $model->filters ?? [],
-            refreshInterval: $model->refresh_interval ?? 0,
-            createdAt: $model->created_at
-                ? Timestamp::fromDateTime($model->created_at)
-                : null,
-            updatedAt: $model->updated_at
-                ? Timestamp::fromDateTime($model->updated_at)
-                : null,
-            deletedAt: $model->deleted_at
-                ? Timestamp::fromDateTime($model->deleted_at)
-                : null,
+            id: (int) $row->id,
+            name: $row->name,
+            description: $row->description,
+            userId: $row->user_id ? UserId::fromInt((int) $row->user_id) : null,
+            isDefault: (bool) $row->is_default,
+            isPublic: (bool) $row->is_public,
+            layout: $row->layout ? (is_string($row->layout) ? json_decode($row->layout, true) : $row->layout) : [],
+            settings: $row->settings ? (is_string($row->settings) ? json_decode($row->settings, true) : $row->settings) : [],
+            filters: $row->filters ? (is_string($row->filters) ? json_decode($row->filters, true) : $row->filters) : [],
+            refreshInterval: (int) ($row->refresh_interval ?? 0),
+            createdAt: $row->created_at ? Timestamp::fromString($row->created_at) : null,
+            updatedAt: $row->updated_at ? Timestamp::fromString($row->updated_at) : null,
+            deletedAt: $row->deleted_at ? Timestamp::fromString($row->deleted_at) : null,
         );
 
-        // Add widgets to dashboard
-        if ($includeWidgets && $model->relationLoaded('widgets')) {
-            $widgets = $model->widgets->map(fn($w) => $this->widgetToDomainEntity($w))->all();
+        if (!empty($widgets)) {
             $dashboard->setWidgets($widgets);
         }
 
@@ -181,28 +195,30 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
     }
 
     /**
-     * Convert a DashboardWidget model to domain entity.
+     * Convert a widget row to domain entity.
      */
-    private function widgetToDomainEntity(DashboardWidgetModel $model): DashboardWidget
+    private function widgetToDomainEntity(stdClass $row): DashboardWidget
     {
         return DashboardWidget::reconstitute(
-            id: $model->id,
-            dashboardId: $model->dashboard_id,
-            reportId: $model->report_id,
-            title: $model->title,
-            type: WidgetType::from($model->type),
-            config: $model->config ?? [],
-            gridPosition: $model->grid_position ?? ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4],
-            refreshInterval: $model->refresh_interval ?? 0,
+            id: (int) $row->id,
+            dashboardId: (int) $row->dashboard_id,
+            reportId: $row->report_id ? (int) $row->report_id : null,
+            title: $row->title,
+            type: WidgetType::from($row->type),
+            config: $row->config ? (is_string($row->config) ? json_decode($row->config, true) : $row->config) : [],
+            gridPosition: $row->grid_position
+                ? (is_string($row->grid_position) ? json_decode($row->grid_position, true) : $row->grid_position)
+                : ['x' => 0, 'y' => 0, 'w' => 6, 'h' => 4],
+            refreshInterval: (int) ($row->refresh_interval ?? 0),
         );
     }
 
     /**
-     * Convert a domain entity to model data.
+     * Convert a domain entity to row data.
      *
      * @return array<string, mixed>
      */
-    private function toModelData(Dashboard $dashboard): array
+    private function toRowData(Dashboard $dashboard): array
     {
         return [
             'name' => $dashboard->name(),
@@ -210,9 +226,9 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
             'user_id' => $dashboard->userId()?->value(),
             'is_default' => $dashboard->isDefault(),
             'is_public' => $dashboard->isPublic(),
-            'layout' => $dashboard->layout(),
-            'settings' => $dashboard->settings(),
-            'filters' => $dashboard->filters(),
+            'layout' => json_encode($dashboard->layout()),
+            'settings' => json_encode($dashboard->settings()),
+            'filters' => json_encode($dashboard->filters()),
             'refresh_interval' => $dashboard->refreshInterval(),
         ];
     }
@@ -222,21 +238,23 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
      *
      * @param array<DashboardWidget> $widgets
      */
-    private function saveWidgets(DashboardModel $dashboardModel, array $widgets): void
+    private function saveWidgets(int $dashboardId, array $widgets): void
     {
         // Delete existing widgets
-        $dashboardModel->widgets()->delete();
+        DB::table(self::TABLE_WIDGETS)->where('dashboard_id', $dashboardId)->delete();
 
         // Create new widgets
         foreach ($widgets as $widget) {
-            DashboardWidgetModel::create([
-                'dashboard_id' => $dashboardModel->id,
+            DB::table(self::TABLE_WIDGETS)->insert([
+                'dashboard_id' => $dashboardId,
                 'report_id' => $widget->reportId(),
                 'title' => $widget->title(),
                 'type' => $widget->type()->value,
-                'config' => $widget->config(),
-                'grid_position' => $widget->gridPosition(),
+                'config' => json_encode($widget->config()),
+                'grid_position' => json_encode($widget->gridPosition()),
                 'refresh_interval' => $widget->refreshInterval(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
     }

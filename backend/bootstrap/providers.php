@@ -5,5 +5,5 @@ return [
     App\Providers\AuthServiceProvider::class,
     App\Providers\RepositoryServiceProvider::class,
     App\Providers\TenancyServiceProvider::class,
-    App\Providers\ModuleServiceProvider::class,
+    App\Providers\DomainEventServiceProvider::class,
 ];

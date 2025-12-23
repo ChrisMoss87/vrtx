@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Forecasting\Entities;
 
 use App\Domain\Forecasting\ValueObjects\AdjustmentType;
+use App\Domain\Shared\Contracts\Entity;
 use App\Domain\Shared\ValueObjects\Timestamp;
 use App\Domain\Shared\ValueObjects\UserId;
 
@@ -14,7 +15,7 @@ use App\Domain\Shared\ValueObjects\UserId;
  * Tracks manual adjustments made to deal forecasts, providing an audit trail
  * of forecast changes.
  */
-final class ForecastAdjustment
+final class ForecastAdjustment implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -138,5 +139,14 @@ final class ForecastAdjustment
     public function updatedAt(): ?Timestamp
     {
         return $this->updatedAt;
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null && $this->id === $other->id;
     }
 }

@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Modules\Entities;
 
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class FieldOption
+final class FieldOption implements Entity
 {
     public function __construct(
         private ?int $id,
@@ -61,11 +62,27 @@ final class FieldOption
         $this->displayOrder = $displayOrder;
     }
 
-    // Getters
-    public function id(): ?int
+    // ========== Entity Interface ==========
+
+    public function getId(): ?int
     {
         return $this->id;
     }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->getId() === null) {
+            return false;
+        }
+
+        return $this->id === $other->getId();
+    }
+
+    // ========== Getters ==========
 
     public function fieldId(): int
     {

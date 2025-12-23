@@ -1,6 +1,11 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
-	import { TrendingUp, Flag } from 'lucide-svelte';
+	import { TrendingUp, Flag, ExternalLink } from 'lucide-svelte';
+	import type { WidgetConfig } from '$lib/api/dashboards';
+	import {
+		navigateToRecords,
+		buildFiltersFromKpiConfig
+	} from '$lib/stores/dashboardNavigation.svelte';
 
 	interface Props {
 		title: string;
@@ -10,11 +15,25 @@
 			label?: string;
 			unit?: string;
 			color?: 'default' | 'success' | 'warning' | 'danger';
+			module_api_name?: string;
 		} | null;
+		config?: WidgetConfig;
 		loading?: boolean;
 	}
 
-	let { title, data, loading = false }: Props = $props();
+	let { title, data, config, loading = false }: Props = $props();
+
+	// Check if click-through is enabled
+	const isClickable = $derived(
+		config?.module_id && config?.click_enabled !== false && data?.module_api_name
+	);
+
+	function handleClick() {
+		if (!isClickable || !data?.module_api_name) return;
+
+		const filters = buildFiltersFromKpiConfig(config || {});
+		navigateToRecords(data.module_api_name, filters);
+	}
 
 	const progress = $derived(() => {
 		if (!data || data.goal === 0) return 0;
@@ -72,7 +91,7 @@
 	}
 </script>
 
-<Card.Root class="h-full">
+<Card.Root class="h-full group">
 	<Card.Header class="pb-2">
 		<div class="flex items-center gap-2">
 			<TrendingUp class="h-4 w-4 text-muted-foreground" />
@@ -89,44 +108,56 @@
 				</div>
 			</div>
 		{:else if data}
-			<div class="space-y-3">
-				<!-- Progress bar -->
-				<div class="relative">
-					<div class="h-4 w-full overflow-hidden rounded-full {trackColor()}">
+			<button
+				type="button"
+				class="w-full rounded-md p-2 transition-colors {isClickable ? 'cursor-pointer hover:bg-muted/50' : ''}"
+				onclick={handleClick}
+				disabled={!isClickable}
+			>
+				<div class="space-y-3">
+					<!-- Progress bar -->
+					<div class="relative">
+						<div class="h-4 w-full overflow-hidden rounded-full {trackColor()}">
+							<div
+								class="h-full rounded-full transition-all duration-500 {progressColor()}"
+								style="width: {progress()}%"
+							></div>
+						</div>
+
+						<!-- Goal marker -->
 						<div
-							class="h-full rounded-full transition-all duration-500 {progressColor()}"
-							style="width: {progress()}%"
-						></div>
-					</div>
-
-					<!-- Goal marker -->
-					<div
-						class="absolute top-1/2 -translate-y-1/2"
-						style="left: 100%"
-					>
-						<Flag class="h-3 w-3 -translate-x-1/2 text-muted-foreground" />
-					</div>
-				</div>
-
-				<!-- Values -->
-				<div class="flex items-end justify-between">
-					<div>
-						<div class="text-2xl font-bold">{formatValue(data.current, data.unit)}</div>
-						{#if data.label}
-							<div class="text-xs text-muted-foreground">{data.label}</div>
-						{/if}
-					</div>
-					<div class="text-right">
-						<div class="flex items-center gap-1 text-sm text-muted-foreground">
-							<Flag class="h-3 w-3" />
-							<span>{formatValue(data.goal, data.unit)}</span>
-						</div>
-						<div class="text-lg font-semibold {progress() >= 100 ? 'text-green-600' : ''}">
-							{progress()}%
+							class="absolute top-1/2 -translate-y-1/2"
+							style="left: 100%"
+						>
+							<Flag class="h-3 w-3 -translate-x-1/2 text-muted-foreground" />
 						</div>
 					</div>
+
+					<!-- Values -->
+					<div class="flex items-end justify-between">
+						<div class="text-left">
+							<div class="flex items-center gap-1">
+								<span class="text-2xl font-bold">{formatValue(data.current, data.unit)}</span>
+								{#if isClickable}
+									<ExternalLink class="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+								{/if}
+							</div>
+							{#if data.label}
+								<div class="text-xs text-muted-foreground">{data.label}</div>
+							{/if}
+						</div>
+						<div class="text-right">
+							<div class="flex items-center gap-1 text-sm text-muted-foreground">
+								<Flag class="h-3 w-3" />
+								<span>{formatValue(data.goal, data.unit)}</span>
+							</div>
+							<div class="text-lg font-semibold {progress() >= 100 ? 'text-green-600' : ''}">
+								{progress()}%
+							</div>
+						</div>
+					</div>
 				</div>
-			</div>
+			</button>
 		{:else}
 			<div class="py-4 text-center text-sm text-muted-foreground">No data available</div>
 		{/if}

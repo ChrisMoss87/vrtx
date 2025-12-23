@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace App\Application\Services\WhatsApp;
 
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\WhatsApp\Repositories\WhatsappConversationRepositoryInterface;
 use App\Models\WhatsappConnection;
-use App\Models\WhatsappConversation;
 use App\Models\WhatsappMessage;
 use App\Models\WhatsappTemplate;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class WhatsAppApplicationService
 {
     public function __construct(
         private WhatsappConversationRepositoryInterface $repository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -129,99 +129,34 @@ class WhatsAppApplicationService
     /**
      * List conversations with filtering and pagination.
      */
-    public function listConversations(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listConversations(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = WhatsappConversation::query()
-            ->with(['connection:id,name,display_phone_number', 'assignedUser:id,name,email']);
-
-        // Filter by connection
-        if (!empty($filters['connection_id'])) {
-            $query->where('connection_id', $filters['connection_id']);
-        }
-
-        // Filter by status
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
-        // Filter open conversations
-        if (!empty($filters['open'])) {
-            $query->open();
-        }
-
-        // Filter unresolved
-        if (!empty($filters['unresolved'])) {
-            $query->unresolved();
-        }
-
-        // Filter with unread messages
-        if (!empty($filters['unread'])) {
-            $query->withUnread();
-        }
-
-        // Filter by assigned user
-        if (!empty($filters['assigned_to'])) {
-            $query->assignedTo($filters['assigned_to']);
-        }
-
-        // Filter unassigned
-        if (!empty($filters['unassigned'])) {
-            $query->unassigned();
-        }
-
-        // Filter by module record
-        if (!empty($filters['module_api_name']) && !empty($filters['module_record_id'])) {
-            $query->where('module_api_name', $filters['module_api_name'])
-                ->where('module_record_id', $filters['module_record_id']);
-        }
-
-        // Search
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('contact_name', 'like', "%{$search}%")
-                    ->orWhere('contact_phone', 'like', "%{$search}%")
-                    ->orWhere('contact_wa_id', 'like', "%{$search}%");
-            });
-        }
-
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'last_message_at';
-        $sortDir = $filters['sort_dir'] ?? 'desc';
-        $query->orderBy($sortBy, $sortDir);
-
-        return $query->paginate($perPage);
+        $page = $filters['page'] ?? 1;
+        return $this->repository->list($filters, $perPage, $page);
     }
 
     /**
      * Get a single conversation by ID.
      */
-    public function getConversation(int $id): ?WhatsappConversation
+    public function getConversation(int $id): ?array
     {
-        return WhatsappConversation::with([
+        return $this->repository->findById($id, [
             'connection:id,name,display_phone_number',
             'assignedUser:id,name,email',
             'messages' => function ($q) {
                 $q->orderBy('created_at', 'asc')->with('sender:id,name');
             }
-        ])->find($id);
+        ]);
     }
 
     /**
      * Get conversations for a user.
      */
-    public function getMyConversations(?int $userId = null, array $filters = []): Collection
+    public function getMyConversations(?int $userId = null, array $filters = []): array
     {
-        $userId = $userId ?? Auth::id();
+        $userId = $userId ?? $this->authContext->userId();
 
-        $query = WhatsappConversation::assignedTo($userId)
-            ->with(['connection:id,name', 'assignedUser:id,name']);
-
-        if (!empty($filters['unresolved'])) {
-            $query->unresolved();
-        }
-
-        return $query->orderBy('last_message_at', 'desc')->get();
+        return $this->repository->findByAssignedUser($userId, $filters);
     }
 
     /**
@@ -229,11 +164,9 @@ class WhatsAppApplicationService
      */
     public function getUnreadCount(?int $userId = null): int
     {
-        $userId = $userId ?? Auth::id();
+        $userId = $userId ?? $this->authContext->userId();
 
-        return WhatsappConversation::assignedTo($userId)
-            ->withUnread()
-            ->count();
+        return $this->repository->countUnreadByUser($userId);
     }
 
     // =========================================================================
@@ -243,94 +176,62 @@ class WhatsAppApplicationService
     /**
      * Create or get conversation for a contact.
      */
-    public function getOrCreateConversation(int $connectionId, string $contactWaId, string $contactPhone, ?string $contactName = null): WhatsappConversation
+    public function getOrCreateConversation(int $connectionId, string $contactWaId, string $contactPhone, ?string $contactName = null): array
     {
-        $conversation = WhatsappConversation::where('connection_id', $connectionId)
-            ->where('contact_wa_id', $contactWaId)
-            ->first();
-
-        if (!$conversation) {
-            $conversation = WhatsappConversation::create([
-                'connection_id' => $connectionId,
-                'contact_wa_id' => $contactWaId,
-                'contact_phone' => $contactPhone,
-                'contact_name' => $contactName,
-                'status' => 'open',
-                'is_resolved' => false,
-            ]);
-        }
-
-        return $conversation;
+        return $this->repository->getOrCreate($connectionId, $contactWaId, $contactPhone, $contactName);
     }
 
     /**
      * Update conversation details.
      */
-    public function updateConversation(int $id, array $data): WhatsappConversation
+    public function updateConversation(int $id, array $data): ?array
     {
-        $conversation = WhatsappConversation::findOrFail($id);
-
-        $updateData = [];
-
-        if (isset($data['contact_name'])) $updateData['contact_name'] = $data['contact_name'];
-        if (isset($data['status'])) $updateData['status'] = $data['status'];
-        if (isset($data['assigned_to'])) $updateData['assigned_to'] = $data['assigned_to'];
-        if (isset($data['is_resolved'])) $updateData['is_resolved'] = $data['is_resolved'];
-        if (isset($data['metadata'])) $updateData['metadata'] = array_merge($conversation->metadata ?? [], $data['metadata']);
-
-        $conversation->update($updateData);
-
-        return $conversation->fresh();
+        return $this->repository->update($id, $data);
     }
 
     /**
      * Assign conversation to a user.
      */
-    public function assignConversation(int $id, int $userId): WhatsappConversation
+    public function assignConversation(int $id, int $userId): ?array
     {
-        $conversation = WhatsappConversation::findOrFail($id);
-        $conversation->assign($userId);
-        return $conversation->fresh();
+        $this->repository->assign($id, $userId);
+        return $this->repository->findById($id);
     }
 
     /**
      * Link conversation to a module record.
      */
-    public function linkToRecord(int $id, string $moduleApiName, int $recordId): WhatsappConversation
+    public function linkToRecord(int $id, string $moduleApiName, int $recordId): ?array
     {
-        $conversation = WhatsappConversation::findOrFail($id);
-        $conversation->linkToRecord($moduleApiName, $recordId);
-        return $conversation->fresh();
+        $this->repository->linkToRecord($id, $moduleApiName, $recordId);
+        return $this->repository->findById($id);
     }
 
     /**
      * Mark conversation as read.
      */
-    public function markAsRead(int $id): WhatsappConversation
+    public function markAsRead(int $id): ?array
     {
-        $conversation = WhatsappConversation::findOrFail($id);
-        $conversation->markAsRead();
-        return $conversation->fresh();
+        $this->repository->markAsRead($id);
+        return $this->repository->findById($id);
     }
 
     /**
      * Close a conversation.
      */
-    public function closeConversation(int $id): WhatsappConversation
+    public function closeConversation(int $id): ?array
     {
-        $conversation = WhatsappConversation::findOrFail($id);
-        $conversation->close();
-        return $conversation->fresh();
+        $this->repository->close($id);
+        return $this->repository->findById($id);
     }
 
     /**
      * Reopen a conversation.
      */
-    public function reopenConversation(int $id): WhatsappConversation
+    public function reopenConversation(int $id): ?array
     {
-        $conversation = WhatsappConversation::findOrFail($id);
-        $conversation->reopen();
-        return $conversation->fresh();
+        $this->repository->reopen($id);
+        return $this->repository->findById($id);
     }
 
     // =========================================================================
@@ -376,21 +277,25 @@ class WhatsAppApplicationService
      */
     public function sendMessage(int $conversationId, string $content, ?int $userId = null): WhatsappMessage
     {
-        $conversation = WhatsappConversation::findOrFail($conversationId);
+        $conversation = $this->repository->findById($conversationId);
+
+        if (!$conversation) {
+            throw new \InvalidArgumentException('Conversation not found');
+        }
 
         return DB::transaction(function () use ($conversation, $content, $userId) {
             $message = WhatsappMessage::create([
-                'conversation_id' => $conversation->id,
-                'connection_id' => $conversation->connection_id,
+                'conversation_id' => $conversation['id'],
+                'connection_id' => $conversation['connection_id'],
                 'direction' => 'outbound',
                 'type' => 'text',
                 'content' => $content,
                 'status' => 'pending',
-                'sent_by' => $userId ?? Auth::id(),
+                'sent_by' => $userId ?? $this->authContext->userId(),
             ]);
 
             // Update conversation last message timestamp
-            $conversation->update([
+            $this->repository->updateTimestamps($conversation['id'], [
                 'last_message_at' => now(),
                 'last_outgoing_at' => now(),
             ]);
@@ -404,7 +309,12 @@ class WhatsAppApplicationService
      */
     public function sendTemplateMessage(int $conversationId, int $templateId, array $params = [], ?int $userId = null): WhatsappMessage
     {
-        $conversation = WhatsappConversation::findOrFail($conversationId);
+        $conversation = $this->repository->findById($conversationId);
+
+        if (!$conversation) {
+            throw new \InvalidArgumentException('Conversation not found');
+        }
+
         $template = WhatsappTemplate::findOrFail($templateId);
 
         if (!$template->isUsable()) {
@@ -413,18 +323,18 @@ class WhatsAppApplicationService
 
         return DB::transaction(function () use ($conversation, $templateId, $params, $userId) {
             $message = WhatsappMessage::create([
-                'conversation_id' => $conversation->id,
-                'connection_id' => $conversation->connection_id,
+                'conversation_id' => $conversation['id'],
+                'connection_id' => $conversation['connection_id'],
                 'direction' => 'outbound',
                 'type' => 'template',
                 'template_id' => $templateId,
                 'template_params' => $params,
                 'status' => 'pending',
-                'sent_by' => $userId ?? Auth::id(),
+                'sent_by' => $userId ?? $this->authContext->userId(),
             ]);
 
             // Update conversation last message timestamp
-            $conversation->update([
+            $this->repository->updateTimestamps($conversation['id'], [
                 'last_message_at' => now(),
                 'last_outgoing_at' => now(),
             ]);
@@ -438,22 +348,26 @@ class WhatsAppApplicationService
      */
     public function sendMediaMessage(int $conversationId, string $type, array $media, ?string $caption = null, ?int $userId = null): WhatsappMessage
     {
-        $conversation = WhatsappConversation::findOrFail($conversationId);
+        $conversation = $this->repository->findById($conversationId);
+
+        if (!$conversation) {
+            throw new \InvalidArgumentException('Conversation not found');
+        }
 
         return DB::transaction(function () use ($conversation, $type, $media, $caption, $userId) {
             $message = WhatsappMessage::create([
-                'conversation_id' => $conversation->id,
-                'connection_id' => $conversation->connection_id,
+                'conversation_id' => $conversation['id'],
+                'connection_id' => $conversation['connection_id'],
                 'direction' => 'outbound',
                 'type' => $type,
                 'content' => $caption,
                 'media' => $media,
                 'status' => 'pending',
-                'sent_by' => $userId ?? Auth::id(),
+                'sent_by' => $userId ?? $this->authContext->userId(),
             ]);
 
             // Update conversation last message timestamp
-            $conversation->update([
+            $this->repository->updateTimestamps($conversation['id'], [
                 'last_message_at' => now(),
                 'last_outgoing_at' => now(),
             ]);
@@ -467,12 +381,16 @@ class WhatsAppApplicationService
      */
     public function receiveMessage(int $conversationId, string $waMessageId, string $type, ?string $content = null, ?array $media = null): WhatsappMessage
     {
-        $conversation = WhatsappConversation::findOrFail($conversationId);
+        $conversation = $this->repository->findById($conversationId);
+
+        if (!$conversation) {
+            throw new \InvalidArgumentException('Conversation not found');
+        }
 
         return DB::transaction(function () use ($conversation, $waMessageId, $type, $content, $media) {
             $message = WhatsappMessage::create([
-                'conversation_id' => $conversation->id,
-                'connection_id' => $conversation->connection_id,
+                'conversation_id' => $conversation['id'],
+                'connection_id' => $conversation['connection_id'],
                 'wa_message_id' => $waMessageId,
                 'direction' => 'inbound',
                 'type' => $type,
@@ -482,11 +400,11 @@ class WhatsAppApplicationService
             ]);
 
             // Update conversation
-            $conversation->update([
+            $this->repository->updateTimestamps($conversation['id'], [
                 'last_message_at' => now(),
                 'last_incoming_at' => now(),
             ]);
-            $conversation->incrementUnread();
+            $this->repository->incrementUnread($conversation['id']);
 
             return $message;
         });
@@ -618,7 +536,7 @@ class WhatsAppApplicationService
             'status' => $data['status'] ?? 'PENDING',
             'components' => $data['components'] ?? [],
             'example' => $data['example'] ?? [],
-            'created_by' => Auth::id(),
+            'created_by' => $this->authContext->userId(),
         ]);
     }
 
@@ -660,24 +578,7 @@ class WhatsAppApplicationService
      */
     public function getConversationStats(?int $connectionId = null, ?string $fromDate = null, ?string $toDate = null): array
     {
-        $query = WhatsappConversation::query();
-
-        if ($connectionId) {
-            $query->where('connection_id', $connectionId);
-        }
-
-        if ($fromDate) {
-            $query->where('created_at', '>=', $fromDate);
-        }
-        if ($toDate) {
-            $query->where('created_at', '<=', $toDate);
-        }
-
-        $total = $query->count();
-        $open = (clone $query)->open()->count();
-        $resolved = (clone $query)->where('is_resolved', true)->count();
-        $unassigned = (clone $query)->unassigned()->count();
-        $withUnread = (clone $query)->withUnread()->count();
+        $stats = $this->repository->getStats($connectionId, $fromDate, $toDate);
 
         $avgResponseTime = WhatsappMessage::query()
             ->where('direction', 'outbound')
@@ -685,14 +586,9 @@ class WhatsAppApplicationService
             ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, created_at, sent_at)) as avg_seconds')
             ->value('avg_seconds');
 
-        return [
-            'total_conversations' => $total,
-            'open' => $open,
-            'resolved' => $resolved,
-            'unassigned' => $unassigned,
-            'with_unread' => $withUnread,
-            'avg_response_time_seconds' => $avgResponseTime ? round($avgResponseTime) : null,
-        ];
+        $stats['avg_response_time_seconds'] = $avgResponseTime ? round($avgResponseTime) : null;
+
+        return $stats;
     }
 
     /**
@@ -800,9 +696,9 @@ class WhatsAppApplicationService
      */
     public function getAgentStats(?int $userId = null, ?string $fromDate = null, ?string $toDate = null): array
     {
-        $userId = $userId ?? Auth::id();
+        $userId = $userId ?? $this->authContext->userId();
 
-        $conversationsQuery = WhatsappConversation::assignedTo($userId);
+        $conversationsQuery = \App\Models\WhatsappConversation::assignedTo($userId);
 
         if ($fromDate) {
             $conversationsQuery->where('created_at', '>=', $fromDate);

@@ -50,13 +50,27 @@ final readonly class DateRange implements JsonSerializable
 
     /**
      * Create from array data.
+     *
+     * Returns null for empty or invalid arrays to prevent validation errors.
+     * Supports both 'type' and legacy 'range' keys for backward compatibility.
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data): ?self
     {
+        // Return null for empty arrays
+        if (empty($data)) {
+            return null;
+        }
+
         $field = $data['field'] ?? 'created_at';
-        $type = $data['type'] ?? null;
+        // Support both 'type' and legacy 'range' keys
+        $type = $data['type'] ?? $data['range'] ?? null;
         $start = isset($data['start']) ? new DateTimeImmutable($data['start']) : null;
         $end = isset($data['end']) ? new DateTimeImmutable($data['end']) : null;
+
+        // Return null if no valid date range configuration
+        if ($type === null && $start === null && $end === null) {
+            return null;
+        }
 
         return new self(
             field: $field,

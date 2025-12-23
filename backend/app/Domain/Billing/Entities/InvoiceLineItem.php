@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Entities;
 
 use App\Domain\Billing\ValueObjects\Money;
+use App\Domain\Shared\Contracts\Entity;
 
 /**
  * Invoice line item entity.
  */
-final class InvoiceLineItem
+final class InvoiceLineItem implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -153,5 +154,18 @@ final class InvoiceLineItem
     public function getDisplayOrder(): int
     {
         return $this->displayOrder;
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->getId() === null) {
+            return false;
+        }
+
+        return $this->id === $other->getId();
     }
 }

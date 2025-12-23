@@ -9,54 +9,59 @@ use App\Domain\Scheduling\Repositories\ScheduledMeetingRepositoryInterface;
 use App\Domain\Scheduling\ValueObjects\MeetingStatus;
 use App\Domain\Shared\ValueObjects\Timestamp;
 use App\Domain\Shared\ValueObjects\UserId;
-use App\Models\ScheduledMeeting as ScheduledMeetingModel;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 /**
- * Eloquent implementation of the ScheduledMeetingRepository.
+ * Query Builder implementation of the ScheduledMeetingRepository.
  */
 class EloquentScheduledMeetingRepository implements ScheduledMeetingRepositoryInterface
 {
+    private const TABLE = 'scheduled_meetings';
+
     public function findById(int $id): ?ScheduledMeeting
     {
-        $model = ScheduledMeetingModel::find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findByManageToken(string $token): ?ScheduledMeeting
     {
-        $model = ScheduledMeetingModel::where('manage_token', $token)->first();
+        $row = DB::table(self::TABLE)->where('manage_token', $token)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findByHostUserId(UserId $userId): array
     {
-        $models = ScheduledMeetingModel::where('host_user_id', $userId->value())
-            ->orderBy('start_time', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('host_user_id', $userId->value())
+            ->orderByDesc('start_time')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findUpcomingByHostUserId(UserId $userId): array
     {
-        $models = ScheduledMeetingModel::where('host_user_id', $userId->value())
+        $rows = DB::table(self::TABLE)
+            ->where('host_user_id', $userId->value())
             ->where('status', MeetingStatus::SCHEDULED->value)
             ->where('start_time', '>', now())
             ->orderBy('start_time')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findInRangeForUser(
@@ -64,61 +69,65 @@ class EloquentScheduledMeetingRepository implements ScheduledMeetingRepositoryIn
         DateTimeImmutable $start,
         DateTimeImmutable $end
     ): array {
-        $models = ScheduledMeetingModel::where('host_user_id', $userId->value())
+        $rows = DB::table(self::TABLE)
+            ->where('host_user_id', $userId->value())
             ->where('start_time', '>=', $start->format('Y-m-d H:i:s'))
             ->where('start_time', '<=', $end->format('Y-m-d H:i:s'))
             ->orderBy('start_time')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findByStatusForUser(UserId $userId, MeetingStatus $status): array
     {
-        $models = ScheduledMeetingModel::where('host_user_id', $userId->value())
+        $rows = DB::table(self::TABLE)
+            ->where('host_user_id', $userId->value())
             ->where('status', $status->value)
-            ->orderBy('start_time', 'desc')
+            ->orderByDesc('start_time')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findNeedingReminder(int $hoursBeforeMeeting = 24): array
     {
         $reminderTime = now()->addHours($hoursBeforeMeeting);
 
-        $models = ScheduledMeetingModel::where('status', MeetingStatus::SCHEDULED->value)
+        $rows = DB::table(self::TABLE)
+            ->where('status', MeetingStatus::SCHEDULED->value)
             ->where('reminder_sent', false)
             ->where('start_time', '<=', $reminderTime)
             ->where('start_time', '>', now())
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function save(ScheduledMeeting $meeting): ScheduledMeeting
     {
-        $data = $this->toModelData($meeting);
+        $data = $this->toRowData($meeting);
 
         if ($meeting->getId() !== null) {
-            $model = ScheduledMeetingModel::findOrFail($meeting->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $meeting->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $meeting->getId();
         } else {
-            $model = ScheduledMeetingModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomainEntity($model->fresh());
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        $model = ScheduledMeetingModel::find($id);
-
-        if (!$model) {
-            return false;
-        }
-
-        return $model->delete() ?? false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
     public function hasConflict(
@@ -127,7 +136,8 @@ class EloquentScheduledMeetingRepository implements ScheduledMeetingRepositoryIn
         DateTimeImmutable $end,
         ?int $excludeMeetingId = null
     ): bool {
-        $query = ScheduledMeetingModel::where('host_user_id', $userId->value())
+        $query = DB::table(self::TABLE)
+            ->where('host_user_id', $userId->value())
             ->where('status', MeetingStatus::SCHEDULED->value)
             ->where(function ($q) use ($start, $end) {
                 $q->whereBetween('start_time', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')])
@@ -146,41 +156,41 @@ class EloquentScheduledMeetingRepository implements ScheduledMeetingRepositoryIn
     }
 
     /**
-     * Convert an Eloquent model to a domain entity.
+     * Convert a database row to a domain entity.
      */
-    private function toDomainEntity(ScheduledMeetingModel $model): ScheduledMeeting
+    private function toDomainEntity(stdClass $row): ScheduledMeeting
     {
         return ScheduledMeeting::reconstitute(
-            id: $model->id,
-            meetingTypeId: $model->meeting_type_id,
-            hostUserId: UserId::fromInt($model->host_user_id),
-            contactId: $model->contact_id,
-            attendeeName: $model->attendee_name,
-            attendeeEmail: $model->attendee_email,
-            attendeePhone: $model->attendee_phone,
-            startTime: new DateTimeImmutable($model->start_time->toIso8601String()),
-            endTime: new DateTimeImmutable($model->end_time->toIso8601String()),
-            timezone: $model->timezone,
-            location: $model->location,
-            notes: $model->notes,
-            answers: $model->answers,
-            status: MeetingStatus::from($model->status),
-            calendarEventId: $model->calendar_event_id,
-            manageToken: $model->manage_token,
-            reminderSent: $model->reminder_sent,
-            cancelledAt: $model->cancelled_at ? new DateTimeImmutable($model->cancelled_at->toIso8601String()) : null,
-            cancellationReason: $model->cancellation_reason,
-            createdAt: $model->created_at ? Timestamp::fromDateTime($model->created_at) : null,
-            updatedAt: $model->updated_at ? Timestamp::fromDateTime($model->updated_at) : null,
+            id: (int) $row->id,
+            meetingTypeId: (int) $row->meeting_type_id,
+            hostUserId: UserId::fromInt((int) $row->host_user_id),
+            contactId: $row->contact_id ? (int) $row->contact_id : null,
+            attendeeName: $row->attendee_name,
+            attendeeEmail: $row->attendee_email,
+            attendeePhone: $row->attendee_phone,
+            startTime: new DateTimeImmutable($row->start_time),
+            endTime: new DateTimeImmutable($row->end_time),
+            timezone: $row->timezone,
+            location: $row->location,
+            notes: $row->notes,
+            answers: $row->answers ? (is_string($row->answers) ? json_decode($row->answers, true) : $row->answers) : [],
+            status: MeetingStatus::from($row->status),
+            calendarEventId: $row->calendar_event_id,
+            manageToken: $row->manage_token,
+            reminderSent: (bool) $row->reminder_sent,
+            cancelledAt: $row->cancelled_at ? new DateTimeImmutable($row->cancelled_at) : null,
+            cancellationReason: $row->cancellation_reason,
+            createdAt: $row->created_at ? Timestamp::fromString($row->created_at) : null,
+            updatedAt: $row->updated_at ? Timestamp::fromString($row->updated_at) : null,
         );
     }
 
     /**
-     * Convert a domain entity to model data.
+     * Convert a domain entity to row data.
      *
      * @return array<string, mixed>
      */
-    private function toModelData(ScheduledMeeting $meeting): array
+    private function toRowData(ScheduledMeeting $meeting): array
     {
         return [
             'meeting_type_id' => $meeting->meetingTypeId(),
@@ -194,7 +204,7 @@ class EloquentScheduledMeetingRepository implements ScheduledMeetingRepositoryIn
             'timezone' => $meeting->timezone(),
             'location' => $meeting->location(),
             'notes' => $meeting->notes(),
-            'answers' => $meeting->answers(),
+            'answers' => json_encode($meeting->answers()),
             'status' => $meeting->status()->value,
             'calendar_event_id' => $meeting->calendarEventId(),
             'manage_token' => $meeting->manageToken(),

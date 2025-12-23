@@ -36,8 +36,37 @@ class DefaultDashboardsSeeder extends Seeder
         );
     }
 
+    private int $currentX = 0;
+    private int $currentY = 0;
+    private int $maxRowHeight = 0;
+
     private function createWidget(Dashboard $dashboard, array $data): DashboardWidget
     {
+        // Convert old size/position to grid_position
+        if (isset($data['size']) || isset($data['position'])) {
+            $w = $data['size']['w'] ?? 3;
+            $h = $data['size']['h'] ?? 2;
+
+            // Auto-layout: 12-column grid
+            if ($this->currentX + $w > 12) {
+                $this->currentX = 0;
+                $this->currentY += $this->maxRowHeight;
+                $this->maxRowHeight = 0;
+            }
+
+            $data['grid_position'] = [
+                'x' => $this->currentX,
+                'y' => $this->currentY,
+                'w' => $w,
+                'h' => $h,
+            ];
+
+            $this->currentX += $w;
+            $this->maxRowHeight = max($this->maxRowHeight, $h);
+
+            unset($data['size'], $data['position']);
+        }
+
         return DashboardWidget::firstOrCreate(
             [
                 'dashboard_id' => $dashboard->id,
@@ -47,8 +76,16 @@ class DefaultDashboardsSeeder extends Seeder
         );
     }
 
+    private function resetGrid(): void
+    {
+        $this->currentX = 0;
+        $this->currentY = 0;
+        $this->maxRowHeight = 0;
+    }
+
     private function createSalesDashboard(): void
     {
+        $this->resetGrid();
         $dealsModule = Module::where('api_name', 'deals')->first();
         $tasksModule = Module::where('api_name', 'tasks')->first();
 
@@ -201,6 +238,7 @@ class DefaultDashboardsSeeder extends Seeder
 
     private function createSupportDashboard(): void
     {
+        $this->resetGrid();
         $casesModule = Module::where('api_name', 'cases')->first();
 
         $dashboard = $this->createDashboard([
@@ -354,6 +392,7 @@ class DefaultDashboardsSeeder extends Seeder
 
     private function createExecutiveDashboard(): void
     {
+        $this->resetGrid();
         $dealsModule = Module::where('api_name', 'deals')->first();
         $orgsModule = Module::where('api_name', 'organizations')->first();
 
@@ -492,6 +531,7 @@ class DefaultDashboardsSeeder extends Seeder
 
     private function createActivityDashboard(): void
     {
+        $this->resetGrid();
         $activitiesModule = Module::where('api_name', 'activities')->first();
         $tasksModule = Module::where('api_name', 'tasks')->first();
         $eventsModule = Module::where('api_name', 'events')->first();
@@ -635,6 +675,7 @@ class DefaultDashboardsSeeder extends Seeder
 
     private function createFinancialDashboard(): void
     {
+        $this->resetGrid();
         $invoicesModule = Module::where('api_name', 'invoices')->first();
 
         $dashboard = $this->createDashboard([

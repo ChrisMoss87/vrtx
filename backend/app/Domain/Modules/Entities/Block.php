@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Modules\Entities;
 
 use App\Domain\Modules\ValueObjects\BlockType;
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class Block
+final class Block implements Entity
 {
     private array $fields = [];
 
@@ -60,11 +61,27 @@ final class Block
         $this->displayOrder = $displayOrder;
     }
 
-    // Getters
-    public function id(): ?int
+    // ========== Entity Interface ==========
+
+    public function getId(): ?int
     {
         return $this->id;
     }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->getId() === null) {
+            return false;
+        }
+
+        return $this->id === $other->getId();
+    }
+
+    // ========== Getters ==========
 
     public function moduleId(): int
     {

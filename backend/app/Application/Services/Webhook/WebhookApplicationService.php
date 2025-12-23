@@ -4,22 +4,16 @@ declare(strict_types=1);
 
 namespace App\Application\Services\Webhook;
 
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\Webhook\Repositories\WebhookRepositoryInterface;
-use App\Models\IncomingWebhook;
-use App\Models\IncomingWebhookLog;
-use App\Models\ModuleRecord;
-use App\Models\Webhook;
-use App\Models\WebhookDelivery;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
 
 class WebhookApplicationService
 {
     public function __construct(
         private WebhookRepositoryInterface $repository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -29,60 +23,26 @@ class WebhookApplicationService
     /**
      * List outgoing webhooks with filtering and pagination.
      */
-    public function listWebhooks(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listWebhooks(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = Webhook::query()->with(['user:id,name,email', 'module:id,name']);
-
-        // Filter by status
-        if (isset($filters['is_active'])) {
-            $query->where('is_active', $filters['is_active']);
-        }
-
-        // Filter by event
-        if (!empty($filters['event'])) {
-            $query->forEvent($filters['event']);
-        }
-
-        // Filter by module
-        if (!empty($filters['module_id'])) {
-            $query->forModule($filters['module_id']);
-        }
-
-        // Filter by user
-        if (!empty($filters['user_id'])) {
-            $query->where('user_id', $filters['user_id']);
-        }
-
-        // Search
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('url', 'like', "%{$search}%");
-            });
-        }
-
-        return $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $page = $filters['page'] ?? 1;
+        return $this->repository->listWebhooks($filters, $perPage, $page);
     }
 
     /**
      * Get a webhook by ID.
      */
-    public function getWebhook(int $id): ?Webhook
+    public function getWebhook(int $id): ?array
     {
-        return Webhook::with(['user:id,name,email', 'module', 'deliveries' => function ($q) {
-            $q->orderBy('created_at', 'desc')->limit(10);
-        }])->find($id);
+        return $this->repository->getWebhook($id);
     }
 
     /**
      * Get webhook delivery history.
      */
-    public function getDeliveryHistory(int $webhookId, int $perPage = 50): LengthAwarePaginator
+    public function getDeliveryHistory(int $webhookId, int $perPage = 50): PaginatedResult
     {
-        return WebhookDelivery::where('webhook_id', $webhookId)
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
+        return $this->repository->getDeliveryHistory($webhookId, $perPage);
     }
 
     /**
@@ -90,26 +50,7 @@ class WebhookApplicationService
      */
     public function getWebhookStats(int $webhookId): array
     {
-        $webhook = Webhook::findOrFail($webhookId);
-
-        $deliveries = $webhook->deliveries();
-        $recentDeliveries = (clone $deliveries)->recent(7);
-
-        return [
-            'webhook' => $webhook,
-            'total_deliveries' => $deliveries->count(),
-            'success_count' => $webhook->success_count,
-            'failure_count' => $webhook->failure_count,
-            'success_rate' => ($webhook->success_count + $webhook->failure_count) > 0
-                ? round(($webhook->success_count / ($webhook->success_count + $webhook->failure_count)) * 100, 1)
-                : 0,
-            'recent_deliveries' => $recentDeliveries->count(),
-            'recent_failures' => (clone $recentDeliveries)->failed()->count(),
-            'avg_response_time' => (clone $recentDeliveries)
-                ->where('status', WebhookDelivery::STATUS_SUCCESS)
-                ->avg('response_time_ms') ?? 0,
-            'last_triggered_at' => $webhook->last_triggered_at,
-        ];
+        return $this->repository->getWebhookStats($webhookId);
     }
 
     /**
@@ -117,7 +58,7 @@ class WebhookApplicationService
      */
     public function getAvailableEvents(): array
     {
-        return Webhook::getAvailableEvents();
+        return $this->repository->getAvailableEvents();
     }
 
     // =========================================================================
@@ -127,47 +68,18 @@ class WebhookApplicationService
     /**
      * Create a new outgoing webhook.
      */
-    public function createWebhook(array $data): Webhook
+    public function createWebhook(array $data): array
     {
-        return Webhook::create([
-            'user_id' => Auth::id(),
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'url' => $data['url'],
-            'secret' => Webhook::generateSecret(),
-            'events' => $data['events'] ?? [],
-            'module_id' => $data['module_id'] ?? null,
-            'headers' => $data['headers'] ?? [],
-            'is_active' => $data['is_active'] ?? true,
-            'verify_ssl' => $data['verify_ssl'] ?? true,
-            'timeout' => $data['timeout'] ?? 30,
-            'retry_count' => $data['retry_count'] ?? 3,
-            'retry_delay' => $data['retry_delay'] ?? 60,
-        ]);
+        $data['user_id'] = $this->authContext->userId();
+        return $this->repository->createWebhook($data);
     }
 
     /**
      * Update a webhook.
      */
-    public function updateWebhook(int $id, array $data): Webhook
+    public function updateWebhook(int $id, array $data): array
     {
-        $webhook = Webhook::findOrFail($id);
-
-        $webhook->update([
-            'name' => $data['name'] ?? $webhook->name,
-            'description' => $data['description'] ?? $webhook->description,
-            'url' => $data['url'] ?? $webhook->url,
-            'events' => $data['events'] ?? $webhook->events,
-            'module_id' => $data['module_id'] ?? $webhook->module_id,
-            'headers' => $data['headers'] ?? $webhook->headers,
-            'is_active' => $data['is_active'] ?? $webhook->is_active,
-            'verify_ssl' => $data['verify_ssl'] ?? $webhook->verify_ssl,
-            'timeout' => $data['timeout'] ?? $webhook->timeout,
-            'retry_count' => $data['retry_count'] ?? $webhook->retry_count,
-            'retry_delay' => $data['retry_delay'] ?? $webhook->retry_delay,
-        ]);
-
-        return $webhook->fresh();
+        return $this->repository->updateWebhook($id, $data);
     }
 
     /**
@@ -175,8 +87,7 @@ class WebhookApplicationService
      */
     public function deleteWebhook(int $id): bool
     {
-        $webhook = Webhook::findOrFail($id);
-        return $webhook->delete();
+        return $this->repository->deleteWebhook($id);
     }
 
     /**
@@ -184,22 +95,15 @@ class WebhookApplicationService
      */
     public function regenerateSecret(int $id): string
     {
-        $webhook = Webhook::findOrFail($id);
-        $newSecret = Webhook::generateSecret();
-
-        $webhook->update(['secret' => $newSecret]);
-
-        return $newSecret;
+        return $this->repository->regenerateSecret($id);
     }
 
     /**
      * Toggle webhook active status.
      */
-    public function toggleActive(int $id): Webhook
+    public function toggleActive(int $id): array
     {
-        $webhook = Webhook::findOrFail($id);
-        $webhook->update(['is_active' => !$webhook->is_active]);
-        return $webhook->fresh();
+        return $this->repository->toggleActive($id);
     }
 
     /**
@@ -207,14 +111,18 @@ class WebhookApplicationService
      */
     public function testWebhook(int $id): array
     {
-        $webhook = Webhook::findOrFail($id);
+        $webhook = $this->repository->getWebhook($id);
+
+        if (!$webhook) {
+            throw new \InvalidArgumentException('Webhook not found');
+        }
 
         $testPayload = [
             'event' => 'test',
             'timestamp' => now()->toIso8601String(),
             'data' => [
                 'message' => 'This is a test webhook delivery',
-                'webhook_id' => $webhook->id,
+                'webhook_id' => $webhook['id'],
             ],
         ];
 
@@ -230,15 +138,12 @@ class WebhookApplicationService
      */
     public function triggerEvent(string $event, array $payload, ?int $moduleId = null): array
     {
-        $webhooks = Webhook::active()
-            ->forEvent($event)
-            ->forModule($moduleId)
-            ->get();
+        $webhooks = $this->repository->getWebhooksForEvent($event, $moduleId);
 
         $results = [];
 
         foreach ($webhooks as $webhook) {
-            $results[$webhook->id] = $this->queueDelivery($webhook, $event, $payload);
+            $results[$webhook['id']] = $this->queueDelivery($webhook['id'], $event, $payload);
         }
 
         return $results;
@@ -247,22 +152,9 @@ class WebhookApplicationService
     /**
      * Queue a webhook delivery.
      */
-    public function queueDelivery(Webhook $webhook, string $event, array $payload): WebhookDelivery
+    public function queueDelivery(int $webhookId, string $event, array $payload): array
     {
-        $fullPayload = [
-            'event' => $event,
-            'timestamp' => now()->toIso8601String(),
-            'webhook_id' => $webhook->id,
-            'data' => $payload,
-        ];
-
-        return WebhookDelivery::create([
-            'webhook_id' => $webhook->id,
-            'event' => $event,
-            'payload' => $fullPayload,
-            'status' => WebhookDelivery::STATUS_PENDING,
-            'attempts' => 0,
-        ]);
+        return $this->repository->queueDelivery($webhookId, $event, $payload);
     }
 
     /**
@@ -270,10 +162,7 @@ class WebhookApplicationService
      */
     public function processPendingDeliveries(int $limit = 100): array
     {
-        $deliveries = WebhookDelivery::readyForRetry()
-            ->with('webhook')
-            ->limit($limit)
-            ->get();
+        $deliveries = $this->repository->getPendingDeliveries($limit);
 
         $results = ['processed' => 0, 'success' => 0, 'failed' => 0];
 
@@ -294,65 +183,90 @@ class WebhookApplicationService
     /**
      * Execute a single delivery.
      */
-    public function executeDelivery(WebhookDelivery $delivery): array
+    public function executeDelivery(array $delivery): array
     {
-        $webhook = $delivery->webhook;
+        $webhook = $delivery['webhook'] ?? null;
+
+        if (!$webhook) {
+            $webhook = $this->repository->getWebhookForDelivery($delivery['id']);
+        }
+
+        if (!$webhook) {
+            throw new \InvalidArgumentException('Webhook not found for delivery');
+        }
+
         $startTime = microtime(true);
 
         try {
-            $signature = $webhook->signPayload($delivery->payload);
+            $signature = $this->signPayload($delivery['payload'], $webhook['secret']);
 
-            $headers = array_merge($webhook->headers ?? [], [
+            $headers = array_merge($webhook['headers'] ?? [], [
                 'Content-Type' => 'application/json',
                 'X-Webhook-Signature' => $signature,
                 'User-Agent' => 'CRM-Webhook/1.0',
             ]);
 
             $response = Http::withHeaders($headers)
-                ->timeout($webhook->timeout)
-                ->withOptions(['verify' => $webhook->verify_ssl])
-                ->post($webhook->url, $delivery->payload);
+                ->timeout($webhook['timeout'])
+                ->withOptions(['verify' => $webhook['verify_ssl']])
+                ->post($webhook['url'], $delivery['payload']);
 
             $responseTimeMs = (int) ((microtime(true) - $startTime) * 1000);
 
             if ($response->successful()) {
-                $delivery->markAsSuccess(
-                    $response->status(),
-                    $response->body(),
-                    $responseTimeMs
-                );
+                $this->repository->updateDeliveryStatus($delivery['id'], [
+                    'status' => 'success',
+                    'response_code' => $response->status(),
+                    'response_body' => $response->body() ? substr($response->body(), 0, 10000) : null,
+                    'response_time_ms' => $responseTimeMs,
+                    'delivered_at' => now(),
+                    'next_retry_at' => null,
+                ]);
 
                 return ['success' => true, 'response_code' => $response->status()];
             } else {
-                $delivery->markAsFailed(
-                    $delivery->attempts + 1,
-                    $response->status(),
-                    "HTTP {$response->status()}: " . substr($response->body(), 0, 500),
-                    $responseTimeMs
-                );
+                $this->repository->updateDeliveryStatus($delivery['id'], [
+                    'status' => 'failed',
+                    'attempts' => $delivery['attempts'] + 1,
+                    'response_code' => $response->status(),
+                    'error_message' => "HTTP {$response->status()}: " . substr($response->body(), 0, 500),
+                    'response_time_ms' => $responseTimeMs,
+                ]);
 
                 return ['success' => false, 'response_code' => $response->status()];
             }
         } catch (\Exception $e) {
             $responseTimeMs = (int) ((microtime(true) - $startTime) * 1000);
 
-            $delivery->markAsFailed(
-                $delivery->attempts + 1,
-                null,
-                $e->getMessage(),
-                $responseTimeMs
-            );
+            $this->repository->updateDeliveryStatus($delivery['id'], [
+                'status' => 'failed',
+                'attempts' => $delivery['attempts'] + 1,
+                'error_message' => $e->getMessage(),
+                'response_time_ms' => $responseTimeMs,
+            ]);
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 
     /**
+     * Sign a payload with the webhook secret.
+     */
+    private function signPayload(array $payload, string $secret): string
+    {
+        $jsonPayload = json_encode($payload);
+        $timestamp = time();
+        $signature = hash_hmac('sha256', "{$timestamp}.{$jsonPayload}", $secret);
+
+        return "t={$timestamp},v1={$signature}";
+    }
+
+    /**
      * Deliver payload directly (synchronous).
      */
-    public function deliverPayload(Webhook $webhook, string $event, array $payload): array
+    public function deliverPayload(array $webhook, string $event, array $payload): array
     {
-        $delivery = $this->queueDelivery($webhook, $event, $payload);
+        $delivery = $this->queueDelivery($webhook['id'], $event, $payload);
         return $this->executeDelivery($delivery);
     }
 
@@ -361,17 +275,22 @@ class WebhookApplicationService
      */
     public function retryDelivery(int $deliveryId): array
     {
-        $delivery = WebhookDelivery::findOrFail($deliveryId);
+        $delivery = $this->repository->getDelivery($deliveryId);
 
-        if ($delivery->status !== WebhookDelivery::STATUS_FAILED) {
+        if (!$delivery) {
+            throw new \InvalidArgumentException('Delivery not found');
+        }
+
+        if ($delivery['status'] !== 'failed') {
             throw new \InvalidArgumentException('Only failed deliveries can be retried');
         }
 
-        $delivery->update([
-            'status' => WebhookDelivery::STATUS_PENDING,
+        $this->repository->updateDeliveryStatus($deliveryId, [
+            'status' => 'pending',
             'next_retry_at' => null,
         ]);
 
+        $delivery = $this->repository->getDelivery($deliveryId);
         return $this->executeDelivery($delivery);
     }
 
@@ -382,43 +301,26 @@ class WebhookApplicationService
     /**
      * List incoming webhooks.
      */
-    public function listIncomingWebhooks(array $filters = [], int $perPage = 25): LengthAwarePaginator
+    public function listIncomingWebhooks(array $filters = [], int $perPage = 25): PaginatedResult
     {
-        $query = IncomingWebhook::query()->with(['user:id,name,email', 'module:id,name,api_name']);
-
-        if (isset($filters['is_active'])) {
-            $query->where('is_active', $filters['is_active']);
-        }
-
-        if (!empty($filters['module_id'])) {
-            $query->where('module_id', $filters['module_id']);
-        }
-
-        if (!empty($filters['search'])) {
-            $query->where('name', 'like', "%{$filters['search']}%");
-        }
-
-        return $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $page = $filters['page'] ?? 1;
+        return $this->repository->listIncomingWebhooks($filters, $perPage, $page);
     }
 
     /**
      * Get an incoming webhook by ID.
      */
-    public function getIncomingWebhook(int $id): ?IncomingWebhook
+    public function getIncomingWebhook(int $id): ?array
     {
-        return IncomingWebhook::with(['user:id,name,email', 'module', 'logs' => function ($q) {
-            $q->orderBy('created_at', 'desc')->limit(20);
-        }])->find($id);
+        return $this->repository->getIncomingWebhook($id);
     }
 
     /**
      * Get incoming webhook logs.
      */
-    public function getIncomingWebhookLogs(int $webhookId, int $perPage = 50): LengthAwarePaginator
+    public function getIncomingWebhookLogs(int $webhookId, int $perPage = 50): PaginatedResult
     {
-        return IncomingWebhookLog::where('incoming_webhook_id', $webhookId)
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
+        return $this->repository->getIncomingWebhookLogs($webhookId, $perPage);
     }
 
     // =========================================================================
@@ -428,41 +330,18 @@ class WebhookApplicationService
     /**
      * Create an incoming webhook.
      */
-    public function createIncomingWebhook(array $data): IncomingWebhook
+    public function createIncomingWebhook(array $data): array
     {
-        $webhook = IncomingWebhook::create([
-            'user_id' => Auth::id(),
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'token' => IncomingWebhook::generateToken(),
-            'module_id' => $data['module_id'],
-            'field_mapping' => $data['field_mapping'] ?? [],
-            'is_active' => $data['is_active'] ?? true,
-            'action' => $data['action'] ?? IncomingWebhook::ACTION_CREATE,
-            'upsert_field' => $data['upsert_field'] ?? null,
-        ]);
-
-        return $webhook;
+        $data['user_id'] = $this->authContext->userId();
+        return $this->repository->createIncomingWebhook($data);
     }
 
     /**
      * Update an incoming webhook.
      */
-    public function updateIncomingWebhook(int $id, array $data): IncomingWebhook
+    public function updateIncomingWebhook(int $id, array $data): array
     {
-        $webhook = IncomingWebhook::findOrFail($id);
-
-        $webhook->update([
-            'name' => $data['name'] ?? $webhook->name,
-            'description' => $data['description'] ?? $webhook->description,
-            'module_id' => $data['module_id'] ?? $webhook->module_id,
-            'field_mapping' => $data['field_mapping'] ?? $webhook->field_mapping,
-            'is_active' => $data['is_active'] ?? $webhook->is_active,
-            'action' => $data['action'] ?? $webhook->action,
-            'upsert_field' => $data['upsert_field'] ?? $webhook->upsert_field,
-        ]);
-
-        return $webhook->fresh();
+        return $this->repository->updateIncomingWebhook($id, $data);
     }
 
     /**
@@ -470,8 +349,7 @@ class WebhookApplicationService
      */
     public function deleteIncomingWebhook(int $id): bool
     {
-        $webhook = IncomingWebhook::findOrFail($id);
-        return $webhook->delete();
+        return $this->repository->deleteIncomingWebhook($id);
     }
 
     /**
@@ -479,12 +357,7 @@ class WebhookApplicationService
      */
     public function regenerateIncomingToken(int $id): string
     {
-        $webhook = IncomingWebhook::findOrFail($id);
-        $newToken = IncomingWebhook::generateToken();
-
-        $webhook->update(['token' => $newToken]);
-
-        return $newToken;
+        return $this->repository->regenerateIncomingToken($id);
     }
 
     /**
@@ -492,15 +365,15 @@ class WebhookApplicationService
      */
     public function processIncomingWebhook(string $token, array $payload, array $headers = []): array
     {
-        $webhook = IncomingWebhook::findByToken($token);
+        $webhook = $this->repository->findIncomingWebhookByToken($token);
 
         if (!$webhook) {
             return ['success' => false, 'error' => 'Invalid or inactive webhook token'];
         }
 
         // Log the incoming request
-        $log = IncomingWebhookLog::create([
-            'incoming_webhook_id' => $webhook->id,
+        $log = $this->repository->createIncomingWebhookLog([
+            'incoming_webhook_id' => $webhook['id'],
             'payload' => $payload,
             'headers' => $headers,
             'ip_address' => request()->ip(),
@@ -509,29 +382,29 @@ class WebhookApplicationService
 
         try {
             // Map the data
-            $mappedData = $webhook->mapData($payload);
+            $mappedData = $this->mapData($payload, $webhook['field_mapping'] ?? []);
 
             if (empty($mappedData)) {
                 throw new \InvalidArgumentException('No fields mapped from payload');
             }
 
-            $result = match ($webhook->action) {
-                IncomingWebhook::ACTION_CREATE => $this->createRecordFromWebhook($webhook, $mappedData),
-                IncomingWebhook::ACTION_UPDATE => $this->updateRecordFromWebhook($webhook, $mappedData, $payload),
-                IncomingWebhook::ACTION_UPSERT => $this->upsertRecordFromWebhook($webhook, $mappedData, $payload),
+            $result = match ($webhook['action']) {
+                'create' => $this->createRecordFromWebhook($webhook, $mappedData),
+                'update' => $this->updateRecordFromWebhook($webhook, $mappedData, $payload),
+                'upsert' => $this->upsertRecordFromWebhook($webhook, $mappedData, $payload),
                 default => throw new \InvalidArgumentException('Unknown action'),
             };
 
-            $log->update([
+            $this->repository->updateIncomingWebhookLog($log['id'], [
                 'status' => 'success',
                 'result' => $result,
             ]);
 
-            $webhook->recordReceived();
+            $this->repository->recordIncomingWebhookReceived($webhook['id']);
 
             return ['success' => true, 'result' => $result];
         } catch (\Exception $e) {
-            $log->update([
+            $this->repository->updateIncomingWebhookLog($log['id'], [
                 'status' => 'failed',
                 'error_message' => $e->getMessage(),
             ]);
@@ -541,50 +414,68 @@ class WebhookApplicationService
     }
 
     /**
+     * Map incoming data to module fields.
+     */
+    private function mapData(array $data, array $fieldMapping): array
+    {
+        $mapped = [];
+
+        foreach ($fieldMapping as $incomingField => $moduleField) {
+            if ($moduleField && isset($data[$incomingField])) {
+                $mapped[$moduleField] = $data[$incomingField];
+            }
+        }
+
+        return $mapped;
+    }
+
+    /**
      * Create record from webhook data.
      */
-    private function createRecordFromWebhook(IncomingWebhook $webhook, array $data): array
+    private function createRecordFromWebhook(array $webhook, array $data): array
     {
-        $record = ModuleRecord::create([
-            'module_id' => $webhook->module_id,
-            'data' => $data,
-            'created_by' => $webhook->user_id,
-        ]);
+        $record = $this->repository->createModuleRecord(
+            $webhook['module_id'],
+            $data,
+            $webhook['user_id']
+        );
 
-        return ['action' => 'created', 'record_id' => $record->id];
+        return ['action' => 'created', 'record_id' => $record['id']];
     }
 
     /**
      * Update record from webhook data.
      */
-    private function updateRecordFromWebhook(IncomingWebhook $webhook, array $data, array $payload): array
+    private function updateRecordFromWebhook(array $webhook, array $data, array $payload): array
     {
-        $lookupField = $webhook->upsert_field;
+        $lookupField = $webhook['upsert_field'];
         $lookupValue = $payload[$lookupField] ?? null;
 
         if (!$lookupValue) {
             throw new \InvalidArgumentException("Missing lookup field: {$lookupField}");
         }
 
-        $record = ModuleRecord::where('module_id', $webhook->module_id)
-            ->whereRaw("data->>? = ?", [$lookupField, $lookupValue])
-            ->first();
+        $record = $this->repository->findModuleRecordByField(
+            $webhook['module_id'],
+            $lookupField,
+            $lookupValue
+        );
 
         if (!$record) {
             throw new \InvalidArgumentException("Record not found for {$lookupField}: {$lookupValue}");
         }
 
-        $record->update(['data' => array_merge($record->data ?? [], $data)]);
+        $this->repository->updateModuleRecord($record['id'], $data);
 
-        return ['action' => 'updated', 'record_id' => $record->id];
+        return ['action' => 'updated', 'record_id' => $record['id']];
     }
 
     /**
      * Upsert record from webhook data.
      */
-    private function upsertRecordFromWebhook(IncomingWebhook $webhook, array $data, array $payload): array
+    private function upsertRecordFromWebhook(array $webhook, array $data, array $payload): array
     {
-        $lookupField = $webhook->upsert_field;
+        $lookupField = $webhook['upsert_field'];
         $lookupValue = $payload[$lookupField] ?? null;
 
         if (!$lookupValue) {
@@ -592,13 +483,15 @@ class WebhookApplicationService
             return $this->createRecordFromWebhook($webhook, $data);
         }
 
-        $record = ModuleRecord::where('module_id', $webhook->module_id)
-            ->whereRaw("data->>? = ?", [$lookupField, $lookupValue])
-            ->first();
+        $record = $this->repository->findModuleRecordByField(
+            $webhook['module_id'],
+            $lookupField,
+            $lookupValue
+        );
 
         if ($record) {
-            $record->update(['data' => array_merge($record->data ?? [], $data)]);
-            return ['action' => 'updated', 'record_id' => $record->id];
+            $this->repository->updateModuleRecord($record['id'], $data);
+            return ['action' => 'updated', 'record_id' => $record['id']];
         } else {
             return $this->createRecordFromWebhook($webhook, $data);
         }

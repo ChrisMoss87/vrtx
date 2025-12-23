@@ -10,24 +10,29 @@ use App\Domain\Forecasting\ValueObjects\ForecastPeriod;
 use App\Domain\Forecasting\ValueObjects\QuotaType;
 use App\Domain\Shared\ValueObjects\Timestamp;
 use App\Domain\Shared\ValueObjects\UserId;
-use App\Models\SalesQuota as SalesQuotaModel;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class EloquentSalesQuotaRepository implements SalesQuotaRepositoryInterface
 {
+    private const TABLE = 'sales_quotas';
+
     public function findById(int $id): ?SalesQuota
     {
-        $model = SalesQuotaModel::find($id);
-        return $model ? $this->toDomainEntity($model) : null;
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
+
+        return $row ? $this->toDomainEntity($row) : null;
     }
 
     public function findByUser(int $userId): array
     {
-        $models = SalesQuotaModel::where('user_id', $userId)
-            ->orderBy('period_start', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('user_id', $userId)
+            ->orderByDesc('period_start')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findByUserAndPeriod(
@@ -35,7 +40,8 @@ class EloquentSalesQuotaRepository implements SalesQuotaRepositoryInterface
         ForecastPeriod $period,
         ?int $pipelineId = null
     ): ?SalesQuota {
-        $query = SalesQuotaModel::where('user_id', $userId)
+        $query = DB::table(self::TABLE)
+            ->where('user_id', $userId)
             ->where('period_type', $period->type())
             ->where('period_start', '<=', $period->end()->format('Y-m-d'))
             ->where('period_end', '>=', $period->start()->format('Y-m-d'));
@@ -47,17 +53,19 @@ class EloquentSalesQuotaRepository implements SalesQuotaRepositoryInterface
             });
         }
 
-        $model = $query->first();
-        return $model ? $this->toDomainEntity($model) : null;
+        $row = $query->first();
+
+        return $row ? $this->toDomainEntity($row) : null;
     }
 
     public function findByTeam(int $teamId): array
     {
-        $models = SalesQuotaModel::where('team_id', $teamId)
-            ->orderBy('period_start', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('team_id', $teamId)
+            ->orderByDesc('period_start')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findByTeamAndPeriod(
@@ -65,7 +73,8 @@ class EloquentSalesQuotaRepository implements SalesQuotaRepositoryInterface
         ForecastPeriod $period,
         ?int $pipelineId = null
     ): ?SalesQuota {
-        $query = SalesQuotaModel::where('team_id', $teamId)
+        $query = DB::table(self::TABLE)
+            ->where('team_id', $teamId)
             ->where('period_type', $period->type())
             ->where('period_start', '<=', $period->end()->format('Y-m-d'))
             ->where('period_end', '>=', $period->start()->format('Y-m-d'));
@@ -74,71 +83,80 @@ class EloquentSalesQuotaRepository implements SalesQuotaRepositoryInterface
             $query->where('pipeline_id', $pipelineId);
         }
 
-        $model = $query->first();
-        return $model ? $this->toDomainEntity($model) : null;
+        $row = $query->first();
+
+        return $row ? $this->toDomainEntity($row) : null;
     }
 
     public function findByPipeline(int $pipelineId): array
     {
-        $models = SalesQuotaModel::where('pipeline_id', $pipelineId)
-            ->orderBy('period_start', 'desc')
+        $rows = DB::table(self::TABLE)
+            ->where('pipeline_id', $pipelineId)
+            ->orderByDesc('period_start')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findCurrent(): array
     {
-        $now = now();
-        $models = SalesQuotaModel::where('period_start', '<=', $now)
+        $now = now()->format('Y-m-d');
+        $rows = DB::table(self::TABLE)
+            ->where('period_start', '<=', $now)
             ->where('period_end', '>=', $now)
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function save(SalesQuota $quota): SalesQuota
     {
-        $data = $this->toModelData($quota);
+        $data = $this->toRowData($quota);
 
         if ($quota->getId() !== null) {
-            $model = SalesQuotaModel::findOrFail($quota->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $quota->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $quota->getId();
         } else {
-            $model = SalesQuotaModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomainEntity($model->fresh());
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        $model = SalesQuotaModel::find($id);
-        return $model ? ($model->delete() ?? false) : false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
-    private function toDomainEntity(SalesQuotaModel $model): SalesQuota
+    private function toDomainEntity(stdClass $row): SalesQuota
     {
         return SalesQuota::reconstitute(
-            id: $model->id,
-            userId: $model->user_id ? UserId::fromInt($model->user_id) : null,
-            pipelineId: $model->pipeline_id,
-            teamId: $model->team_id,
+            id: (int) $row->id,
+            userId: $row->user_id ? UserId::fromInt((int) $row->user_id) : null,
+            pipelineId: $row->pipeline_id ? (int) $row->pipeline_id : null,
+            teamId: $row->team_id ? (int) $row->team_id : null,
             period: ForecastPeriod::create(
-                $model->period_type,
-                new DateTimeImmutable($model->period_start->toDateString()),
-                new DateTimeImmutable($model->period_end->toDateString())
+                $row->period_type,
+                new DateTimeImmutable($row->period_start),
+                new DateTimeImmutable($row->period_end)
             ),
-            quotaAmount: (float) $model->quota_amount,
-            currency: $model->currency ?? 'USD',
-            quotaType: QuotaType::tryFrom($model->quota_type ?? 'revenue') ?? QuotaType::REVENUE,
-            notes: $model->notes,
-            createdAt: $model->created_at ? Timestamp::fromDateTime($model->created_at) : null,
-            updatedAt: $model->updated_at ? Timestamp::fromDateTime($model->updated_at) : null,
+            quotaAmount: (float) $row->quota_amount,
+            currency: $row->currency ?? 'USD',
+            quotaType: QuotaType::tryFrom($row->quota_type ?? 'revenue') ?? QuotaType::REVENUE,
+            notes: $row->notes,
+            createdAt: $row->created_at ? Timestamp::fromString($row->created_at) : null,
+            updatedAt: $row->updated_at ? Timestamp::fromString($row->updated_at) : null,
         );
     }
 
-    private function toModelData(SalesQuota $quota): array
+    private function toRowData(SalesQuota $quota): array
     {
         return [
             'user_id' => $quota->userId()?->value(),

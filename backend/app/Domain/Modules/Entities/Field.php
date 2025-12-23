@@ -7,10 +7,10 @@ namespace App\Domain\Modules\Entities;
 use App\Domain\Modules\ValueObjects\FieldSettings;
 use App\Domain\Modules\ValueObjects\FieldType;
 use App\Domain\Modules\ValueObjects\ValidationRules;
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
-use Illuminate\Support\Str;
 
-final class Field
+final class Field implements Entity
 {
     private array $options = [];
 
@@ -55,7 +55,7 @@ final class Field
         int $displayOrder = 0,
         int $width = 100
     ): self {
-        $apiName = Str::snake($label);
+        $apiName = self::toSnakeCase($label);
 
         return new self(
             id: null,
@@ -92,7 +92,7 @@ final class Field
         ?string $helpText
     ): void {
         $this->label = $label;
-        $this->apiName = Str::snake($label);
+        $this->apiName = self::toSnakeCase($label);
         $this->type = $type;
         $this->description = $description;
         $this->helpText = $helpText;
@@ -125,11 +125,27 @@ final class Field
         $this->width = $width;
     }
 
-    // Getters
-    public function id(): ?int
+    // ========== Entity Interface ==========
+
+    public function getId(): ?int
     {
         return $this->id;
     }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->getId() === null) {
+            return false;
+        }
+
+        return $this->id === $other->getId();
+    }
+
+    // ========== Getters ==========
 
     public function moduleId(): int
     {
@@ -229,5 +245,14 @@ final class Field
     public function updatedAt(): ?DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    /**
+     * Convert a string to snake_case.
+     */
+    private static function toSnakeCase(string $value): string
+    {
+        $value = preg_replace('/\s+/u', '', ucwords($value));
+        return strtolower(preg_replace('/(.)(?=[A-Z])/u', '$1_', $value));
     }
 }

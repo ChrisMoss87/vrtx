@@ -1,6 +1,11 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
-	import { Target, TrendingUp, TrendingDown } from 'lucide-svelte';
+	import { Target, TrendingUp, TrendingDown, ExternalLink } from 'lucide-svelte';
+	import type { WidgetConfig } from '$lib/api/dashboards';
+	import {
+		navigateToRecords,
+		buildFiltersFromKpiConfig
+	} from '$lib/stores/dashboardNavigation.svelte';
 
 	interface Props {
 		title: string;
@@ -10,11 +15,25 @@
 			label?: string;
 			change_percent?: number | null;
 			change_type?: 'increase' | 'decrease' | 'no_change' | null;
+			module_api_name?: string;
 		} | null;
+		config?: WidgetConfig;
 		loading?: boolean;
 	}
 
-	let { title, data, loading = false }: Props = $props();
+	let { title, data, config, loading = false }: Props = $props();
+
+	// Check if click-through is enabled
+	const isClickable = $derived(
+		config?.module_id && config?.click_enabled !== false && data?.module_api_name
+	);
+
+	function handleClick() {
+		if (!isClickable || !data?.module_api_name) return;
+
+		const filters = buildFiltersFromKpiConfig(config || {});
+		navigateToRecords(data.module_api_name, filters);
+	}
 
 	const progress = $derived(() => {
 		if (!data || data.target === 0) return 0;
@@ -39,7 +58,7 @@
 	}
 </script>
 
-<Card.Root class="h-full">
+<Card.Root class="h-full group">
 	<Card.Header class="pb-2">
 		<div class="flex items-center gap-2">
 			<Target class="h-4 w-4 text-muted-foreground" />
@@ -53,38 +72,50 @@
 				<div class="mt-2 h-4 w-16 rounded bg-muted"></div>
 			</div>
 		{:else if data}
-			<div class="space-y-3">
-				<div class="flex items-baseline justify-between">
-					<span class="text-3xl font-bold">{formatValue(data.value)}</span>
-					<span class="text-sm text-muted-foreground">/ {formatValue(data.target)}</span>
-				</div>
+			<button
+				type="button"
+				class="w-full rounded-md p-2 transition-colors {isClickable ? 'cursor-pointer hover:bg-muted/50' : ''}"
+				onclick={handleClick}
+				disabled={!isClickable}
+			>
+				<div class="space-y-3">
+					<div class="flex items-baseline justify-between">
+						<div class="flex items-center gap-1">
+							<span class="text-3xl font-bold">{formatValue(data.value)}</span>
+							{#if isClickable}
+								<ExternalLink class="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+							{/if}
+						</div>
+						<span class="text-sm text-muted-foreground">/ {formatValue(data.target)}</span>
+					</div>
 
-				<!-- Progress bar -->
-				<div class="space-y-1">
-					<div class="h-2 w-full overflow-hidden rounded-full bg-muted">
-						<div class="h-full transition-all {progressColor()}" style="width: {progress()}%"></div>
-					</div>
-					<div class="flex items-center justify-between text-xs">
-						<span class="text-muted-foreground">{progress()}% of goal</span>
-						{#if data.change_percent !== null && data.change_percent !== undefined}
-							<span
-								class="flex items-center gap-1 {data.change_type === 'increase'
-									? 'text-green-600'
-									: data.change_type === 'decrease'
-										? 'text-red-600'
-										: 'text-muted-foreground'}"
-							>
-								{#if data.change_type === 'increase'}
-									<TrendingUp class="h-3 w-3" />
-								{:else if data.change_type === 'decrease'}
-									<TrendingDown class="h-3 w-3" />
-								{/if}
-								{data.change_percent >= 0 ? '+' : ''}{data.change_percent.toFixed(1)}%
-							</span>
-						{/if}
+					<!-- Progress bar -->
+					<div class="space-y-1">
+						<div class="h-2 w-full overflow-hidden rounded-full bg-muted">
+							<div class="h-full transition-all {progressColor()}" style="width: {progress()}%"></div>
+						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-muted-foreground">{progress()}% of goal</span>
+							{#if data.change_percent !== null && data.change_percent !== undefined}
+								<span
+									class="flex items-center gap-1 {data.change_type === 'increase'
+										? 'text-green-600'
+										: data.change_type === 'decrease'
+											? 'text-red-600'
+											: 'text-muted-foreground'}"
+								>
+									{#if data.change_type === 'increase'}
+										<TrendingUp class="h-3 w-3" />
+									{:else if data.change_type === 'decrease'}
+										<TrendingDown class="h-3 w-3" />
+									{/if}
+									{data.change_percent >= 0 ? '+' : ''}{data.change_percent.toFixed(1)}%
+								</span>
+							{/if}
+						</div>
 					</div>
 				</div>
-			</div>
+			</button>
 		{:else}
 			<div class="py-4 text-center text-sm text-muted-foreground">No data available</div>
 		{/if}

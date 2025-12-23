@@ -6,6 +6,7 @@ namespace App\Domain\Forecasting\Entities;
 
 use App\Domain\Forecasting\ValueObjects\ForecastPeriod;
 use App\Domain\Forecasting\ValueObjects\QuotaType;
+use App\Domain\Shared\Contracts\Entity;
 use App\Domain\Shared\ValueObjects\Timestamp;
 use App\Domain\Shared\ValueObjects\UserId;
 
@@ -14,7 +15,7 @@ use App\Domain\Shared\ValueObjects\UserId;
  *
  * Represents a sales quota for a user, team, or pipeline within a specific time period.
  */
-final class SalesQuota
+final class SalesQuota implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -218,5 +219,14 @@ final class SalesQuota
     public function updatedAt(): ?Timestamp
     {
         return $this->updatedAt;
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null && $this->id === $other->id;
     }
 }

@@ -91,27 +91,27 @@ class ModuleService
                 throw new \DomainException("Module with name '{$dto->name}' already exists.");
             }
 
-            $module->updateDetails(
+            $module = $module->updateDetails(
                 name: $dto->name,
                 singularName: $dto->singularName,
-                icon: $dto->icon ?? $module->icon(),
-                description: $dto->description ?? $module->description()
+                icon: $dto->icon ?? $module->getIcon(),
+                description: $dto->description ?? $module->getDescription()
             );
         }
 
         // Update settings if provided
         if ($dto->settings !== null) {
-            $module->updateSettings(ModuleSettings::fromArray($dto->settings));
+            $module = $module->updateSettings(ModuleSettings::fromArray($dto->settings));
         }
 
         // Update display order if provided
         if ($dto->displayOrder !== null) {
-            $module->updateDisplayOrder($dto->displayOrder);
+            $module = $module->updateDisplayOrder($dto->displayOrder);
         }
 
         // Update active status if provided
         if ($dto->isActive !== null) {
-            $dto->isActive ? $module->activate() : $module->deactivate();
+            $module = $dto->isActive ? $module->activate() : $module->deactivate();
         }
 
         return $this->moduleRepository->save($module);
@@ -136,7 +136,7 @@ class ModuleService
             throw new \DomainException("Module not found.");
         }
 
-        $module->activate();
+        $module = $module->activate();
 
         return $this->moduleRepository->save($module);
     }
@@ -152,7 +152,7 @@ class ModuleService
             throw new \DomainException("Module not found.");
         }
 
-        $module->deactivate();
+        $module = $module->deactivate();
 
         return $this->moduleRepository->save($module);
     }

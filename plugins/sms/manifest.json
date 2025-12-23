@@ -1,0 +1,38 @@
+{
+    "slug": "sms",
+    "name": "SMS Business Integration",
+    "version": "1.0.0",
+    "description": "Send and receive SMS messages from your CRM. Supports Twilio and other providers with templates, campaigns, and opt-out management.",
+    "category": "communication",
+    "service_provider": "Plugins\\SMS\\SMSPluginServiceProvider",
+    "dependencies": [],
+    "routes": {
+        "prefix": "sms",
+        "file": "src/Http/routes.php"
+    },
+    "migrations": [
+        "database/migrations"
+    ],
+    "permissions": [
+        "sms.view",
+        "sms.send",
+        "sms.manage_connections",
+        "sms.manage_templates",
+        "sms.manage_campaigns"
+    ],
+    "communication_channel": "sms",
+    "usage_metrics": [
+        {
+            "name": "messages_sent",
+            "display_name": "Messages Sent",
+            "unit": "messages",
+            "reset_period": "monthly"
+        },
+        {
+            "name": "campaigns",
+            "display_name": "Campaigns Created",
+            "unit": "campaigns",
+            "reset_period": "monthly"
+        }
+    ]
+}

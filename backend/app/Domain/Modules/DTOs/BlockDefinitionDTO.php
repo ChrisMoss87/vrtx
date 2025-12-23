@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Modules\DTOs;
 
-use App\Models\Block;
 use JsonSerializable;
 
 /**
@@ -34,36 +33,6 @@ readonly class BlockDefinitionDTO implements JsonSerializable
         public \DateTimeInterface $createdAt,
         public \DateTimeInterface $updatedAt,
     ) {}
-
-    /**
-     * Create from Eloquent model.
-     *
-     * @param Block $block
-     * @return self
-     */
-    public static function fromModel(Block $block): self
-    {
-        // Load fields if not already loaded
-        $block->loadMissing('fields.options');
-
-        // Build field definitions
-        $fields = [];
-        foreach ($block->fields as $field) {
-            $fields[] = FieldDefinitionDTO::fromModel($field);
-        }
-
-        return new self(
-            id: $block->id,
-            moduleId: $block->module_id,
-            name: $block->name,
-            type: $block->type,
-            displayOrder: $block->display_order,
-            settings: $block->settings,
-            fields: $fields,
-            createdAt: $block->created_at,
-            updatedAt: $block->updated_at,
-        );
-    }
 
     /**
      * Get field count.

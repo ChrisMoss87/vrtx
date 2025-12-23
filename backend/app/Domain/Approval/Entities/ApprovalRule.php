@@ -6,9 +6,10 @@ namespace App\Domain\Approval\Entities;
 
 use App\Domain\Approval\ValueObjects\ApprovalType;
 use App\Domain\Approval\ValueObjects\EntityType;
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class ApprovalRule
+final class ApprovalRule implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -179,4 +180,15 @@ final class ApprovalRule
     public function getCreatedBy(): ?int { return $this->createdBy; }
     public function getCreatedAt(): ?DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?DateTimeImmutable { return $this->updatedAt; }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null
+            && $other->id !== null
+            && $this->id === $other->id;
+    }
 }

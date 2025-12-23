@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Notification\Repositories;
 
-use Illuminate\Support\Collection;
-
 /**
  * Repository interface for NotificationPreference.
  */
@@ -14,9 +12,9 @@ interface NotificationPreferenceRepositoryInterface
     /**
      * Get all preferences for a user, keyed by category.
      *
-     * @return Collection<string, array>
+     * @return array<string, array>
      */
-    public function getForUser(int $userId): Collection;
+    public function getForUser(int $userId): array;
 
     /**
      * Get preference for a specific category.

@@ -9,197 +9,241 @@ use App\Domain\Blueprint\Entities\BlueprintSla;
 use App\Domain\Blueprint\Entities\BlueprintState;
 use App\Domain\Blueprint\Entities\BlueprintTransition;
 use App\Domain\Blueprint\Repositories\BlueprintRepositoryInterface;
-use App\Models\Blueprint as BlueprintModel;
+use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class EloquentBlueprintRepository implements BlueprintRepositoryInterface
 {
+    private const TABLE = 'blueprints';
+    private const TABLE_STATES = 'blueprint_states';
+    private const TABLE_TRANSITIONS = 'blueprint_transitions';
+    private const TABLE_SLAS = 'blueprint_slas';
+    private const TABLE_TRANSITION_CONDITIONS = 'blueprint_transition_conditions';
+    private const TABLE_TRANSITION_REQUIREMENTS = 'blueprint_transition_requirements';
+    private const TABLE_TRANSITION_ACTIONS = 'blueprint_transition_actions';
+    private const TABLE_TRANSITION_APPROVALS = 'blueprint_transition_approvals';
+
     public function findById(int $id): ?Blueprint
     {
-        $model = BlueprintModel::with(['states', 'transitions', 'slas'])->find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toEntity($model);
+        return $this->toDomainEntityWithRelations($row);
     }
 
     public function findByModuleId(int $moduleId): array
     {
-        $models = BlueprintModel::with(['states', 'transitions', 'slas'])
+        $rows = DB::table(self::TABLE)
             ->where('module_id', $moduleId)
             ->get();
 
-        return $models->map(fn($m) => $this->toEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findByFieldId(int $fieldId): ?Blueprint
     {
-        $model = BlueprintModel::with(['states', 'transitions', 'slas'])
+        $row = DB::table(self::TABLE)
             ->where('field_id', $fieldId)
             ->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toEntity($model);
+        return $this->toDomainEntityWithRelations($row);
     }
 
     public function findActiveForModule(int $moduleId): array
     {
-        $models = BlueprintModel::with(['states', 'transitions', 'slas'])
+        $rows = DB::table(self::TABLE)
             ->where('module_id', $moduleId)
             ->where('is_active', true)
             ->get();
 
-        return $models->map(fn($m) => $this->toEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function findAll(): array
     {
-        $models = BlueprintModel::with(['states', 'transitions', 'slas'])->get();
+        $rows = DB::table(self::TABLE)->get();
 
-        return $models->map(fn($m) => $this->toEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntityWithRelations($row))->all();
     }
 
     public function save(Blueprint $blueprint): Blueprint
     {
-        $model = $blueprint->getId()
-            ? BlueprintModel::find($blueprint->getId())
-            : new BlueprintModel();
+        $data = $this->toRowData($blueprint);
 
-        $model->fill([
-            'name' => $blueprint->getName(),
-            'module_id' => $blueprint->getModuleId(),
-            'field_id' => $blueprint->getFieldId(),
-            'description' => $blueprint->getDescription(),
-            'is_active' => $blueprint->isActive(),
-            'layout_data' => $blueprint->getLayoutData(),
-        ]);
+        if ($blueprint->getId() !== null) {
+            DB::table(self::TABLE)
+                ->where('id', $blueprint->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $blueprint->getId();
+        } else {
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
+        }
 
-        $model->save();
-
-        // Reload with relationships
-        $model->load(['states', 'transitions', 'slas']);
-
-        return $this->toEntity($model);
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        return BlueprintModel::destroy($id) > 0;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
-    private function toEntity(BlueprintModel $model): Blueprint
+    private function toDomainEntityWithRelations(stdClass $row): Blueprint
     {
         $blueprint = Blueprint::reconstitute(
-            id: $model->id,
-            name: $model->name,
-            moduleId: $model->module_id,
-            fieldId: $model->field_id,
-            description: $model->description,
-            isActive: $model->is_active,
-            layoutData: $model->layout_data ?? [],
-            createdAt: new \DateTimeImmutable($model->created_at),
-            updatedAt: $model->updated_at ? new \DateTimeImmutable($model->updated_at) : null,
+            id: (int) $row->id,
+            name: $row->name,
+            moduleId: (int) $row->module_id,
+            fieldId: $row->field_id ? (int) $row->field_id : null,
+            description: $row->description,
+            isActive: (bool) $row->is_active,
+            layoutData: $row->layout_data ? (is_string($row->layout_data) ? json_decode($row->layout_data, true) : $row->layout_data) : [],
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
         );
 
-        // Map states
-        $states = $model->states->map(fn($s) => BlueprintState::reconstitute(
-            id: $s->id,
-            blueprintId: $s->blueprint_id,
+        // Load states
+        $stateRows = DB::table(self::TABLE_STATES)
+            ->where('blueprint_id', $row->id)
+            ->get();
+
+        $states = $stateRows->map(fn($s) => BlueprintState::reconstitute(
+            id: (int) $s->id,
+            blueprintId: (int) $s->blueprint_id,
             name: $s->name,
             fieldOptionValue: $s->field_option_value,
             color: $s->color,
-            isInitial: $s->is_initial,
-            isTerminal: $s->is_terminal,
-            positionX: $s->position_x ?? 0,
-            positionY: $s->position_y ?? 0,
-            metadata: $s->metadata ?? [],
-            createdAt: new \DateTimeImmutable($s->created_at),
-            updatedAt: $s->updated_at ? new \DateTimeImmutable($s->updated_at) : null,
+            isInitial: (bool) $s->is_initial,
+            isTerminal: (bool) $s->is_terminal,
+            positionX: (int) ($s->position_x ?? 0),
+            positionY: (int) ($s->position_y ?? 0),
+            metadata: $s->metadata ? (is_string($s->metadata) ? json_decode($s->metadata, true) : $s->metadata) : [],
+            createdAt: new DateTimeImmutable($s->created_at),
+            updatedAt: $s->updated_at ? new DateTimeImmutable($s->updated_at) : null,
         ))->all();
         $blueprint->setStates($states);
 
-        // Map transitions
-        $transitions = $model->transitions->map(fn($t) => $this->toTransitionEntity($t))->all();
+        // Load transitions with their relations
+        $transitionRows = DB::table(self::TABLE_TRANSITIONS)
+            ->where('blueprint_id', $row->id)
+            ->orderBy('display_order')
+            ->get();
+
+        $transitions = $transitionRows->map(fn($t) => $this->toTransitionEntity($t))->all();
         $blueprint->setTransitions($transitions);
 
-        // Map SLAs
-        $slas = $model->slas->map(fn($s) => BlueprintSla::reconstitute(
-            id: $s->id,
-            blueprintId: $s->blueprint_id,
-            stateId: $s->state_id,
+        // Load SLAs
+        $slaRows = DB::table(self::TABLE_SLAS)
+            ->where('blueprint_id', $row->id)
+            ->get();
+
+        $slas = $slaRows->map(fn($s) => BlueprintSla::reconstitute(
+            id: (int) $s->id,
+            blueprintId: (int) $s->blueprint_id,
+            stateId: $s->state_id ? (int) $s->state_id : null,
             name: $s->name,
-            durationHours: $s->duration_hours,
-            warningHours: $s->warning_hours ?? 0,
-            businessHoursOnly: $s->business_hours_only ?? false,
-            escalationConfig: $s->escalation_config ?? [],
-            isActive: $s->is_active ?? true,
-            createdAt: new \DateTimeImmutable($s->created_at),
-            updatedAt: $s->updated_at ? new \DateTimeImmutable($s->updated_at) : null,
+            durationHours: (int) $s->duration_hours,
+            warningHours: (int) ($s->warning_hours ?? 0),
+            businessHoursOnly: (bool) ($s->business_hours_only ?? false),
+            escalationConfig: $s->escalation_config ? (is_string($s->escalation_config) ? json_decode($s->escalation_config, true) : $s->escalation_config) : [],
+            isActive: (bool) ($s->is_active ?? true),
+            createdAt: new DateTimeImmutable($s->created_at),
+            updatedAt: $s->updated_at ? new DateTimeImmutable($s->updated_at) : null,
         ))->all();
         $blueprint->setSlas($slas);
 
         return $blueprint;
     }
 
-    private function toTransitionEntity($model): BlueprintTransition
+    private function toTransitionEntity(stdClass $row): BlueprintTransition
     {
         $transition = BlueprintTransition::reconstitute(
-            id: $model->id,
-            blueprintId: $model->blueprint_id,
-            fromStateId: $model->from_state_id,
-            toStateId: $model->to_state_id,
-            name: $model->name,
-            description: $model->description,
-            buttonLabel: $model->button_label,
-            displayOrder: $model->display_order ?? 0,
-            isActive: $model->is_active ?? true,
-            createdAt: new \DateTimeImmutable($model->created_at),
-            updatedAt: $model->updated_at ? new \DateTimeImmutable($model->updated_at) : null,
+            id: (int) $row->id,
+            blueprintId: (int) $row->blueprint_id,
+            fromStateId: $row->from_state_id ? (int) $row->from_state_id : null,
+            toStateId: $row->to_state_id ? (int) $row->to_state_id : null,
+            name: $row->name,
+            description: $row->description,
+            buttonLabel: $row->button_label,
+            displayOrder: (int) ($row->display_order ?? 0),
+            isActive: (bool) ($row->is_active ?? true),
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
         );
 
-        // Load conditions from relationship if exists
-        if ($model->relationLoaded('conditions')) {
-            $conditions = $model->conditions->map(fn($c) => [
+        // Load conditions
+        $conditions = DB::table(self::TABLE_TRANSITION_CONDITIONS)
+            ->where('transition_id', $row->id)
+            ->get()
+            ->map(fn($c) => [
                 'field_id' => $c->field_id,
                 'operator' => $c->operator,
                 'value' => $c->value,
-            ])->all();
-            $transition->setConditions($conditions);
-        }
+            ])
+            ->all();
+        $transition->setConditions($conditions);
 
-        // Load requirements from relationship if exists
-        if ($model->relationLoaded('requirements')) {
-            $requirements = $model->requirements->map(fn($r) => [
+        // Load requirements
+        $requirements = DB::table(self::TABLE_TRANSITION_REQUIREMENTS)
+            ->where('transition_id', $row->id)
+            ->get()
+            ->map(fn($r) => [
                 'type' => $r->type,
                 'field_id' => $r->field_id,
-                'is_required' => $r->is_required,
-                'config' => $r->config,
-            ])->all();
-            $transition->setRequirements($requirements);
-        }
+                'is_required' => (bool) $r->is_required,
+                'config' => $r->config ? (is_string($r->config) ? json_decode($r->config, true) : $r->config) : [],
+            ])
+            ->all();
+        $transition->setRequirements($requirements);
 
-        // Load actions from relationship if exists
-        if ($model->relationLoaded('actions')) {
-            $actions = $model->actions->map(fn($a) => [
+        // Load actions
+        $actions = DB::table(self::TABLE_TRANSITION_ACTIONS)
+            ->where('transition_id', $row->id)
+            ->get()
+            ->map(fn($a) => [
                 'type' => $a->action_type,
-                'config' => $a->action_config,
-            ])->all();
-            $transition->setActions($actions);
-        }
+                'config' => $a->action_config ? (is_string($a->action_config) ? json_decode($a->action_config, true) : $a->action_config) : [],
+            ])
+            ->all();
+        $transition->setActions($actions);
 
-        // Load approval config if exists
-        if ($model->relationLoaded('approval') && $model->approval) {
+        // Load approval config
+        $approval = DB::table(self::TABLE_TRANSITION_APPROVALS)
+            ->where('transition_id', $row->id)
+            ->first();
+
+        if ($approval) {
             $transition->setApprovalConfig([
-                'type' => $model->approval->approval_type,
-                'approvers' => $model->approval->approvers,
-                'config' => $model->approval->config,
+                'type' => $approval->approval_type,
+                'approvers' => $approval->approvers ? (is_string($approval->approvers) ? json_decode($approval->approvers, true) : $approval->approvers) : [],
+                'config' => $approval->config ? (is_string($approval->config) ? json_decode($approval->config, true) : $approval->config) : [],
             ]);
         }
 
         return $transition;
+    }
+
+    private function toRowData(Blueprint $blueprint): array
+    {
+        return [
+            'name' => $blueprint->getName(),
+            'module_id' => $blueprint->getModuleId(),
+            'field_id' => $blueprint->getFieldId(),
+            'description' => $blueprint->getDescription(),
+            'is_active' => $blueprint->isActive(),
+            'layout_data' => json_encode($blueprint->getLayoutData()),
+        ];
     }
 }

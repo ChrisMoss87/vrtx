@@ -9,15 +9,19 @@ use App\Domain\Forecasting\Repositories\ForecastSnapshotRepositoryInterface;
 use App\Domain\Forecasting\ValueObjects\ForecastPeriod;
 use App\Domain\Shared\ValueObjects\Timestamp;
 use App\Domain\Shared\ValueObjects\UserId;
-use App\Models\ForecastSnapshot as ForecastSnapshotModel;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class EloquentForecastSnapshotRepository implements ForecastSnapshotRepositoryInterface
 {
+    private const TABLE = 'forecast_snapshots';
+
     public function findById(int $id): ?ForecastSnapshot
     {
-        $model = ForecastSnapshotModel::find($id);
-        return $model ? $this->toDomainEntity($model) : null;
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
+
+        return $row ? $this->toDomainEntity($row) : null;
     }
 
     public function findByPipelineAndDate(
@@ -26,7 +30,8 @@ class EloquentForecastSnapshotRepository implements ForecastSnapshotRepositoryIn
         DateTimeImmutable $snapshotDate,
         ?int $userId = null
     ): ?ForecastSnapshot {
-        $query = ForecastSnapshotModel::where('pipeline_id', $pipelineId)
+        $query = DB::table(self::TABLE)
+            ->where('pipeline_id', $pipelineId)
             ->where('period_type', $period->type())
             ->where('period_start', $period->start()->format('Y-m-d'))
             ->where('snapshot_date', $snapshotDate->format('Y-m-d'));
@@ -35,8 +40,9 @@ class EloquentForecastSnapshotRepository implements ForecastSnapshotRepositoryIn
             $query->where('user_id', $userId);
         }
 
-        $model = $query->first();
-        return $model ? $this->toDomainEntity($model) : null;
+        $row = $query->first();
+
+        return $row ? $this->toDomainEntity($row) : null;
     }
 
     public function findLatestByPipeline(
@@ -44,17 +50,19 @@ class EloquentForecastSnapshotRepository implements ForecastSnapshotRepositoryIn
         ForecastPeriod $period,
         ?int $userId = null
     ): ?ForecastSnapshot {
-        $query = ForecastSnapshotModel::where('pipeline_id', $pipelineId)
+        $query = DB::table(self::TABLE)
+            ->where('pipeline_id', $pipelineId)
             ->where('period_type', $period->type())
             ->where('period_start', $period->start()->format('Y-m-d'))
-            ->orderBy('snapshot_date', 'desc');
+            ->orderByDesc('snapshot_date');
 
         if ($userId !== null) {
             $query->where('user_id', $userId);
         }
 
-        $model = $query->first();
-        return $model ? $this->toDomainEntity($model) : null;
+        $row = $query->first();
+
+        return $row ? $this->toDomainEntity($row) : null;
     }
 
     public function findHistoryByPipeline(
@@ -63,16 +71,19 @@ class EloquentForecastSnapshotRepository implements ForecastSnapshotRepositoryIn
         ?int $userId = null,
         int $limit = 12
     ): array {
-        $query = ForecastSnapshotModel::where('pipeline_id', $pipelineId)
+        $query = DB::table(self::TABLE)
+            ->where('pipeline_id', $pipelineId)
             ->where('period_type', $periodType)
-            ->orderBy('snapshot_date', 'desc')
+            ->orderByDesc('snapshot_date')
             ->limit($limit);
 
         if ($userId !== null) {
             $query->where('user_id', $userId);
         }
 
-        return $query->get()->map(fn($m) => $this->toDomainEntity($m))->all();
+        $rows = $query->get();
+
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findByPeriod(
@@ -80,69 +91,79 @@ class EloquentForecastSnapshotRepository implements ForecastSnapshotRepositoryIn
         ForecastPeriod $period,
         ?int $userId = null
     ): array {
-        $query = ForecastSnapshotModel::where('pipeline_id', $pipelineId)
+        $query = DB::table(self::TABLE)
+            ->where('pipeline_id', $pipelineId)
             ->where('period_type', $period->type())
             ->where('period_start', $period->start()->format('Y-m-d'))
-            ->orderBy('snapshot_date', 'desc');
+            ->orderByDesc('snapshot_date');
 
         if ($userId !== null) {
             $query->where('user_id', $userId);
         }
 
-        return $query->get()->map(fn($m) => $this->toDomainEntity($m))->all();
+        $rows = $query->get();
+
+        return $rows->map(fn ($row) => $this->toDomainEntity($row))->all();
     }
 
     public function save(ForecastSnapshot $snapshot): ForecastSnapshot
     {
-        $data = $this->toModelData($snapshot);
+        $data = $this->toRowData($snapshot);
 
         if ($snapshot->getId() !== null) {
-            $model = ForecastSnapshotModel::findOrFail($snapshot->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $snapshot->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $snapshot->getId();
         } else {
-            $model = ForecastSnapshotModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomainEntity($model->fresh());
+        return $this->findById($id);
     }
 
     public function deleteOlderThan(DateTimeImmutable $date): int
     {
-        return ForecastSnapshotModel::where('snapshot_date', '<', $date->format('Y-m-d'))
+        return DB::table(self::TABLE)
+            ->where('snapshot_date', '<', $date->format('Y-m-d'))
             ->delete();
     }
 
     public function delete(int $id): bool
     {
-        $model = ForecastSnapshotModel::find($id);
-        return $model ? ($model->delete() ?? false) : false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
-    private function toDomainEntity(ForecastSnapshotModel $model): ForecastSnapshot
+    private function toDomainEntity(stdClass $row): ForecastSnapshot
     {
         return ForecastSnapshot::reconstitute(
-            id: $model->id,
-            userId: $model->user_id ? UserId::fromInt($model->user_id) : null,
-            pipelineId: $model->pipeline_id,
+            id: (int) $row->id,
+            userId: $row->user_id ? UserId::fromInt((int) $row->user_id) : null,
+            pipelineId: (int) $row->pipeline_id,
             period: ForecastPeriod::create(
-                $model->period_type,
-                new DateTimeImmutable($model->period_start->toDateString()),
-                new DateTimeImmutable($model->period_end->toDateString())
+                $row->period_type,
+                new DateTimeImmutable($row->period_start),
+                new DateTimeImmutable($row->period_end)
             ),
-            snapshotDate: new DateTimeImmutable($model->snapshot_date->toDateString()),
-            commitAmount: (float) $model->commit_amount,
-            bestCaseAmount: (float) $model->best_case_amount,
-            pipelineAmount: (float) $model->pipeline_amount,
-            weightedAmount: (float) $model->weighted_amount,
-            closedWonAmount: (float) $model->closed_won_amount,
-            dealCount: $model->deal_count ?? 0,
-            metadata: $model->metadata ?? [],
-            createdAt: $model->created_at ? Timestamp::fromDateTime($model->created_at) : null,
-            updatedAt: $model->updated_at ? Timestamp::fromDateTime($model->updated_at) : null,
+            snapshotDate: new DateTimeImmutable($row->snapshot_date),
+            commitAmount: (float) $row->commit_amount,
+            bestCaseAmount: (float) $row->best_case_amount,
+            pipelineAmount: (float) $row->pipeline_amount,
+            weightedAmount: (float) $row->weighted_amount,
+            closedWonAmount: (float) $row->closed_won_amount,
+            dealCount: (int) ($row->deal_count ?? 0),
+            metadata: $row->metadata ? (is_string($row->metadata) ? json_decode($row->metadata, true) : $row->metadata) : [],
+            createdAt: $row->created_at ? Timestamp::fromString($row->created_at) : null,
+            updatedAt: $row->updated_at ? Timestamp::fromString($row->updated_at) : null,
         );
     }
 
-    private function toModelData(ForecastSnapshot $snapshot): array
+    private function toRowData(ForecastSnapshot $snapshot): array
     {
         return [
             'user_id' => $snapshot->userId()?->value(),
@@ -157,7 +178,7 @@ class EloquentForecastSnapshotRepository implements ForecastSnapshotRepositoryIn
             'weighted_amount' => $snapshot->weightedAmount(),
             'closed_won_amount' => $snapshot->closedWonAmount(),
             'deal_count' => $snapshot->dealCount(),
-            'metadata' => $snapshot->metadata(),
+            'metadata' => json_encode($snapshot->metadata()),
         ];
     }
 }

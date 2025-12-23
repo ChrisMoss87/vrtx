@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Email\EmailAccountController;
 use App\Http\Controllers\Api\Email\EmailMessageController;
+use App\Http\Controllers\Api\Email\EmailOAuthController;
 use App\Http\Controllers\Api\Email\EmailTemplateController;
 use App\Http\Controllers\Api\Email\EmailTrackingController;
 use App\Http\Controllers\Api\FileUploadController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Api\WizardDraftController;
 use App\Http\Controllers\Api\Workflows\WorkflowController;
 use App\Http\Controllers\Api\Workflow\WorkflowEmailTemplateController;
 use App\Http\Controllers\Api\Reporting\ReportController;
+use App\Http\Controllers\Api\Reporting\ReportTemplateController;
 use App\Http\Controllers\Api\Reporting\DashboardController;
 use App\Http\Controllers\Api\Reporting\DashboardTemplateController;
 use App\Http\Controllers\Api\Reporting\AdvancedReportController;
@@ -86,6 +88,7 @@ use App\Http\Controllers\Api\CMS\CmsCategoryController;
 use App\Http\Controllers\Api\CMS\CmsMenuController;
 use App\Http\Controllers\Api\CMS\CmsTagController;
 use App\Http\Controllers\Api\CMS\CmsPublicController;
+use App\Http\Controllers\Api\Integration\IntegrationController;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
@@ -439,6 +442,37 @@ Route::middleware([
             Route::get('/{emailAccount}/folders', [EmailAccountController::class, 'folders']);
         });
 
+        // Email OAuth Routes
+        Route::prefix('email/oauth')->group(function () {
+            Route::get('/providers', [EmailOAuthController::class, 'providers']);
+            Route::get('/{provider}/authorize', [EmailOAuthController::class, 'getAuthorizationUrl']);
+            Route::post('/{emailAccount}/reconnect', [EmailOAuthController::class, 'reconnect']);
+            Route::post('/{emailAccount}/disconnect', [EmailOAuthController::class, 'disconnect']);
+            Route::get('/{emailAccount}/status', [EmailOAuthController::class, 'status']);
+        });
+
+        // Unified Inbox Routes (Omnichannel Communication)
+        Route::prefix('inbox')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'index']);
+            Route::get('/stats', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'stats']);
+            Route::get('/count-by-status', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'countByStatus']);
+            Route::get('/channels', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'channels']);
+            Route::post('/sync', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'sync']);
+            Route::get('/record/{module}/{recordId}', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'forRecord']);
+
+            Route::get('/{id}', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'show']);
+            Route::post('/{id}/reply', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'reply']);
+            Route::post('/{id}/assign', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'assign']);
+            Route::post('/{id}/unassign', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'unassign']);
+            Route::post('/{id}/resolve', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'resolve']);
+            Route::post('/{id}/close', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'close']);
+            Route::post('/{id}/reopen', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'reopen']);
+            Route::post('/{id}/link', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'link']);
+            Route::post('/{id}/unlink', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'unlink']);
+            Route::post('/{id}/tag', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'addTag']);
+            Route::delete('/{id}/tag', [\App\Http\Controllers\Api\Communication\UnifiedInboxController::class, 'removeTag']);
+        });
+
         // Email Message Routes
         Route::prefix('emails')->group(function () {
             Route::get('/', [EmailMessageController::class, 'index']);
@@ -534,6 +568,12 @@ Route::middleware([
             Route::middleware('permission:reports.edit')->group(function () {
                 Route::put('/{report}', [ReportController::class, 'update']);
                 Route::post('/{report}/toggle-favorite', [ReportController::class, 'toggleFavorite']);
+                Route::get('/{report}/schedule', [ReportController::class, 'getSchedule']);
+                Route::put('/{report}/schedule', [ReportController::class, 'updateSchedule']);
+                // Sharing
+                Route::get('/{report}/shares', [ReportController::class, 'getShares']);
+                Route::post('/{report}/share', [ReportController::class, 'share']);
+                Route::delete('/{report}/share', [ReportController::class, 'unshare']);
             });
 
             // Delete operations
@@ -547,6 +587,27 @@ Route::middleware([
                 Route::post('/cohort', [AdvancedReportController::class, 'cohort']);
                 Route::post('/validate-formula', [AdvancedReportController::class, 'validateFormula']);
             });
+        });
+
+        // Report Templates
+        Route::prefix('report-templates')->group(function () {
+            Route::middleware('permission:reports.view')->group(function () {
+                Route::get('/', [ReportTemplateController::class, 'index']);
+                Route::get('/{reportTemplate}', [ReportTemplateController::class, 'show']);
+            });
+
+            Route::middleware('permission:reports.create')->group(function () {
+                Route::post('/', [ReportTemplateController::class, 'store']);
+                Route::post('/{reportTemplate}/apply', [ReportTemplateController::class, 'apply']);
+                Route::post('/from-report/{report}', [ReportTemplateController::class, 'createFromReport']);
+            });
+
+            Route::middleware('permission:reports.edit')->group(function () {
+                Route::put('/{reportTemplate}', [ReportTemplateController::class, 'update']);
+            });
+
+            Route::delete('/{reportTemplate}', [ReportTemplateController::class, 'destroy'])
+                ->middleware('permission:reports.delete');
         });
 
         // Dashboard Routes
@@ -2041,6 +2102,33 @@ Route::middleware([
             Route::delete('/bundles/{slug}', [BundleController::class, 'deactivate']);
         });
 
+        // Third-Party Integration Routes
+        Route::prefix('integrations')->group(function () {
+            // List all available integrations
+            Route::get('/', [IntegrationController::class, 'index']);
+            Route::get('/stats', [IntegrationController::class, 'stats']);
+            Route::get('/category/{category}', [IntegrationController::class, 'byCategory']);
+
+            // OAuth callback (must be accessible)
+            Route::get('/oauth/callback', [IntegrationController::class, 'callback']);
+
+            // Individual integration operations
+            Route::get('/{slug}', [IntegrationController::class, 'show']);
+            Route::post('/{slug}/authorize', [IntegrationController::class, 'getAuthorizationUrl']);
+            Route::post('/{slug}/connect', [IntegrationController::class, 'connectApiKey']);
+            Route::delete('/{slug}/disconnect', [IntegrationController::class, 'disconnect']);
+            Route::post('/{slug}/refresh-token', [IntegrationController::class, 'refreshToken']);
+            Route::put('/{slug}/settings', [IntegrationController::class, 'updateSettings']);
+
+            // Sync operations
+            Route::get('/{slug}/sync-logs', [IntegrationController::class, 'syncLogs']);
+            Route::post('/{slug}/sync', [IntegrationController::class, 'triggerSync']);
+
+            // Field mappings
+            Route::get('/{slug}/field-mappings', [IntegrationController::class, 'fieldMappings']);
+            Route::put('/{slug}/field-mappings', [IntegrationController::class, 'saveFieldMappings']);
+        });
+
         // Support Ticketing Routes
         Route::prefix('support')->group(function () {
             // Ticket Categories
@@ -2333,6 +2421,18 @@ Route::middleware([
         Route::post('/plivo/dlr', [\App\Http\Controllers\Api\Sms\SmsWebhookController::class, 'plivoDeliveryReport']);
     });
 
+    // QuickBooks Webhook Routes (no auth required - uses signature verification)
+    Route::prefix('integrations/quickbooks/webhook')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\Integration\Webhooks\QuickBooksWebhookController::class, 'verify']);
+        Route::post('/', [\App\Http\Controllers\Api\Integration\Webhooks\QuickBooksWebhookController::class, 'handle']);
+    });
+
+    // Xero Webhook Routes (no auth required - uses signature verification)
+    Route::prefix('integrations/xero/webhook')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\Integration\Webhooks\XeroWebhookController::class, 'verify']);
+        Route::post('/', [\App\Http\Controllers\Api\Integration\Webhooks\XeroWebhookController::class, 'handle']);
+    });
+
     // Public Live Chat Widget Routes (no auth required, rate limited)
     Route::prefix('chat-widget')->middleware('throttle:public-forms')->group(function () {
         // Get widget config
@@ -2370,6 +2470,9 @@ Route::middleware([
 
     // Video OAuth Callback (no auth required)
     Route::get('/video/oauth/callback', [\App\Http\Controllers\Api\Video\VideoWebhookController::class, 'oauthCallback'])->name('api.video.oauth.callback');
+
+    // Email OAuth Callback (no auth required - state contains user context)
+    Route::get('/email/oauth/callback', [EmailOAuthController::class, 'callback'])->name('api.email.oauth.callback');
 
     // Customer Portal Public Routes (no internal auth required)
     Route::prefix('portal')->group(function () {

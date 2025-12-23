@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Workflow\Services;
 
+use App\Domain\Shared\Contracts\EventDispatcherInterface;
+use App\Domain\Shared\Contracts\LoggerInterface;
 use App\Domain\Workflow\Entities\Workflow;
 use App\Domain\Workflow\Entities\WorkflowExecution;
 use App\Domain\Workflow\Entities\WorkflowStep;
@@ -15,8 +17,6 @@ use App\Domain\Workflow\Events\WorkflowFailed;
 use App\Domain\Workflow\Repositories\WorkflowExecutionRepositoryInterface;
 use App\Domain\Workflow\Repositories\WorkflowRepositoryInterface;
 use App\Domain\Workflow\ValueObjects\ExecutionStatus;
-use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Domain service for executing workflows.
@@ -31,6 +31,8 @@ class WorkflowExecutionService
         private readonly WorkflowExecutionRepositoryInterface $executionRepository,
         private readonly ConditionEvaluationService $conditionEvaluator,
         private readonly ActionDispatcherService $actionDispatcher,
+        private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly LoggerInterface $logger,
     ) {}
 
     /**
@@ -90,7 +92,7 @@ class WorkflowExecutionService
             return true;
 
         } catch (\Exception $e) {
-            Log::error('Workflow execution failed', [
+            $this->logger->error('Workflow execution failed', [
                 'execution_id' => $execution->getId(),
                 'workflow_id' => $workflow->getId(),
                 'error' => $e->getMessage(),
@@ -144,7 +146,7 @@ class WorkflowExecutionService
             $this->executionRepository->save($execution);
 
             // Dispatch event
-            Event::dispatch(new StepExecuted(
+            $this->eventDispatcher->dispatch(new StepExecuted(
                 workflowId: $execution->workflowId(),
                 executionId: $execution->getId() ?? 0,
                 stepId: $step->getId() ?? 0,
@@ -164,7 +166,7 @@ class WorkflowExecutionService
             $this->executionRepository->save($execution);
 
             // Dispatch event
-            Event::dispatch(new StepFailed(
+            $this->eventDispatcher->dispatch(new StepFailed(
                 workflowId: $execution->workflowId(),
                 executionId: $execution->getId() ?? 0,
                 stepId: $step->getId() ?? 0,
@@ -249,7 +251,7 @@ class WorkflowExecutionService
 
         // Note: The actual retry scheduling should be handled by infrastructure
         // This would typically dispatch a job with the delay
-        Log::info('Step scheduled for retry', [
+        $this->logger->info('Step scheduled for retry', [
             'step_id' => $step->getId(),
             'attempt' => $retryLog->attemptNumber(),
             'delay_seconds' => $step->retryDelaySeconds(),
@@ -269,7 +271,7 @@ class WorkflowExecutionService
         $this->workflowRepository->save($workflow);
 
         // Dispatch event
-        Event::dispatch(new WorkflowCompleted(
+        $this->eventDispatcher->dispatch(new WorkflowCompleted(
             workflowId: $workflow->getId() ?? 0,
             executionId: $execution->getId() ?? 0,
             stepsCompleted: $execution->stepsCompleted(),
@@ -294,7 +296,7 @@ class WorkflowExecutionService
         }
 
         // Dispatch event
-        Event::dispatch(new WorkflowFailed(
+        $this->eventDispatcher->dispatch(new WorkflowFailed(
             workflowId: $execution->workflowId(),
             executionId: $execution->getId() ?? 0,
             errorMessage: $errorMessage,

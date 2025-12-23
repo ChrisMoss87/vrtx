@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Modules\Entities;
 
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class ModuleRecord
+final class ModuleRecord implements Entity
 {
     public function __construct(
         private ?int $id,
@@ -68,11 +69,27 @@ final class ModuleRecord
         return $this->data[$fieldName] ?? null;
     }
 
-    // Getters
-    public function id(): ?int
+    // ========== Entity Interface ==========
+
+    public function getId(): ?int
     {
         return $this->id;
     }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->getId() === null) {
+            return false;
+        }
+
+        return $this->id === $other->getId();
+    }
+
+    // ========== Getters ==========
 
     public function moduleId(): int
     {

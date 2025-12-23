@@ -25,8 +25,10 @@ class ReportPolicy
      */
     public function view(User $user, Report $report): bool
     {
-        // Users can view their own reports or public reports
-        return $report->user_id === $user->id || $report->is_public;
+        // Users can view their own reports, public reports, or reports shared with them
+        return $report->user_id === $user->id
+            || $report->is_public
+            || $report->isSharedWith($user->id);
     }
 
     /**
@@ -42,8 +44,9 @@ class ReportPolicy
      */
     public function update(User $user, Report $report): bool
     {
-        // Only the owner can update a report
-        return $report->user_id === $user->id;
+        // Owner or users with edit permission can update
+        return $report->user_id === $user->id
+            || $report->canUserEdit($user->id);
     }
 
     /**

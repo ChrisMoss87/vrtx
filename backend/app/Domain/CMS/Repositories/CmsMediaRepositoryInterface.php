@@ -6,10 +6,13 @@ namespace App\Domain\CMS\Repositories;
 
 use App\Domain\CMS\Entities\CmsMedia;
 use App\Domain\CMS\ValueObjects\MediaType;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 
 interface CmsMediaRepositoryInterface
 {
     public function findById(int $id): ?CmsMedia;
+
+    public function findByIdAsArray(int $id): ?array;
 
     public function findByFolder(?int $folderId): array;
 
@@ -19,7 +22,7 @@ interface CmsMediaRepositoryInterface
 
     public function search(string $query, ?MediaType $type = null): array;
 
-    public function paginate(int $page, int $perPage, ?int $folderId = null, ?MediaType $type = null): array;
+    public function paginate(array $filters = [], int $perPage = 25, int $page = 1): PaginatedResult;
 
     public function findByIds(array $ids): array;
 

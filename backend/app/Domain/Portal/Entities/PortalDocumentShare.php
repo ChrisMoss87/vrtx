@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Portal\Entities;
 
-
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class PortalDocumentShare
+final class PortalDocumentShare implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -39,4 +39,12 @@ final class PortalDocumentShare
     public function getId(): ?int { return $this->id; }
     public function getCreatedAt(): ?DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?DateTimeImmutable { return $this->updatedAt; }
+
+    public function equals(Entity $other): bool
+    {
+        return $other instanceof self
+            && $this->id !== null
+            && $other->id !== null
+            && $this->id === $other->id;
+    }
 }

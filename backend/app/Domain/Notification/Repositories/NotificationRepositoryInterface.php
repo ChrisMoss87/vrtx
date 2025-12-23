@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Notification\Repositories;
 
 use App\Domain\Notification\Entities\Notification;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 
 /**
  * Repository interface for Notification aggregate root.
@@ -17,9 +18,19 @@ interface NotificationRepositoryInterface
     public function findById(int $id): ?Notification;
 
     /**
+     * Find a notification by ID as array.
+     */
+    public function findByIdAsArray(int $id): ?array;
+
+    /**
      * Find a notification by ID for a specific user.
      */
     public function findByIdForUser(int $id, int $userId): ?Notification;
+
+    /**
+     * Find a notification by ID for a specific user as array.
+     */
+    public function findByIdForUserAsArray(int $id, int $userId): ?array;
 
     /**
      * Get notifications for a user with filtering options.
@@ -35,6 +46,30 @@ interface NotificationRepositoryInterface
     ): array;
 
     /**
+     * Get notifications for a user as arrays.
+     *
+     * @return array<array>
+     */
+    public function getForUserAsArrays(
+        int $userId,
+        ?string $category = null,
+        bool $unreadOnly = false,
+        int $limit = 50,
+        int $offset = 0
+    ): array;
+
+    /**
+     * Get paginated notifications for a user.
+     */
+    public function getPaginatedForUser(
+        int $userId,
+        ?string $category = null,
+        bool $unreadOnly = false,
+        int $perPage = 25,
+        int $page = 1
+    ): PaginatedResult;
+
+    /**
      * Get unread notification count for a user.
      */
     public function getUnreadCount(int $userId, ?string $category = null): int;
@@ -43,6 +78,11 @@ interface NotificationRepositoryInterface
      * Save a notification (create or update).
      */
     public function save(Notification $notification): Notification;
+
+    /**
+     * Create a notification and return as array.
+     */
+    public function create(array $data): array;
 
     /**
      * Mark a notification as read.

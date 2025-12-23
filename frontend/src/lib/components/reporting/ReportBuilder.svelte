@@ -26,7 +26,8 @@
 		Plus,
 		Trash2,
 		ArrowUpDown,
-		RefreshCw
+		RefreshCw,
+		FileText
 	} from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import { modulesApi } from '$lib/api/modules';
@@ -44,9 +45,12 @@
 		type CreateReportRequest,
 		type UpdateReportRequest
 	} from '$lib/api/reports';
+	import { type ReportTemplate } from '$lib/api/report-templates';
 	import type { FilterConfig } from '$lib/types/filters';
 	import ReportFilterBuilder from './ReportFilterBuilder.svelte';
 	import ReportPreview from './ReportPreview.svelte';
+	import TemplateSaveDialog from './TemplateSaveDialog.svelte';
+	import TemplateSelector from './TemplateSelector.svelte';
 
 	interface Props {
 		report?: Report;
@@ -79,6 +83,10 @@
 	let previewLoading = $state(false);
 	let previewResult = $state<ReportResult | null>(null);
 	let activeTab = $state('config');
+
+	// Template state
+	let showTemplateSelector = $state(false);
+	let showSaveTemplateDialog = $state(false);
 
 	onMount(async () => {
 		await loadInitialData();
@@ -130,6 +138,31 @@
 			aggregations = [];
 			sorting = [];
 		}
+	}
+
+	async function applyTemplate(template: ReportTemplate) {
+		// Set module and load fields first
+		if (template.module_id) {
+			moduleId = template.module_id;
+			await loadModuleFields();
+		}
+
+		// Apply template configuration
+		reportType = template.type;
+		chartType = template.chart_type || null;
+		filters = template.filters || [];
+		grouping = template.grouping || [];
+		aggregations = template.aggregations || [];
+		sorting = template.sorting || [];
+		dateRange = template.date_range || {};
+
+		// Optionally pre-fill name based on template
+		if (!name) {
+			name = `${template.name} Report`;
+		}
+
+		toast.success(`Applied template: ${template.name}`);
+		showTemplateSelector = false;
 	}
 
 	function addGrouping() {
@@ -258,6 +291,18 @@
 			</p>
 		</div>
 		<div class="flex items-center gap-2">
+			{#if !report?.id}
+				<Button variant="outline" onclick={() => (showTemplateSelector = true)}>
+					<FileText class="mr-2 h-4 w-4" />
+					Load Template
+				</Button>
+			{/if}
+			{#if report?.id}
+				<Button variant="outline" onclick={() => (showSaveTemplateDialog = true)}>
+					<FileText class="mr-2 h-4 w-4" />
+					Save as Template
+				</Button>
+			{/if}
 			<Button variant="outline" onclick={onCancel} disabled={loading}>
 				<X class="mr-2 h-4 w-4" />
 				Cancel
@@ -642,3 +687,18 @@
 		</div>
 	</Tabs.Root>
 </div>
+
+<!-- Template Dialogs -->
+<TemplateSelector
+	bind:open={showTemplateSelector}
+	moduleId={moduleId ?? undefined}
+	onSelect={applyTemplate}
+/>
+
+{#if report?.id}
+	<TemplateSaveDialog
+		reportId={report.id}
+		defaultName={report.name}
+		bind:open={showSaveTemplateDialog}
+	/>
+{/if}

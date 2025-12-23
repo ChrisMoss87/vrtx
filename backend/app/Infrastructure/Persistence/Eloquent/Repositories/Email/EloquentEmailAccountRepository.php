@@ -6,119 +6,121 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories\Email;
 
 use App\Domain\Email\Entities\EmailAccount;
 use App\Domain\Email\Repositories\EmailAccountRepositoryInterface;
-use App\Models\EmailAccount as EmailAccountModel;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class EloquentEmailAccountRepository implements EmailAccountRepositoryInterface
 {
+    private const TABLE = 'email_accounts';
+
     public function findById(int $id): ?EmailAccount
     {
-        $model = EmailAccountModel::find($id);
+        $row = DB::table(self::TABLE)->where('id', $id)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findByUserId(int $userId): array
     {
-        $models = EmailAccountModel::where('user_id', $userId)
-            ->orderBy('is_default', 'desc')
-            ->orderBy('created_at', 'asc')
+        $rows = DB::table(self::TABLE)
+            ->where('user_id', $userId)
+            ->orderByDesc('is_default')
+            ->orderBy('created_at')
             ->get();
 
-        return $models->map(fn($m) => $this->toDomainEntity($m))->all();
+        return $rows->map(fn($row) => $this->toDomainEntity($row))->all();
     }
 
     public function findDefaultForUser(int $userId): ?EmailAccount
     {
-        $model = EmailAccountModel::where('user_id', $userId)
+        $row = DB::table(self::TABLE)
+            ->where('user_id', $userId)
             ->where('is_default', true)
             ->where('is_active', true)
             ->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function findByEmail(string $email): ?EmailAccount
     {
-        $model = EmailAccountModel::where('email', $email)->first();
+        $row = DB::table(self::TABLE)->where('email', $email)->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomainEntity($model);
+        return $this->toDomainEntity($row);
     }
 
     public function save(EmailAccount $account): EmailAccount
     {
-        $data = $this->toModelData($account);
+        $data = $this->toRowData($account);
 
         if ($account->getId() !== null) {
-            $model = EmailAccountModel::findOrFail($account->getId());
-            $model->update($data);
+            DB::table(self::TABLE)
+                ->where('id', $account->getId())
+                ->update(array_merge($data, ['updated_at' => now()]));
+            $id = $account->getId();
         } else {
-            $model = EmailAccountModel::create($data);
+            $id = DB::table(self::TABLE)->insertGetId(
+                array_merge($data, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
 
-        return $this->toDomainEntity($model->fresh());
+        return $this->findById($id);
     }
 
     public function delete(int $id): bool
     {
-        $model = EmailAccountModel::find($id);
-
-        if (!$model) {
-            return false;
-        }
-
-        return $model->delete() ?? false;
+        return DB::table(self::TABLE)->where('id', $id)->delete() > 0;
     }
 
     /**
-     * Convert an Eloquent model to a domain entity.
+     * Convert a database row to a domain entity.
      */
-    private function toDomainEntity(EmailAccountModel $model): EmailAccount
+    private function toDomainEntity(stdClass $row): EmailAccount
     {
         return EmailAccount::reconstitute(
-            id: $model->id,
-            userId: $model->user_id,
-            email: $model->email,
-            name: $model->name,
-            provider: $model->provider,
-            settings: $model->settings ?? [],
-            isActive: $model->is_active,
-            isDefault: $model->is_default,
-            lastSyncedAt: $model->last_synced_at
-                ? new DateTimeImmutable($model->last_synced_at->toDateTimeString())
-                : null,
-            createdAt: new DateTimeImmutable($model->created_at->toDateTimeString()),
-            updatedAt: $model->updated_at
-                ? new DateTimeImmutable($model->updated_at->toDateTimeString())
-                : null,
+            id: (int) $row->id,
+            userId: (int) $row->user_id,
+            email: $row->email,
+            name: $row->name,
+            provider: $row->provider,
+            settings: $row->settings ? (is_string($row->settings) ? json_decode($row->settings, true) : $row->settings) : [],
+            isActive: (bool) $row->is_active,
+            isDefault: (bool) $row->is_default,
+            lastSyncedAt: $row->last_synced_at ? new DateTimeImmutable($row->last_synced_at) : null,
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: $row->updated_at ? new DateTimeImmutable($row->updated_at) : null,
         );
     }
 
     /**
-     * Convert a domain entity to model data.
+     * Convert a domain entity to row data.
      *
      * @return array<string, mixed>
      */
-    private function toModelData(EmailAccount $account): array
+    private function toRowData(EmailAccount $account): array
     {
         return [
             'user_id' => $account->getUserId(),
             'email' => $account->getEmail(),
             'name' => $account->getName(),
             'provider' => $account->getProvider(),
-            'settings' => $account->getSettings(),
+            'settings' => json_encode($account->getSettings()),
             'is_active' => $account->isActive(),
             'is_default' => $account->isDefault(),
             'last_synced_at' => $account->getLastSyncedAt()?->format('Y-m-d H:i:s'),

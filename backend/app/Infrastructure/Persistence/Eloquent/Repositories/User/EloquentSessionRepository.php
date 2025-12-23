@@ -5,15 +5,17 @@ declare(strict_types=1);
 namespace App\Infrastructure\Persistence\Eloquent\Repositories\User;
 
 use App\Domain\User\Repositories\SessionRepositoryInterface;
-use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class EloquentSessionRepository implements SessionRepositoryInterface
 {
+    private const TABLE = 'sessions';
+    private const TABLE_TOKENS = 'personal_access_tokens';
+
     public function getForUser(int $userId): Collection
     {
-        return DB::table('sessions')
+        return DB::table(self::TABLE)
             ->where('user_id', $userId)
             ->orderByDesc('last_activity')
             ->get()
@@ -27,7 +29,7 @@ class EloquentSessionRepository implements SessionRepositoryInterface
 
     public function revoke(int $userId, string $sessionId): bool
     {
-        return DB::table('sessions')
+        return DB::table(self::TABLE)
             ->where('user_id', $userId)
             ->where('id', $sessionId)
             ->delete() > 0;
@@ -35,19 +37,16 @@ class EloquentSessionRepository implements SessionRepositoryInterface
 
     public function revokeAll(int $userId): int
     {
-        return DB::table('sessions')
+        return DB::table(self::TABLE)
             ->where('user_id', $userId)
             ->delete();
     }
 
     public function revokeAllTokens(int $userId): int
     {
-        $user = User::find($userId);
-
-        if (!$user) {
-            return 0;
-        }
-
-        return $user->tokens()->delete();
+        return DB::table(self::TABLE_TOKENS)
+            ->where('tokenable_type', 'App\\Models\\User')
+            ->where('tokenable_id', $userId)
+            ->delete();
     }
 }

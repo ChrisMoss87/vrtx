@@ -4,11 +4,21 @@ declare(strict_types=1);
 
 namespace App\Observers;
 
+use App\Domain\Modules\Events\ModuleRecordCreated;
+use App\Domain\Modules\Events\ModuleRecordDeleted;
+use App\Domain\Modules\Events\ModuleRecordUpdated;
+use App\Domain\Shared\Contracts\EventDispatcherInterface;
 use App\Models\ModuleRecord;
-use App\Services\TimeMachine\SnapshotService;
-use App\Services\Workflow\WorkflowTriggerService;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
+/**
+ * Observer for ModuleRecord model.
+ *
+ * This observer acts as a bridge between Eloquent model events and domain events.
+ * It dispatches domain events which are handled by dedicated listeners for:
+ * - Creating snapshots (TimeMachine)
+ * - Triggering workflows
+ */
 class ModuleRecordObserver
 {
     /**
@@ -19,8 +29,7 @@ class ModuleRecordObserver
     protected static array $pendingOldData = [];
 
     public function __construct(
-        protected SnapshotService $snapshotService,
-        protected WorkflowTriggerService $workflowTriggerService,
+        protected EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
@@ -28,14 +37,12 @@ class ModuleRecordObserver
      */
     public function created(ModuleRecord $record): void
     {
-        $this->snapshotService->createInitialSnapshot($record);
-
-        // Trigger workflows for record creation
-        $this->triggerWorkflowsSafely(
-            fn() => $this->workflowTriggerService->onRecordCreated($record),
-            'created',
-            $record->id
-        );
+        $this->eventDispatcher->dispatch(new ModuleRecordCreated(
+            recordId: $record->id,
+            moduleId: $record->module_id,
+            data: $record->data ?? [],
+            createdBy: Auth::id(),
+        ));
     }
 
     /**
@@ -46,7 +53,7 @@ class ModuleRecordObserver
     {
         // Store the original data for comparison after update
         // Use a static array to avoid setting dynamic properties on the model
-        self::$pendingOldData[$record->id] = $record->getOriginal('data');
+        self::$pendingOldData[$record->id] = $record->getOriginal('data') ?? [];
     }
 
     /**
@@ -54,23 +61,20 @@ class ModuleRecordObserver
      */
     public function updated(ModuleRecord $record): void
     {
-        // Compare old and new data to create a snapshot
+        // Compare old and new data
         $oldData = self::$pendingOldData[$record->id] ?? [];
         $newData = $record->data ?? [];
 
         // Clean up the stored old data
         unset(self::$pendingOldData[$record->id]);
 
-        if (!empty($oldData) || !empty($newData)) {
-            $this->snapshotService->createChangeSnapshot($record, $oldData, $newData);
-        }
-
-        // Trigger workflows for record update
-        $this->triggerWorkflowsSafely(
-            fn() => $this->workflowTriggerService->onRecordUpdated($record, $oldData),
-            'updated',
-            $record->id
-        );
+        $this->eventDispatcher->dispatch(new ModuleRecordUpdated(
+            recordId: $record->id,
+            moduleId: $record->module_id,
+            oldData: $oldData,
+            newData: $newData,
+            updatedBy: Auth::id(),
+        ));
     }
 
     /**
@@ -78,30 +82,11 @@ class ModuleRecordObserver
      */
     public function deleted(ModuleRecord $record): void
     {
-        // Trigger workflows for record deletion
-        $this->triggerWorkflowsSafely(
-            fn() => $this->workflowTriggerService->onRecordDeleted($record),
-            'deleted',
-            $record->id
-        );
-    }
-
-    /**
-     * Safely trigger workflows, catching any exceptions to prevent
-     * workflow errors from breaking record operations.
-     */
-    protected function triggerWorkflowsSafely(callable $trigger, string $event, int $recordId): void
-    {
-        try {
-            $trigger();
-        } catch (\Throwable $e) {
-            // Log the error but don't let workflow failures break record operations
-            Log::error('Workflow trigger failed', [
-                'event' => $event,
-                'record_id' => $recordId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-        }
+        $this->eventDispatcher->dispatch(new ModuleRecordDeleted(
+            recordId: $record->id,
+            moduleId: $record->module_id,
+            data: $record->data ?? [],
+            deletedBy: Auth::id(),
+        ));
     }
 }

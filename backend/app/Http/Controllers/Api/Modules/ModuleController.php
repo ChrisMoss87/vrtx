@@ -8,7 +8,6 @@ use App\Domain\Modules\DTOs\CreateBlockDTO;
 use App\Domain\Modules\DTOs\CreateFieldDTO;
 use App\Domain\Modules\DTOs\CreateModuleDTO;
 use App\Domain\Modules\DTOs\UpdateModuleDTO;
-use App\Domain\Modules\Repositories\Interfaces\ModuleRepositoryInterface;
 use App\Http\Controllers\Controller;
 use App\Models\Module;
 use Illuminate\Http\JsonResponse;
@@ -18,9 +17,6 @@ use Illuminate\Support\Str;
 
 class ModuleController extends Controller
 {
-    public function __construct(
-        private readonly ModuleRepositoryInterface $moduleRepository
-    ) {}
 
     /**
      * Get all modules.
@@ -28,7 +24,9 @@ class ModuleController extends Controller
     public function index(): JsonResponse
     {
         try {
-            $modules = $this->moduleRepository->all();
+            $modules = Module::with(['blocks.fields.options', 'fields.options'])
+                ->orderBy('display_order')
+                ->get();
 
             return $this->listResponse($modules->toArray(), 'modules');
         } catch (\Exception $e) {
@@ -42,7 +40,10 @@ class ModuleController extends Controller
     public function active(): JsonResponse
     {
         try {
-            $modules = $this->moduleRepository->all(activeOnly: true);
+            $modules = Module::with(['blocks.fields.options', 'fields.options'])
+                ->where('is_active', true)
+                ->orderBy('display_order')
+                ->get();
 
             return $this->listResponse($modules->toArray(), 'modules');
         } catch (\Exception $e) {
@@ -120,7 +121,43 @@ class ModuleController extends Controller
             ];
 
             $dto = CreateModuleDTO::fromArray($moduleData);
-            $module = $this->moduleRepository->create($dto);
+
+            // Create module using Eloquent directly since we need to handle blocks/fields
+            $module = Module::create([
+                'name' => $dto->name,
+                'singular_name' => $dto->singularName,
+                'api_name' => Str::snake($dto->name),
+                'icon' => $dto->icon,
+                'description' => $dto->description,
+                'is_active' => $dto->isActive,
+                'settings' => $dto->settings,
+                'display_order' => $dto->displayOrder,
+            ]);
+
+            // Create blocks and fields
+            foreach ($dto->blocks as $blockIndex => $blockDto) {
+                $block = $module->blocks()->create([
+                    'name' => $blockDto->name,
+                    'type' => $blockDto->type,
+                    'display_order' => $blockDto->displayOrder ?? $blockIndex,
+                    'settings' => $blockDto->settings ?? [],
+                ]);
+            }
+
+            // Create fields and associate with blocks
+            foreach ($dto->fields as $fieldDto) {
+                $block = $module->blocks()->where('name', $fieldDto->blockApiName)->first();
+                $module->fields()->create([
+                    'block_id' => $block?->id,
+                    'label' => $fieldDto->label,
+                    'api_name' => $fieldDto->apiName,
+                    'type' => $fieldDto->type,
+                    'is_required' => $fieldDto->isRequired,
+                    'display_order' => $fieldDto->displayOrder,
+                    'width' => $fieldDto->width ?? 100,
+                    'settings' => $fieldDto->settings ?? [],
+                ]);
+            }
 
             // Update default view settings if provided
             if (isset($validated['default_filters']) || isset($validated['default_sorting']) ||
@@ -159,7 +196,7 @@ class ModuleController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $module = $this->moduleRepository->findById($id);
+            $module = Module::with(['blocks.fields.options', 'fields.options'])->find($id);
 
             if (!$module) {
                 return response()->json([
@@ -170,7 +207,7 @@ class ModuleController extends Controller
 
             return response()->json([
                 'success' => true,
-                'module' => $module->load(['blocks.fields.options', 'fields.options']),
+                'module' => $module,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -514,14 +551,16 @@ class ModuleController extends Controller
     public function destroy(int $id): JsonResponse
     {
         try {
-            $deleted = $this->moduleRepository->delete($id);
+            $module = Module::find($id);
 
-            if (!$deleted) {
+            if (!$module) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Module not found',
                 ], Response::HTTP_NOT_FOUND);
             }
+
+            $module->delete();
 
             return response()->json([
                 'success' => true,
@@ -580,7 +619,7 @@ class ModuleController extends Controller
     public function toggleStatus(int $id): JsonResponse
     {
         try {
-            $module = $this->moduleRepository->findById($id);
+            $module = Module::find($id);
 
             if (!$module) {
                 return response()->json([

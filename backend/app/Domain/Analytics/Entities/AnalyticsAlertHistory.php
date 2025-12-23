@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Analytics\Entities;
 
 use App\Domain\Analytics\ValueObjects\AlertHistoryStatus;
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
-final class AnalyticsAlertHistory
+final class AnalyticsAlertHistory implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -165,5 +166,14 @@ final class AnalyticsAlertHistory
             'created_at' => $this->createdAt?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updatedAt?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        return $this->id !== null && $this->id === $other->id;
     }
 }

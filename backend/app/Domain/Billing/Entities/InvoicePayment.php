@@ -6,12 +6,13 @@ namespace App\Domain\Billing\Entities;
 
 use App\Domain\Billing\ValueObjects\Money;
 use App\Domain\Billing\ValueObjects\PaymentMethod;
+use App\Domain\Shared\Contracts\Entity;
 use DateTimeImmutable;
 
 /**
  * Invoice payment entity.
  */
-final class InvoicePayment
+final class InvoicePayment implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -116,5 +117,18 @@ final class InvoicePayment
     public function getCreatedAt(): ?DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->getId() === null) {
+            return false;
+        }
+
+        return $this->id === $other->getId();
     }
 }

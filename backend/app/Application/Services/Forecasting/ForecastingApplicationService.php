@@ -24,9 +24,10 @@ use App\Domain\Forecasting\Services\ForecastCalculatorService;
 use App\Domain\Forecasting\Services\SnapshotService;
 use App\Domain\Forecasting\ValueObjects\AdjustmentType;
 use App\Domain\Forecasting\ValueObjects\ForecastPeriod;
+use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
+use App\Domain\Pipeline\Repositories\PipelineRepositoryInterface;
+use App\Domain\Shared\Contracts\AuthContextInterface;
 use App\Domain\Shared\ValueObjects\UserId;
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -45,6 +46,9 @@ final class ForecastingApplicationService
         private readonly SalesQuotaRepositoryInterface $quotaRepository,
         private readonly ForecastSnapshotRepositoryInterface $snapshotRepository,
         private readonly ForecastAdjustmentRepositoryInterface $adjustmentRepository,
+        private readonly PipelineRepositoryInterface $pipelineRepository,
+        private readonly ModuleRecordRepositoryInterface $moduleRecordRepository,
+        private readonly AuthContextInterface $authContext,
     ) {}
 
     /**
@@ -56,37 +60,33 @@ final class ForecastingApplicationService
         string $periodType = 'month',
         ?DateTimeImmutable $periodStart = null
     ): ForecastResponseDTO {
-        $pipeline = Pipeline::with('stages')->findOrFail($pipelineId);
+        $pipeline = $this->pipelineRepository->findByIdWithRelations($pipelineId);
+        if (!$pipeline) {
+            throw new \RuntimeException("Pipeline not found: {$pipelineId}");
+        }
+
         $period = ForecastPeriod::fromType($periodType, $periodStart);
 
-        $valueField = $pipeline->settings['value_field'] ?? 'amount';
-        $stageFieldName = $pipeline->stage_field_api_name;
+        $valueField = $pipeline['settings']['value_field'] ?? 'amount';
+        $stageFieldName = $pipeline['stage_field_api_name'];
 
         // Get stage data
         $stageData = [];
-        foreach ($pipeline->stages as $stage) {
-            $stageData[$stage->id] = [
-                'probability' => $stage->probability,
-                'is_won' => $stage->is_won_stage,
-                'is_lost' => $stage->is_lost_stage,
+        foreach ($pipeline['stages'] as $stage) {
+            $stageData[$stage['id']] = [
+                'probability' => $stage['probability'],
+                'is_won' => $stage['is_won_stage'],
+                'is_lost' => $stage['is_lost_stage'],
             ];
         }
 
         // Get deals for the period
-        $dealsQuery = ModuleRecord::where('module_id', $pipeline->module_id)
-            ->where(function ($q) use ($period) {
-                $q->whereNull('expected_close_date')
-                    ->orWhereBetween('expected_close_date', [
-                        $period->start()->format('Y-m-d'),
-                        $period->end()->format('Y-m-d')
-                    ]);
-            });
-
-        if ($userId) {
-            $dealsQuery->where('created_by', $userId);
-        }
-
-        $deals = $dealsQuery->get();
+        $deals = $this->moduleRecordRepository->findByPeriod(
+            $pipeline['module_id'],
+            $period->start(),
+            $period->end(),
+            $userId
+        );
 
         // Calculate forecast summary
         $summary = $this->calculatorService->calculateForecastSummary(

@@ -1,6 +1,11 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
-	import { Filter } from 'lucide-svelte';
+	import { Filter, ExternalLink } from 'lucide-svelte';
+	import type { WidgetConfig } from '$lib/api/dashboards';
+	import {
+		navigateToRecords,
+		buildFiltersFromFunnelClick
+	} from '$lib/stores/dashboardNavigation.svelte';
 
 	interface FunnelStage {
 		id: string | number;
@@ -14,11 +19,27 @@
 		data: {
 			stages: FunnelStage[];
 			show_conversion?: boolean;
+			module_api_name?: string;
+			stage_field?: string;
 		} | null;
+		config?: WidgetConfig;
 		loading?: boolean;
 	}
 
-	let { title, data, loading = false }: Props = $props();
+	let { title, data, config, loading = false }: Props = $props();
+
+	// Check if click-through is enabled
+	const isClickable = $derived(
+		config?.module_id && config?.click_enabled !== false && data?.module_api_name
+	);
+
+	function handleStageClick(stage: FunnelStage) {
+		if (!isClickable || !data?.module_api_name) return;
+
+		const stageField = data.stage_field || config?.stage_field || 'stage';
+		const filters = buildFiltersFromFunnelClick(config || {}, String(stage.id), stageField);
+		navigateToRecords(data.module_api_name, filters);
+	}
 
 	const maxValue = $derived(() => {
 		if (!data?.stages || data.stages.length === 0) return 0;
@@ -87,17 +108,25 @@
 					<div class="group relative">
 						<div class="flex items-center gap-3">
 							<!-- Funnel bar -->
-							<div
-								class="relative h-10 transition-all duration-300 {getStageColor(index, stage.color)} rounded"
+							<button
+								type="button"
+								class="relative h-10 transition-all duration-300 {getStageColor(index, stage.color)} rounded {isClickable ? 'cursor-pointer hover:opacity-90' : ''}"
 								style="width: {widthPercent}%"
+								onclick={() => handleStageClick(stage)}
+								disabled={!isClickable}
 							>
 								<div
 									class="absolute inset-0 flex items-center justify-between px-3 text-white"
 								>
 									<span class="truncate text-sm font-medium">{stage.label}</span>
-									<span class="text-sm font-bold">{formatValue(stage.value)}</span>
+									<div class="flex items-center gap-1">
+										<span class="text-sm font-bold">{formatValue(stage.value)}</span>
+										{#if isClickable}
+											<ExternalLink class="h-3 w-3 opacity-0 group-hover:opacity-100" />
+										{/if}
+									</div>
 								</div>
-							</div>
+							</button>
 
 							<!-- Conversion rate -->
 							{#if data.show_conversion !== false && prevValue !== null}

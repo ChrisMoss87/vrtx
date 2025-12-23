@@ -5,14 +5,8 @@ declare(strict_types=1);
 namespace App\Application\Services\Cadence;
 
 use App\Domain\Cadence\Repositories\CadenceRepositoryInterface;
-use App\Models\Cadence;
-use App\Models\CadenceEnrollment;
-use App\Models\CadenceStep;
-use App\Models\CadenceTemplate;
-use Carbon\Carbon;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
+use App\Domain\Shared\Contracts\AuthContextInterface;
+use App\Domain\Shared\ValueObjects\PaginatedResult;
 
 /**
  * Application Service for Cadence (Sales Sequence) operations.
@@ -24,99 +18,70 @@ class CadenceApplicationService
 {
     public function __construct(
         private CadenceRepositoryInterface $repository,
+        private AuthContextInterface $authContext,
     ) {}
+
+    // =========================================================================
+    // QUERY USE CASES - CADENCES
+    // =========================================================================
 
     /**
      * List cadences with filters and pagination.
      */
-    public function listCadences(array $filters = []): LengthAwarePaginator
+    public function listCadences(array $filters = []): PaginatedResult
     {
-        $query = Cadence::with(['module', 'owner', 'creator'])
-            ->withCount(['steps', 'enrollments as active_enrollments_count' => function ($q) {
-                $q->where('status', 'active');
-            }]);
-
-        if (!empty($filters['module_id'])) {
-            $query->where('module_id', $filters['module_id']);
-        }
-
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
-        if (!empty($filters['owner_id'])) {
-            $query->where('owner_id', $filters['owner_id']);
-        }
-
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'ilike', "%{$search}%")
-                    ->orWhere('description', 'ilike', "%{$search}%");
-            });
-        }
-
-        $sortField = $filters['sort_field'] ?? 'created_at';
-        $sortOrder = $filters['sort_order'] ?? 'desc';
-        $query->orderBy($sortField, $sortOrder);
-
-        return $query->paginate($filters['per_page'] ?? 20);
+        $perPage = $filters['per_page'] ?? 20;
+        return $this->repository->findWithFilters($filters, $perPage);
     }
 
     /**
      * Get a single cadence with all related data.
      */
-    public function getCadence(int $id): Cadence
+    public function getCadence(int $id): ?array
     {
-        return Cadence::with([
-            'module',
-            'owner',
-            'creator',
-            'steps' => fn($q) => $q->orderBy('step_order'),
-            'steps.template',
-        ])->findOrFail($id);
+        return $this->repository->findByIdWithRelations($id);
     }
+
+    // =========================================================================
+    // COMMAND USE CASES - CADENCES
+    // =========================================================================
 
     /**
      * Create a new cadence.
      */
-    public function createCadence(array $data): Cadence
+    public function createCadence(array $data): array
     {
-        return DB::transaction(function () use ($data) {
-            $cadence = Cadence::create([
-                'name' => $data['name'],
-                'description' => $data['description'] ?? null,
-                'module_id' => $data['module_id'],
-                'status' => Cadence::STATUS_DRAFT,
-                'entry_criteria' => $data['entry_criteria'] ?? null,
-                'exit_criteria' => $data['exit_criteria'] ?? null,
-                'settings' => $data['settings'] ?? [],
-                'auto_enroll' => $data['auto_enroll'] ?? false,
-                'allow_re_enrollment' => $data['allow_re_enrollment'] ?? false,
-                're_enrollment_days' => $data['re_enrollment_days'] ?? null,
-                'max_enrollments_per_day' => $data['max_enrollments_per_day'] ?? null,
-                'owner_id' => $data['owner_id'] ?? auth()->id(),
-                'created_by' => auth()->id(),
-            ]);
+        $cadence = $this->repository->create([
+            'name' => $data['name'],
+            'description' => $data['description'] ?? null,
+            'module_id' => $data['module_id'],
+            'status' => 'draft',
+            'entry_criteria' => $data['entry_criteria'] ?? null,
+            'exit_criteria' => $data['exit_criteria'] ?? null,
+            'settings' => $data['settings'] ?? [],
+            'auto_enroll' => $data['auto_enroll'] ?? false,
+            'allow_re_enrollment' => $data['allow_re_enrollment'] ?? false,
+            're_enrollment_days' => $data['re_enrollment_days'] ?? null,
+            'max_enrollments_per_day' => $data['max_enrollments_per_day'] ?? null,
+            'owner_id' => $data['owner_id'] ?? $this->authContext->userId(),
+            'created_by' => $this->authContext->userId(),
+        ]);
 
-            if (!empty($data['steps'])) {
-                foreach ($data['steps'] as $index => $stepData) {
-                    $this->createStep($cadence->id, array_merge($stepData, ['step_order' => $index + 1]));
-                }
+        if (!empty($data['steps'])) {
+            foreach ($data['steps'] as $index => $stepData) {
+                $this->createStep($cadence['id'], array_merge($stepData, ['step_order' => $index + 1]));
             }
+        }
 
-            return $cadence->load(['steps', 'module']);
-        });
+        return $this->repository->findByIdWithRelations($cadence['id']);
     }
 
     /**
      * Update a cadence.
      */
-    public function updateCadence(int $id, array $data): Cadence
+    public function updateCadence(int $id, array $data): array
     {
-        $cadence = Cadence::findOrFail($id);
-        $cadence->update($data);
-        return $cadence->fresh(['steps', 'module', 'owner']);
+        return $this->repository->update($id, $data);
     }
 
     /**
@@ -124,111 +89,73 @@ class CadenceApplicationService
      */
     public function deleteCadence(int $id): bool
     {
-        return DB::transaction(function () use ($id) {
-            $cadence = Cadence::findOrFail($id);
-
-            // Cancel all active enrollments
-            $cadence->enrollments()->where('status', 'active')->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-                'exit_reason' => 'Cadence deleted',
-            ]);
-
-            return $cadence->delete();
-        });
+        return $this->repository->delete($id);
     }
 
     /**
      * Activate a cadence.
      */
-    public function activateCadence(int $id): Cadence
+    public function activateCadence(int $id): array
     {
-        $cadence = Cadence::findOrFail($id);
+        $steps = $this->repository->findStepsForCadence($id, activeOnly: true);
 
-        if (!$cadence->steps()->where('is_active', true)->exists()) {
+        if (empty($steps)) {
             throw new \InvalidArgumentException('Cannot activate cadence without active steps');
         }
 
-        $cadence->update(['status' => Cadence::STATUS_ACTIVE]);
-        return $cadence->fresh();
+        return $this->repository->update($id, ['status' => 'active']);
     }
 
     /**
      * Pause a cadence.
      */
-    public function pauseCadence(int $id): Cadence
+    public function pauseCadence(int $id): array
     {
-        $cadence = Cadence::findOrFail($id);
-        $cadence->update(['status' => Cadence::STATUS_PAUSED]);
-        return $cadence->fresh();
+        return $this->repository->update($id, ['status' => 'paused']);
     }
 
     /**
      * Archive a cadence.
      */
-    public function archiveCadence(int $id): Cadence
+    public function archiveCadence(int $id): array
     {
-        return DB::transaction(function () use ($id) {
-            $cadence = Cadence::findOrFail($id);
-
-            // Complete all active enrollments
-            $cadence->enrollments()->where('status', 'active')->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-                'exit_reason' => 'Cadence archived',
-            ]);
-
-            $cadence->update(['status' => Cadence::STATUS_ARCHIVED]);
-            return $cadence->fresh();
-        });
+        return $this->repository->update($id, ['status' => 'archived']);
     }
 
     /**
      * Duplicate a cadence.
      */
-    public function duplicateCadence(int $id): Cadence
+    public function duplicateCadence(int $id): array
     {
-        return DB::transaction(function () use ($id) {
-            $original = $this->getCadence($id);
+        $original = $this->repository->findByIdWithRelations($id);
 
-            $newCadence = $original->replicate();
-            $newCadence->name = $original->name . ' (Copy)';
-            $newCadence->status = Cadence::STATUS_DRAFT;
-            $newCadence->created_by = auth()->id();
-            $newCadence->save();
+        if (!$original) {
+            throw new \InvalidArgumentException('Cadence not found');
+        }
 
-            // Duplicate steps
-            foreach ($original->steps as $step) {
-                $newStep = $step->replicate();
-                $newStep->cadence_id = $newCadence->id;
-                $newStep->save();
-            }
-
-            return $newCadence->load(['steps', 'module']);
-        });
+        $newName = $original['name'] . ' (Copy)';
+        return $this->repository->duplicate($id, $newName, $this->authContext->userId());
     }
 
-    // Step Management
+    // =========================================================================
+    // COMMAND USE CASES - STEPS
+    // =========================================================================
 
     /**
      * Create a cadence step.
      */
-    public function createStep(int $cadenceId, array $data): CadenceStep
+    public function createStep(int $cadenceId, array $data): array
     {
-        $cadence = Cadence::findOrFail($cadenceId);
-
-        // Get next step order if not provided
-        if (!isset($data['step_order'])) {
-            $data['step_order'] = ($cadence->steps()->max('step_order') ?? 0) + 1;
+        if (!isset($data['name']) && isset($data['step_order'])) {
+            $data['name'] = "Step {$data['step_order']}";
         }
 
-        return CadenceStep::create([
-            'cadence_id' => $cadenceId,
-            'name' => $data['name'] ?? "Step {$data['step_order']}",
+        $stepData = [
+            'name' => $data['name'] ?? null,
             'channel' => $data['channel'],
             'delay_type' => $data['delay_type'],
             'delay_value' => $data['delay_value'],
-            'step_order' => $data['step_order'],
+            'step_order' => $data['step_order'] ?? null,
             'preferred_time' => $data['preferred_time'] ?? null,
             'timezone' => $data['timezone'] ?? null,
             'subject' => $data['subject'] ?? null,
@@ -245,17 +172,17 @@ class CadenceApplicationService
             'task_type' => $data['task_type'] ?? null,
             'task_assigned_to' => $data['task_assigned_to'] ?? null,
             'is_active' => true,
-        ]);
+        ];
+
+        return $this->repository->createStep($cadenceId, $stepData);
     }
 
     /**
      * Update a cadence step.
      */
-    public function updateStep(int $stepId, array $data): CadenceStep
+    public function updateStep(int $stepId, array $data): array
     {
-        $step = CadenceStep::findOrFail($stepId);
-        $step->update($data);
-        return $step->fresh();
+        return $this->repository->updateStep($stepId, $data);
     }
 
     /**
@@ -263,7 +190,7 @@ class CadenceApplicationService
      */
     public function deleteStep(int $stepId): bool
     {
-        return CadenceStep::findOrFail($stepId)->delete();
+        return $this->repository->deleteStep($stepId);
     }
 
     /**
@@ -271,59 +198,52 @@ class CadenceApplicationService
      */
     public function reorderSteps(int $cadenceId, array $stepIds): void
     {
-        DB::transaction(function () use ($cadenceId, $stepIds) {
-            foreach ($stepIds as $order => $stepId) {
-                CadenceStep::where('id', $stepId)
-                    ->where('cadence_id', $cadenceId)
-                    ->update(['step_order' => $order + 1]);
-            }
-        });
+        $this->repository->reorderSteps($cadenceId, $stepIds);
     }
 
-    // Enrollment Management
+    // =========================================================================
+    // COMMAND USE CASES - ENROLLMENTS
+    // =========================================================================
 
     /**
      * Enroll a record in a cadence.
      */
-    public function enrollRecord(int $cadenceId, int $recordId): CadenceEnrollment
+    public function enrollRecord(int $cadenceId, int $recordId): array
     {
-        $cadence = Cadence::findOrFail($cadenceId);
-
-        if (!$cadence->canEnroll()) {
+        if (!$this->repository->canEnroll($cadenceId)) {
             throw new \InvalidArgumentException('Cadence is not accepting enrollments');
         }
 
         // Check for existing enrollment
-        $existing = CadenceEnrollment::where('cadence_id', $cadenceId)
-            ->where('record_id', $recordId)
-            ->where('status', 'active')
-            ->first();
+        $existing = $this->repository->findActiveEnrollmentForRecord($cadenceId, $recordId);
 
         if ($existing) {
             throw new \InvalidArgumentException('Record is already enrolled in this cadence');
         }
 
         // Check re-enrollment rules
-        if (!$cadence->allow_re_enrollment) {
-            $previousEnrollment = CadenceEnrollment::where('cadence_id', $cadenceId)
-                ->where('record_id', $recordId)
-                ->exists();
+        $cadence = $this->repository->findById($cadenceId);
+        if ($cadence && !($cadence['allow_re_enrollment'] ?? false)) {
+            $previousEnrollment = $this->repository->findPreviousEnrollment($cadenceId, $recordId);
 
             if ($previousEnrollment) {
                 throw new \InvalidArgumentException('Re-enrollment is not allowed for this cadence');
             }
         }
 
-        $firstStep = $cadence->steps()->where('is_active', true)->orderBy('step_order')->first();
+        $steps = $this->repository->findStepsForCadence($cadenceId, activeOnly: true);
+        $firstStep = !empty($steps) ? $steps[0] : null;
 
-        return CadenceEnrollment::create([
+        $nextStepAt = $firstStep ? $this->repository->calculateNextStepTime($firstStep['id']) : null;
+
+        return $this->repository->createEnrollment([
             'cadence_id' => $cadenceId,
             'record_id' => $recordId,
             'status' => 'active',
-            'current_step_id' => $firstStep?->id,
+            'current_step_id' => $firstStep['id'] ?? null,
             'enrolled_at' => now(),
-            'enrolled_by' => auth()->id(),
-            'next_step_at' => $this->calculateNextStepTime($firstStep),
+            'enrolled_by' => $this->authContext->userId(),
+            'next_step_at' => $nextStepAt,
         ]);
     }
 
@@ -356,117 +276,72 @@ class CadenceApplicationService
     /**
      * Unenroll from a cadence.
      */
-    public function unenroll(int $enrollmentId, string $reason = 'Manually removed'): CadenceEnrollment
+    public function unenroll(int $enrollmentId, string $reason = 'Manually removed'): array
     {
-        $enrollment = CadenceEnrollment::findOrFail($enrollmentId);
-
-        $enrollment->update([
+        return $this->repository->updateEnrollment($enrollmentId, [
             'status' => 'completed',
             'completed_at' => now(),
             'exit_reason' => $reason,
         ]);
-
-        return $enrollment->fresh();
     }
 
     /**
      * Pause an enrollment.
      */
-    public function pauseEnrollment(int $enrollmentId): CadenceEnrollment
+    public function pauseEnrollment(int $enrollmentId): array
     {
-        $enrollment = CadenceEnrollment::findOrFail($enrollmentId);
-
-        $enrollment->update([
+        return $this->repository->updateEnrollment($enrollmentId, [
             'status' => 'paused',
             'paused_at' => now(),
         ]);
-
-        return $enrollment->fresh();
     }
 
     /**
      * Resume a paused enrollment.
      */
-    public function resumeEnrollment(int $enrollmentId): CadenceEnrollment
+    public function resumeEnrollment(int $enrollmentId): array
     {
-        $enrollment = CadenceEnrollment::findOrFail($enrollmentId);
+        $enrollment = $this->repository->findEnrollmentById($enrollmentId);
 
-        if ($enrollment->status !== 'paused') {
+        if (!$enrollment) {
+            throw new \InvalidArgumentException('Enrollment not found');
+        }
+
+        if ($enrollment['status'] !== 'paused') {
             throw new \InvalidArgumentException('Enrollment is not paused');
         }
 
-        $enrollment->update([
+        $nextStepAt = $enrollment['current_step_id']
+            ? $this->repository->calculateNextStepTime($enrollment['current_step_id'])
+            : null;
+
+        return $this->repository->updateEnrollment($enrollmentId, [
             'status' => 'active',
             'paused_at' => null,
-            'next_step_at' => $this->calculateNextStepTime($enrollment->currentStep),
+            'next_step_at' => $nextStepAt,
         ]);
-
-        return $enrollment->fresh();
     }
 
     /**
      * Get enrollments for a cadence.
      */
-    public function getEnrollments(int $cadenceId, array $filters = []): LengthAwarePaginator
+    public function getEnrollments(int $cadenceId, array $filters = []): PaginatedResult
     {
-        $query = CadenceEnrollment::with(['currentStep', 'enrolledBy'])
-            ->where('cadence_id', $cadenceId);
-
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
-        return $query->orderBy('enrolled_at', 'desc')
-            ->paginate($filters['per_page'] ?? 20);
+        $perPage = $filters['per_page'] ?? 20;
+        return $this->repository->findEnrollments($cadenceId, $filters, $perPage);
     }
 
-    // Analytics
+    // =========================================================================
+    // QUERY USE CASES - ANALYTICS
+    // =========================================================================
 
     /**
      * Get analytics for a cadence.
      */
     public function getAnalytics(int $cadenceId, ?string $startDate = null, ?string $endDate = null): array
     {
-        $cadence = Cadence::with(['steps', 'enrollments', 'metrics'])->findOrFail($cadenceId);
-
-        $query = CadenceEnrollment::where('cadence_id', $cadenceId);
-
-        if ($startDate) {
-            $query->where('enrolled_at', '>=', Carbon::parse($startDate));
-        }
-        if ($endDate) {
-            $query->where('enrolled_at', '<=', Carbon::parse($endDate));
-        }
-
-        $enrollments = $query->get();
-
-        $summary = [
-            'total_enrollments' => $enrollments->count(),
-            'active_enrollments' => $enrollments->where('status', 'active')->count(),
-            'completed_enrollments' => $enrollments->where('status', 'completed')->count(),
-            'replied_enrollments' => $enrollments->whereNotNull('replied_at')->count(),
-            'bounced_enrollments' => $enrollments->where('status', 'bounced')->count(),
-            'reply_rate' => $enrollments->count() > 0
-                ? round($enrollments->whereNotNull('replied_at')->count() / $enrollments->count() * 100, 1)
-                : 0,
-        ];
-
-        // Step performance
-        $stepPerformance = $cadence->steps->map(function ($step) use ($cadenceId) {
-            $executions = $step->executions()->count();
-            $completed = $step->executions()->where('status', 'completed')->count();
-            $replies = $step->executions()->whereNotNull('replied_at')->count();
-
-            return [
-                'step_id' => $step->id,
-                'step_name' => $step->name,
-                'channel' => $step->channel,
-                'executions' => $executions,
-                'completed' => $completed,
-                'replies' => $replies,
-                'reply_rate' => $completed > 0 ? round($replies / $completed * 100, 1) : 0,
-            ];
-        });
+        $summary = $this->repository->getAnalytics($cadenceId, $startDate, $endDate);
+        $stepPerformance = $this->repository->getStepPerformance($cadenceId);
 
         return [
             'summary' => $summary,
@@ -474,129 +349,98 @@ class CadenceApplicationService
         ];
     }
 
-    // Templates
+    // =========================================================================
+    // QUERY USE CASES - TEMPLATES
+    // =========================================================================
 
     /**
      * Get cadence templates.
      */
-    public function getTemplates(?string $category = null): Collection
+    public function getTemplates(?string $category = null): array
     {
-        $query = CadenceTemplate::with(['steps']);
-
-        if ($category) {
-            $query->where('category', $category);
-        }
-
-        return $query->orderBy('name')->get();
+        return $this->repository->findTemplates($category);
     }
+
+    // =========================================================================
+    // COMMAND USE CASES - TEMPLATES
+    // =========================================================================
 
     /**
      * Create a cadence from a template.
      */
-    public function createFromTemplate(int $templateId, int $moduleId, string $name): Cadence
+    public function createFromTemplate(int $templateId, int $moduleId, string $name): array
     {
-        return DB::transaction(function () use ($templateId, $moduleId, $name) {
-            $template = CadenceTemplate::with('steps')->findOrFail($templateId);
+        $template = $this->repository->findTemplateById($templateId);
 
-            $cadence = Cadence::create([
-                'name' => $name,
-                'description' => $template->description,
-                'module_id' => $moduleId,
-                'status' => Cadence::STATUS_DRAFT,
-                'settings' => $template->settings ?? [],
-                'owner_id' => auth()->id(),
-                'created_by' => auth()->id(),
-            ]);
+        if (!$template) {
+            throw new \InvalidArgumentException('Template not found');
+        }
 
-            // Copy template steps
-            foreach ($template->steps as $templateStep) {
-                CadenceStep::create([
-                    'cadence_id' => $cadence->id,
-                    'name' => $templateStep->name,
-                    'channel' => $templateStep->channel,
-                    'delay_type' => $templateStep->delay_type,
-                    'delay_value' => $templateStep->delay_value,
-                    'step_order' => $templateStep->step_order,
-                    'subject' => $templateStep->subject,
-                    'content' => $templateStep->content,
-                    'conditions' => $templateStep->conditions,
+        $cadence = $this->repository->create([
+            'name' => $name,
+            'description' => $template['description'] ?? null,
+            'module_id' => $moduleId,
+            'status' => 'draft',
+            'settings' => $template['settings'] ?? [],
+            'owner_id' => $this->authContext->userId(),
+            'created_by' => $this->authContext->userId(),
+        ]);
+
+        // Copy template steps from steps_config
+        if (!empty($template['steps_config'])) {
+            foreach ($template['steps_config'] as $index => $stepConfig) {
+                $this->repository->createStep($cadence['id'], [
+                    'name' => $stepConfig['name'] ?? "Step " . ($index + 1),
+                    'channel' => $stepConfig['channel'] ?? 'email',
+                    'delay_type' => $stepConfig['delay_type'] ?? 'days',
+                    'delay_value' => $stepConfig['delay_value'] ?? 1,
+                    'step_order' => $stepConfig['step_order'] ?? ($index + 1),
+                    'subject' => $stepConfig['subject'] ?? null,
+                    'content' => $stepConfig['content'] ?? null,
+                    'conditions' => $stepConfig['conditions'] ?? null,
                     'is_active' => true,
                 ]);
             }
+        }
 
-            return $cadence->load(['steps', 'module']);
-        });
+        return $this->repository->findByIdWithRelations($cadence['id']);
     }
 
     /**
      * Save a cadence as a template.
      */
-    public function saveAsTemplate(int $cadenceId, string $name, ?string $category = null): CadenceTemplate
+    public function saveAsTemplate(int $cadenceId, string $name, ?string $category = null): array
     {
-        return DB::transaction(function () use ($cadenceId, $name, $category) {
-            $cadence = $this->getCadence($cadenceId);
+        $cadence = $this->repository->findByIdWithRelations($cadenceId);
 
-            $template = CadenceTemplate::create([
-                'name' => $name,
-                'description' => $cadence->description,
-                'category' => $category,
-                'settings' => $cadence->settings,
-                'created_by' => auth()->id(),
-            ]);
-
-            // Copy steps to template
-            foreach ($cadence->steps as $step) {
-                $template->steps()->create([
-                    'name' => $step->name,
-                    'channel' => $step->channel,
-                    'delay_type' => $step->delay_type,
-                    'delay_value' => $step->delay_value,
-                    'step_order' => $step->step_order,
-                    'subject' => $step->subject,
-                    'content' => $step->content,
-                    'conditions' => $step->conditions,
-                ]);
-            }
-
-            return $template->load('steps');
-        });
-    }
-
-    /**
-     * Calculate when the next step should execute.
-     */
-    private function calculateNextStepTime(?CadenceStep $step): ?Carbon
-    {
-        if (!$step) {
-            return null;
+        if (!$cadence) {
+            throw new \InvalidArgumentException('Cadence not found');
         }
 
-        $now = now();
-
-        return match ($step->delay_type) {
-            'immediate' => $now,
-            'hours' => $now->addHours($step->delay_value),
-            'days' => $now->addDays($step->delay_value),
-            'business_days' => $this->addBusinessDays($now, $step->delay_value),
-            default => $now,
-        };
-    }
-
-    /**
-     * Add business days to a date.
-     */
-    private function addBusinessDays(Carbon $date, int $days): Carbon
-    {
-        $added = 0;
-        $result = $date->copy();
-
-        while ($added < $days) {
-            $result->addDay();
-            if (!$result->isWeekend()) {
-                $added++;
+        // Convert steps to steps_config array
+        $stepsConfig = [];
+        if (!empty($cadence['steps'])) {
+            foreach ($cadence['steps'] as $step) {
+                $stepsConfig[] = [
+                    'name' => $step['name'],
+                    'channel' => $step['channel'],
+                    'delay_type' => $step['delay_type'],
+                    'delay_value' => $step['delay_value'],
+                    'step_order' => $step['step_order'],
+                    'subject' => $step['subject'] ?? null,
+                    'content' => $step['content'] ?? null,
+                    'conditions' => $step['conditions'] ?? null,
+                ];
             }
         }
 
-        return $result;
+        return $this->repository->createTemplate([
+            'name' => $name,
+            'description' => $cadence['description'] ?? null,
+            'category' => $category,
+            'settings' => $cadence['settings'] ?? [],
+            'steps_config' => $stepsConfig,
+            'created_by' => $this->authContext->userId(),
+        ]);
     }
 }

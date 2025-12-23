@@ -1,7 +1,12 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
-	import { Hash, TrendingUp, TrendingDown, Minus } from 'lucide-svelte';
+	import { Hash, TrendingUp, TrendingDown, Minus, ExternalLink } from 'lucide-svelte';
 	import Sparkline from './Sparkline.svelte';
+	import type { WidgetConfig } from '$lib/api/dashboards';
+	import {
+		navigateToRecords,
+		buildFiltersFromKpiConfig
+	} from '$lib/stores/dashboardNavigation.svelte';
 
 	interface Props {
 		title: string;
@@ -12,11 +17,25 @@
 			change_type?: 'increase' | 'decrease' | 'no_change' | null;
 			trend_data?: number[];
 			comparison_period?: string;
+			module_api_name?: string;
 		} | null;
+		config?: WidgetConfig;
 		loading?: boolean;
 	}
 
-	let { title, data, loading = false }: Props = $props();
+	let { title, data, config, loading = false }: Props = $props();
+
+	// Check if click-through is enabled
+	const isClickable = $derived(
+		config?.module_id && config?.click_enabled !== false && data?.module_api_name
+	);
+
+	function handleClick() {
+		if (!isClickable || !data?.module_api_name) return;
+
+		const filters = buildFiltersFromKpiConfig(config || {});
+		navigateToRecords(data.module_api_name, filters);
+	}
 
 	const sparklineColor = $derived(() => {
 		if (!data?.change_type) return '#6b7280';
@@ -81,9 +100,19 @@
 				<div class="mt-2 h-4 w-16 rounded bg-muted"></div>
 			</div>
 		{:else}
-			<div class="flex flex-col items-center">
-				<div class="text-3xl font-bold">
+			<button
+				type="button"
+				class="flex w-full flex-col items-center rounded-md p-2 transition-colors {isClickable
+					? 'cursor-pointer hover:bg-muted/50'
+					: ''}"
+				onclick={handleClick}
+				disabled={!isClickable}
+			>
+				<div class="flex items-center gap-1 text-3xl font-bold">
 					{formatValue(data?.value ?? 0)}
+					{#if isClickable}
+						<ExternalLink class="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+					{/if}
 				</div>
 
 				{#if data?.trend_data && data.trend_data.length >= 2}
@@ -112,7 +141,7 @@
 						{/if}
 					</div>
 				{/if}
-			</div>
+			</button>
 		{/if}
 	</Card.Content>
 </Card.Root>

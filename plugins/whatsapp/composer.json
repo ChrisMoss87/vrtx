@@ -1,0 +1,20 @@
+{
+    "name": "vrtx/whatsapp-plugin",
+    "description": "WhatsApp Business Integration for VRTX CRM",
+    "type": "vrtx-plugin",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "VRTX",
+            "email": "plugins@vrtx.io"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Plugins\\WhatsApp\\": "src/"
+        }
+    },
+    "require": {
+        "php": "^8.2"
+    }
+}

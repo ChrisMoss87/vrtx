@@ -2,7 +2,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Clock, ExternalLink } from 'lucide-svelte';
 	import { formatDistanceToNow } from 'date-fns';
-	import { goto } from '$app/navigation';
+	import { navigateToRecord } from '$lib/stores/dashboardNavigation.svelte';
 
 	interface Record {
 		id: number;
@@ -10,6 +10,7 @@
 		subtitle?: string;
 		module_id: number;
 		module_name: string;
+		module_api_name?: string;
 		created_at: string;
 		fields?: { label: string; value: string }[];
 	}
@@ -19,6 +20,7 @@
 		data: {
 			records: Record[];
 			module_name?: string;
+			module_api_name?: string;
 		} | null;
 		loading?: boolean;
 	}
@@ -34,8 +36,11 @@
 	}
 
 	function handleRecordClick(record: Record) {
-		// Navigate to the record detail page
-		goto(`/modules/${record.module_id}/records/${record.id}`);
+		// Use the navigation store for consistent navigation
+		const moduleApiName = record.module_api_name || data?.module_api_name;
+		if (moduleApiName) {
+			navigateToRecord(moduleApiName, record.id);
+		}
 	}
 </script>
 

@@ -5,20 +5,18 @@ declare(strict_types=1);
 namespace App\Application\Services\AI;
 
 use App\Domain\AI\Repositories\AiPromptRepositoryInterface;
+use App\Domain\Shared\Contracts\AuthContextInterface;
 use App\Models\AiEmailDraft;
-use App\Models\AiPrompt;
 use App\Models\AiSetting;
 use App\Models\AiUsageLog;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 class AIApplicationService
 {
     public function __construct(
-        private AiPromptRepositoryInterface $repository,
+        private AiPromptRepositoryInterface $promptRepository,
+        private AuthContextInterface $authContext,
     ) {}
 
     // =========================================================================
@@ -122,83 +120,41 @@ class AIApplicationService
     /**
      * List prompts
      */
-    public function listPrompts(array $filters = []): Collection
+    public function listPrompts(array $filters = []): array
     {
-        $query = AiPrompt::query();
-
-        if (!empty($filters['category'])) {
-            $query->byCategory($filters['category']);
-        }
-
-        if (!empty($filters['active_only'])) {
-            $query->active();
-        }
-
-        if (!empty($filters['search'])) {
-            $query->where('name', 'ilike', "%{$filters['search']}%");
-        }
-
-        return $query->orderBy('category')->orderBy('name')->get();
+        return $this->promptRepository->findByFilters($filters);
     }
 
     /**
      * Get a prompt by ID
      */
-    public function getPrompt(int $promptId): ?AiPrompt
+    public function getPrompt(int $promptId): ?array
     {
-        return AiPrompt::find($promptId);
+        return $this->promptRepository->findById($promptId);
     }
 
     /**
      * Get a prompt by slug
      */
-    public function getPromptBySlug(string $slug): ?AiPrompt
+    public function getPromptBySlug(string $slug): ?array
     {
-        return AiPrompt::findBySlug($slug);
+        return $this->promptRepository->findBySlug($slug);
     }
 
     /**
      * Create a prompt
      */
-    public function createPrompt(array $data): AiPrompt
+    public function createPrompt(array $data): array
     {
-        return AiPrompt::create([
-            'slug' => $data['slug'],
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'category' => $data['category'],
-            'system_prompt' => $data['system_prompt'],
-            'user_prompt_template' => $data['user_prompt_template'],
-            'variables' => $data['variables'] ?? [],
-            'is_system' => false,
-            'is_active' => $data['is_active'] ?? true,
-        ]);
+        return $this->promptRepository->create($data);
     }
 
     /**
      * Update a prompt
      */
-    public function updatePrompt(int $promptId, array $data): AiPrompt
+    public function updatePrompt(int $promptId, array $data): array
     {
-        $prompt = AiPrompt::findOrFail($promptId);
-
-        // Don't allow modifying system prompts' core fields
-        if ($prompt->is_system) {
-            $prompt->update([
-                'is_active' => $data['is_active'] ?? $prompt->is_active,
-            ]);
-        } else {
-            $prompt->update([
-                'name' => $data['name'] ?? $prompt->name,
-                'description' => $data['description'] ?? $prompt->description,
-                'system_prompt' => $data['system_prompt'] ?? $prompt->system_prompt,
-                'user_prompt_template' => $data['user_prompt_template'] ?? $prompt->user_prompt_template,
-                'variables' => $data['variables'] ?? $prompt->variables,
-                'is_active' => $data['is_active'] ?? $prompt->is_active,
-            ]);
-        }
-
-        return $prompt->fresh();
+        return $this->promptRepository->update($promptId, $data);
     }
 
     /**
@@ -206,13 +162,7 @@ class AIApplicationService
      */
     public function deletePrompt(int $promptId): bool
     {
-        $prompt = AiPrompt::findOrFail($promptId);
-
-        if ($prompt->is_system) {
-            throw new \RuntimeException('Cannot delete system prompts');
-        }
-
-        return $prompt->delete();
+        return $this->promptRepository->delete($promptId);
     }
 
     // =========================================================================
@@ -226,7 +176,7 @@ class AIApplicationService
     {
         $settings = $this->ensureAvailable();
 
-        $prompt = AiPrompt::findBySlug('email-compose');
+        $prompt = $this->promptRepository->findBySlug('email-compose');
 
         if (!$prompt) {
             throw new \RuntimeException('Email compose prompt not configured');
@@ -235,12 +185,12 @@ class AIApplicationService
         $variables = [
             'context' => $data['context'] ?? '',
             'recipient_name' => $data['recipient_name'] ?? 'the recipient',
-            'sender_name' => Auth::user()->name ?? 'the sender',
+            'sender_name' => $this->authContext->userName() ?? 'the sender',
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
             'key_points' => $data['key_points'] ?? '',
         ];
 
-        $messages = $prompt->getMessages($variables);
+        $messages = $this->promptRepository->getMessages($prompt, $variables);
 
         $response = $this->callProviderWithLogging(
             $settings,
@@ -251,7 +201,7 @@ class AIApplicationService
         );
 
         return AiEmailDraft::create([
-            'user_id' => Auth::id(),
+            'user_id' => $this->authContext->userId(),
             'type' => AiEmailDraft::TYPE_COMPOSE,
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
             'context' => $data,
@@ -269,7 +219,7 @@ class AIApplicationService
     {
         $settings = $this->ensureAvailable();
 
-        $prompt = AiPrompt::findBySlug('email-improve');
+        $prompt = $this->promptRepository->findBySlug('email-improve');
 
         if (!$prompt) {
             throw new \RuntimeException('Email improve prompt not configured');
@@ -281,7 +231,7 @@ class AIApplicationService
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
         ];
 
-        $messages = $prompt->getMessages($variables);
+        $messages = $this->promptRepository->getMessages($prompt, $variables);
 
         $response = $this->callProviderWithLogging(
             $settings,
@@ -292,7 +242,7 @@ class AIApplicationService
         );
 
         return AiEmailDraft::create([
-            'user_id' => Auth::id(),
+            'user_id' => $this->authContext->userId(),
             'type' => AiEmailDraft::TYPE_IMPROVE,
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
             'context' => $data,
@@ -310,7 +260,7 @@ class AIApplicationService
     {
         $settings = $this->ensureAvailable();
 
-        $prompt = AiPrompt::findBySlug('email-reply');
+        $prompt = $this->promptRepository->findBySlug('email-reply');
 
         if (!$prompt) {
             throw new \RuntimeException('Email reply prompt not configured');
@@ -320,10 +270,10 @@ class AIApplicationService
             'original_email' => $data['original_email'],
             'reply_intent' => $data['reply_intent'] ?? '',
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
-            'sender_name' => Auth::user()->name ?? 'the sender',
+            'sender_name' => $this->authContext->userName() ?? 'the sender',
         ];
 
-        $messages = $prompt->getMessages($variables);
+        $messages = $this->promptRepository->getMessages($prompt, $variables);
 
         $response = $this->callProviderWithLogging(
             $settings,
@@ -334,7 +284,7 @@ class AIApplicationService
         );
 
         return AiEmailDraft::create([
-            'user_id' => Auth::id(),
+            'user_id' => $this->authContext->userId(),
             'type' => AiEmailDraft::TYPE_REPLY,
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
             'context' => $data,
@@ -353,7 +303,7 @@ class AIApplicationService
     {
         $settings = $this->ensureAvailable();
 
-        $prompt = AiPrompt::findBySlug('subject-suggest');
+        $prompt = $this->promptRepository->findBySlug('subject-suggest');
 
         if (!$prompt) {
             // Fallback inline prompt
@@ -362,7 +312,7 @@ class AIApplicationService
                 ['role' => 'user', 'content' => "Generate {$count} different subject lines for this email content. Return only the subject lines, one per line, no numbering:\n\n{$emailContent}"],
             ];
         } else {
-            $messages = $prompt->getMessages([
+            $messages = $this->promptRepository->getMessages($prompt, [
                 'email_content' => $emailContent,
                 'count' => $count,
             ]);
@@ -388,12 +338,14 @@ class AIApplicationService
     /**
      * Get email drafts for current user
      */
-    public function getUserEmailDrafts(int $limit = 20): Collection
+    public function getUserEmailDrafts(int $limit = 20): array
     {
-        return AiEmailDraft::where('user_id', Auth::id())
+        return AiEmailDraft::where('user_id', $this->authContext->userId())
             ->orderByDesc('created_at')
             ->limit($limit)
-            ->get();
+            ->get()
+            ->map(fn($draft) => $draft->toArray())
+            ->all();
     }
 
     /**
@@ -486,18 +438,18 @@ class AIApplicationService
     {
         $settings = $this->ensureAvailable();
 
-        $prompt = AiPrompt::findBySlug($promptSlug);
+        $prompt = $this->promptRepository->findBySlug($promptSlug);
 
         if (!$prompt) {
             throw new \RuntimeException("Prompt '{$promptSlug}' not found");
         }
 
-        $messages = $prompt->getMessages($variables);
+        $messages = $this->promptRepository->getMessages($prompt, $variables);
 
         $response = $this->callProviderWithLogging(
             $settings,
             $messages,
-            $prompt->category,
+            $prompt['category'],
             $entityType,
             $entityId
         );
@@ -520,7 +472,7 @@ class AIApplicationService
     /**
      * Get usage by user
      */
-    public function getUsageByUser(?string $startDate = null, ?string $endDate = null): Collection
+    public function getUsageByUser(?string $startDate = null, ?string $endDate = null): array
     {
         $query = AiUsageLog::query()
             ->selectRaw('user_id, COUNT(*) as request_count, SUM(cost_cents) as total_cost, SUM(input_tokens + output_tokens) as total_tokens')
@@ -534,7 +486,10 @@ class AIApplicationService
             $query->where('created_at', '<=', $endDate);
         }
 
-        return $query->orderByDesc('total_cost')->get();
+        return $query->orderByDesc('total_cost')
+            ->get()
+            ->map(fn($item) => $item->toArray())
+            ->all();
     }
 
     /**
@@ -644,7 +599,7 @@ class AIApplicationService
             'input_tokens' => $inputTokens,
             'output_tokens' => $outputTokens,
             'cost_cents' => $costCents,
-            'user_id' => Auth::id(),
+            'user_id' => $this->authContext->userId(),
             'entity_type' => $entityType,
             'entity_id' => $entityId,
         ]);

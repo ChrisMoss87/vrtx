@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card';
-	import { BarChart2 } from 'lucide-svelte';
+	import { BarChart2, ExternalLink } from 'lucide-svelte';
+	import type { WidgetConfig } from '$lib/api/dashboards';
+	import {
+		navigateToRecords,
+		buildFiltersFromChartClick
+	} from '$lib/stores/dashboardNavigation.svelte';
 
 	interface Props {
 		title: string;
@@ -13,12 +18,28 @@
 				backgroundColor?: string | string[];
 			}>;
 			chart_type?: 'bar' | 'line' | 'pie' | 'doughnut' | 'area';
+			module_api_name?: string;
+			group_by_field?: string;
 		} | null;
+		config?: WidgetConfig;
 		loading?: boolean;
 		chartType?: 'bar' | 'line' | 'pie' | 'doughnut' | 'area';
 	}
 
-	let { title, data, loading = false, chartType = 'bar' }: Props = $props();
+	let { title, data, config, loading = false, chartType = 'bar' }: Props = $props();
+
+	// Check if click-through is enabled
+	const isClickable = $derived(
+		config?.module_id && config?.click_enabled !== false && data?.module_api_name
+	);
+
+	function handleChartClick(label: string) {
+		if (!isClickable || !data?.module_api_name) return;
+
+		const groupByField = data.group_by_field || config?.group_by_field;
+		const filters = buildFiltersFromChartClick(config || {}, label, groupByField);
+		navigateToRecords(data.module_api_name, filters);
+	}
 
 	let canvasRef = $state<HTMLCanvasElement | null>(null);
 	let chart = $state<any>(null);
@@ -66,6 +87,15 @@
 					options: {
 						responsive: true,
 						maintainAspectRatio: false,
+						onClick: (event, elements) => {
+							if (elements.length > 0 && isClickable) {
+								const index = elements[0].index;
+								const label = data.labels?.[index];
+								if (label) {
+									handleChartClick(label);
+								}
+							}
+						},
 						plugins: {
 							legend: {
 								display: type === 'pie' || type === 'doughnut',
@@ -119,7 +149,7 @@
 	});
 </script>
 
-<Card.Root class="h-full">
+<Card.Root class="h-full group">
 	<Card.Header class="pb-2">
 		<div class="flex items-center gap-2">
 			<BarChart2 class="h-4 w-4 text-muted-foreground" />
@@ -137,8 +167,13 @@
 				<p class="text-sm">No chart data available</p>
 			</div>
 		{:else}
-			<div class="relative min-h-[200px] h-full">
+			<div class="relative min-h-[200px] h-full {isClickable ? 'cursor-pointer' : ''}">
 				<canvas bind:this={canvasRef}></canvas>
+				{#if isClickable}
+					<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+						<ExternalLink class="h-4 w-4 text-muted-foreground" />
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</Card.Content>

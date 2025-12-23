@@ -196,10 +196,16 @@
 			<h1 class="text-2xl font-bold">Reports</h1>
 			<p class="text-muted-foreground">Create and manage your reports</p>
 		</div>
-		<Button onclick={() => goto('/reports/new')}>
-			<Plus class="mr-2 h-4 w-4" />
-			Create Report
-		</Button>
+		<div class="flex items-center gap-2">
+			<Button variant="outline" onclick={() => goto('/reports/templates')}>
+				<FileText class="mr-2 h-4 w-4" />
+				Templates
+			</Button>
+			<Button onclick={() => goto('/reports/new')}>
+				<Plus class="mr-2 h-4 w-4" />
+				Create Report
+			</Button>
+		</div>
 	</div>
 
 	<!-- Tabs -->

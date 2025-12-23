@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Entities;
 
 use App\Domain\Billing\ValueObjects\Money;
+use App\Domain\Shared\Contracts\Entity;
 
 /**
  * Quote line item entity.
  */
-final class QuoteLineItem
+final class QuoteLineItem implements Entity
 {
     private function __construct(
         private ?int $id,
@@ -185,5 +186,18 @@ final class QuoteLineItem
     public function updateDisplayOrder(int $displayOrder): void
     {
         $this->displayOrder = $displayOrder;
+    }
+
+    public function equals(Entity $other): bool
+    {
+        if (!$other instanceof self) {
+            return false;
+        }
+
+        if ($this->id === null || $other->getId() === null) {
+            return false;
+        }
+
+        return $this->id === $other->getId();
     }
 }

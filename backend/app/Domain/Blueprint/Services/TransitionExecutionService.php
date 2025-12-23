@@ -12,10 +12,10 @@ use App\Domain\Blueprint\Events\TransitionExecuted;
 use App\Domain\Blueprint\Events\TransitionFailed;
 use App\Domain\Blueprint\Repositories\BlueprintRecordStateRepositoryInterface;
 use App\Domain\Blueprint\Repositories\TransitionExecutionRepositoryInterface;
+use App\Domain\Shared\Contracts\EventDispatcherInterface;
+use App\Domain\Shared\Contracts\LoggerInterface;
 use App\Domain\Shared\ValueObjects\UserId;
 use App\Domain\Workflow\Services\ActionDispatcherService;
-use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Domain service for executing blueprint transitions.
@@ -27,6 +27,8 @@ class TransitionExecutionService
         private readonly BlueprintRecordStateRepositoryInterface $recordStateRepository,
         private readonly TransitionExecutionRepositoryInterface $executionRepository,
         private readonly ActionDispatcherService $actionDispatcher,
+        private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly LoggerInterface $logger,
     ) {}
 
     /**
@@ -85,7 +87,7 @@ class TransitionExecutionService
             $this->executionRepository->save($savedExecution);
 
             // Dispatch event
-            Event::dispatch(new TransitionExecuted(
+            $this->eventDispatcher->dispatch(new TransitionExecuted(
                 blueprintId: $blueprint->getId(),
                 transitionId: $transition->getId(),
                 recordId: $recordId,
@@ -94,7 +96,7 @@ class TransitionExecutionService
                 executedByUserId: $userId,
             ));
 
-            Log::info('Blueprint transition executed', [
+            $this->logger->info('Blueprint transition executed', [
                 'blueprint_id' => $blueprint->getId(),
                 'transition_id' => $transition->getId(),
                 'record_id' => $recordId,
@@ -108,7 +110,7 @@ class TransitionExecutionService
             $savedExecution->fail($e->getMessage());
             $this->executionRepository->save($savedExecution);
 
-            Event::dispatch(new TransitionFailed(
+            $this->eventDispatcher->dispatch(new TransitionFailed(
                 blueprintId: $blueprint->getId(),
                 transitionId: $transition->getId(),
                 recordId: $recordId,
@@ -148,7 +150,7 @@ class TransitionExecutionService
                 $result = $this->actionDispatcher->dispatchByName($actionType, $actionConfig, $context);
                 $execution->addActionResult("action_{$index}", $result);
             } catch (\Exception $e) {
-                Log::warning('Blueprint action failed', [
+                $this->logger->warning('Blueprint action failed', [
                     'transition_id' => $transition->getId(),
                     'action_type' => $actionType,
                     'error' => $e->getMessage(),

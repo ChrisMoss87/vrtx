@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Modules\DTOs;
 
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\Module;
 use JsonSerializable;
 
 /**
@@ -46,46 +43,6 @@ readonly class ModuleDefinitionDTO implements JsonSerializable
         public \DateTimeInterface $createdAt,
         public \DateTimeInterface $updatedAt,
     ) {}
-
-    /**
-     * Create from Eloquent model with eager-loaded relationships.
-     *
-     * @param Module $module
-     * @return self
-     */
-    public static function fromModel(Module $module): self
-    {
-        // Load relationships if not already loaded
-        $module->loadMissing(['blocks.fields.options', 'fields.options']);
-
-        // Build block definitions
-        $blocks = [];
-        foreach ($module->blocks as $block) {
-            $blocks[] = BlockDefinitionDTO::fromModel($block);
-        }
-
-        // Build field definitions (flat list of all fields)
-        $fields = [];
-        foreach ($module->fields as $field) {
-            $fields[] = FieldDefinitionDTO::fromModel($field);
-        }
-
-        return new self(
-            id: $module->id,
-            name: $module->name,
-            singularName: $module->singular_name,
-            apiName: $module->api_name,
-            icon: $module->icon,
-            description: $module->description,
-            isActive: $module->is_active,
-            settings: $module->settings,
-            displayOrder: $module->display_order,
-            blocks: $blocks,
-            fields: $fields,
-            createdAt: $module->created_at,
-            updatedAt: $module->updated_at,
-        );
-    }
 
     /**
      * Get fields organized by block.

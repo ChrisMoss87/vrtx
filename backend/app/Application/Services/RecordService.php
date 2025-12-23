@@ -231,7 +231,7 @@ final class RecordService
             $module = $this->moduleRepository->findById($moduleId);
 
             if ($module) {
-                foreach ($module->fields() as $field) {
+                foreach ($module->getFields() as $field) {
                     if ($field->isSearchable()) {
                         $searchableFields[] = $field->apiName();
                     }

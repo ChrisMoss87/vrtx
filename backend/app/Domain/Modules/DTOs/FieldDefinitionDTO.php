@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Modules\DTOs;
 
-use App\Models\Field;
-use App\Models\FieldOption;
 use JsonSerializable;
 
 /**
@@ -69,53 +67,6 @@ readonly class FieldDefinitionDTO implements JsonSerializable
         public \DateTimeInterface $createdAt,
         public \DateTimeInterface $updatedAt,
     ) {}
-
-    /**
-     * Create from Eloquent model.
-     *
-     * @param Field $field
-     * @return self
-     */
-    public static function fromModel(Field $field): self
-    {
-        // Load options if not already loaded
-        $field->loadMissing('options');
-
-        // Build option definitions
-        $options = [];
-        foreach ($field->options as $option) {
-            $options[] = FieldOptionDefinitionDTO::fromModel($option);
-        }
-
-        return new self(
-            id: $field->id,
-            moduleId: $field->module_id,
-            blockId: $field->block_id,
-            label: $field->label,
-            apiName: $field->api_name,
-            type: $field->type,
-            description: $field->description,
-            helpText: $field->help_text,
-            placeholder: $field->placeholder,
-            isRequired: $field->is_required,
-            isUnique: $field->is_unique,
-            isSearchable: $field->is_searchable,
-            isFilterable: $field->is_filterable,
-            isSortable: $field->is_sortable,
-            validationRules: $field->validation_rules,
-            settings: $field->settings,
-            conditionalVisibility: $field->conditional_visibility,
-            fieldDependency: $field->field_dependency,
-            formulaDefinition: $field->formula_definition,
-            lookupSettings: $field->lookup_settings,
-            defaultValue: $field->default_value,
-            displayOrder: $field->display_order,
-            width: $field->width,
-            options: $options,
-            createdAt: $field->created_at,
-            updatedAt: $field->updated_at,
-        );
-    }
 
     /**
      * Check if field has conditional visibility.
