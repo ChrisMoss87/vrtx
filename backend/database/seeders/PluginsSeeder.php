@@ -2,17 +2,16 @@
 
 namespace Database\Seeders;
 
-use App\Models\Plugin;
-use App\Models\PluginBundle;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class PluginsSeeder extends Seeder
 {
     public function run(): void
     {
         // Clear existing data
-        PluginBundle::truncate();
-        Plugin::truncate();
+        DB::table('plugin_bundles')->truncate();
+        DB::table('plugins')->truncate();
 
         // ============================================
         // TIER 1: CORE PLUGINS (Included in all plans)

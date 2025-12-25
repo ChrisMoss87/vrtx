@@ -14,8 +14,6 @@ use App\Domain\Communication\ValueObjects\MessageParticipant;
 use App\Domain\Communication\ValueObjects\RecordContext;
 use App\Domain\Inbox\Repositories\InboxConversationRepositoryInterface;
 use App\Domain\Shared\ValueObjects\PaginatedResult;
-use App\Models\InboxConversation;
-use App\Models\InboxMessage;
 
 class EmailChannelAdapter extends AbstractChannelAdapter
 {
@@ -38,61 +36,54 @@ class EmailChannelAdapter extends AbstractChannelAdapter
         // Add email channel filter
         $filters['channel'] = 'email';
 
-        return $this->inboxRepository->list($filters, $perPage, $page);
+        return $this->inboxRepository->listConversations($filters, $perPage, $page);
     }
 
     public function getConversation(string $sourceId): ?UnifiedConversation
     {
-        $conversation = InboxConversation::where('id', $sourceId)->first();
+        $conversation = $this->inboxRepository->getConversation((int) $sourceId);
 
         if (!$conversation) {
             return null;
         }
 
-        return $this->toUnifiedConversation($conversation);
+        return $this->toUnifiedConversation((object) $conversation);
     }
 
     public function getConversationsForRecord(RecordContext $context): array
     {
-        $conversations = InboxConversation::where('contact_module', $context->moduleApiName)
-            ->where('contact_id', $context->recordId)
-            ->get();
+        $filters = [
+            'contact_module' => $context->moduleApiName,
+            'contact_id' => $context->recordId,
+        ];
 
-        return $conversations->map(fn($c) => $this->toUnifiedConversation($c))->all();
+        $result = $this->inboxRepository->listConversations($filters, perPage: 1000, page: 1);
+
+        return array_map(fn($c) => $this->toUnifiedConversation((object) $c), $result->items);
     }
 
     public function getMessages(string $sourceConversationId, int $limit = 50): array
     {
-        $messages = InboxMessage::where('conversation_id', $sourceConversationId)
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
+        $result = $this->inboxRepository->getConversationMessages((int) $sourceConversationId, perPage: $limit, page: 1);
 
-        return $messages->map(fn($m) => $this->toUnifiedMessage($m))->all();
+        return array_map(fn($m) => $this->toUnifiedMessage((object) $m), $result->items);
     }
 
     public function sendMessage(SendMessageDTO $message): UnifiedMessage
     {
-        // Create inbox message
-        $inboxMessage = InboxMessage::create([
-            'conversation_id' => $message->conversationId,
-            'direction' => 'outbound',
-            'sender_type' => 'user',
-            'sender_id' => $message->sender->userId,
-            'sender_name' => $message->sender->name,
-            'sender_email' => $message->sender->email,
-            'content' => $message->content,
-            'html_content' => $message->htmlContent,
-            'attachments' => $message->attachments,
-        ]);
+        // Send reply through repository
+        $inboxMessage = $this->inboxRepository->sendReply(
+            conversationId: $message->conversationId,
+            data: [
+                'content' => $message->content,
+                'html_content' => $message->htmlContent,
+                'attachments' => $message->attachments,
+            ],
+            sentByUserId: $message->sender->userId,
+            userName: $message->sender->name
+        );
 
-        // Update conversation
-        InboxConversation::where('id', $message->conversationId)->update([
-            'last_message_at' => now(),
-            'message_count' => \DB::raw('message_count + 1'),
-        ]);
-
-        return $this->toUnifiedMessage($inboxMessage);
+        return $this->toUnifiedMessage((object) $inboxMessage);
     }
 
     public function toUnifiedConversation(mixed $sourceConversation): UnifiedConversation
@@ -101,14 +92,14 @@ class EmailChannelAdapter extends AbstractChannelAdapter
 
         $contact = MessageParticipant::fromEmail(
             email: $conversation->contact_email ?? '',
-            name: $conversation->contact_name,
+            name: $conversation->contact_name ?? null,
         );
 
-        if ($conversation->contact_id && $conversation->contact_module) {
+        if (isset($conversation->contact_id) && $conversation->contact_id && isset($conversation->contact_module)) {
             $contact = MessageParticipant::fromContact(
                 name: $conversation->contact_name ?? '',
-                email: $conversation->contact_email,
-                phone: $conversation->contact_phone,
+                email: $conversation->contact_email ?? null,
+                phone: $conversation->contact_phone ?? null,
                 recordContext: new RecordContext(
                     $conversation->contact_module,
                     $conversation->contact_id
@@ -117,35 +108,42 @@ class EmailChannelAdapter extends AbstractChannelAdapter
         }
 
         $linkedRecord = null;
-        if ($conversation->linked_module && $conversation->linked_record_id) {
+        if (isset($conversation->linked_module) && $conversation->linked_module && isset($conversation->linked_record_id) && $conversation->linked_record_id) {
             $linkedRecord = new RecordContext(
                 $conversation->linked_module,
                 $conversation->linked_record_id
             );
         }
 
+        $tags = isset($conversation->tags)
+            ? (is_string($conversation->tags) ? json_decode($conversation->tags, true) : $conversation->tags)
+            : [];
+        $metadata = isset($conversation->metadata)
+            ? (is_string($conversation->metadata) ? json_decode($conversation->metadata, true) : $conversation->metadata)
+            : [];
+
         return UnifiedConversation::reconstitute(
             id: $conversation->id,
             channel: ChannelType::EMAIL,
             status: $this->mapStatus($conversation->status ?? 'open'),
-            subject: $conversation->subject,
+            subject: $conversation->subject ?? null,
             contact: $contact,
-            assignedTo: $conversation->assigned_to,
+            assignedTo: $conversation->assigned_to ?? null,
             linkedRecord: $linkedRecord,
             sourceConversationId: (string) $conversation->id,
-            externalThreadId: $conversation->external_thread_id,
-            tags: $conversation->tags ?? [],
+            externalThreadId: $conversation->external_thread_id ?? null,
+            tags: $tags ?? [],
             messageCount: $conversation->message_count ?? 0,
-            lastMessageAt: $conversation->last_message_at
+            lastMessageAt: isset($conversation->last_message_at) && $conversation->last_message_at
                 ? new \DateTimeImmutable($conversation->last_message_at)
                 : null,
-            firstResponseAt: $conversation->first_response_at
+            firstResponseAt: isset($conversation->first_response_at) && $conversation->first_response_at
                 ? new \DateTimeImmutable($conversation->first_response_at)
                 : null,
-            responseTimeSeconds: $conversation->response_time_seconds,
-            metadata: $conversation->metadata ?? [],
+            responseTimeSeconds: $conversation->response_time_seconds ?? null,
+            metadata: $metadata ?? [],
             createdAt: new \DateTimeImmutable($conversation->created_at),
-            updatedAt: $conversation->updated_at
+            updatedAt: isset($conversation->updated_at) && $conversation->updated_at
                 ? new \DateTimeImmutable($conversation->updated_at)
                 : null,
         );

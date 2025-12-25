@@ -4,12 +4,10 @@ namespace App\Http\Controllers\Api\Whatsapp;
 
 use App\Application\Services\WhatsApp\WhatsAppApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\WhatsappConnection;
-use App\Models\WhatsappConversation;
-use App\Models\WhatsappTemplate;
 use App\Services\Whatsapp\WhatsappService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WhatsappConversationController extends Controller
 {

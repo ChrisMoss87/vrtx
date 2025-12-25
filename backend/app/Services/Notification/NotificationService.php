@@ -8,9 +8,7 @@ use App\Domain\Notification\Repositories\NotificationRepositoryInterface;
 use App\Domain\Notification\Repositories\NotificationPreferenceRepositoryInterface;
 use App\Domain\Notification\Repositories\NotificationScheduleRepositoryInterface;
 use App\Events\NotificationCreated;
-use App\Models\Notification;
-use App\Models\NotificationPreference;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 

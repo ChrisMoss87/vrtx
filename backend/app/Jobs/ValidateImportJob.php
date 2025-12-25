@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\Import;
 use App\Services\Import\ImportEngine;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 class ValidateImportJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+use Illuminate\Support\Facades\DB;
 
     public int $tries = 1;
     public int $timeout = 600; // 10 minutes

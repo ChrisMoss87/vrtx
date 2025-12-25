@@ -2,28 +2,22 @@
 
 namespace App\Http\Controllers\Api\LandingPage;
 
-use App\Application\Services\LandingPage\LandingPageApplicationService;
+use App\Domain\LandingPage\Repositories\LandingPageRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\LandingPage;
-use App\Models\LandingPageVisit;
-use App\Services\LandingPage\LandingPageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PublicLandingPageController extends Controller
 {
     public function __construct(
-        protected LandingPageService $landingPageService,
-        protected LandingPageApplicationService $landingPageApplicationService
+        protected LandingPageRepositoryInterface $repository
     ) {}
 
     public function show(Request $request, string $slug): JsonResponse
     {
-        $page = LandingPage::where('slug', $slug)
-            ->where('status', 'published')
-            ->first();
+        $page = $this->repository->getPageBySlug($slug, ['variants']);
 
-        if (!$page) {
+        if (!$page || $page['status'] !== 'published') {
             return response()->json([
                 'success' => false,
                 'message' => 'Page not found',
@@ -44,40 +38,46 @@ class PublicLandingPageController extends Controller
             'utm_content' => $request->query('utm_content'),
         ];
 
-        $visit = $this->landingPageService->recordVisit($page, $visitData);
+        $visit = $this->repository->recordVisit($page['id'], $visitData);
 
         // Get the appropriate content (variant or main)
-        $content = $page->content;
-        $styles = $page->styles;
+        $content = $page['content'];
+        $styles = $page['styles'];
         $variantId = null;
 
-        if ($page->is_ab_testing_enabled && $visit->variant_id) {
-            $variant = $page->variants()->find($visit->variant_id);
+        if ($page['is_ab_testing_enabled'] && isset($visit['variant_id'])) {
+            $variant = null;
+            foreach ($page['variants'] ?? [] as $v) {
+                if ($v['id'] === $visit['variant_id']) {
+                    $variant = $v;
+                    break;
+                }
+            }
             if ($variant) {
-                $content = $variant->content;
-                $styles = $variant->styles;
-                $variantId = $variant->id;
+                $content = $variant['content'];
+                $styles = $variant['styles'];
+                $variantId = $variant['id'];
             }
         }
 
         return response()->json([
             'success' => true,
             'data' => [
-                'id' => $page->id,
-                'name' => $page->name,
-                'slug' => $page->slug,
+                'id' => $page['id'],
+                'name' => $page['name'],
+                'slug' => $page['slug'],
                 'content' => $content,
                 'styles' => $styles,
-                'settings' => $page->settings,
-                'seo_settings' => $page->seo_settings,
-                'web_form_id' => $page->web_form_id,
-                'thank_you_page_type' => $page->thank_you_page_type,
-                'thank_you_message' => $page->thank_you_message,
-                'thank_you_redirect_url' => $page->thank_you_redirect_url,
-                'favicon_url' => $page->favicon_url,
-                'og_image_url' => $page->og_image_url,
+                'settings' => $page['settings'],
+                'seo_settings' => $page['seo_settings'],
+                'web_form_id' => $page['web_form_id'],
+                'thank_you_page_type' => $page['thank_you_page_type'],
+                'thank_you_message' => $page['thank_you_message'],
+                'thank_you_redirect_url' => $page['thank_you_redirect_url'],
+                'favicon_url' => $page['favicon_url'],
+                'og_image_url' => $page['og_image_url'],
             ],
-            'visit_id' => $visit->id,
+            'visit_id' => $visit['id'],
             'variant_id' => $variantId,
         ]);
     }
@@ -90,16 +90,11 @@ class PublicLandingPageController extends Controller
             'scroll_depth' => 'required|integer|min:0|max:100',
         ]);
 
-        $visit = LandingPageVisit::find($validated['visit_id']);
-
-        if (!$visit || $visit->page->slug !== $slug) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Visit not found',
-            ], 404);
-        }
-
-        $visit->updateEngagement($validated['time_on_page'], $validated['scroll_depth']);
+        $this->repository->updateVisitEngagement(
+            $validated['visit_id'],
+            $validated['time_on_page'],
+            $validated['scroll_depth']
+        );
 
         return response()->json([
             'success' => true,
@@ -114,16 +109,10 @@ class PublicLandingPageController extends Controller
             'submission_id' => 'required|integer',
         ]);
 
-        $visit = LandingPageVisit::find($validated['visit_id']);
-
-        if (!$visit || $visit->page->slug !== $slug) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Visit not found',
-            ], 404);
-        }
-
-        $visit->markConverted($validated['submission_id']);
+        $this->repository->markVisitConverted(
+            $validated['visit_id'],
+            $validated['submission_id']
+        );
 
         return response()->json([
             'success' => true,
@@ -133,11 +122,9 @@ class PublicLandingPageController extends Controller
 
     public function thankYou(string $slug): JsonResponse
     {
-        $page = LandingPage::where('slug', $slug)
-            ->where('status', 'published')
-            ->first();
+        $page = $this->repository->getPageBySlug($slug);
 
-        if (!$page) {
+        if (!$page || $page['status'] !== 'published') {
             return response()->json([
                 'success' => false,
                 'message' => 'Page not found',
@@ -145,18 +132,18 @@ class PublicLandingPageController extends Controller
         }
 
         $thankYouData = [
-            'type' => $page->thank_you_page_type,
-            'message' => $page->thank_you_message,
-            'redirect_url' => $page->thank_you_redirect_url,
+            'type' => $page['thank_you_page_type'],
+            'message' => $page['thank_you_message'],
+            'redirect_url' => $page['thank_you_redirect_url'],
         ];
 
-        if ($page->thank_you_page_type === 'page' && $page->thank_you_page_id) {
-            $thankYouPage = LandingPage::find($page->thank_you_page_id);
+        if ($page['thank_you_page_type'] === 'page' && $page['thank_you_page_id']) {
+            $thankYouPage = $this->repository->getPageById($page['thank_you_page_id']);
             if ($thankYouPage) {
                 $thankYouData['page'] = [
-                    'slug' => $thankYouPage->slug,
-                    'content' => $thankYouPage->content,
-                    'styles' => $thankYouPage->styles,
+                    'slug' => $thankYouPage['slug'],
+                    'content' => $thankYouPage['content'],
+                    'styles' => $thankYouPage['styles'],
                 ];
             }
         }

@@ -9,14 +9,13 @@ use App\Domain\Modules\ValueObjects\FieldDependency;
 use App\Domain\Modules\ValueObjects\FormulaDefinition;
 use App\Domain\Modules\ValueObjects\LookupConfiguration;
 use App\Domain\Modules\ValueObjects\ValidationRule;
-use App\Models\Field;
-use App\Models\Module;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class FieldTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected Module $module;
 
@@ -24,7 +23,7 @@ class FieldTest extends TestCase
     {
         parent::setUp();
 
-        $this->module = Module::create([
+        $this->module = DB::table('modules')->insertGetId([
             'name' => 'Test Module',
             'singular_name' => 'Test',
             'api_name' => 'test_module',
@@ -34,7 +33,7 @@ class FieldTest extends TestCase
 
     public function test_field_can_be_created(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Test Field',
             'api_name' => 'test_field',
@@ -52,7 +51,7 @@ class FieldTest extends TestCase
 
     public function test_field_belongs_to_module(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Test Field',
             'api_name' => 'test_field',
@@ -78,7 +77,7 @@ class FieldTest extends TestCase
 
     public function test_conditional_visibility_object_returns_value_object(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Test Field',
             'api_name' => 'test_field',
@@ -117,7 +116,7 @@ class FieldTest extends TestCase
 
     public function test_formula_definition_object_returns_value_object(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Total',
             'api_name' => 'total',
@@ -140,7 +139,7 @@ class FieldTest extends TestCase
 
     public function test_lookup_settings_object_returns_value_object(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Contact',
             'api_name' => 'contact_id',
@@ -177,7 +176,7 @@ class FieldTest extends TestCase
 
     public function test_has_conditional_visibility(): void
     {
-        $fieldWithVisibility = Field::create([
+        $fieldWithVisibility = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Field 1',
             'api_name' => 'field_1',
@@ -191,7 +190,7 @@ class FieldTest extends TestCase
             ],
         ]);
 
-        $fieldWithoutVisibility = Field::create([
+        $fieldWithoutVisibility = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Field 2',
             'api_name' => 'field_2',
@@ -204,7 +203,7 @@ class FieldTest extends TestCase
 
     public function test_is_formula_field(): void
     {
-        $formulaField = Field::create([
+        $formulaField = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Total',
             'api_name' => 'total',
@@ -218,7 +217,7 @@ class FieldTest extends TestCase
             ],
         ]);
 
-        $textField = Field::create([
+        $textField = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Name',
             'api_name' => 'name',
@@ -231,7 +230,7 @@ class FieldTest extends TestCase
 
     public function test_is_lookup_field(): void
     {
-        $lookupField = Field::create([
+        $lookupField = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Contact',
             'api_name' => 'contact_id',
@@ -244,7 +243,7 @@ class FieldTest extends TestCase
             ],
         ]);
 
-        $textField = Field::create([
+        $textField = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Name',
             'api_name' => 'name',
@@ -257,7 +256,7 @@ class FieldTest extends TestCase
 
     public function test_get_dependencies_from_conditional_visibility(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Field',
             'api_name' => 'field',
@@ -281,7 +280,7 @@ class FieldTest extends TestCase
 
     public function test_get_dependencies_from_formula(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Total',
             'api_name' => 'total',
@@ -304,7 +303,7 @@ class FieldTest extends TestCase
 
     public function test_get_dependencies_from_lookup(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Contact',
             'api_name' => 'contact_id',
@@ -331,7 +330,7 @@ class FieldTest extends TestCase
 
     public function test_is_visible_evaluates_conditional_visibility(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Field',
             'api_name' => 'field',
@@ -351,7 +350,7 @@ class FieldTest extends TestCase
 
     public function test_is_visible_returns_true_when_no_conditions(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Field',
             'api_name' => 'field',
@@ -363,7 +362,7 @@ class FieldTest extends TestCase
 
     public function test_get_validation_rules_includes_base_rules(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Field',
             'api_name' => 'field',
@@ -381,7 +380,7 @@ class FieldTest extends TestCase
 
     public function test_get_validation_rules_adds_unique_rule(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Email',
             'api_name' => 'email',
@@ -398,7 +397,7 @@ class FieldTest extends TestCase
 
     public function test_get_validation_rules_does_not_duplicate_required(): void
     {
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $this->module->id,
             'label' => 'Field',
             'api_name' => 'field',

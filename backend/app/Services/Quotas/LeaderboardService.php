@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Quotas;
 
-use App\Models\LeaderboardEntry;
-use App\Models\Quota;
-use App\Models\QuotaPeriod;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -18,7 +15,7 @@ class LeaderboardService
     public function getLeaderboard(?int $periodId = null, string $metricType = Quota::METRIC_REVENUE, int $limit = 10): array
     {
         $period = $periodId
-            ? QuotaPeriod::find($periodId)
+            ? DB::table('quota_periods')->where('id', $periodId)->first()
             : QuotaPeriod::getCurrentPeriod();
 
         if (!$period) {
@@ -61,7 +58,7 @@ class LeaderboardService
      */
     public function refreshLeaderboard(int $periodId, ?string $metricType = null): void
     {
-        $period = QuotaPeriod::findOrFail($periodId);
+        $period = DB::table('quota_periods')->where('id', $periodId)->first();
         $metricTypes = $metricType ? [$metricType] : array_keys(Quota::getMetricTypes());
 
         foreach ($metricTypes as $type) {
@@ -87,7 +84,7 @@ class LeaderboardService
 
         DB::transaction(function () use ($period, $metricType, $quotas, $previousWeekValues) {
             // Delete existing entries
-            LeaderboardEntry::where('period_id', $period->id)
+            DB::table('leaderboard_entries')->where('period_id', $period->id)
                 ->where('metric_type', $metricType)
                 ->delete();
 
@@ -99,7 +96,7 @@ class LeaderboardService
                     ? round((($quota->current_value - $previousValue) / $previousValue) * 100, 2)
                     : 0;
 
-                LeaderboardEntry::create([
+                DB::table('leaderboard_entries')->insertGetId([
                     'period_id' => $period->id,
                     'metric_type' => $metricType,
                     'user_id' => $quota->user_id,
@@ -137,7 +134,7 @@ class LeaderboardService
     public function getUserPosition(int $userId, ?int $periodId = null, string $metricType = Quota::METRIC_REVENUE): ?array
     {
         $period = $periodId
-            ? QuotaPeriod::find($periodId)
+            ? DB::table('quota_periods')->where('id', $periodId)->first()
             : QuotaPeriod::getCurrentPeriod();
 
         if (!$period) {
@@ -154,7 +151,7 @@ class LeaderboardService
             return null;
         }
 
-        $totalEntries = LeaderboardEntry::where('period_id', $period->id)
+        $totalEntries = DB::table('leaderboard_entries')->where('period_id', $period->id)
             ->where('metric_type', $metricType)
             ->count();
 
@@ -177,7 +174,7 @@ class LeaderboardService
     public function getAvailableMetrics(?int $periodId = null): array
     {
         $period = $periodId
-            ? QuotaPeriod::find($periodId)
+            ? DB::table('quota_periods')->where('id', $periodId)->first()
             : QuotaPeriod::getCurrentPeriod();
 
         if (!$period) {

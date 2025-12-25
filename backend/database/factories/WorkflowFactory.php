@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Module;
-use App\Models\User;
-use App\Models\Workflow;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Workflow>
@@ -26,7 +25,7 @@ class WorkflowFactory extends Factory
         return [
             'name' => $this->faker->words(3, true) . ' Workflow',
             'description' => $this->faker->sentence(),
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'is_active' => $this->faker->boolean(80),
             'priority' => $this->faker->numberBetween(0, 10),
             'trigger_type' => $this->faker->randomElement([
@@ -108,17 +107,6 @@ class WorkflowFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'trigger_type' => Workflow::TRIGGER_MANUAL,
         ]);
-    }
-
-    /**
-     * Create workflow with steps.
-     */
-    public function withSteps(int $count = 3): static
-    {
-        return $this->has(
-            \App\Models\WorkflowStep::factory()->count($count),
-            'steps'
-        );
     }
 
     /**

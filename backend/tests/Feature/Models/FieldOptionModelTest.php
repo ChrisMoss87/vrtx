@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Models;
 
-use App\Models\Field;
-use App\Models\FieldOption;
-use App\Models\Module;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class FieldOptionModelTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -26,15 +24,15 @@ class FieldOptionModelTest extends TestCase
 
     public function test_can_create_field_option(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
             'api_name' => 'status',
             'type' => 'select',
         ]);
 
-        $option = FieldOption::create([
+        $option = DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Active',
             'value' => 'active',
@@ -50,15 +48,15 @@ class FieldOptionModelTest extends TestCase
 
     public function test_field_option_belongs_to_field(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Priority',
             'api_name' => 'priority',
             'type' => 'select',
         ]);
 
-        $option = FieldOption::create([
+        $option = DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'High',
             'value' => 'high',
@@ -70,22 +68,22 @@ class FieldOptionModelTest extends TestCase
 
     public function test_field_option_active_scope(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
             'api_name' => 'status',
             'type' => 'select',
         ]);
 
-        FieldOption::create([
+        DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Active',
             'value' => 'active',
             'is_active' => true,
         ]);
 
-        FieldOption::create([
+        DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Inactive',
             'value' => 'inactive',
@@ -100,17 +98,17 @@ class FieldOptionModelTest extends TestCase
 
     public function test_field_option_ordered_scope(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Priority',
             'api_name' => 'priority',
             'type' => 'select',
         ]);
 
-        FieldOption::create(['field_id' => $field->id, 'label' => 'Low', 'value' => 'low', 'display_order' => 2]);
-        FieldOption::create(['field_id' => $field->id, 'label' => 'High', 'value' => 'high', 'display_order' => 0]);
-        FieldOption::create(['field_id' => $field->id, 'label' => 'Medium', 'value' => 'medium', 'display_order' => 1]);
+        DB::table('field_options')->insertGetId(['field_id' => $field->id, 'label' => 'Low', 'value' => 'low', 'display_order' => 2]);
+        DB::table('field_options')->insertGetId(['field_id' => $field->id, 'label' => 'High', 'value' => 'high', 'display_order' => 0]);
+        DB::table('field_options')->insertGetId(['field_id' => $field->id, 'label' => 'Medium', 'value' => 'medium', 'display_order' => 1]);
 
         $options = FieldOption::ordered()->get();
 
@@ -121,15 +119,15 @@ class FieldOptionModelTest extends TestCase
 
     public function test_field_option_metadata_is_cast_to_array(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
             'api_name' => 'status',
             'type' => 'select',
         ]);
 
-        $option = FieldOption::create([
+        $option = DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Active',
             'value' => 'active',
@@ -157,15 +155,15 @@ class FieldOptionModelTest extends TestCase
 
     public function test_field_option_cascade_deletes_with_field(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
             'api_name' => 'status',
             'type' => 'select',
         ]);
 
-        $option = FieldOption::create([
+        $option = DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Active',
             'value' => 'active',
@@ -178,15 +176,15 @@ class FieldOptionModelTest extends TestCase
 
     public function test_field_option_supports_color(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
             'api_name' => 'status',
             'type' => 'select',
         ]);
 
-        $option = FieldOption::create([
+        $option = DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Active',
             'value' => 'active',
@@ -198,8 +196,8 @@ class FieldOptionModelTest extends TestCase
 
     public function test_multiple_options_for_single_field(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
             'api_name' => 'status',
@@ -209,7 +207,7 @@ class FieldOptionModelTest extends TestCase
         $values = ['new', 'in_progress', 'completed', 'cancelled'];
 
         foreach ($values as $index => $value) {
-            FieldOption::create([
+            DB::table('field_options')->insertGetId([
                 'field_id' => $field->id,
                 'label' => ucfirst(str_replace('_', ' ', $value)),
                 'value' => $value,

@@ -9,9 +9,6 @@ use App\Domain\Integration\DTOs\ExternalInvoiceDTO;
 use App\Domain\Integration\DTOs\SyncResultDTO;
 use App\Domain\Integration\Repositories\IntegrationConnectionRepositoryInterface;
 use App\Domain\Integration\ValueObjects\SyncDirection;
-use App\Models\IntegrationConnection;
-use App\Models\IntegrationEntityMapping;
-use App\Models\IntegrationSyncLog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -363,7 +360,7 @@ class QuickBooksSyncService
 
     private function upsertCrmContact(IntegrationConnection $connection, ExternalContactDTO $dto): string
     {
-        $mapping = IntegrationEntityMapping::where('integration_connection_id', $connection->id)
+        $mapping = DB::table('integration_entity_mappings')->where('integration_connection_id', $connection->id)
             ->where('entity_type', 'contacts')
             ->where('external_id', $dto->externalId)
             ->first();
@@ -399,7 +396,7 @@ class QuickBooksSyncService
 
         if ($existingContact) {
             // Link existing contact
-            IntegrationEntityMapping::create([
+            DB::table('integration_entity_mappings')->insertGetId([
                 'integration_connection_id' => $connection->id,
                 'entity_type' => 'contacts',
                 'local_id' => $existingContact->id,
@@ -420,7 +417,7 @@ class QuickBooksSyncService
             'updated_at' => now(),
         ]);
 
-        IntegrationEntityMapping::create([
+        DB::table('integration_entity_mappings')->insertGetId([
             'integration_connection_id' => $connection->id,
             'entity_type' => 'contacts',
             'local_id' => $contactId,
@@ -434,13 +431,13 @@ class QuickBooksSyncService
 
     private function upsertCrmInvoice(IntegrationConnection $connection, ExternalInvoiceDTO $dto): string
     {
-        $mapping = IntegrationEntityMapping::where('integration_connection_id', $connection->id)
+        $mapping = DB::table('integration_entity_mappings')->where('integration_connection_id', $connection->id)
             ->where('entity_type', 'invoices')
             ->where('external_id', $dto->externalId)
             ->first();
 
         // Find the linked CRM contact
-        $contactMapping = IntegrationEntityMapping::where('integration_connection_id', $connection->id)
+        $contactMapping = DB::table('integration_entity_mappings')->where('integration_connection_id', $connection->id)
             ->where('entity_type', 'contacts')
             ->where('external_id', $dto->externalCustomerId)
             ->first();
@@ -475,7 +472,7 @@ class QuickBooksSyncService
             'updated_at' => now(),
         ]);
 
-        IntegrationEntityMapping::create([
+        DB::table('integration_entity_mappings')->insertGetId([
             'integration_connection_id' => $connection->id,
             'entity_type' => 'invoices',
             'local_id' => $invoiceId,
@@ -668,7 +665,7 @@ class QuickBooksSyncService
 
     private function getEntityMapping(IntegrationConnection $connection, string $entityType, int $localId): ?IntegrationEntityMapping
     {
-        return IntegrationEntityMapping::where('integration_connection_id', $connection->id)
+        return DB::table('integration_entity_mappings')->where('integration_connection_id', $connection->id)
             ->where('entity_type', $entityType)
             ->where('local_id', $localId)
             ->first();
@@ -676,7 +673,7 @@ class QuickBooksSyncService
 
     private function createEntityMapping(IntegrationConnection $connection, string $entityType, int $localId, string $externalId): IntegrationEntityMapping
     {
-        return IntegrationEntityMapping::create([
+        return DB::table('integration_entity_mappings')->insertGetId([
             'integration_connection_id' => $connection->id,
             'entity_type' => $entityType,
             'local_id' => $localId,
@@ -695,7 +692,7 @@ class QuickBooksSyncService
 
     private function createSyncLog(IntegrationConnection $connection, string $entityType, string $direction): IntegrationSyncLog
     {
-        return IntegrationSyncLog::create([
+        return DB::table('integration_sync_logs')->insertGetId([
             'integration_connection_id' => $connection->id,
             'entity_type' => $entityType,
             'direction' => $direction,

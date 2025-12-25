@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Api\AbTest;
 
 use App\Http\Controllers\Controller;
-use App\Models\AbTest;
-use App\Models\AbTestVariant;
 use App\Services\AbTest\AbTestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AbTestController extends Controller
 {
@@ -73,7 +72,7 @@ class AbTestController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
 
         if ($test->isRunning()) {
             return response()->json([
@@ -103,7 +102,7 @@ class AbTestController extends Controller
 
     public function destroy(int $id): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
 
         if ($test->isRunning()) {
             return response()->json([
@@ -122,7 +121,7 @@ class AbTestController extends Controller
 
     public function start(int $id): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
 
         try {
             $test = $this->abTestService->startTest($test);
@@ -142,7 +141,7 @@ class AbTestController extends Controller
 
     public function pause(int $id): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
         $test->pause();
 
         return response()->json([
@@ -154,7 +153,7 @@ class AbTestController extends Controller
 
     public function resume(int $id): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
         $test->resume();
 
         return response()->json([
@@ -166,7 +165,7 @@ class AbTestController extends Controller
 
     public function complete(int $id): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
         $test->complete();
 
         return response()->json([
@@ -224,7 +223,7 @@ class AbTestController extends Controller
 
     public function variants(int $id): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
         $statistics = $this->abTestService->getTestStatistics($test);
 
         return response()->json([
@@ -235,7 +234,7 @@ class AbTestController extends Controller
 
     public function createVariant(Request $request, int $id): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
 
         if ($test->isCompleted()) {
             return response()->json([
@@ -261,8 +260,8 @@ class AbTestController extends Controller
 
     public function updateVariant(Request $request, int $id, int $variantId): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
-        $variant = AbTestVariant::where('test_id', $test->id)->findOrFail($variantId);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
+        $variant = DB::table('ab_test_variants')->where('test_id', $test->id)->findOrFail($variantId);
 
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',
@@ -282,8 +281,8 @@ class AbTestController extends Controller
 
     public function deleteVariant(int $id, int $variantId): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
-        $variant = AbTestVariant::where('test_id', $test->id)->findOrFail($variantId);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
+        $variant = DB::table('ab_test_variants')->where('test_id', $test->id)->findOrFail($variantId);
 
         if ($variant->is_control) {
             return response()->json([
@@ -309,8 +308,8 @@ class AbTestController extends Controller
 
     public function declareWinner(int $id, int $variantId): JsonResponse
     {
-        $test = AbTest::findOrFail($id);
-        $variant = AbTestVariant::where('test_id', $test->id)->findOrFail($variantId);
+        $test = DB::table('ab_tests')->where('id', $id)->first();
+        $variant = DB::table('ab_test_variants')->where('test_id', $test->id)->findOrFail($variantId);
 
         $variant->declareWinner();
 

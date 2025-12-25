@@ -2,13 +2,11 @@
 
 namespace App\Services\Inbox;
 
-use App\Models\SharedInbox;
-use App\Models\InboxConversation;
-use App\Models\InboxMessage;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Mail\Message as MailMessage;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport;
+use Illuminate\Support\Facades\DB;
 
 class SmtpService
 {
@@ -35,7 +33,7 @@ class SmtpService
             ->first();
 
         // Create message record first
-        $message = InboxMessage::create([
+        $message = DB::table('inbox_messages')->insertGetId([
             'conversation_id' => $conversation->id,
             'direction' => 'outbound',
             'type' => 'reply',
@@ -153,7 +151,7 @@ class SmtpService
             return null;
         }
 
-        $message = InboxMessage::create([
+        $message = DB::table('inbox_messages')->insertGetId([
             'conversation_id' => $conversation->id,
             'direction' => 'outbound',
             'type' => 'auto_reply',

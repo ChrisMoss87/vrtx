@@ -4,11 +4,10 @@ namespace App\Http\Controllers\Api\Video;
 
 use App\Application\Services\Video\VideoApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\VideoMeeting;
-use App\Models\VideoMeetingParticipant;
 use App\Services\Video\VideoService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class VideoParticipantController extends Controller
 {

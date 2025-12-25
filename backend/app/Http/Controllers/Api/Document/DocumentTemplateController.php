@@ -6,11 +6,10 @@ namespace App\Http\Controllers\Api\Document;
 
 use App\Application\Services\Document\DocumentApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\DocumentTemplate;
-use App\Models\GeneratedDocument;
 use App\Services\Document\DocumentTemplateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DocumentTemplateController extends Controller
 {
@@ -21,7 +20,7 @@ class DocumentTemplateController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = DocumentTemplate::query()
+        $query = DB::table('document_templates')
             ->accessibleBy(auth()->id())
             ->with('createdBy');
 

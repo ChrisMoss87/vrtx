@@ -5,21 +5,34 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Workflows;
 
 use App\Http\Controllers\Controller;
-use App\Models\WorkflowTemplate;
-use App\Models\Module;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WorkflowTemplateController extends Controller
 {
+    // Categories
+    private const CATEGORY_LEAD = 'lead';
+    private const CATEGORY_DEAL = 'deal';
+    private const CATEGORY_CUSTOMER = 'customer';
+    private const CATEGORY_DATA = 'data';
+    private const CATEGORY_PRODUCTIVITY = 'productivity';
+    private const CATEGORY_COMMUNICATION = 'communication';
+
+    // Difficulty levels
+    private const DIFFICULTY_BEGINNER = 'beginner';
+    private const DIFFICULTY_INTERMEDIATE = 'intermediate';
+    private const DIFFICULTY_ADVANCED = 'advanced';
+
     /**
      * Get all workflow templates.
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = WorkflowTemplate::query()->active();
+            $query = DB::table('workflow_templates')->where('is_active', true);
 
             // Filter by category
             if ($request->has('category')) {
@@ -50,22 +63,40 @@ class WorkflowTemplateController extends Controller
             $templates = $query->get();
 
             // Get available modules to check compatibility
-            $availableModules = Module::where('is_active', true)
+            $availableModules = DB::table('modules')
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
                 ->pluck('api_name')
                 ->toArray();
 
             // Add compatibility flag to each template
             $templates = $templates->map(function ($template) use ($availableModules) {
-                $data = $template->toArray();
-                $data['is_compatible'] = $template->canUseWithModules($availableModules);
+                $data = (array) $template;
+
+                // Decode JSON fields
+                if (isset($data['workflow_data']) && is_string($data['workflow_data'])) {
+                    $data['workflow_data'] = json_decode($data['workflow_data'], true);
+                }
+                if (isset($data['required_modules']) && is_string($data['required_modules'])) {
+                    $data['required_modules'] = json_decode($data['required_modules'], true);
+                }
+                if (isset($data['required_fields']) && is_string($data['required_fields'])) {
+                    $data['required_fields'] = json_decode($data['required_fields'], true);
+                }
+                if (isset($data['variable_mappings']) && is_string($data['variable_mappings'])) {
+                    $data['variable_mappings'] = json_decode($data['variable_mappings'], true);
+                }
+
+                // Check compatibility
+                $data['is_compatible'] = $this->canUseWithModules($data['required_modules'] ?? [], $availableModules);
                 return $data;
             });
 
             return response()->json([
                 'success' => true,
                 'templates' => $templates,
-                'categories' => WorkflowTemplate::getCategories(),
-                'difficulty_levels' => WorkflowTemplate::getDifficultyLevels(),
+                'categories' => $this->getCategories(),
+                'difficulty_levels' => $this->getDifficultyLevels(),
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -82,7 +113,9 @@ class WorkflowTemplateController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $template = WorkflowTemplate::find($id);
+            $template = DB::table('workflow_templates')
+                ->where('id', $id)
+                ->first();
 
             if (!$template) {
                 return response()->json([
@@ -92,16 +125,33 @@ class WorkflowTemplateController extends Controller
             }
 
             // Get available modules
-            $availableModules = Module::where('is_active', true)
+            $availableModules = DB::table('modules')
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
                 ->pluck('api_name')
                 ->toArray();
 
-            $data = $template->toArray();
-            $data['is_compatible'] = $template->canUseWithModules($availableModules);
+            $data = (array) $template;
+
+            // Decode JSON fields
+            if (isset($data['workflow_data']) && is_string($data['workflow_data'])) {
+                $data['workflow_data'] = json_decode($data['workflow_data'], true);
+            }
+            if (isset($data['required_modules']) && is_string($data['required_modules'])) {
+                $data['required_modules'] = json_decode($data['required_modules'], true);
+            }
+            if (isset($data['required_fields']) && is_string($data['required_fields'])) {
+                $data['required_fields'] = json_decode($data['required_fields'], true);
+            }
+            if (isset($data['variable_mappings']) && is_string($data['variable_mappings'])) {
+                $data['variable_mappings'] = json_decode($data['variable_mappings'], true);
+            }
+
+            $data['is_compatible'] = $this->canUseWithModules($data['required_modules'] ?? [], $availableModules);
 
             // Get missing modules if not compatible
             if (!$data['is_compatible']) {
-                $required = $template->required_modules ?? [];
+                $required = $data['required_modules'] ?? [];
                 $data['missing_modules'] = array_diff($required, $availableModules);
             }
 
@@ -124,7 +174,9 @@ class WorkflowTemplateController extends Controller
     public function use(Request $request, int $id): JsonResponse
     {
         try {
-            $template = WorkflowTemplate::find($id);
+            $template = DB::table('workflow_templates')
+                ->where('id', $id)
+                ->first();
 
             if (!$template) {
                 return response()->json([
@@ -140,13 +192,19 @@ class WorkflowTemplateController extends Controller
             ]);
 
             // Check compatibility
-            $availableModules = Module::where('is_active', true)
+            $availableModules = DB::table('modules')
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
                 ->pluck('api_name')
                 ->toArray();
 
-            if (!$template->canUseWithModules($availableModules)) {
-                $required = $template->required_modules ?? [];
-                $missing = array_diff($required, $availableModules);
+            // Decode required_modules
+            $requiredModules = is_string($template->required_modules)
+                ? json_decode($template->required_modules, true)
+                : [];
+
+            if (!$this->canUseWithModules($requiredModules, $availableModules)) {
+                $missing = array_diff($requiredModules, $availableModules);
 
                 return response()->json([
                     'success' => false,
@@ -157,7 +215,7 @@ class WorkflowTemplateController extends Controller
 
             // Get workflow data with mappings applied
             $mappings = $validated['mappings'] ?? [];
-            $workflowData = $template->getWorkflowDataWithMappings($mappings);
+            $workflowData = $this->getWorkflowDataWithMappings($template, $mappings);
 
             // Override name if provided
             if (!empty($validated['name'])) {
@@ -165,7 +223,9 @@ class WorkflowTemplateController extends Controller
             }
 
             // Increment usage count
-            $template->incrementUsage();
+            DB::table('workflow_templates')
+                ->where('id', $id)
+                ->increment('usage_count');
 
             return response()->json([
                 'success' => true,
@@ -195,7 +255,7 @@ class WorkflowTemplateController extends Controller
     {
         return response()->json([
             'success' => true,
-            'categories' => WorkflowTemplate::getCategories(),
+            'categories' => $this->getCategories(),
         ]);
     }
 
@@ -205,8 +265,8 @@ class WorkflowTemplateController extends Controller
     public function popular(int $limit = 6): JsonResponse
     {
         try {
-            $templates = WorkflowTemplate::query()
-                ->active()
+            $templates = DB::table('workflow_templates')
+                ->where('is_active', true)
                 ->orderByDesc('usage_count')
                 ->limit($limit)
                 ->get();
@@ -230,16 +290,16 @@ class WorkflowTemplateController extends Controller
     public function byCategory(string $category): JsonResponse
     {
         try {
-            $templates = WorkflowTemplate::query()
-                ->active()
-                ->category($category)
+            $templates = DB::table('workflow_templates')
+                ->where('is_active', true)
+                ->where('category', $category)
                 ->orderBy('name')
                 ->get();
 
             return response()->json([
                 'success' => true,
                 'category' => $category,
-                'category_label' => WorkflowTemplate::getCategories()[$category] ?? $category,
+                'category_label' => $this->getCategories()[$category] ?? $category,
                 'templates' => $templates,
             ]);
         } catch (\Exception $e) {
@@ -249,5 +309,68 @@ class WorkflowTemplateController extends Controller
                 'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Get all categories.
+     */
+    private function getCategories(): array
+    {
+        return [
+            self::CATEGORY_LEAD => 'Lead Management',
+            self::CATEGORY_DEAL => 'Deal & Sales',
+            self::CATEGORY_CUSTOMER => 'Customer Success',
+            self::CATEGORY_DATA => 'Data Quality',
+            self::CATEGORY_PRODUCTIVITY => 'Team Productivity',
+            self::CATEGORY_COMMUNICATION => 'Communication',
+        ];
+    }
+
+    /**
+     * Get all difficulty levels.
+     */
+    private function getDifficultyLevels(): array
+    {
+        return [
+            self::DIFFICULTY_BEGINNER => 'Beginner',
+            self::DIFFICULTY_INTERMEDIATE => 'Intermediate',
+            self::DIFFICULTY_ADVANCED => 'Advanced',
+        ];
+    }
+
+    /**
+     * Check if template can be used with given modules.
+     */
+    private function canUseWithModules(array $requiredModules, array $availableModuleApiNames): bool
+    {
+        if (empty($requiredModules)) {
+            return true;
+        }
+
+        foreach ($requiredModules as $requiredModule) {
+            if (!in_array($requiredModule, $availableModuleApiNames)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the workflow data with variable mappings applied.
+     */
+    private function getWorkflowDataWithMappings(object $template, array $mappings): array
+    {
+        $data = is_string($template->workflow_data)
+            ? json_decode($template->workflow_data, true)
+            : (array) $template->workflow_data;
+
+        // Replace variable placeholders with actual values
+        $json = json_encode($data);
+        foreach ($mappings as $key => $value) {
+            $json = str_replace("{{$key}}", (string) $value, $json);
+        }
+
+        return json_decode($json, true);
     }
 }

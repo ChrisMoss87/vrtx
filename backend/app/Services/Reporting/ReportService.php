@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Reporting;
 
-use App\Models\Dashboard;
-use App\Models\DashboardWidget;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Report;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -76,7 +71,7 @@ class ReportService
         $limit = $config['config']['limit'] ?? 1000;
 
         // Start query
-        $query = ModuleRecord::query();
+        $query = DB::table('module_records');
 
         if ($moduleId) {
             $query->where('module_id', $moduleId);
@@ -471,7 +466,7 @@ class ReportService
         $compareRange = $config['compare_range'] ?? null;
 
         // Current value
-        $query = ModuleRecord::query();
+        $query = DB::table('module_records');
         if ($moduleId) {
             $query->where('module_id', $moduleId);
         }
@@ -486,7 +481,7 @@ class ReportService
         $changePercent = null;
 
         if ($compareRange) {
-            $compareQuery = ModuleRecord::query();
+            $compareQuery = DB::table('module_records');
             if ($moduleId) {
                 $compareQuery->where('module_id', $moduleId);
             }
@@ -562,7 +557,7 @@ class ReportService
             'date_range' => $report->date_range ?? [],
         ];
 
-        $query = ModuleRecord::query();
+        $query = DB::table('module_records');
 
         if ($config['module_id']) {
             $query->where('module_id', $config['module_id']);
@@ -634,7 +629,7 @@ class ReportService
             'date_range' => $report->date_range ?? [],
         ];
 
-        $query = ModuleRecord::query();
+        $query = DB::table('module_records');
 
         if ($config['module_id']) {
             $query->where('module_id', $config['module_id']);

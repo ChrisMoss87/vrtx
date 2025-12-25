@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\TimeMachine;
 
-use App\Models\Field;
-use App\Models\Module;
 
 class DiffService
 {

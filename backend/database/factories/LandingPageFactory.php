@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\LandingPage;
-use App\Models\LandingPageTemplate;
-use App\Models\User;
-use App\Models\WebForm;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\LandingPage>

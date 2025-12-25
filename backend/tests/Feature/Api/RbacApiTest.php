@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Permission;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -14,6 +11,7 @@ use Tests\TestCase;
 class RbacApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $adminUser;
     protected Role $adminRole;
@@ -22,10 +20,10 @@ class RbacApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->adminUser = User::factory()->create();
+        $this->adminUser = /* User factory - use DB::table('users') */->create();
 
         // Create admin role with all RBAC permissions
-        $this->adminRole = Role::create(['name' => 'super_admin', 'guard_name' => 'web']);
+        $this->adminRole = DB::table('roles')->insertGetId(['name' => 'super_admin', 'guard_name' => 'web']);
         $permissions = [
             'roles.view',
             'roles.create',
@@ -38,7 +36,7 @@ class RbacApiTest extends TestCase
             'users.delete',
         ];
         foreach ($permissions as $permName) {
-            $perm = Permission::create(['name' => $permName, 'guard_name' => 'web']);
+            $perm = DB::table('permissions')->insertGetId(['name' => $permName, 'guard_name' => 'web']);
             $this->adminRole->givePermissionTo($perm);
         }
         $this->adminUser->assignRole($this->adminRole);
@@ -52,8 +50,8 @@ class RbacApiTest extends TestCase
 
     public function test_can_list_roles(): void
     {
-        Role::create(['name' => 'manager', 'guard_name' => 'web']);
-        Role::create(['name' => 'sales_rep', 'guard_name' => 'web']);
+        DB::table('roles')->insertGetId(['name' => 'manager', 'guard_name' => 'web']);
+        DB::table('roles')->insertGetId(['name' => 'sales_rep', 'guard_name' => 'web']);
 
         $response = $this->getJson('/api/v1/roles');
 
@@ -85,7 +83,7 @@ class RbacApiTest extends TestCase
 
     public function test_cannot_create_duplicate_role(): void
     {
-        Role::create(['name' => 'existing_role', 'guard_name' => 'web']);
+        DB::table('roles')->insertGetId(['name' => 'existing_role', 'guard_name' => 'web']);
 
         $response = $this->postJson('/api/v1/roles', [
             'name' => 'existing_role',
@@ -97,7 +95,7 @@ class RbacApiTest extends TestCase
 
     public function test_can_show_role(): void
     {
-        $role = Role::create(['name' => 'test_role', 'guard_name' => 'web']);
+        $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
 
         $response = $this->getJson("/api/v1/roles/{$role->id}");
 
@@ -113,7 +111,7 @@ class RbacApiTest extends TestCase
 
     public function test_can_update_role(): void
     {
-        $role = Role::create(['name' => 'old_name', 'guard_name' => 'web']);
+        $role = DB::table('roles')->insertGetId(['name' => 'old_name', 'guard_name' => 'web']);
 
         $response = $this->putJson("/api/v1/roles/{$role->id}", [
             'name' => 'updated_name',
@@ -133,7 +131,7 @@ class RbacApiTest extends TestCase
 
     public function test_can_delete_role(): void
     {
-        $role = Role::create(['name' => 'deletable_role', 'guard_name' => 'web']);
+        $role = DB::table('roles')->insertGetId(['name' => 'deletable_role', 'guard_name' => 'web']);
 
         $response = $this->deleteJson("/api/v1/roles/{$role->id}");
 
@@ -147,8 +145,8 @@ class RbacApiTest extends TestCase
 
     public function test_cannot_delete_role_with_users(): void
     {
-        $role = Role::create(['name' => 'role_with_users', 'guard_name' => 'web']);
-        $user = User::factory()->create();
+        $role = DB::table('roles')->insertGetId(['name' => 'role_with_users', 'guard_name' => 'web']);
+        $user = /* User factory - use DB::table('users') */->create();
         $user->assignRole($role);
 
         $response = $this->deleteJson("/api/v1/roles/{$role->id}");
@@ -163,9 +161,9 @@ class RbacApiTest extends TestCase
 
     public function test_can_assign_permissions_to_role(): void
     {
-        $role = Role::create(['name' => 'test_role', 'guard_name' => 'web']);
-        $permission1 = Permission::create(['name' => 'test.view', 'guard_name' => 'web']);
-        $permission2 = Permission::create(['name' => 'test.create', 'guard_name' => 'web']);
+        $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
+        $permission1 = DB::table('permissions')->insertGetId(['name' => 'test.view', 'guard_name' => 'web']);
+        $permission2 = DB::table('permissions')->insertGetId(['name' => 'test.create', 'guard_name' => 'web']);
 
         $response = $this->postJson("/api/v1/roles/{$role->id}/permissions", [
             'permissions' => [$permission1->name, $permission2->name],
@@ -178,10 +176,10 @@ class RbacApiTest extends TestCase
 
     public function test_can_sync_role_permissions(): void
     {
-        $role = Role::create(['name' => 'test_role', 'guard_name' => 'web']);
-        $permission1 = Permission::create(['name' => 'test.view', 'guard_name' => 'web']);
-        $permission2 = Permission::create(['name' => 'test.create', 'guard_name' => 'web']);
-        $permission3 = Permission::create(['name' => 'test.delete', 'guard_name' => 'web']);
+        $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
+        $permission1 = DB::table('permissions')->insertGetId(['name' => 'test.view', 'guard_name' => 'web']);
+        $permission2 = DB::table('permissions')->insertGetId(['name' => 'test.create', 'guard_name' => 'web']);
+        $permission3 = DB::table('permissions')->insertGetId(['name' => 'test.delete', 'guard_name' => 'web']);
 
         $role->givePermissionTo($permission1);
 
@@ -197,8 +195,8 @@ class RbacApiTest extends TestCase
 
     public function test_can_remove_permission_from_role(): void
     {
-        $role = Role::create(['name' => 'test_role', 'guard_name' => 'web']);
-        $permission = Permission::create(['name' => 'test.view', 'guard_name' => 'web']);
+        $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
+        $permission = DB::table('permissions')->insertGetId(['name' => 'test.view', 'guard_name' => 'web']);
         $role->givePermissionTo($permission);
 
         $response = $this->deleteJson("/api/v1/roles/{$role->id}/permissions/{$permission->name}");
@@ -224,9 +222,9 @@ class RbacApiTest extends TestCase
 
     public function test_can_get_grouped_permissions(): void
     {
-        Permission::create(['name' => 'contacts.view', 'guard_name' => 'web']);
-        Permission::create(['name' => 'contacts.create', 'guard_name' => 'web']);
-        Permission::create(['name' => 'deals.view', 'guard_name' => 'web']);
+        DB::table('permissions')->insertGetId(['name' => 'contacts.view', 'guard_name' => 'web']);
+        DB::table('permissions')->insertGetId(['name' => 'contacts.create', 'guard_name' => 'web']);
+        DB::table('permissions')->insertGetId(['name' => 'deals.view', 'guard_name' => 'web']);
 
         $response = $this->getJson('/api/v1/permissions?grouped=true');
 
@@ -246,7 +244,7 @@ class RbacApiTest extends TestCase
 
     public function test_can_list_users(): void
     {
-        User::factory()->count(5)->create();
+        /* User factory - use DB::table('users') */->count(5)->create();
 
         $response = $this->getJson('/api/v1/users');
 
@@ -263,8 +261,8 @@ class RbacApiTest extends TestCase
 
     public function test_can_assign_role_to_user(): void
     {
-        $user = User::factory()->create();
-        $role = Role::create(['name' => 'test_role', 'guard_name' => 'web']);
+        $user = /* User factory - use DB::table('users') */->create();
+        $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
 
         $response = $this->postJson("/api/v1/users/{$user->id}/roles", [
             'roles' => [$role->name],
@@ -276,8 +274,8 @@ class RbacApiTest extends TestCase
 
     public function test_can_remove_role_from_user(): void
     {
-        $user = User::factory()->create();
-        $role = Role::create(['name' => 'test_role', 'guard_name' => 'web']);
+        $user = /* User factory - use DB::table('users') */->create();
+        $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
         $user->assignRole($role);
 
         $response = $this->deleteJson("/api/v1/users/{$user->id}/roles/{$role->name}");
@@ -288,10 +286,10 @@ class RbacApiTest extends TestCase
 
     public function test_can_sync_user_roles(): void
     {
-        $user = User::factory()->create();
-        $role1 = Role::create(['name' => 'role1', 'guard_name' => 'web']);
-        $role2 = Role::create(['name' => 'role2', 'guard_name' => 'web']);
-        $role3 = Role::create(['name' => 'role3', 'guard_name' => 'web']);
+        $user = /* User factory - use DB::table('users') */->create();
+        $role1 = DB::table('roles')->insertGetId(['name' => 'role1', 'guard_name' => 'web']);
+        $role2 = DB::table('roles')->insertGetId(['name' => 'role2', 'guard_name' => 'web']);
+        $role3 = DB::table('roles')->insertGetId(['name' => 'role3', 'guard_name' => 'web']);
 
         $user->assignRole($role1);
 
@@ -307,9 +305,9 @@ class RbacApiTest extends TestCase
 
     public function test_can_get_user_permissions(): void
     {
-        $user = User::factory()->create();
-        $role = Role::create(['name' => 'test_role', 'guard_name' => 'web']);
-        $permission = Permission::create(['name' => 'test.view', 'guard_name' => 'web']);
+        $user = /* User factory - use DB::table('users') */->create();
+        $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
+        $permission = DB::table('permissions')->insertGetId(['name' => 'test.view', 'guard_name' => 'web']);
         $role->givePermissionTo($permission);
         $user->assignRole($role);
 
@@ -328,8 +326,8 @@ class RbacApiTest extends TestCase
 
     public function test_can_assign_direct_permission_to_user(): void
     {
-        $user = User::factory()->create();
-        $permission = Permission::create(['name' => 'special.permission', 'guard_name' => 'web']);
+        $user = /* User factory - use DB::table('users') */->create();
+        $permission = DB::table('permissions')->insertGetId(['name' => 'special.permission', 'guard_name' => 'web']);
 
         $response = $this->postJson("/api/v1/users/{$user->id}/permissions", [
             'permissions' => [$permission->name],
@@ -345,7 +343,7 @@ class RbacApiTest extends TestCase
 
     public function test_user_without_permission_cannot_manage_roles(): void
     {
-        $regularUser = User::factory()->create();
+        $regularUser = /* User factory - use DB::table('users') */->create();
         Sanctum::actingAs($regularUser);
 
         $response = $this->getJson('/api/v1/roles');
@@ -355,7 +353,7 @@ class RbacApiTest extends TestCase
 
     public function test_user_without_permission_cannot_manage_users(): void
     {
-        $regularUser = User::factory()->create();
+        $regularUser = /* User factory - use DB::table('users') */->create();
         Sanctum::actingAs($regularUser);
 
         $response = $this->getJson('/api/v1/users');
@@ -369,8 +367,8 @@ class RbacApiTest extends TestCase
 
     public function test_can_clone_role(): void
     {
-        $role = Role::create(['name' => 'original_role', 'guard_name' => 'web']);
-        $permission = Permission::create(['name' => 'test.view', 'guard_name' => 'web']);
+        $role = DB::table('roles')->insertGetId(['name' => 'original_role', 'guard_name' => 'web']);
+        $permission = DB::table('permissions')->insertGetId(['name' => 'test.view', 'guard_name' => 'web']);
         $role->givePermissionTo($permission);
 
         $response = $this->postJson("/api/v1/roles/{$role->id}/clone", [
@@ -379,7 +377,7 @@ class RbacApiTest extends TestCase
 
         $response->assertOk();
 
-        $clonedRole = Role::where('name', 'cloned_role')->first();
+        $clonedRole = DB::table('roles')->where('name', 'cloned_role')->first();
         $this->assertNotNull($clonedRole);
         $this->assertTrue($clonedRole->hasPermissionTo('test.view'));
     }

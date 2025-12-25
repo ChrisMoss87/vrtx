@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Models;
 
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ModuleRecordModelTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -26,9 +24,9 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_can_create_module_record(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $record = ModuleRecord::create([
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => [
                 'first_name' => 'John',
@@ -46,8 +44,8 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_module_record_belongs_to_module(): void
     {
-        $module = Module::factory()->create();
-        $record = ModuleRecord::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Test'],
         ]);
@@ -58,10 +56,10 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_module_record_belongs_to_creator(): void
     {
-        $module = Module::factory()->create();
-        $user = User::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $user = /* User factory - use DB::table('users') */->create();
 
-        $record = ModuleRecord::create([
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Test'],
             'created_by' => $user->id,
@@ -73,10 +71,10 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_module_record_belongs_to_updater(): void
     {
-        $module = Module::factory()->create();
-        $user = User::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $user = /* User factory - use DB::table('users') */->create();
 
-        $record = ModuleRecord::create([
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Test'],
             'updated_by' => $user->id,
@@ -88,8 +86,8 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_get_field_from_data(): void
     {
-        $module = Module::factory()->create();
-        $record = ModuleRecord::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => [
                 'first_name' => 'John',
@@ -106,8 +104,8 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_set_field_in_data(): void
     {
-        $module = Module::factory()->create();
-        $record = ModuleRecord::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Original'],
         ]);
@@ -121,8 +119,8 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_module_record_data_is_cast_to_array(): void
     {
-        $module = Module::factory()->create();
-        $record = ModuleRecord::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => [
                 'name' => 'Test',
@@ -149,8 +147,8 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_module_record_soft_deletes(): void
     {
-        $module = Module::factory()->create();
-        $record = ModuleRecord::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Test'],
         ]);
@@ -164,8 +162,8 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_module_record_cascade_deletes_with_module(): void
     {
-        $module = Module::factory()->create();
-        $record = ModuleRecord::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Test'],
         ]);
@@ -179,14 +177,14 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_search_scope_finds_matching_records(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        ModuleRecord::create([
+        DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'John Doe', 'email' => 'john@example.com'],
         ]);
 
-        ModuleRecord::create([
+        DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Jane Smith', 'email' => 'jane@example.com'],
         ]);
@@ -203,14 +201,14 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_where_field_scope_filters_by_field_value(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        ModuleRecord::create([
+        DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['status' => 'active'],
         ]);
 
-        ModuleRecord::create([
+        DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['status' => 'inactive'],
         ]);
@@ -227,19 +225,19 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_order_by_field_scope_sorts_by_field(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        ModuleRecord::create([
+        DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['priority' => '3'],
         ]);
 
-        ModuleRecord::create([
+        DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['priority' => '1'],
         ]);
 
-        ModuleRecord::create([
+        DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['priority' => '2'],
         ]);
@@ -257,9 +255,9 @@ class ModuleRecordModelTest extends TestCase
 
     public function test_complex_nested_data_storage(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $record = ModuleRecord::create([
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => [
                 'person' => [

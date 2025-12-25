@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\IncomingWebhook;
-use App\Models\IncomingWebhookLog;
-use App\Models\ModuleRecord;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends Factory<IncomingWebhookLog>

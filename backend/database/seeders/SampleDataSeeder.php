@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
 use Illuminate\Database\Seeder;
 use Faker\Factory as Faker;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds sample/demo data for a new tenant.
@@ -45,7 +43,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedOrganizations(int $count): array
     {
-        $module = Module::where('api_name', 'organizations')->first();
+        $module = DB::table('modules')->where('api_name', 'organizations')->first();
         if (!$module) return [];
 
         $ids = [];
@@ -54,7 +52,7 @@ class SampleDataSeeder extends Seeder
         $types = ['customer', 'prospect', 'partner', 'vendor', 'competitor'];
 
         for ($i = 0; $i < $count; $i++) {
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'name' => $this->faker->company,
@@ -83,7 +81,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedContacts(int $count, array $orgIds): array
     {
-        $module = Module::where('api_name', 'contacts')->first();
+        $module = DB::table('modules')->where('api_name', 'contacts')->first();
         if (!$module) return [];
 
         $ids = [];
@@ -93,7 +91,7 @@ class SampleDataSeeder extends Seeder
         $departments = ['Sales', 'Marketing', 'Engineering', 'Finance', 'HR', 'Operations', 'Executive', 'IT', 'Support'];
 
         for ($i = 0; $i < $count; $i++) {
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'first_name' => $this->faker->firstName,
@@ -124,7 +122,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedProducts(int $count): array
     {
-        $module = Module::where('api_name', 'products')->first();
+        $module = DB::table('modules')->where('api_name', 'products')->first();
         if (!$module) return [];
 
         $ids = [];
@@ -140,7 +138,7 @@ class SampleDataSeeder extends Seeder
             $unitPrice = $this->faker->numberBetween(100, 10000);
             $cost = round($unitPrice * $this->faker->randomFloat(2, 0.3, 0.6), 2);
 
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'name' => $this->faker->randomElement($productNames) . ' ' . $this->faker->word,
@@ -167,10 +165,10 @@ class SampleDataSeeder extends Seeder
 
     private function seedDeals(int $count, array $orgIds, array $contactIds): array
     {
-        $module = Module::where('api_name', 'deals')->first();
+        $module = DB::table('modules')->where('api_name', 'deals')->first();
         if (!$module) return [];
 
-        $pipeline = Pipeline::where('module_id', $module->id)->first();
+        $pipeline = DB::table('pipelines')->where('module_id', $module->id)->first();
         $stages = $pipeline ? $pipeline->stages()->orderBy('display_order')->get() : collect();
 
         $ids = [];
@@ -182,7 +180,7 @@ class SampleDataSeeder extends Seeder
 
             $expectedClose = $this->faker->dateTimeBetween('-1 month', '+3 months');
 
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'name' => $this->faker->company . ' - ' . $this->faker->words(3, true),
@@ -208,7 +206,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedTasks(int $count, array $contactIds, array $dealIds): void
     {
-        $module = Module::where('api_name', 'tasks')->first();
+        $module = DB::table('modules')->where('api_name', 'tasks')->first();
         if (!$module) return;
 
         $statuses = ['not_started', 'in_progress', 'completed', 'waiting', 'deferred'];
@@ -223,7 +221,7 @@ class SampleDataSeeder extends Seeder
             $status = $this->faker->randomElement($statuses);
             $dueDate = $this->faker->dateTimeBetween('-1 week', '+2 weeks');
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'subject' => $this->faker->randomElement($subjects),
@@ -245,7 +243,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedActivities(int $count, array $contactIds, array $dealIds): void
     {
-        $module = Module::where('api_name', 'activities')->first();
+        $module = DB::table('modules')->where('api_name', 'activities')->first();
         if (!$module) return;
 
         $types = ['call', 'meeting', 'email', 'note', 'demo', 'lunch', 'other'];
@@ -261,7 +259,7 @@ class SampleDataSeeder extends Seeder
             $duration = $this->faker->randomElement([15, 30, 45, 60, 90, 120]);
             $endTime = (clone $startTime)->modify("+{$duration} minutes");
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'subject' => $this->faker->randomElement($subjects),
@@ -284,10 +282,10 @@ class SampleDataSeeder extends Seeder
 
     private function seedCases(int $count, array $orgIds, array $contactIds): void
     {
-        $module = Module::where('api_name', 'cases')->first();
+        $module = DB::table('modules')->where('api_name', 'cases')->first();
         if (!$module) return;
 
-        $pipeline = Pipeline::where('module_id', $module->id)->first();
+        $pipeline = DB::table('pipelines')->where('module_id', $module->id)->first();
         $stages = $pipeline ? $pipeline->stages()->orderBy('display_order')->get() : collect();
 
         $priorities = ['low', 'medium', 'high', 'critical'];
@@ -303,7 +301,7 @@ class SampleDataSeeder extends Seeder
             $stage = $stages->isNotEmpty() ? $stages->random() : null;
             $openedDate = $this->faker->dateTimeBetween('-3 months', 'now');
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'case_number' => 'CS-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
@@ -327,7 +325,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedInvoices(int $count, array $orgIds, array $dealIds): void
     {
-        $module = Module::where('api_name', 'invoices')->first();
+        $module = DB::table('modules')->where('api_name', 'invoices')->first();
         if (!$module) return;
 
         $statuses = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
@@ -345,7 +343,7 @@ class SampleDataSeeder extends Seeder
             $invoiceDate = $this->faker->dateTimeBetween('-3 months', 'now');
             $dueDate = (clone $invoiceDate)->modify('+30 days');
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'invoice_number' => 'INV-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
@@ -374,7 +372,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedQuotes(int $count, array $orgIds, array $dealIds): void
     {
-        $module = Module::where('api_name', 'quotes')->first();
+        $module = DB::table('modules')->where('api_name', 'quotes')->first();
         if (!$module) return;
 
         $statuses = ['draft', 'sent', 'accepted', 'rejected', 'expired'];
@@ -390,7 +388,7 @@ class SampleDataSeeder extends Seeder
             $quoteDate = $this->faker->dateTimeBetween('-2 months', 'now');
             $validUntil = (clone $quoteDate)->modify('+30 days');
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'quote_number' => 'QT-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
@@ -418,7 +416,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedEvents(int $count): void
     {
-        $module = Module::where('api_name', 'events')->first();
+        $module = DB::table('modules')->where('api_name', 'events')->first();
         if (!$module) return;
 
         $types = ['meeting', 'call', 'webinar', 'conference', 'personal', 'other'];
@@ -433,7 +431,7 @@ class SampleDataSeeder extends Seeder
             $endTime = (clone $startTime)->modify("+{$duration} minutes");
             $allDay = $this->faker->boolean(10);
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'title' => $this->faker->randomElement($titles),
@@ -455,7 +453,7 @@ class SampleDataSeeder extends Seeder
 
     private function seedNotes(int $count, array $contactIds, array $dealIds): void
     {
-        $module = Module::where('api_name', 'notes')->first();
+        $module = DB::table('modules')->where('api_name', 'notes')->first();
         if (!$module) return;
 
         $visibilities = ['everyone', 'team_only', 'private'];
@@ -467,7 +465,7 @@ class SampleDataSeeder extends Seeder
         for ($i = 0; $i < $count; $i++) {
             $relatedType = $this->faker->randomElement(['contact', 'organization', 'deal']);
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'title' => $this->faker->randomElement($titles) . ' - ' . $this->faker->date(),

@@ -8,14 +8,13 @@ use App\Application\Services\ImportExport\ImportExportApplicationService;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessImportJob;
 use App\Jobs\ValidateImportJob;
-use App\Models\Import;
-use App\Models\Module;
 use App\Services\Import\FileParser;
 use App\Services\Import\ImportEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class ImportController extends Controller
 {
@@ -36,7 +35,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $query = Import::where('module_id', $module->id)
+        $query = DB::table('imports')->where('module_id', $module->id)
             ->with('user:id,name,email')
             ->orderBy('created_at', 'desc');
 
@@ -60,7 +59,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $import = Import::where('module_id', $module->id)
+        $import = DB::table('imports')->where('module_id', $module->id)
             ->with(['user:id,name,email', 'rows' => function ($q) {
                 $q->where('status', '!=', 'success')
                     ->orderBy('row_number')
@@ -112,7 +111,7 @@ class ImportController extends Controller
         $suggestedMapping = $this->importEngine->autoMapColumns($preview['headers'], $module);
 
         // Create import record
-        $import = Import::create([
+        $import = DB::table('imports')->insertGetId([
             'module_id' => $module->id,
             'user_id' => $request->user()->id,
             'name' => $request->name ?? pathinfo($fileName, PATHINFO_FILENAME),
@@ -156,7 +155,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $import = Import::where('module_id', $module->id)
+        $import = DB::table('imports')->where('module_id', $module->id)
             ->where('status', Import::STATUS_PENDING)
             ->findOrFail($importId);
 
@@ -182,7 +181,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $import = Import::where('module_id', $module->id)
+        $import = DB::table('imports')->where('module_id', $module->id)
             ->whereIn('status', [Import::STATUS_PENDING])
             ->findOrFail($importId);
 
@@ -206,7 +205,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $import = Import::where('module_id', $module->id)
+        $import = DB::table('imports')->where('module_id', $module->id)
             ->where('status', Import::STATUS_VALIDATED)
             ->findOrFail($importId);
 
@@ -230,7 +229,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $import = Import::where('module_id', $module->id)->findOrFail($importId);
+        $import = DB::table('imports')->where('module_id', $module->id)->findOrFail($importId);
 
         if (!$import->canBeCancelled()) {
             return response()->json(['message' => 'Import cannot be cancelled'], 422);
@@ -255,7 +254,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $import = Import::where('module_id', $module->id)->findOrFail($importId);
+        $import = DB::table('imports')->where('module_id', $module->id)->findOrFail($importId);
 
         $failedRows = $import->rows()
             ->where('status', 'failed')
@@ -335,7 +334,7 @@ class ImportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $import = Import::where('module_id', $module->id)->findOrFail($importId);
+        $import = DB::table('imports')->where('module_id', $module->id)->findOrFail($importId);
 
         if (!$import->isTerminal()) {
             return response()->json(['message' => 'Cannot delete import in progress'], 422);

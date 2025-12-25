@@ -2,38 +2,50 @@
 
 namespace App\Http\Controllers\Api\Inbox;
 
+use App\Domain\Inbox\Repositories\InboxConversationRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\InboxCannedResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class InboxCannedResponseController extends Controller
 {
+    public function __construct(
+        protected InboxConversationRepositoryInterface $conversationRepository
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
-        $query = InboxCannedResponse::with('creator:id,name')
-            ->active();
+        $filters = [];
 
         if ($request->filled('inbox_id')) {
-            $query->forInbox($request->inbox_id);
+            $filters['inbox_id'] = $request->inbox_id;
         }
 
         if ($request->filled('category')) {
-            $query->byCategory($request->category);
+            $filters['category'] = $request->category;
         }
 
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'ilike', "%{$search}%")
-                  ->orWhere('shortcut', 'ilike', "%{$search}%")
-                  ->orWhere('body', 'ilike', "%{$search}%");
-            });
+            $filters['search'] = $request->search;
         }
 
-        $responses = $query->orderBy('name')->get();
+        $filters['active_only'] = true;
 
-        return response()->json(['data' => $responses]);
+        $perPage = $request->input('per_page', 100);
+        $page = $request->input('page', 1);
+
+        $result = $this->conversationRepository->listCannedResponses($filters, $perPage, $page);
+
+        return response()->json([
+            'data' => $result->items,
+            'meta' => [
+                'current_page' => $result->currentPage,
+                'per_page' => $result->perPage,
+                'total' => $result->total,
+                'last_page' => $result->lastPage,
+            ],
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -48,20 +60,45 @@ class InboxCannedResponseController extends Controller
             'attachments' => 'nullable|array',
         ]);
 
-        $validated['created_by'] = auth()->id();
-
-        $response = InboxCannedResponse::create($validated);
+        $response = $this->conversationRepository->createCannedResponse($validated, auth()->id());
 
         return response()->json(['data' => $response], 201);
     }
 
-    public function show(InboxCannedResponse $inboxCannedResponse): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $inboxCannedResponse->load(['inbox:id,name', 'creator:id,name']);
-        return response()->json(['data' => $inboxCannedResponse]);
+        $response = DB::table('inbox_canned_responses')->where('id', $id)->first();
+        if (!$response) {
+            return response()->json(['message' => 'Canned response not found'], 404);
+        }
+
+        $responseArray = (array) $response;
+
+        // Decode JSON field
+        if (isset($responseArray['attachments']) && is_string($responseArray['attachments'])) {
+            $responseArray['attachments'] = json_decode($responseArray['attachments'], true);
+        }
+
+        // Load inbox
+        if (isset($responseArray['inbox_id']) && $responseArray['inbox_id']) {
+            $inbox = DB::table('shared_inboxes')->where('id', $responseArray['inbox_id'])->first(['id', 'name']);
+            $responseArray['inbox'] = $inbox ? (array) $inbox : null;
+        } else {
+            $responseArray['inbox'] = null;
+        }
+
+        // Load creator
+        if (isset($responseArray['created_by'])) {
+            $creator = DB::table('users')->where('id', $responseArray['created_by'])->first(['id', 'name']);
+            $responseArray['creator'] = $creator ? (array) $creator : null;
+        } else {
+            $responseArray['creator'] = null;
+        }
+
+        return response()->json(['data' => $responseArray]);
     }
 
-    public function update(Request $request, InboxCannedResponse $inboxCannedResponse): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'inbox_id' => 'nullable|exists:shared_inboxes,id',
@@ -74,31 +111,43 @@ class InboxCannedResponseController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $inboxCannedResponse->update($validated);
+        $response = DB::table('inbox_canned_responses')->where('id', $id)->first();
+        if (!$response) {
+            return response()->json(['message' => 'Canned response not found'], 404);
+        }
 
-        return response()->json(['data' => $inboxCannedResponse]);
+        $updated = $this->conversationRepository->updateCannedResponse($id, $validated);
+
+        return response()->json(['data' => $updated]);
     }
 
-    public function destroy(InboxCannedResponse $inboxCannedResponse): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $inboxCannedResponse->delete();
+        $response = DB::table('inbox_canned_responses')->where('id', $id)->first();
+        if (!$response) {
+            return response()->json(['message' => 'Canned response not found'], 404);
+        }
+
+        $this->conversationRepository->deleteCannedResponse($id);
         return response()->json(null, 204);
     }
 
-    public function render(Request $request, InboxCannedResponse $inboxCannedResponse): JsonResponse
+    public function render(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'variables' => 'nullable|array',
         ]);
 
-        $rendered = $inboxCannedResponse->render($validated['variables'] ?? []);
+        $response = DB::table('inbox_canned_responses')->where('id', $id)->first();
+        if (!$response) {
+            return response()->json(['message' => 'Canned response not found'], 404);
+        }
 
-        // Increment use count
-        $inboxCannedResponse->incrementUseCount();
+        $rendered = $this->conversationRepository->useCannedResponse($id, $validated['variables'] ?? []);
 
         return response()->json([
             'data' => [
-                'subject' => $inboxCannedResponse->subject,
+                'subject' => $response->subject,
                 'body' => $rendered,
             ],
         ]);
@@ -106,14 +155,17 @@ class InboxCannedResponseController extends Controller
 
     public function categories(Request $request): JsonResponse
     {
-        $query = InboxCannedResponse::active();
+        $query = DB::table('inbox_canned_responses')
+            ->where('is_active', true)
+            ->whereNotNull('category');
 
         if ($request->filled('inbox_id')) {
-            $query->forInbox($request->inbox_id);
+            $query->where('inbox_id', $request->inbox_id);
+        } else {
+            $query->whereNull('inbox_id');
         }
 
-        $categories = $query->whereNotNull('category')
-            ->distinct()
+        $categories = $query->distinct()
             ->pluck('category')
             ->sort()
             ->values();
@@ -128,14 +180,10 @@ class InboxCannedResponseController extends Controller
             'inbox_id' => 'nullable|integer',
         ]);
 
-        $query = InboxCannedResponse::active()
-            ->byShortcut($validated['shortcut']);
-
-        if ($validated['inbox_id'] ?? null) {
-            $query->forInbox($validated['inbox_id']);
-        }
-
-        $response = $query->first();
+        $response = $this->conversationRepository->getCannedResponseByShortcut(
+            $validated['shortcut'],
+            $validated['inbox_id'] ?? null
+        );
 
         if (!$response) {
             return response()->json(['message' => 'Canned response not found'], 404);

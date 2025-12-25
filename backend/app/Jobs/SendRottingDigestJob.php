@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Mail\RottingDealsDigest;
-use App\Models\RottingAlertSetting;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use App\Services\Rotting\DealRottingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -15,6 +14,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 
 class SendRottingDigestJob implements ShouldQueue
 {
@@ -45,7 +45,7 @@ class SendRottingDigestJob implements ShouldQueue
         Log::info("SendRottingDigestJob: Starting {$this->frequency} digest");
 
         // Get users who have enabled email digest with this frequency
-        $settings = RottingAlertSetting::where('email_digest_enabled', true)
+        $settings = DB::table('rotting_alert_settings')->where('email_digest_enabled', true)
             ->where('digest_frequency', $this->frequency)
             ->with('user')
             ->get();

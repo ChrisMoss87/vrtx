@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use App\Models\Report;
-use App\Models\User;
+use App\Domain\Reporting\Entities\Report;
+use App\Domain\Reporting\Repositories\ReportRepositoryInterface;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class ReportPolicy
 {
     use HandlesAuthorization;
+
+    public function __construct(
+        private ReportRepositoryInterface $reportRepository
+    ) {}
 
     /**
      * Determine if the user can view any reports.
@@ -26,9 +31,10 @@ class ReportPolicy
     public function view(User $user, Report $report): bool
     {
         // Users can view their own reports, public reports, or reports shared with them
-        return $report->user_id === $user->id
-            || $report->is_public
-            || $report->isSharedWith($user->id);
+        $reportUserId = $report->userId()?->value();
+        return $reportUserId === $user->id
+            || $report->isPublic()
+            || $this->reportRepository->isSharedWith($report->getId(), $user->id);
     }
 
     /**
@@ -45,8 +51,9 @@ class ReportPolicy
     public function update(User $user, Report $report): bool
     {
         // Owner or users with edit permission can update
-        return $report->user_id === $user->id
-            || $report->canUserEdit($user->id);
+        $reportUserId = $report->userId()?->value();
+        return $reportUserId === $user->id
+            || $this->reportRepository->canUserEdit($report->getId(), $user->id);
     }
 
     /**
@@ -55,7 +62,7 @@ class ReportPolicy
     public function delete(User $user, Report $report): bool
     {
         // Only the owner can delete a report
-        return $report->user_id === $user->id;
+        return $report->userId()?->value() === $user->id;
     }
 
     /**

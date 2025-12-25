@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\Tenant;
 use App\Services\Blueprint\SLAService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,10 +26,10 @@ class ProcessBlueprintSLAsJob implements ShouldQueue
      */
     public function handle(SLAService $slaService): void
     {
-        $tenants = Tenant::all();
+        $tenants = tenancy()->all();
 
         Log::info('Starting Blueprint SLA processing', [
-            'tenant_count' => $tenants->count(),
+            'tenant_count' => count($tenants),
         ]);
 
         $totalResults = [
@@ -42,28 +41,31 @@ class ProcessBlueprintSLAsJob implements ShouldQueue
 
         foreach ($tenants as $tenant) {
             try {
-                $tenant->run(function () use ($slaService, &$totalResults, $tenant) {
-                    $results = $slaService->checkSLAs();
+                tenancy()->initialize($tenant);
 
-                    $totalResults['tenants_processed']++;
-                    $totalResults['total_checked'] += $results['checked'];
-                    $totalResults['total_escalations'] += $results['escalations_triggered'];
-                    $totalResults['total_breaches'] += $results['breaches_marked'];
+                $results = $slaService->checkSLAs();
 
-                    if ($results['checked'] > 0) {
-                        Log::info('Processed SLAs for tenant', [
-                            'tenant_id' => $tenant->id,
-                            'checked' => $results['checked'],
-                            'escalations_triggered' => $results['escalations_triggered'],
-                            'breaches_marked' => $results['breaches_marked'],
-                        ]);
-                    }
-                });
+                $totalResults['tenants_processed']++;
+                $totalResults['total_checked'] += $results['checked'];
+                $totalResults['total_escalations'] += $results['escalations_triggered'];
+                $totalResults['total_breaches'] += $results['breaches_marked'];
+
+                if ($results['checked'] > 0) {
+                    Log::info('Processed SLAs for tenant', [
+                        'tenant_id' => $tenant->getTenantKey(),
+                        'checked' => $results['checked'],
+                        'escalations_triggered' => $results['escalations_triggered'],
+                        'breaches_marked' => $results['breaches_marked'],
+                    ]);
+                }
+
+                tenancy()->end();
             } catch (\Throwable $e) {
                 Log::error('Failed to process SLAs for tenant', [
-                    'tenant_id' => $tenant->id,
+                    'tenant_id' => $tenant->getTenantKey(),
                     'error' => $e->getMessage(),
                 ]);
+                tenancy()->end();
             }
         }
 

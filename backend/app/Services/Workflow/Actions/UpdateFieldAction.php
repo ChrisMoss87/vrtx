@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\ModuleRecord;
 
 /**
  * Action to update a field on the current record.
@@ -22,7 +21,7 @@ class UpdateFieldAction implements ActionInterface
             throw new \InvalidArgumentException('No record ID in context');
         }
 
-        $record = ModuleRecord::find($recordId);
+        $record = DB::table('module_records')->where('id', $recordId)->first();
 
         if (!$record) {
             throw new \InvalidArgumentException("Record not found: {$recordId}");

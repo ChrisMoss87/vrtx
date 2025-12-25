@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Scenario;
 
-use App\Models\ForecastScenario;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ScenarioCalculatorService
 {

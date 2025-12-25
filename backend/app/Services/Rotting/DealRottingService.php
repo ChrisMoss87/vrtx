@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Rotting;
 
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
-use App\Models\RottingAlert;
-use App\Models\RottingAlertSetting;
-use App\Models\Stage;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class DealRottingService
 {
@@ -147,7 +143,7 @@ class DealRottingService
         $stageFieldName = $pipeline->stage_field_api_name;
 
         // Get all records in stages with rotting thresholds
-        $records = ModuleRecord::where('module_id', $pipeline->module_id)
+        $records = DB::table('module_records')->where('module_id', $pipeline->module_id)
             ->whereIn(
                 \DB::raw("data->>'{$stageFieldName}'"),
                 $stages->keys()->map(fn ($id) => (string) $id)->toArray()
@@ -209,7 +205,7 @@ class DealRottingService
             $stageFieldName = $pipeline->stage_field_api_name;
 
             // Get records owned by this user in stages with rotting thresholds
-            $records = ModuleRecord::where('module_id', $pipeline->module_id)
+            $records = DB::table('module_records')->where('module_id', $pipeline->module_id)
                 ->where('created_by', $userId)
                 ->whereIn(
                     \DB::raw("data->>'{$stageFieldName}'"),
@@ -289,7 +285,7 @@ class DealRottingService
                 }
 
                 // Check if alert already exists for this record/stage/type
-                $existingAlert = RottingAlert::where('module_record_id', $record->id)
+                $existingAlert = DB::table('rotting_alerts')->where('module_record_id', $record->id)
                     ->where('stage_id', $stage->id)
                     ->where('alert_type', $alertType)
                     ->first();
@@ -299,7 +295,7 @@ class DealRottingService
                 }
 
                 // Create new alert
-                RottingAlert::create([
+                DB::table('rotting_alerts')->insertGetId([
                     'module_record_id' => $record->id,
                     'stage_id' => $stage->id,
                     'user_id' => $record->created_by,
@@ -349,7 +345,7 @@ class DealRottingService
 
         $stageFieldName = $pipeline->stage_field_api_name;
 
-        $records = ModuleRecord::where('module_id', $pipeline->module_id)
+        $records = DB::table('module_records')->where('module_id', $pipeline->module_id)
             ->whereIn(
                 \DB::raw("data->>'{$stageFieldName}'"),
                 $stages->keys()->map(fn ($id) => (string) $id)->toArray()

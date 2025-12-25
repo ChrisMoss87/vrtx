@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Blueprint;
 
-use App\Models\BlueprintSla;
-use App\Models\BlueprintSlaEscalation;
-use App\Models\BlueprintSlaEscalationLog;
-use App\Models\BlueprintSlaInstance;
-use App\Models\BlueprintState;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Manages SLA monitoring and escalations for blueprint states.
@@ -34,7 +30,7 @@ class SLAService
         $enteredAt = now();
         $dueAt = $this->calculateDueAt($sla, $enteredAt);
 
-        return BlueprintSlaInstance::create([
+        return DB::table('blueprint_sla_instances')->insertGetId([
             'sla_id' => $sla->id,
             'record_id' => $recordId,
             'state_entered_at' => $enteredAt,
@@ -49,7 +45,7 @@ class SLAService
     public function completeSLA(int $recordId, int $blueprintId): void
     {
         // Find active SLA instances for this record in this blueprint
-        $activeInstances = BlueprintSlaInstance::where('record_id', $recordId)
+        $activeInstances = DB::table('blueprint_sla_instances')->where('record_id', $recordId)
             ->where('status', BlueprintSlaInstance::STATUS_ACTIVE)
             ->whereHas('sla', function ($query) use ($blueprintId) {
                 $query->where('blueprint_id', $blueprintId);
@@ -129,7 +125,7 @@ class SLAService
             'breaches_marked' => 0,
         ];
 
-        $activeInstances = BlueprintSlaInstance::where('status', BlueprintSlaInstance::STATUS_ACTIVE)
+        $activeInstances = DB::table('blueprint_sla_instances')->where('status', BlueprintSlaInstance::STATUS_ACTIVE)
             ->with(['sla.escalations', 'sla.state', 'sla.blueprint'])
             ->get();
 
@@ -199,7 +195,7 @@ class SLAService
         try {
             $result = $this->runEscalationAction($instance, $escalation);
 
-            return BlueprintSlaEscalationLog::create([
+            return DB::table('blueprint_sla_escalation_logs')->insertGetId([
                 'sla_instance_id' => $instance->id,
                 'escalation_id' => $escalation->id,
                 'executed_at' => now(),
@@ -213,7 +209,7 @@ class SLAService
                 'error' => $e->getMessage(),
             ]);
 
-            return BlueprintSlaEscalationLog::create([
+            return DB::table('blueprint_sla_escalation_logs')->insertGetId([
                 'sla_instance_id' => $instance->id,
                 'escalation_id' => $escalation->id,
                 'executed_at' => now(),
@@ -288,7 +284,7 @@ class SLAService
         $moduleId = $context['module_id'];
         $recordId = $context['record_id'];
 
-        $module = \App\Models\Module::find($moduleId);
+        $module = DB::table('modules')->where('id', $moduleId)->first();
         if (!$module) {
             return ['updated' => false, 'error' => 'Module not found'];
         }
@@ -354,7 +350,7 @@ class SLAService
             $notifications = array_map(fn($userId) => [
                 'id' => \Illuminate\Support\Str::uuid()->toString(),
                 'type' => 'App\\Notifications\\SLAEscalationNotification',
-                'notifiable_type' => 'App\\Models\\User',
+                'notifiable_type' => 'users',
                 'notifiable_id' => $userId,
                 'data' => $notificationData,
                 'created_at' => $now,
@@ -374,7 +370,7 @@ class SLAService
      */
     public function getSLAStatus(int $blueprintId, int $recordId): ?array
     {
-        $activeInstance = BlueprintSlaInstance::where('record_id', $recordId)
+        $activeInstance = DB::table('blueprint_sla_instances')->where('record_id', $recordId)
             ->where('status', BlueprintSlaInstance::STATUS_ACTIVE)
             ->whereHas('sla', function ($query) use ($blueprintId) {
                 $query->where('blueprint_id', $blueprintId);

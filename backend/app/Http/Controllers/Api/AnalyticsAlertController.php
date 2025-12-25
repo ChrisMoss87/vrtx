@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AnalyticsAlert;
-use App\Models\AnalyticsAlertHistory;
-use App\Models\AnalyticsAlertSubscription;
 use App\Services\Analytics\AnalyticsAlertService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AnalyticsAlertController extends Controller
 {
@@ -65,7 +63,7 @@ class AnalyticsAlertController extends Controller
 
         $validated['user_id'] = Auth::id();
 
-        $alert = AnalyticsAlert::create($validated);
+        $alert = DB::table('analytics_alerts')->insertGetId($validated);
 
         return response()->json([
             'data' => $alert->load(['module:id,api_name,label', 'report:id,name']),
@@ -311,7 +309,7 @@ class AnalyticsAlertController extends Controller
      */
     public function unsubscribe(AnalyticsAlert $alert): JsonResponse
     {
-        AnalyticsAlertSubscription::where('alert_id', $alert->id)
+        DB::table('analytics_alert_subscriptions')->where('alert_id', $alert->id)
             ->where('user_id', Auth::id())
             ->delete();
 
@@ -329,7 +327,7 @@ class AnalyticsAlertController extends Controller
             'until' => 'nullable|date|after:now',
         ]);
 
-        $subscription = AnalyticsAlertSubscription::where('alert_id', $alert->id)
+        $subscription = DB::table('analytics_alert_subscriptions')->where('alert_id', $alert->id)
             ->where('user_id', Auth::id())
             ->first();
 

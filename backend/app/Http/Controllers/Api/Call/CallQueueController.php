@@ -4,13 +4,12 @@ namespace App\Http\Controllers\Api\Call;
 
 use App\Application\Services\Call\CallApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\CallQueue;
-use App\Models\CallQueueMember;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use App\Services\Call\CallService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class CallQueueController extends Controller
 {
@@ -56,7 +55,7 @@ class CallQueueController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $queue = CallQueue::create([
+        $queue = DB::table('call_queues')->insertGetId([
             ...$validator->validated(),
             'is_active' => true,
         ]);
@@ -230,7 +229,7 @@ class CallQueueController extends Controller
     public function myStatus(Request $request): JsonResponse
     {
         $user = $request->user();
-        $memberships = CallQueueMember::where('user_id', $user->id)
+        $memberships = DB::table('call_queue_members')->where('user_id', $user->id)
             ->with('queue')
             ->get();
 
@@ -259,7 +258,7 @@ class CallQueueController extends Controller
         }
 
         $user = $request->user();
-        $query = CallQueueMember::where('user_id', $user->id);
+        $query = DB::table('call_queue_members')->where('user_id', $user->id);
 
         if ($request->has('queue_id')) {
             $query->where('queue_id', $request->queue_id);

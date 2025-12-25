@@ -4,75 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\AnalyticsAlert;
-use App\Models\AnalyticsAlertHistory;
-use App\Models\AnalyticsAlertSubscription;
-use App\Models\Call;
-use App\Models\CallProvider;
-use App\Models\ChatConversation;
-use App\Models\ChatMessage;
-use App\Models\ChatVisitor;
-use App\Models\ChatWidget;
-use App\Models\Contract;
-use App\Models\ContractLineItem;
-use App\Models\CustomerHealthScore;
-use App\Models\DocumentSendLog;
-use App\Models\DocumentTemplate;
-use App\Models\DocumentTemplateVariable;
-use App\Models\ForecastAdjustment;
-use App\Models\ForecastScenario;
-use App\Models\ForecastSnapshot;
-use App\Models\GeneratedDocument;
-use App\Models\Goal;
-use App\Models\GoalMilestone;
-use App\Models\GoalProgressLog;
-use App\Models\HealthScoreHistory;
-use App\Models\Invoice;
-use App\Models\InvoiceLineItem;
-use App\Models\InvoicePayment;
-use App\Models\LandingPage;
-use App\Models\LandingPageTemplate;
-use App\Models\LandingPageVariant;
-use App\Models\LandingPageVisit;
-use App\Models\MeetingAnalyticsCache;
-use App\Models\MeetingType;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\PortalActivityLog;
-use App\Models\PortalInvitation;
-use App\Models\PortalUser;
-use App\Models\Product;
-use App\Models\ProductCategory;
-use App\Models\Quota;
-use App\Models\QuotaPeriod;
-use App\Models\QuotaSnapshot;
-use App\Models\Renewal;
-use App\Models\RenewalActivity;
-use App\Models\RenewalForecast;
-use App\Models\RenewalReminder;
-use App\Models\ScheduledMeeting;
-use App\Models\SchedulingPage;
-use App\Models\SignatureAuditLog;
-use App\Models\SignatureField;
-use App\Models\SignatureRequest;
-use App\Models\SignatureSigner;
-use App\Models\SignatureTemplate;
-use App\Models\SmsConnection;
-use App\Models\SmsMessage;
-use App\Models\SmsTemplate;
-use App\Models\SupportTeam;
-use App\Models\SupportTicket;
-use App\Models\TicketActivity;
-use App\Models\TicketCannedResponse;
-use App\Models\TicketCategory;
-use App\Models\TicketEscalation;
-use App\Models\TicketReply;
-use App\Models\User;
-use App\Models\VideoMeeting;
-use App\Models\VideoProvider;
-use App\Models\WebForm;
-use App\Models\WebFormField;
-use App\Models\WebFormSubmission;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -474,7 +406,7 @@ class DemoDataSeeder extends Seeder
         $this->command->info('  Seeding Renewals...');
 
         $userId = $users[0]->id ?? null;
-        $contracts = $this->tableExists('contracts') ? Contract::where('status', 'active')->take(5)->get() : collect();
+        $contracts = $this->tableExists('contracts') ? DB::table('contracts')->where('status', 'active')->take(5)->get() : collect();
 
         foreach ($contracts as $contract) {
             // Create renewal
@@ -497,7 +429,7 @@ class DemoDataSeeder extends Seeder
         Renewal::factory()->lost()->count(2)->create(['owner_id' => $userId]);
 
         // Create renewal forecasts
-        if ($this->tableExists('renewal_forecasts') && RenewalForecast::count() === 0) {
+        if ($this->tableExists('renewal_forecasts') && DB::table('renewal_forecasts')->count() === 0) {
             RenewalForecast::factory()->monthly()->highRetention()->create();
             RenewalForecast::factory()->monthly()->previous()->create();
             RenewalForecast::factory()->quarterly()->create();
@@ -603,7 +535,7 @@ class DemoDataSeeder extends Seeder
             ];
 
             // Create standard template variables (global, not per-template)
-            if ($this->tableExists('document_template_variables') && DocumentTemplateVariable::count() === 0) {
+            if ($this->tableExists('document_template_variables') && DB::table('document_template_variables')->count() === 0) {
                 DocumentTemplateVariable::factory()->contact()->create(['api_name' => 'contact_name']);
                 DocumentTemplateVariable::factory()->contact()->create(['name' => 'Contact Email', 'api_name' => 'contact_email', 'field_path' => 'contact.email']);
                 DocumentTemplateVariable::factory()->company()->create(['api_name' => 'company_name']);
@@ -787,7 +719,7 @@ class DemoDataSeeder extends Seeder
             $videoProvider = VideoProvider::factory()->zoom()->active()->create();
 
             if ($this->tableExists('meeting_types') && $this->tableExists('scheduling_pages')) {
-                $schedulingPage = SchedulingPage::first();
+                $schedulingPage = DB::table('scheduling_pages')->first();
                 if ($schedulingPage) {
                     MeetingType::factory()->short()->zoom()->create(['scheduling_page_id' => $schedulingPage->id]);
                     MeetingType::factory()->standard()->zoom()->create(['scheduling_page_id' => $schedulingPage->id]);
@@ -959,10 +891,10 @@ class DemoDataSeeder extends Seeder
         $userId = $users[0]->id ?? 1;
 
         // Get modules
-        $contactsModule = Module::where('api_name', 'contacts')->first();
-        $orgsModule = Module::where('api_name', 'organizations')->first();
-        $dealsModule = Module::where('api_name', 'deals')->first();
-        $leadsModule = Module::where('api_name', 'leads')->first();
+        $contactsModule = DB::table('modules')->where('api_name', 'contacts')->first();
+        $orgsModule = DB::table('modules')->where('api_name', 'organizations')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
+        $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
 
         // Seed Organizations
         if ($orgsModule) {
@@ -980,7 +912,7 @@ class DemoDataSeeder extends Seeder
             ];
 
             foreach ($companies as $company) {
-                ModuleRecord::create([
+                DB::table('module_records')->insertGetId([
                     'module_id' => $orgsModule->id,
                     'data' => $company,
                     'created_by' => $userId,
@@ -1010,7 +942,7 @@ class DemoDataSeeder extends Seeder
             ];
 
             foreach ($contacts as $contact) {
-                ModuleRecord::create([
+                DB::table('module_records')->insertGetId([
                     'module_id' => $contactsModule->id,
                     'data' => $contact,
                     'created_by' => $userId,
@@ -1031,7 +963,7 @@ class DemoDataSeeder extends Seeder
             foreach ($dealNames as $index => $dealName) {
                 $stage = $stages[array_rand($stages)];
                 $amount = rand(10000, 500000);
-                ModuleRecord::create([
+                DB::table('module_records')->insertGetId([
                     'module_id' => $dealsModule->id,
                     'data' => [
                         'name' => $dealName,
@@ -1064,7 +996,7 @@ class DemoDataSeeder extends Seeder
             ];
 
             foreach ($leadData as $lead) {
-                ModuleRecord::create([
+                DB::table('module_records')->insertGetId([
                     'module_id' => $leadsModule->id,
                     'data' => array_merge($lead, [
                         'phone' => '+1-555-' . rand(2000, 2999),

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\WorkflowExecution;
-use App\Models\WorkflowStep;
-use App\Models\WorkflowStepLog;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends Factory<WorkflowStepLog>

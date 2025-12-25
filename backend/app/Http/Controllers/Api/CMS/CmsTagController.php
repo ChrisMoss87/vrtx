@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\CMS;
 
 use App\Http\Controllers\Controller;
-use App\Models\CmsTag;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CmsTagController extends Controller
 {
+    private const TABLE_TAGS = 'cms_tags';
+    private const TABLE_PAGE_TAG = 'cms_page_tag';
+
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -19,19 +22,46 @@ class CmsTagController extends Controller
             'limit' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = CmsTag::query()->withCount('pages');
+        $query = DB::table(self::TABLE_TAGS);
 
         if (isset($validated['search'])) {
-            $query->search($validated['search']);
+            $search = $validated['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('slug', 'like', "%{$search}%");
+            });
         }
 
-        $query->orderByDesc('pages_count')->orderBy('name');
+        $tags = $query->get();
 
+        // Enrich with pages count and sort
+        $items = [];
+        foreach ($tags as $tag) {
+            $tagArray = (array) $tag;
+
+            // Count pages
+            $pagesCount = DB::table(self::TABLE_PAGE_TAG)
+                ->where('cms_tag_id', $tag->id)
+                ->count();
+            $tagArray['pages_count'] = $pagesCount;
+
+            $items[] = $tagArray;
+        }
+
+        // Sort by pages count descending, then by name
+        usort($items, function ($a, $b) {
+            if ($b['pages_count'] === $a['pages_count']) {
+                return strcmp($a['name'], $b['name']);
+            }
+            return $b['pages_count'] - $a['pages_count'];
+        });
+
+        // Apply limit
         $limit = $validated['limit'] ?? 50;
-        $tags = $query->limit($limit)->get();
+        $items = array_slice($items, 0, $limit);
 
         return response()->json([
-            'data' => $tags,
+            'data' => array_values($items),
         ]);
     }
 
@@ -41,25 +71,70 @@ class CmsTagController extends Controller
             'name' => 'required|string|max:50',
         ]);
 
-        $tag = CmsTag::findOrCreateByName($validated['name']);
+        $slug = Str::slug($validated['name']);
+
+        // Check if tag already exists
+        $existingTag = DB::table(self::TABLE_TAGS)->where('slug', $slug)->first();
+
+        if ($existingTag) {
+            $tagArray = (array) $existingTag;
+            $pagesCount = DB::table(self::TABLE_PAGE_TAG)
+                ->where('cms_tag_id', $existingTag->id)
+                ->count();
+            $tagArray['pages_count'] = $pagesCount;
+
+            return response()->json([
+                'data' => $tagArray,
+                'message' => 'Tag already exists',
+            ], 200);
+        }
+
+        $tagId = DB::table(self::TABLE_TAGS)->insertGetId([
+            'name' => $validated['name'],
+            'slug' => $slug,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $tag = DB::table(self::TABLE_TAGS)->where('id', $tagId)->first();
+        $tagArray = (array) $tag;
+        $tagArray['pages_count'] = 0;
 
         return response()->json([
-            'data' => $tag,
+            'data' => $tagArray,
             'message' => 'Tag created successfully',
         ], 201);
     }
 
-    public function show(CmsTag $cmsTag): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $cmsTag->loadCount('pages');
+        $tag = DB::table(self::TABLE_TAGS)->where('id', $id)->first();
+
+        if (!$tag) {
+            return response()->json(['message' => 'Tag not found'], 404);
+        }
+
+        $tagArray = (array) $tag;
+
+        // Count pages
+        $pagesCount = DB::table(self::TABLE_PAGE_TAG)
+            ->where('cms_tag_id', $id)
+            ->count();
+        $tagArray['pages_count'] = $pagesCount;
 
         return response()->json([
-            'data' => $cmsTag,
+            'data' => $tagArray,
         ]);
     }
 
-    public function update(Request $request, CmsTag $cmsTag): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
+        $tag = DB::table(self::TABLE_TAGS)->where('id', $id)->first();
+
+        if (!$tag) {
+            return response()->json(['message' => 'Tag not found'], 404);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:50',
         ]);
@@ -67,27 +142,49 @@ class CmsTagController extends Controller
         $slug = Str::slug($validated['name']);
 
         // Check for duplicate slug
-        if (CmsTag::where('slug', $slug)->where('id', '!=', $cmsTag->id)->exists()) {
+        $existingTag = DB::table(self::TABLE_TAGS)
+            ->where('slug', $slug)
+            ->where('id', '!=', $id)
+            ->first();
+
+        if ($existingTag) {
             return response()->json([
                 'message' => 'A tag with this name already exists',
             ], 422);
         }
 
-        $cmsTag->update([
+        DB::table(self::TABLE_TAGS)->where('id', $id)->update([
             'name' => $validated['name'],
             'slug' => $slug,
+            'updated_at' => now(),
         ]);
 
+        $updatedTag = DB::table(self::TABLE_TAGS)->where('id', $id)->first();
+        $tagArray = (array) $updatedTag;
+
+        $pagesCount = DB::table(self::TABLE_PAGE_TAG)
+            ->where('cms_tag_id', $id)
+            ->count();
+        $tagArray['pages_count'] = $pagesCount;
+
         return response()->json([
-            'data' => $cmsTag->fresh(),
+            'data' => $tagArray,
             'message' => 'Tag updated successfully',
         ]);
     }
 
-    public function destroy(CmsTag $cmsTag): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $cmsTag->pages()->detach();
-        $cmsTag->delete();
+        $tag = DB::table(self::TABLE_TAGS)->where('id', $id)->first();
+
+        if (!$tag) {
+            return response()->json(['message' => 'Tag not found'], 404);
+        }
+
+        // Detach from pages
+        DB::table(self::TABLE_PAGE_TAG)->where('cms_tag_id', $id)->delete();
+
+        DB::table(self::TABLE_TAGS)->where('id', $id)->delete();
 
         return response()->json([
             'message' => 'Tag deleted successfully',
@@ -100,10 +197,33 @@ class CmsTagController extends Controller
             'limit' => 'nullable|integer|min:1|max:50',
         ]);
 
-        $tags = CmsTag::popular($validated['limit'] ?? 10)->get();
+        $limit = $validated['limit'] ?? 10;
+
+        $tags = DB::table(self::TABLE_TAGS)->get();
+
+        // Enrich with pages count
+        $items = [];
+        foreach ($tags as $tag) {
+            $tagArray = (array) $tag;
+
+            $pagesCount = DB::table(self::TABLE_PAGE_TAG)
+                ->where('cms_tag_id', $tag->id)
+                ->count();
+            $tagArray['pages_count'] = $pagesCount;
+
+            $items[] = $tagArray;
+        }
+
+        // Sort by pages count descending
+        usort($items, function ($a, $b) {
+            return $b['pages_count'] - $a['pages_count'];
+        });
+
+        // Apply limit
+        $items = array_slice($items, 0, $limit);
 
         return response()->json([
-            'data' => $tags,
+            'data' => array_values($items),
         ]);
     }
 
@@ -114,21 +234,52 @@ class CmsTagController extends Controller
             'target_id' => 'required|integer|exists:cms_tags,id|different:source_id',
         ]);
 
-        $sourceTag = CmsTag::findOrFail($validated['source_id']);
-        $targetTag = CmsTag::findOrFail($validated['target_id']);
+        $sourceTag = DB::table(self::TABLE_TAGS)->where('id', $validated['source_id'])->first();
+        $targetTag = DB::table(self::TABLE_TAGS)->where('id', $validated['target_id'])->first();
 
-        // Move all pages from source to target
-        foreach ($sourceTag->pages as $page) {
-            if (!$page->tags->contains($targetTag->id)) {
-                $page->tags()->attach($targetTag->id);
-            }
-            $page->tags()->detach($sourceTag->id);
+        if (!$sourceTag || !$targetTag) {
+            return response()->json(['message' => 'Tag not found'], 404);
         }
 
-        $sourceTag->delete();
+        // Get all pages with source tag
+        $sourcePairs = DB::table(self::TABLE_PAGE_TAG)
+            ->where('cms_tag_id', $validated['source_id'])
+            ->get();
+
+        foreach ($sourcePairs as $pair) {
+            // Check if target tag is already attached to this page
+            $exists = DB::table(self::TABLE_PAGE_TAG)
+                ->where('cms_page_id', $pair->cms_page_id)
+                ->where('cms_tag_id', $validated['target_id'])
+                ->exists();
+
+            if (!$exists) {
+                // Attach target tag to page
+                DB::table(self::TABLE_PAGE_TAG)->insert([
+                    'cms_page_id' => $pair->cms_page_id,
+                    'cms_tag_id' => $validated['target_id'],
+                ]);
+            }
+
+            // Detach source tag from page
+            DB::table(self::TABLE_PAGE_TAG)
+                ->where('cms_page_id', $pair->cms_page_id)
+                ->where('cms_tag_id', $validated['source_id'])
+                ->delete();
+        }
+
+        // Delete source tag
+        DB::table(self::TABLE_TAGS)->where('id', $validated['source_id'])->delete();
+
+        // Return target tag with updated count
+        $targetTagArray = (array) $targetTag;
+        $pagesCount = DB::table(self::TABLE_PAGE_TAG)
+            ->where('cms_tag_id', $validated['target_id'])
+            ->count();
+        $targetTagArray['pages_count'] = $pagesCount;
 
         return response()->json([
-            'data' => $targetTag->fresh()->loadCount('pages'),
+            'data' => $targetTagArray,
             'message' => 'Tags merged successfully',
         ]);
     }

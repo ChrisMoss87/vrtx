@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api\Call;
 
 use App\Application\Services\Call\CallApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\CallProvider;
 use App\Services\Call\TwilioCallService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class CallProviderController extends Controller
 {
@@ -17,7 +17,7 @@ class CallProviderController extends Controller
     ) {}
     public function index(): JsonResponse
     {
-        $providers = CallProvider::all();
+        $providers = DB::table('call_providers')->get();
 
         return response()->json([
             'data' => $providers->map(fn($p) => [
@@ -54,7 +54,7 @@ class CallProviderController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $provider = CallProvider::create([
+        $provider = DB::table('call_providers')->insertGetId([
             ...$validator->validated(),
             'is_active' => false,
             'is_verified' => false,

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Contract;
-use App\Models\ContractLineItem;
-use App\Models\Product;
+use App\Infrastructure\Persistence\Eloquent\Models\Contract;
+use App\Infrastructure\Persistence\Eloquent\Models\ContractLineItem;
+use App\Infrastructure\Persistence\Eloquent\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

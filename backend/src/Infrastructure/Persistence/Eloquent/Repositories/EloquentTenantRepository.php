@@ -4,68 +4,89 @@ declare(strict_types=1);
 
 namespace Infrastructure\Persistence\Eloquent\Repositories;
 
-use App\Models\Tenant as TenantModel;
 use Domain\TenantManagement\Entities\Tenant;
 use Domain\TenantManagement\Repositories\TenantRepositoryInterface;
 use Domain\TenantManagement\ValueObjects\TenantId;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 final class EloquentTenantRepository implements TenantRepositoryInterface
 {
+    private const TABLE = 'tenants';
+    private const TABLE_DOMAINS = 'domains';
+
     public function find(TenantId $id): ?Tenant
     {
-        $model = TenantModel::find($id->value());
+        $row = DB::table(self::TABLE)->where('id', $id->value())->first();
 
-        if (!$model) {
+        if (!$row) {
             return null;
         }
 
-        return $this->toDomain($model);
+        return $this->toDomain($row);
     }
 
     public function findByDomain(string $domain): ?Tenant
     {
-        $model = TenantModel::whereHas('domains', function ($query) use ($domain) {
-            $query->where('domain', $domain);
-        })->first();
+        $tenantId = DB::table(self::TABLE_DOMAINS)
+            ->where('domain', $domain)
+            ->value('tenant_id');
 
-        if (!$model) {
+        if (!$tenantId) {
             return null;
         }
 
-        return $this->toDomain($model);
+        $row = DB::table(self::TABLE)->where('id', $tenantId)->first();
+
+        if (!$row) {
+            return null;
+        }
+
+        return $this->toDomain($row);
     }
 
     public function save(Tenant $tenant): void
     {
-        TenantModel::updateOrCreate(
-            ['id' => $tenant->id()->value()],
-            [
-                'data' => ['name' => $tenant->name()],
+        $exists = DB::table(self::TABLE)->where('id', $tenant->id()->value())->exists();
+
+        $data = [
+            'data' => json_encode(['name' => $tenant->name()]),
+            'updated_at' => $tenant->updatedAt(),
+        ];
+
+        if ($exists) {
+            DB::table(self::TABLE)
+                ->where('id', $tenant->id()->value())
+                ->update($data);
+        } else {
+            DB::table(self::TABLE)->insert(array_merge($data, [
+                'id' => $tenant->id()->value(),
                 'created_at' => $tenant->createdAt(),
-                'updated_at' => $tenant->updatedAt(),
-            ]
-        );
+            ]));
+        }
     }
 
     public function delete(TenantId $id): void
     {
-        TenantModel::destroy($id->value());
+        DB::table(self::TABLE)->where('id', $id->value())->delete();
     }
 
     public function exists(TenantId $id): bool
     {
-        return TenantModel::where('id', $id->value())->exists();
+        return DB::table(self::TABLE)->where('id', $id->value())->exists();
     }
 
-    private function toDomain(TenantModel $model): Tenant
+    private function toDomain(stdClass $row): Tenant
     {
+        $data = is_string($row->data) ? json_decode($row->data, true) : ($row->data ?? []);
+
         return Tenant::reconstitute(
-            id: TenantId::from($model->id),
-            name: $model->data['name'] ?? '',
-            data: $model->data ?? [],
-            createdAt: new DateTimeImmutable($model->created_at),
-            updatedAt: new DateTimeImmutable($model->updated_at)
+            id: TenantId::from($row->id),
+            name: $data['name'] ?? '',
+            data: $data,
+            createdAt: new DateTimeImmutable($row->created_at),
+            updatedAt: new DateTimeImmutable($row->updated_at)
         );
     }
 }

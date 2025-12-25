@@ -6,15 +6,12 @@ namespace App\Http\Controllers\Api\Campaign;
 
 use App\Application\Services\Campaign\CampaignApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Campaign;
-use App\Models\CampaignAudience;
-use App\Models\CampaignAsset;
-use App\Models\EmailCampaignTemplate;
 use App\Services\Campaign\CampaignService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class CampaignController extends Controller
 {
@@ -94,7 +91,7 @@ class CampaignController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -123,7 +120,7 @@ class CampaignController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         if ($campaign->isActive()) {
             return response()->json([
@@ -145,7 +142,7 @@ class CampaignController extends Controller
      */
     public function duplicate(int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         $newCampaign = $this->campaignService->duplicateCampaign($campaign, Auth::id());
 
@@ -161,7 +158,7 @@ class CampaignController extends Controller
      */
     public function start(int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         try {
             $campaign = $this->campaignService->startCampaign($campaign);
@@ -184,7 +181,7 @@ class CampaignController extends Controller
      */
     public function pause(int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         try {
             $campaign = $this->campaignService->pauseCampaign($campaign);
@@ -207,7 +204,7 @@ class CampaignController extends Controller
      */
     public function complete(int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         $campaign = $this->campaignService->completeCampaign($campaign);
 
@@ -223,7 +220,7 @@ class CampaignController extends Controller
      */
     public function cancel(int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         $campaign = $this->campaignService->cancelCampaign($campaign);
 
@@ -239,7 +236,7 @@ class CampaignController extends Controller
      */
     public function analytics(int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         $analytics = $this->campaignService->getCampaignAnalytics($campaign);
         $topLinks = $this->campaignService->getTopLinks($campaign);
@@ -256,7 +253,7 @@ class CampaignController extends Controller
      */
     public function metrics(Request $request, int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
@@ -298,7 +295,7 @@ class CampaignController extends Controller
      */
     public function addAudience(Request $request, int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -322,8 +319,8 @@ class CampaignController extends Controller
      */
     public function updateAudience(Request $request, int $id, int $audienceId): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
-        $audience = CampaignAudience::where('campaign_id', $campaign->id)
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
+        $audience = DB::table('campaign_audiences')->where('campaign_id', $campaign->id)
             ->findOrFail($audienceId);
 
         $validated = $request->validate([
@@ -347,8 +344,8 @@ class CampaignController extends Controller
      */
     public function deleteAudience(int $id, int $audienceId): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
-        $audience = CampaignAudience::where('campaign_id', $campaign->id)
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
+        $audience = DB::table('campaign_audiences')->where('campaign_id', $campaign->id)
             ->findOrFail($audienceId);
 
         $audience->delete();
@@ -364,8 +361,8 @@ class CampaignController extends Controller
      */
     public function previewAudience(int $id, int $audienceId): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
-        $audience = CampaignAudience::where('campaign_id', $campaign->id)
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
+        $audience = DB::table('campaign_audiences')->where('campaign_id', $campaign->id)
             ->findOrFail($audienceId);
 
         $records = $this->campaignService->previewAudience($audience, 20);
@@ -382,8 +379,8 @@ class CampaignController extends Controller
      */
     public function refreshAudience(int $id, int $audienceId): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
-        $audience = CampaignAudience::where('campaign_id', $campaign->id)
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
+        $audience = DB::table('campaign_audiences')->where('campaign_id', $campaign->id)
             ->findOrFail($audienceId);
 
         $count = $audience->refreshCount();
@@ -402,7 +399,7 @@ class CampaignController extends Controller
      */
     public function addAsset(Request $request, int $id): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
 
         $validated = $request->validate([
             'type' => 'required|string|in:email,image,document,landing_page',
@@ -427,8 +424,8 @@ class CampaignController extends Controller
      */
     public function updateAsset(Request $request, int $id, int $assetId): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
-        $asset = CampaignAsset::where('campaign_id', $campaign->id)
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
+        $asset = DB::table('campaign_assets')->where('campaign_id', $campaign->id)
             ->findOrFail($assetId);
 
         $validated = $request->validate([
@@ -453,8 +450,8 @@ class CampaignController extends Controller
      */
     public function deleteAsset(int $id, int $assetId): JsonResponse
     {
-        $campaign = Campaign::findOrFail($id);
-        $asset = CampaignAsset::where('campaign_id', $campaign->id)
+        $campaign = DB::table('campaigns')->where('id', $id)->first();
+        $asset = DB::table('campaign_assets')->where('campaign_id', $campaign->id)
             ->findOrFail($assetId);
 
         $asset->delete();
@@ -491,7 +488,7 @@ class CampaignController extends Controller
      */
     public function showTemplate(int $templateId): JsonResponse
     {
-        $template = EmailCampaignTemplate::findOrFail($templateId);
+        $template = DB::table('email_campaign_templates')->where('id', $templateId)->first();
 
         return response()->json([
             'success' => true,
@@ -514,7 +511,7 @@ class CampaignController extends Controller
             'variables' => 'nullable|array',
         ]);
 
-        $template = EmailCampaignTemplate::create([
+        $template = DB::table('email_campaign_templates')->insertGetId([
             ...$validated,
             'created_by' => Auth::id(),
         ]);
@@ -531,7 +528,7 @@ class CampaignController extends Controller
      */
     public function updateTemplate(Request $request, int $templateId): JsonResponse
     {
-        $template = EmailCampaignTemplate::where('is_system', false)
+        $template = DB::table('email_campaign_templates')->where('is_system', false)
             ->findOrFail($templateId);
 
         $validated = $request->validate([
@@ -558,7 +555,7 @@ class CampaignController extends Controller
      */
     public function destroyTemplate(int $templateId): JsonResponse
     {
-        $template = EmailCampaignTemplate::where('is_system', false)
+        $template = DB::table('email_campaign_templates')->where('is_system', false)
             ->findOrFail($templateId);
 
         $template->delete();

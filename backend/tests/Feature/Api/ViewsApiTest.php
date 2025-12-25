@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Module;
-use App\Models\ModuleView;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ViewsApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -21,8 +19,8 @@ class ViewsApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
-        $this->module = Module::factory()->create([
+        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Leads',
             'singular_name' => 'Lead',
             'api_name' => 'leads',
@@ -31,7 +29,7 @@ class ViewsApiTest extends TestCase
 
     public function test_can_create_view(): void
     {
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'My Custom View',
@@ -57,7 +55,7 @@ class ViewsApiTest extends TestCase
 
     public function test_view_belongs_to_module(): void
     {
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Test View',
@@ -68,7 +66,7 @@ class ViewsApiTest extends TestCase
 
     public function test_view_belongs_to_user(): void
     {
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Test View',
@@ -79,12 +77,12 @@ class ViewsApiTest extends TestCase
 
     public function test_module_has_many_views(): void
     {
-        ModuleView::create([
+        DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'View 1',
         ]);
-        ModuleView::create([
+        DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'View 2',
@@ -95,7 +93,7 @@ class ViewsApiTest extends TestCase
 
     public function test_can_update_view(): void
     {
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Original Name',
@@ -114,7 +112,7 @@ class ViewsApiTest extends TestCase
 
     public function test_can_delete_view(): void
     {
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Test View',
@@ -128,7 +126,7 @@ class ViewsApiTest extends TestCase
 
     public function test_filters_are_cast_to_array(): void
     {
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Test View',
@@ -144,7 +142,7 @@ class ViewsApiTest extends TestCase
 
     public function test_sorting_is_cast_to_array(): void
     {
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Test View',
@@ -160,7 +158,7 @@ class ViewsApiTest extends TestCase
 
     public function test_column_visibility_is_cast_to_array(): void
     {
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Test View',
@@ -174,20 +172,20 @@ class ViewsApiTest extends TestCase
 
     public function test_default_view_scope(): void
     {
-        ModuleView::create([
+        DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Regular View',
             'is_default' => false,
         ]);
-        $defaultView = ModuleView::create([
+        $defaultView = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Default View',
             'is_default' => true,
         ]);
 
-        $result = ModuleView::where('module_id', $this->module->id)
+        $result = DB::table('module_views')->where('module_id', $this->module->id)
             ->where('is_default', true)
             ->first();
 
@@ -197,9 +195,9 @@ class ViewsApiTest extends TestCase
 
     public function test_shared_views_can_be_accessed_by_any_user(): void
     {
-        $otherUser = User::factory()->create();
+        $otherUser = /* User factory - use DB::table('users') */->create();
 
-        $sharedView = ModuleView::create([
+        $sharedView = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'Shared View',
@@ -207,7 +205,7 @@ class ViewsApiTest extends TestCase
         ]);
 
         // Shared views should be accessible (filtered by is_shared = true)
-        $sharedViews = ModuleView::where('module_id', $this->module->id)
+        $sharedViews = DB::table('module_views')->where('module_id', $this->module->id)
             ->where('is_shared', true)
             ->get();
 
@@ -217,23 +215,23 @@ class ViewsApiTest extends TestCase
 
     public function test_private_views_are_user_specific(): void
     {
-        $otherUser = User::factory()->create();
+        $otherUser = /* User factory - use DB::table('users') */->create();
 
-        ModuleView::create([
+        DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'User 1 View',
             'is_shared' => false,
         ]);
 
-        ModuleView::create([
+        DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $otherUser->id,
             'name' => 'User 2 View',
             'is_shared' => false,
         ]);
 
-        $user1Views = ModuleView::where('module_id', $this->module->id)
+        $user1Views = DB::table('module_views')->where('module_id', $this->module->id)
             ->where('user_id', $this->user->id)
             ->where('is_shared', false)
             ->get();
@@ -244,19 +242,19 @@ class ViewsApiTest extends TestCase
 
     public function test_ordered_scope_orders_by_display_order(): void
     {
-        ModuleView::create([
+        DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'View C',
             'display_order' => 3,
         ]);
-        ModuleView::create([
+        DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'View A',
             'display_order' => 1,
         ]);
-        ModuleView::create([
+        DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'name' => 'View B',

@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Blueprint;
 
-use App\Models\BlueprintActionLog;
-use App\Models\BlueprintTransitionAction;
-use App\Models\BlueprintTransitionExecution;
 use App\Services\Workflow\Actions\ActionHandler;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Executes after-phase actions for blueprint transitions.
@@ -43,7 +41,7 @@ class ActionService
         try {
             $result = $this->runAction($execution, $action);
 
-            return BlueprintActionLog::create([
+            return DB::table('blueprint_action_logs')->insertGetId([
                 'execution_id' => $execution->id,
                 'action_id' => $action->id,
                 'status' => 'success',
@@ -57,7 +55,7 @@ class ActionService
                 'error' => $e->getMessage(),
             ]);
 
-            return BlueprintActionLog::create([
+            return DB::table('blueprint_action_logs')->insertGetId([
                 'execution_id' => $execution->id,
                 'action_id' => $action->id,
                 'status' => 'failed',
@@ -147,7 +145,7 @@ class ActionService
         }
 
         // Use the transition service to update the field
-        $module = \App\Models\Module::find($moduleId);
+        $module = DB::table('modules')->where('id', $moduleId)->first();
         if (!$module) {
             return ['updated' => false, 'error' => 'Module not found'];
         }
@@ -180,7 +178,7 @@ class ActionService
             return ['created' => false, 'error' => 'No module specified'];
         }
 
-        $module = \App\Models\Module::find($moduleId);
+        $module = DB::table('modules')->where('id', $moduleId)->first();
         if (!$module) {
             return ['created' => false, 'error' => 'Module not found'];
         }
@@ -209,7 +207,7 @@ class ActionService
      */
     protected function createTask(array $config, array $context, int $moduleId, int $recordId): array
     {
-        $taskModule = \App\Models\Module::where('api_name', 'tasks')->first();
+        $taskModule = DB::table('modules')->where('api_name', 'tasks')->first();
         if (!$taskModule) {
             return ['created' => false, 'error' => 'Tasks module not found'];
         }
@@ -297,7 +295,7 @@ class ActionService
                 \Illuminate\Support\Facades\DB::table('notifications')->insert([
                     'id' => \Illuminate\Support\Str::uuid()->toString(),
                     'type' => 'App\\Notifications\\BlueprintNotification',
-                    'notifiable_type' => 'App\\Models\\User',
+                    'notifiable_type' => 'users',
                     'notifiable_id' => $userId,
                     'data' => json_encode([
                         'title' => $title,

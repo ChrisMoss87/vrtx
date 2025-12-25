@@ -9,12 +9,6 @@ use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
 use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
 use App\Domain\Shared\Contracts\AuthContextInterface;
 use App\Domain\Shared\ValueObjects\PaginatedResult;
-use App\Models\Export;
-use App\Models\ExportTemplate;
-use App\Models\Import;
-use App\Models\ImportRow;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -195,7 +189,7 @@ class ImportExportApplicationService
      */
     public function validateImport(int $id): array
     {
-        $import = Import::findOrFail($id);
+        $import = DB::table('imports')->where('id', $id)->first();
         $import->update(['status' => Import::STATUS_VALIDATING]);
 
         $errors = [];
@@ -219,7 +213,7 @@ class ImportExportApplicationService
                 $mappedData = $this->mapRowData($rowData, $import->column_mapping);
                 $rowErrors = $this->validateRowData($mappedData, $import->module_id);
 
-                ImportRow::create([
+                DB::table('import_rows')->insertGetId([
                     'import_id' => $import->id,
                     'row_number' => $rowNumber,
                     'original_data' => $rowData,
@@ -300,13 +294,13 @@ class ImportExportApplicationService
                 try {
                     $recordId = $this->processImportRow($import, $row);
 
-                    // Mark row as success using Eloquent directly (repository doesn't manage ImportRow state)
+                    // Mark row as success using Database directly (repository doesn't manage ImportRow state)
                     $rowModel = ImportRow::find($row['id']);
                     $rowModel?->markAsSuccess($recordId);
 
                     $this->importRepository->incrementProcessed($importId, ImportRow::STATUS_SUCCESS);
                 } catch (\Exception $e) {
-                    // Mark row as failed using Eloquent directly
+                    // Mark row as failed using Database directly
                     $rowModel = ImportRow::find($row['id']);
                     $rowModel?->markAsFailed(['exception' => $e->getMessage()]);
 
@@ -359,7 +353,7 @@ class ImportExportApplicationService
      */
     public function retryFailedRows(int $importId): array
     {
-        $import = Import::findOrFail($importId);
+        $import = DB::table('imports')->where('id', $importId)->first();
         $failedRows = $import->failedRows()->get();
 
         $retried = 0;
@@ -395,7 +389,7 @@ class ImportExportApplicationService
      */
     public function listExports(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = Export::query()
+        $query = DB::table('exports')
             ->with(['module', 'user']);
 
         if (!empty($filters['module_id'])) {
@@ -446,7 +440,7 @@ class ImportExportApplicationService
      */
     public function getExportStats(int $exportId): array
     {
-        $export = Export::findOrFail($exportId);
+        $export = DB::table('exports')->where('id', $exportId)->first();
 
         return [
             'total_records' => $export->total_records,
@@ -470,7 +464,7 @@ class ImportExportApplicationService
      */
     public function getUserExportHistory(int $userId, int $limit = 10): Collection
     {
-        return Export::where('user_id', $userId)
+        return DB::table('exports')->where('user_id', $userId)
             ->with('module')
             ->orderByDesc('created_at')
             ->limit($limit)
@@ -503,7 +497,7 @@ class ImportExportApplicationService
      */
     public function createExport(array $data): Export
     {
-        $export = Export::create([
+        $export = DB::table('exports')->insertGetId([
             'module_id' => $data['module_id'],
             'user_id' => Auth::id(),
             'name' => $data['name'] ?? 'Export ' . now()->format('Y-m-d H:i'),
@@ -526,7 +520,7 @@ class ImportExportApplicationService
      */
     public function startExport(int $id): Export
     {
-        $export = Export::findOrFail($id);
+        $export = DB::table('exports')->where('id', $id)->first();
 
         if ($export->status !== Export::STATUS_PENDING) {
             throw new \InvalidArgumentException('Export has already been started');
@@ -566,7 +560,7 @@ class ImportExportApplicationService
      */
     public function downloadExport(int $id): array
     {
-        $export = Export::findOrFail($id);
+        $export = DB::table('exports')->where('id', $id)->first();
 
         if (!$export->isDownloadable()) {
             throw new \InvalidArgumentException('Export is not available for download');
@@ -586,7 +580,7 @@ class ImportExportApplicationService
      */
     public function deleteExport(int $id): void
     {
-        $export = Export::findOrFail($id);
+        $export = DB::table('exports')->where('id', $id)->first();
 
         if ($export->file_path && Storage::disk('exports')->exists($export->file_path)) {
             Storage::disk('exports')->delete($export->file_path);
@@ -620,7 +614,7 @@ class ImportExportApplicationService
      */
     public function listExportTemplates(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = ExportTemplate::query()
+        $query = DB::table('export_templates')
             ->with(['module', 'user']);
 
         if (!empty($filters['module_id'])) {
@@ -655,7 +649,7 @@ class ImportExportApplicationService
      */
     public function createExportTemplate(array $data): ExportTemplate
     {
-        return ExportTemplate::create([
+        return DB::table('export_templates')->insertGetId([
             'module_id' => $data['module_id'],
             'user_id' => Auth::id(),
             'name' => $data['name'],
@@ -674,7 +668,7 @@ class ImportExportApplicationService
      */
     public function updateExportTemplate(int $id, array $data): ExportTemplate
     {
-        $template = ExportTemplate::findOrFail($id);
+        $template = DB::table('export_templates')->where('id', $id)->first();
 
         $template->update([
             'name' => $data['name'] ?? $template->name,
@@ -695,7 +689,7 @@ class ImportExportApplicationService
      */
     public function deleteExportTemplate(int $id): void
     {
-        ExportTemplate::findOrFail($id)->delete();
+        DB::table('export_templates')->where('id', $id)->first()->delete();
     }
 
     /**
@@ -703,7 +697,7 @@ class ImportExportApplicationService
      */
     public function createExportFromTemplate(int $templateId, ?string $name = null, ?string $fileType = null): Export
     {
-        $template = ExportTemplate::findOrFail($templateId);
+        $template = DB::table('export_templates')->where('id', $templateId)->first();
         $export = $template->createExport(Auth::id(), $name, $fileType);
 
         $totalRecords = $this->countExportRecords($export);
@@ -732,7 +726,7 @@ class ImportExportApplicationService
         $imports = $this->importRepository->getActivitySummary($userId, $period);
 
         // Keep Export queries as-is for now since we're only refactoring Import
-        $exportQuery = Export::where('created_at', '>=', $dateFrom);
+        $exportQuery = DB::table('exports')->where('created_at', '>=', $dateFrom);
         if ($userId) {
             $exportQuery->where('user_id', $userId);
         }
@@ -813,7 +807,7 @@ class ImportExportApplicationService
         $duplicateCheckField = $importOptions['duplicate_check_field'] ?? null;
 
         if ($duplicateCheckField) {
-            $existing = ModuleRecord::where('module_id', $moduleId)
+            $existing = DB::table('module_records')->where('module_id', $moduleId)
                 ->whereRaw("data->>'{$duplicateCheckField}' = ?", [$data[$duplicateCheckField] ?? null])
                 ->first();
 
@@ -834,7 +828,7 @@ class ImportExportApplicationService
         }
 
         // Create new record
-        $record = ModuleRecord::create([
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $moduleId,
             'data' => $data,
             'created_by' => $import['user_id'],
@@ -848,7 +842,7 @@ class ImportExportApplicationService
      */
     private function countExportRecords(Export $export): int
     {
-        $query = ModuleRecord::where('module_id', $export->module_id);
+        $query = DB::table('module_records')->where('module_id', $export->module_id);
         $this->applyExportFilters($query, $export->filters);
         return $query->count();
     }
@@ -858,7 +852,7 @@ class ImportExportApplicationService
      */
     private function getExportRecords(Export $export): Collection
     {
-        $query = ModuleRecord::where('module_id', $export->module_id);
+        $query = DB::table('module_records')->where('module_id', $export->module_id);
         $this->applyExportFilters($query, $export->filters);
         $this->applyExportSorting($query, $export->sorting);
         return $query->get();

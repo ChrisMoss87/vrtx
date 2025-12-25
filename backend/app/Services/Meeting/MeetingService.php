@@ -2,10 +2,9 @@
 
 namespace App\Services\Meeting;
 
-use App\Models\SyncedMeeting;
-use App\Models\MeetingParticipant;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class MeetingService
 {
@@ -79,7 +78,7 @@ class MeetingService
 
     public function createMeeting(User $user, array $data): SyncedMeeting
     {
-        $meeting = SyncedMeeting::create([
+        $meeting = DB::table('synced_meetings')->insertGetId([
             'user_id' => $user->id,
             'calendar_provider' => $data['calendar_provider'] ?? 'manual',
             'external_event_id' => $data['external_event_id'] ?? uniqid('manual_'),
@@ -99,7 +98,7 @@ class MeetingService
         // Add participants
         if (!empty($data['participants'])) {
             foreach ($data['participants'] as $participant) {
-                MeetingParticipant::create([
+                DB::table('meeting_participants')->insertGetId([
                     'meeting_id' => $meeting->id,
                     'email' => $participant['email'],
                     'name' => $participant['name'] ?? null,

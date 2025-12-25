@@ -2,11 +2,10 @@
 
 namespace App\Services\Call;
 
-use App\Models\Call;
-use App\Models\CallTranscription;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class TranscriptionService
 {

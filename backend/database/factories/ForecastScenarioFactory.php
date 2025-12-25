@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\ForecastScenario;
-use App\Models\Module;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\ForecastScenario>
@@ -37,7 +36,7 @@ class ForecastScenarioFactory extends Factory
             ]),
             'description' => $this->faker->sentence(),
             'user_id' => User::factory(),
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'period_start' => now()->startOfQuarter(),
             'period_end' => now()->endOfQuarter(),
             'scenario_type' => $this->faker->randomElement(array_keys(ForecastScenario::getScenarioTypes())),

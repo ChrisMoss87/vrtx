@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AuditLogController extends Controller
 {
@@ -27,7 +27,7 @@ class AuditLogController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = AuditLog::query()
+        $query = DB::table('audit_logs')
             ->with('user:id,name,email')
             ->orderBy('created_at', 'desc');
 

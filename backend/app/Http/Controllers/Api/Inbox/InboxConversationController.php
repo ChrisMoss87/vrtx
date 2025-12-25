@@ -3,105 +3,107 @@
 namespace App\Http\Controllers\Api\Inbox;
 
 use App\Application\Services\Inbox\InboxApplicationService;
+use App\Domain\Inbox\Repositories\InboxConversationRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\SharedInbox;
-use App\Models\InboxConversation;
 use App\Services\Inbox\InboxService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class InboxConversationController extends Controller
 {
     public function __construct(
         protected InboxApplicationService $inboxApplicationService,
-        protected InboxService $inboxService
+        protected InboxService $inboxService,
+        protected InboxConversationRepositoryInterface $conversationRepository
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $query = InboxConversation::with([
-            'inbox:id,name,email',
-            'assignee:id,name',
-        ]);
+        $filters = [];
 
         // Filter by inbox
         if ($request->filled('inbox_id')) {
-            $query->where('inbox_id', $request->inbox_id);
+            $filters['inbox_id'] = $request->inbox_id;
         }
 
         // Filter by status
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $filters['status'] = $request->status;
         }
 
         // Filter by assignee
         if ($request->filled('assigned_to')) {
             if ($request->assigned_to === 'unassigned') {
-                $query->whereNull('assigned_to');
+                $filters['unassigned'] = true;
             } elseif ($request->assigned_to === 'me') {
-                $query->where('assigned_to', auth()->id());
+                $filters['assigned_to'] = auth()->id();
             } else {
-                $query->where('assigned_to', $request->assigned_to);
+                $filters['assigned_to'] = $request->assigned_to;
             }
         }
 
         // Filter by priority
         if ($request->filled('priority')) {
-            $query->where('priority', $request->priority);
+            $filters['priority'] = $request->priority;
         }
 
         // Filter by channel
         if ($request->filled('channel')) {
-            $query->where('channel', $request->channel);
+            $filters['channel'] = $request->channel;
         }
 
         // Filter by starred
         if ($request->boolean('starred', false)) {
-            $query->starred();
+            $filters['starred'] = true;
         }
 
         // Exclude spam by default
         if (!$request->boolean('include_spam', false)) {
-            $query->notSpam();
+            $filters['not_spam'] = true;
         }
 
         // Search
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('subject', 'ilike', "%{$search}%")
-                  ->orWhere('contact_email', 'ilike', "%{$search}%")
-                  ->orWhere('contact_name', 'ilike', "%{$search}%")
-                  ->orWhere('snippet', 'ilike', "%{$search}%");
-            });
+            $filters['search'] = $request->search;
         }
 
         // Tag filter
         if ($request->filled('tag')) {
-            $query->whereJsonContains('tags', $request->tag);
+            $filters['tag'] = $request->tag;
         }
 
-        $conversations = $query->orderBy('last_message_at', 'desc')
-            ->paginate($request->input('per_page', 50));
+        $filters['sort_by'] = 'last_message_at';
+        $filters['sort_dir'] = 'desc';
 
-        return response()->json($conversations);
-    }
+        $perPage = $request->input('per_page', 50);
+        $page = $request->input('page', 1);
 
-    public function show(InboxConversation $inboxConversation): JsonResponse
-    {
-        $inboxConversation->load([
-            'inbox:id,name,email',
-            'assignee:id,name,email',
-            'messages' => function ($q) {
-                $q->orderBy('created_at', 'asc');
-            },
-            'messages.sender:id,name',
+        $result = $this->conversationRepository->listConversations($filters, $perPage, $page);
+
+        return response()->json([
+            'data' => $result->items,
+            'meta' => [
+                'current_page' => $result->currentPage,
+                'per_page' => $result->perPage,
+                'total' => $result->total,
+                'last_page' => $result->lastPage,
+            ],
         ]);
-
-        return response()->json(['data' => $inboxConversation]);
     }
 
-    public function update(Request $request, InboxConversation $inboxConversation): JsonResponse
+    public function show(int $id): JsonResponse
+    {
+        $conversation = $this->conversationRepository->getConversation($id);
+
+        if (!$conversation) {
+            return response()->json(['message' => 'Conversation not found'], 404);
+        }
+
+        return response()->json(['data' => $conversation]);
+    }
+
+    public function update(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'status' => 'sometimes|in:open,pending,resolved,closed',
@@ -111,18 +113,28 @@ class InboxConversationController extends Controller
             'custom_fields' => 'nullable|array',
         ]);
 
-        // Handle assignment change
-        if (array_key_exists('assigned_to', $validated) && $validated['assigned_to'] !== $inboxConversation->assigned_to) {
-            $inboxConversation = $this->inboxService->assignConversation($inboxConversation, $validated['assigned_to']);
+        // Handle assignment change separately
+        if (array_key_exists('assigned_to', $validated)) {
+            $this->conversationRepository->assignConversation($id, $validated['assigned_to']);
             unset($validated['assigned_to']);
         }
 
-        $inboxConversation->update($validated);
+        // Handle status change separately
+        if (array_key_exists('status', $validated)) {
+            $this->conversationRepository->changeStatus($id, $validated['status']);
+            unset($validated['status']);
+        }
 
-        return response()->json(['data' => $inboxConversation->fresh()]);
+        // Update remaining fields
+        if (!empty($validated)) {
+            $this->conversationRepository->updateConversation($id, $validated);
+        }
+
+        $conversation = $this->conversationRepository->getConversation($id);
+        return response()->json(['data' => $conversation]);
     }
 
-    public function reply(Request $request, InboxConversation $inboxConversation): JsonResponse
+    public function reply(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'body' => 'required|string',
@@ -132,125 +144,130 @@ class InboxConversationController extends Controller
             'bcc.*' => 'email',
         ]);
 
-        $message = $this->inboxService->sendReply(
-            $inboxConversation,
-            $validated['body'],
+        $user = auth()->user();
+        $message = $this->conversationRepository->sendReply(
+            $id,
             [
-                'cc' => $validated['cc'] ?? [],
-                'bcc' => $validated['bcc'] ?? [],
-                'user_id' => auth()->id(),
-            ]
+                'body' => $validated['body'],
+                'cc_emails' => $validated['cc'] ?? [],
+                'bcc_emails' => $validated['bcc'] ?? [],
+            ],
+            $user->id,
+            $user->name
         );
 
         return response()->json(['data' => $message], 201);
     }
 
-    public function note(Request $request, InboxConversation $inboxConversation): JsonResponse
+    public function note(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'body' => 'required|string',
         ]);
 
-        $message = $this->inboxService->addNote(
-            $inboxConversation,
-            $validated['body'],
-            auth()->id()
+        $user = auth()->user();
+        $message = $this->conversationRepository->addNote(
+            $id,
+            ['body' => $validated['body']],
+            $user->id,
+            $user->name
         );
 
         return response()->json(['data' => $message], 201);
     }
 
-    public function assign(Request $request, InboxConversation $inboxConversation): JsonResponse
+    public function assign(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'user_id' => 'nullable|exists:users,id',
         ]);
 
-        $inboxConversation = $this->inboxService->assignConversation(
-            $inboxConversation,
+        $conversation = $this->conversationRepository->assignConversation(
+            $id,
             $validated['user_id']
         );
 
-        return response()->json(['data' => $inboxConversation]);
+        return response()->json(['data' => $conversation]);
     }
 
-    public function resolve(InboxConversation $inboxConversation): JsonResponse
+    public function resolve(int $id): JsonResponse
     {
-        $inboxConversation = $this->inboxService->resolveConversation($inboxConversation);
-        return response()->json(['data' => $inboxConversation]);
+        $conversation = $this->conversationRepository->changeStatus($id, 'resolved');
+        return response()->json(['data' => $conversation]);
     }
 
-    public function reopen(InboxConversation $inboxConversation): JsonResponse
+    public function reopen(int $id): JsonResponse
     {
-        $inboxConversation = $this->inboxService->reopenConversation($inboxConversation);
-        return response()->json(['data' => $inboxConversation]);
+        $conversation = $this->conversationRepository->changeStatus($id, 'open');
+        return response()->json(['data' => $conversation]);
     }
 
-    public function close(InboxConversation $inboxConversation): JsonResponse
+    public function close(int $id): JsonResponse
     {
-        $inboxConversation = $this->inboxService->closeConversation($inboxConversation);
-        return response()->json(['data' => $inboxConversation]);
+        $conversation = $this->conversationRepository->changeStatus($id, 'closed');
+        return response()->json(['data' => $conversation]);
     }
 
-    public function spam(InboxConversation $inboxConversation): JsonResponse
+    public function spam(int $id): JsonResponse
     {
-        $inboxConversation = $this->inboxService->markAsSpam($inboxConversation);
-        return response()->json(['data' => $inboxConversation]);
+        $conversation = $this->conversationRepository->markAsSpam($id);
+        return response()->json(['data' => $conversation]);
     }
 
-    public function star(InboxConversation $inboxConversation): JsonResponse
+    public function star(int $id): JsonResponse
     {
-        $inboxConversation = $this->inboxService->toggleStar($inboxConversation);
-        return response()->json(['data' => $inboxConversation]);
+        $conversation = $this->conversationRepository->toggleStar($id);
+        return response()->json(['data' => $conversation]);
     }
 
-    public function addTag(Request $request, InboxConversation $inboxConversation): JsonResponse
+    public function addTag(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'tag' => 'required|string|max:50',
         ]);
 
-        $inboxConversation = $this->inboxService->addTag($inboxConversation, $validated['tag']);
-        return response()->json(['data' => $inboxConversation]);
+        $conversation = $this->conversationRepository->addTag($id, $validated['tag']);
+        return response()->json(['data' => $conversation]);
     }
 
-    public function removeTag(Request $request, InboxConversation $inboxConversation): JsonResponse
+    public function removeTag(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'tag' => 'required|string',
         ]);
 
-        $inboxConversation = $this->inboxService->removeTag($inboxConversation, $validated['tag']);
-        return response()->json(['data' => $inboxConversation]);
+        $conversation = $this->conversationRepository->removeTag($id, $validated['tag']);
+        return response()->json(['data' => $conversation]);
     }
 
-    public function merge(Request $request, InboxConversation $inboxConversation): JsonResponse
+    public function merge(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'conversation_ids' => 'required|array|min:1',
-            'conversation_ids.*' => 'exists:inbox_conversations,id',
+            'conversation_ids.*' => 'integer|exists:inbox_conversations,id',
         ]);
 
-        $inboxConversation = $this->inboxService->mergeConversations(
-            $inboxConversation,
+        $conversation = $this->conversationRepository->mergeConversations(
+            $id,
             $validated['conversation_ids']
         );
 
-        return response()->json(['data' => $inboxConversation]);
+        return response()->json(['data' => $conversation]);
     }
 
     public function bulkAssign(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'conversation_ids' => 'required|array|min:1',
-            'conversation_ids.*' => 'exists:inbox_conversations,id',
+            'conversation_ids.*' => 'integer|exists:inbox_conversations,id',
             'user_id' => 'required|exists:users,id',
         ]);
 
-        $count = $this->inboxService->bulkAssign(
-            $validated['conversation_ids'],
-            $validated['user_id']
-        );
+        $count = 0;
+        foreach ($validated['conversation_ids'] as $conversationId) {
+            $this->conversationRepository->assignConversation($conversationId, $validated['user_id']);
+            $count++;
+        }
 
         return response()->json(['assigned_count' => $count]);
     }
@@ -259,14 +276,14 @@ class InboxConversationController extends Controller
     {
         $validated = $request->validate([
             'conversation_ids' => 'required|array|min:1',
-            'conversation_ids.*' => 'exists:inbox_conversations,id',
+            'conversation_ids.*' => 'integer|exists:inbox_conversations,id',
         ]);
 
         $count = 0;
-        foreach ($validated['conversation_ids'] as $id) {
-            $conversation = InboxConversation::find($id);
+        foreach ($validated['conversation_ids'] as $conversationId) {
+            $conversation = DB::table('inbox_conversations')->where('id', $conversationId)->first();
             if ($conversation && $conversation->status !== 'resolved') {
-                $this->inboxService->resolveConversation($conversation);
+                $this->conversationRepository->changeStatus($conversationId, 'resolved');
                 $count++;
             }
         }

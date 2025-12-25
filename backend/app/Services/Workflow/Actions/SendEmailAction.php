@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\EmailAccount;
-use App\Models\EmailMessage;
-use App\Models\EmailTemplate;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use App\Services\Email\EmailService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Action to send an email.
@@ -60,7 +58,7 @@ class SendEmailAction implements ActionInterface
         }
 
         // Create email message
-        $message = EmailMessage::create([
+        $message = DB::table('email_messages')->insertGetId([
             'account_id' => $account->id,
             'user_id' => $context['triggered_by'] ?? null,
             'direction' => EmailMessage::DIRECTION_OUTBOUND,
@@ -104,7 +102,7 @@ class SendEmailAction implements ActionInterface
         array $recipients,
         array $context
     ): array {
-        $template = EmailTemplate::find($templateId);
+        $template = DB::table('email_templates')->where('id', $templateId)->first();
 
         if (!$template) {
             throw new \InvalidArgumentException("Email template {$templateId} not found");
@@ -153,7 +151,7 @@ class SendEmailAction implements ActionInterface
     {
         // If account_id is specified in config, use that
         if (!empty($config['account_id'])) {
-            return EmailAccount::where('id', $config['account_id'])
+            return DB::table('email_accounts')->where('id', $config['account_id'])
                 ->where('is_active', true)
                 ->first();
         }
@@ -168,7 +166,7 @@ class SendEmailAction implements ActionInterface
         }
 
         // Fall back to any active account (system account)
-        return EmailAccount::where('is_active', true)
+        return DB::table('email_accounts')->where('is_active', true)
             ->orderBy('is_default', 'desc')
             ->first();
     }

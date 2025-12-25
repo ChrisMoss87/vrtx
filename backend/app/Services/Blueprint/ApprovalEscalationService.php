@@ -4,12 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Blueprint;
 
-use App\Models\ApprovalDelegation;
-use App\Models\ApprovalEscalationLog;
-use App\Models\BlueprintApproval;
-use App\Models\BlueprintApprovalRequest;
-use App\Models\BlueprintTransitionExecution;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -296,7 +291,7 @@ class ApprovalEscalationService
             ? $delegation->delegate_id
             : $approverUserId;
 
-        $request = BlueprintApprovalRequest::create([
+        $request = DB::table('blueprint_approval_requests')->insertGetId([
             'approval_id' => $approval->id,
             'record_id' => $execution->record_id,
             'execution_id' => $execution->id,
@@ -393,7 +388,7 @@ class ApprovalEscalationService
             throw new \RuntimeException('Cannot delegate to yourself');
         }
 
-        return ApprovalDelegation::create([
+        return DB::table('approval_delegations')->insertGetId([
             'delegator_id' => $delegatorId,
             'delegate_id' => $delegateId,
             'start_date' => $startDate,
@@ -410,7 +405,7 @@ class ApprovalEscalationService
      */
     public function endDelegation(int $delegationId, int $userId): void
     {
-        $delegation = ApprovalDelegation::findOrFail($delegationId);
+        $delegation = DB::table('approval_delegations')->where('id', $delegationId)->first();
 
         // Only delegator can end their own delegation
         if ($delegation->delegator_id !== $userId) {

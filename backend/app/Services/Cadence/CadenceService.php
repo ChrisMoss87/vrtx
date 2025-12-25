@@ -2,13 +2,6 @@
 
 namespace App\Services\Cadence;
 
-use App\Models\Cadence;
-use App\Models\CadenceEnrollment;
-use App\Models\CadenceMetric;
-use App\Models\CadenceStep;
-use App\Models\CadenceStepExecution;
-use App\Models\CadenceTemplate;
-use App\Models\SendTimePrediction;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -73,7 +66,7 @@ class CadenceService
     public function create(array $data): Cadence
     {
         return DB::transaction(function () use ($data) {
-            $cadence = Cadence::create([
+            $cadence = DB::table('cadences')->insertGetId([
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,
                 'module_id' => $data['module_id'],
@@ -105,7 +98,7 @@ class CadenceService
      */
     public function update(int $id, array $data): Cadence
     {
-        $cadence = Cadence::findOrFail($id);
+        $cadence = DB::table('cadences')->where('id', $id)->first();
 
         $cadence->update(array_filter([
             'name' => $data['name'] ?? null,
@@ -128,7 +121,7 @@ class CadenceService
      */
     public function delete(int $id): void
     {
-        $cadence = Cadence::findOrFail($id);
+        $cadence = DB::table('cadences')->where('id', $id)->first();
 
         // Check for active enrollments
         if ($cadence->enrollments()->where('status', 'active')->exists()) {
@@ -143,7 +136,7 @@ class CadenceService
      */
     public function activate(int $id): Cadence
     {
-        $cadence = Cadence::findOrFail($id);
+        $cadence = DB::table('cadences')->where('id', $id)->first();
 
         if (!$cadence->steps()->where('is_active', true)->exists()) {
             throw new \Exception('Cadence must have at least one active step');
@@ -159,7 +152,7 @@ class CadenceService
      */
     public function pause(int $id): Cadence
     {
-        $cadence = Cadence::findOrFail($id);
+        $cadence = DB::table('cadences')->where('id', $id)->first();
         $cadence->update(['status' => Cadence::STATUS_PAUSED]);
 
         return $cadence;
@@ -170,7 +163,7 @@ class CadenceService
      */
     public function archive(int $id): Cadence
     {
-        $cadence = Cadence::findOrFail($id);
+        $cadence = DB::table('cadences')->where('id', $id)->first();
 
         // Exit all active enrollments
         $cadence->enrollments()
@@ -218,12 +211,12 @@ class CadenceService
      */
     public function createStep(int $cadenceId, array $data): CadenceStep
     {
-        $cadence = Cadence::findOrFail($cadenceId);
+        $cadence = DB::table('cadences')->where('id', $cadenceId)->first();
 
         // Get next step order if not provided
         $stepOrder = $data['step_order'] ?? ($cadence->steps()->max('step_order') ?? 0) + 1;
 
-        return CadenceStep::create([
+        return DB::table('cadence_steps')->insertGetId([
             'cadence_id' => $cadenceId,
             'step_order' => $stepOrder,
             'name' => $data['name'] ?? null,
@@ -254,7 +247,7 @@ class CadenceService
      */
     public function updateStep(int $stepId, array $data): CadenceStep
     {
-        $step = CadenceStep::findOrFail($stepId);
+        $step = DB::table('cadence_steps')->where('id', $stepId)->first();
 
         $step->update(array_filter([
             'name' => $data['name'] ?? null,
@@ -287,10 +280,10 @@ class CadenceService
      */
     public function deleteStep(int $stepId): void
     {
-        $step = CadenceStep::findOrFail($stepId);
+        $step = DB::table('cadence_steps')->where('id', $stepId)->first();
 
         // Check if any enrollments are on this step
-        if (CadenceEnrollment::where('current_step_id', $stepId)->where('status', 'active')->exists()) {
+        if (DB::table('cadence_enrollments')->where('current_step_id', $stepId)->where('status', 'active')->exists()) {
             throw new \Exception('Cannot delete step with active enrollments');
         }
 
@@ -309,7 +302,7 @@ class CadenceService
     {
         DB::transaction(function () use ($cadenceId, $stepIds) {
             foreach ($stepIds as $index => $stepId) {
-                CadenceStep::where('id', $stepId)
+                DB::table('cadence_steps')->where('id', $stepId)
                     ->where('cadence_id', $cadenceId)
                     ->update(['step_order' => $index + 1]);
             }
@@ -323,14 +316,14 @@ class CadenceService
      */
     public function enroll(int $cadenceId, int $recordId, ?int $enrolledBy = null): CadenceEnrollment
     {
-        $cadence = Cadence::findOrFail($cadenceId);
+        $cadence = DB::table('cadences')->where('id', $cadenceId)->first();
 
         if (!$cadence->canEnroll()) {
             throw new \Exception('Cadence is not accepting enrollments');
         }
 
         // Check for existing enrollment
-        $existing = CadenceEnrollment::where('cadence_id', $cadenceId)
+        $existing = DB::table('cadence_enrollments')->where('cadence_id', $cadenceId)
             ->where('record_id', $recordId)
             ->first();
 
@@ -363,7 +356,7 @@ class CadenceService
         }
 
         return DB::transaction(function () use ($cadence, $recordId, $firstStep, $enrolledBy) {
-            $enrollment = CadenceEnrollment::create([
+            $enrollment = DB::table('cadence_enrollments')->insertGetId([
                 'cadence_id' => $cadence->id,
                 'record_id' => $recordId,
                 'current_step_id' => $firstStep->id,
@@ -374,7 +367,7 @@ class CadenceService
             ]);
 
             // Schedule first step execution
-            CadenceStepExecution::create([
+            DB::table('cadence_step_executions')->insertGetId([
                 'enrollment_id' => $enrollment->id,
                 'step_id' => $firstStep->id,
                 'scheduled_at' => $enrollment->next_step_at,
@@ -413,12 +406,12 @@ class CadenceService
      */
     public function unenroll(int $enrollmentId, string $reason = 'Manually removed'): CadenceEnrollment
     {
-        $enrollment = CadenceEnrollment::findOrFail($enrollmentId);
+        $enrollment = DB::table('cadence_enrollments')->where('id', $enrollmentId)->first();
 
         $enrollment->exitWithReason(CadenceEnrollment::STATUS_MANUALLY_REMOVED, $reason);
 
         // Cancel pending executions
-        CadenceStepExecution::where('enrollment_id', $enrollmentId)
+        DB::table('cadence_step_executions')->where('enrollment_id', $enrollmentId)
             ->where('status', CadenceStepExecution::STATUS_SCHEDULED)
             ->update(['status' => CadenceStepExecution::STATUS_CANCELLED]);
 
@@ -430,7 +423,7 @@ class CadenceService
      */
     public function pauseEnrollment(int $enrollmentId): CadenceEnrollment
     {
-        $enrollment = CadenceEnrollment::findOrFail($enrollmentId);
+        $enrollment = DB::table('cadence_enrollments')->where('id', $enrollmentId)->first();
         $enrollment->pause();
 
         return $enrollment;
@@ -441,7 +434,7 @@ class CadenceService
      */
     public function resumeEnrollment(int $enrollmentId): CadenceEnrollment
     {
-        $enrollment = CadenceEnrollment::findOrFail($enrollmentId);
+        $enrollment = DB::table('cadence_enrollments')->where('id', $enrollmentId)->first();
         $enrollment->resume();
 
         // Reschedule next step
@@ -462,7 +455,7 @@ class CadenceService
      */
     public function getEnrollments(int $cadenceId, array $filters = []): LengthAwarePaginator
     {
-        $query = CadenceEnrollment::where('cadence_id', $cadenceId)
+        $query = DB::table('cadence_enrollments')->where('cadence_id', $cadenceId)
             ->with(['currentStep', 'enrolledBy']);
 
         if (!empty($filters['status'])) {
@@ -531,9 +524,9 @@ class CadenceService
      */
     public function getAnalytics(int $cadenceId, ?string $startDate = null, ?string $endDate = null): array
     {
-        $cadence = Cadence::findOrFail($cadenceId);
+        $cadence = DB::table('cadences')->where('id', $cadenceId)->first();
 
-        $query = CadenceEnrollment::where('cadence_id', $cadenceId);
+        $query = DB::table('cadence_enrollments')->where('cadence_id', $cadenceId);
 
         // Overall stats
         $totalEnrollments = $query->count();
@@ -559,7 +552,7 @@ class CadenceService
             ->keyBy('step_id');
 
         // Daily metrics
-        $metricsQuery = CadenceMetric::where('cadence_id', $cadenceId)
+        $metricsQuery = DB::table('cadence_metrics')->where('cadence_id', $cadenceId)
             ->whereNull('step_id');
 
         if ($startDate) {
@@ -621,7 +614,7 @@ class CadenceService
      */
     public function createFromTemplate(int $templateId, int $moduleId, string $name): Cadence
     {
-        $template = CadenceTemplate::findOrFail($templateId);
+        $template = DB::table('cadence_templates')->where('id', $templateId)->first();
 
         return $template->createCadence($moduleId, $name, auth()->id());
     }
@@ -643,7 +636,7 @@ class CadenceService
             'conditions' => $step->conditions,
         ])->toArray();
 
-        return CadenceTemplate::create([
+        return DB::table('cadence_templates')->insertGetId([
             'name' => $name,
             'description' => $cadence->description,
             'category' => $category,

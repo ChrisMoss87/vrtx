@@ -2,10 +2,9 @@
 
 namespace App\Services\Recording;
 
-use App\Models\Recording;
-use App\Models\RecordingStep;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class RecordingService
 {
@@ -18,7 +17,7 @@ class RecordingService
         // Stop any existing active recordings for this user
         $this->stopActiveRecordings($user);
 
-        return Recording::create([
+        return DB::table('recordings')->insertGetId([
             'user_id' => $user->id,
             'module_id' => $moduleId,
             'initial_record_id' => $initialRecordId,
@@ -76,7 +75,7 @@ class RecordingService
             return null;
         }
 
-        return RecordingStep::create([
+        return DB::table('recording_steps')->insertGetId([
             'recording_id' => $recording->id,
             'step_order' => $recording->getNextStepOrder(),
             'action_type' => $actionType,
@@ -95,7 +94,7 @@ class RecordingService
         $step->delete();
 
         // Reorder remaining steps
-        RecordingStep::where('recording_id', $recording->id)
+        DB::table('recording_steps')->where('recording_id', $recording->id)
             ->where('step_order', '>', $removedOrder)
             ->decrement('step_order');
     }
@@ -103,7 +102,7 @@ class RecordingService
     public function reorderSteps(Recording $recording, array $stepIds): void
     {
         foreach ($stepIds as $order => $stepId) {
-            RecordingStep::where('id', $stepId)
+            DB::table('recording_steps')->where('id', $stepId)
                 ->where('recording_id', $recording->id)
                 ->update(['step_order' => $order + 1]);
         }
@@ -154,7 +153,7 @@ class RecordingService
         string $triggerType,
         array $triggerConfig = [],
         ?string $description = null
-    ): \App\Models\Workflow {
+    ): object {
         $workflow = $this->workflowGenerator->generate(
             $recording,
             $name,

@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\ModuleRecord;
-use App\Models\Module;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Action to update related records (parent/child relationships).
@@ -30,7 +29,7 @@ class UpdateRelatedRecordAction implements ActionInterface
             throw new \InvalidArgumentException('Record ID is required');
         }
 
-        $record = ModuleRecord::find($recordId);
+        $record = DB::table('module_records')->where('id', $recordId)->first();
         if (!$record) {
             throw new \InvalidArgumentException("Record not found: {$recordId}");
         }
@@ -119,7 +118,7 @@ class UpdateRelatedRecordAction implements ActionInterface
                     return collect();
                 }
 
-                return ModuleRecord::where('id', $parentId)->get();
+                return DB::table('module_records')->where('id', $parentId)->get();
 
             case self::RELATION_CHILD:
                 // Find child records that reference current record
@@ -127,12 +126,12 @@ class UpdateRelatedRecordAction implements ActionInterface
                     return collect();
                 }
 
-                $relatedModule = Module::where('api_name', $relatedModuleApi)->first();
+                $relatedModule = DB::table('modules')->where('api_name', $relatedModuleApi)->first();
                 if (!$relatedModule) {
                     return collect();
                 }
 
-                return ModuleRecord::where('module_id', $relatedModule->id)
+                return DB::table('module_records')->where('module_id', $relatedModule->id)
                     ->whereJsonContains("data->{$relationField}", $record->id)
                     ->get();
 
@@ -143,7 +142,7 @@ class UpdateRelatedRecordAction implements ActionInterface
                     return collect();
                 }
 
-                $relatedModule = Module::where('api_name', $relatedModuleApi)->first();
+                $relatedModule = DB::table('modules')->where('api_name', $relatedModuleApi)->first();
                 if (!$relatedModule) {
                     return collect();
                 }
@@ -155,7 +154,7 @@ class UpdateRelatedRecordAction implements ActionInterface
                 }
 
                 // Find records in related module where the relation field matches
-                return ModuleRecord::where('module_id', $relatedModule->id)
+                return DB::table('module_records')->where('module_id', $relatedModule->id)
                     ->where('id', $linkedValue)
                     ->get();
         }

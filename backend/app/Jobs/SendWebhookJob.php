@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\WebhookDelivery;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -16,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 class SendWebhookJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+use Illuminate\Support\Facades\DB;
 
     public int $tries = 1; // We handle retries manually
     public int $timeout = 60;

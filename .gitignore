@@ -31,3 +31,4 @@ temp/
 *.tmp
 /useful/
 /frontend/components/ui/
+/redundant_files/

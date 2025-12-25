@@ -2,9 +2,6 @@
 
 namespace App\Services\Competitor;
 
-use App\Models\Competitor;
-use App\Models\DealCompetitor;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -12,7 +9,7 @@ class CompetitorAnalyticsService
 {
     public function getCompetitorAnalytics(Competitor $competitor): array
     {
-        $dealCompetitors = DealCompetitor::where('competitor_id', $competitor->id)
+        $dealCompetitors = DealDB::table('competitors')->where('competitor_id', $competitor->id)
             ->whereIn('outcome', ['won', 'lost'])
             ->get();
 
@@ -74,7 +71,7 @@ class CompetitorAnalyticsService
         $comparison = [];
 
         foreach ($competitors as $competitor) {
-            $dealCompetitors = DealCompetitor::where('competitor_id', $competitor->id)
+            $dealCompetitors = DealDB::table('competitors')->where('competitor_id', $competitor->id)
                 ->whereIn('outcome', ['won', 'lost'])
                 ->get();
 
@@ -165,7 +162,7 @@ class CompetitorAnalyticsService
     {
         $sixMonthsAgo = now()->subMonths(6)->startOfMonth();
 
-        $results = DealCompetitor::where('competitor_id', $competitorId)
+        $results = DealDB::table('competitors')->where('competitor_id', $competitorId)
             ->whereIn('outcome', ['won', 'lost'])
             ->where('created_at', '>=', $sixMonthsAgo)
             ->selectRaw("

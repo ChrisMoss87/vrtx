@@ -4,11 +4,10 @@ namespace App\Http\Controllers\Api\Chat;
 
 use App\Application\Services\Chat\ChatApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\ChatConversation;
-use App\Models\ChatMessage;
 use App\Services\Chat\ChatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ChatConversationController extends Controller
 {
@@ -71,7 +70,7 @@ class ChatConversationController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $conversation = ChatConversation::findOrFail($id);
+        $conversation = DB::table('chat_conversations')->where('id', $id)->first();
 
         $validated = $request->validate([
             'status' => 'sometimes|in:open,pending,closed',
@@ -91,7 +90,7 @@ class ChatConversationController extends Controller
 
     public function assign(Request $request, int $id): JsonResponse
     {
-        $conversation = ChatConversation::findOrFail($id);
+        $conversation = DB::table('chat_conversations')->where('id', $id)->first();
 
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
@@ -111,7 +110,7 @@ class ChatConversationController extends Controller
 
     public function close(Request $request, int $id): JsonResponse
     {
-        $conversation = ChatConversation::findOrFail($id);
+        $conversation = DB::table('chat_conversations')->where('id', $id)->first();
 
         $this->chatService->closeConversation(
             $conversation,
@@ -126,7 +125,7 @@ class ChatConversationController extends Controller
 
     public function reopen(int $id): JsonResponse
     {
-        $conversation = ChatConversation::findOrFail($id);
+        $conversation = DB::table('chat_conversations')->where('id', $id)->first();
         $conversation->reopen();
 
         $conversation->addMessage(
@@ -142,7 +141,7 @@ class ChatConversationController extends Controller
 
     public function messages(int $id): JsonResponse
     {
-        $conversation = ChatConversation::findOrFail($id);
+        $conversation = DB::table('chat_conversations')->where('id', $id)->first();
 
         $messages = $conversation->messages()
             ->with('sender')
@@ -156,7 +155,7 @@ class ChatConversationController extends Controller
 
     public function sendMessage(Request $request, int $id): JsonResponse
     {
-        $conversation = ChatConversation::findOrFail($id);
+        $conversation = DB::table('chat_conversations')->where('id', $id)->first();
 
         $validated = $request->validate([
             'content' => 'required|string|max:10000',

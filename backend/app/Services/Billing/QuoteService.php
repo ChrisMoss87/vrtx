@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
-use App\Models\BillingSetting;
-use App\Models\Quote;
-use App\Models\QuoteLineItem;
-use App\Models\QuoteVersion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
@@ -18,7 +14,7 @@ class QuoteService
         return DB::transaction(function () use ($data, $userId) {
             $settings = BillingSetting::getSettings();
 
-            $quote = Quote::create([
+            $quote = DB::table('quotes')->insertGetId([
                 'quote_number' => $settings->generateQuoteNumber(),
                 'deal_id' => $data['deal_id'] ?? null,
                 'contact_id' => $data['contact_id'] ?? null,
@@ -85,7 +81,7 @@ class QuoteService
 
         // Create new items
         foreach ($items as $index => $item) {
-            QuoteLineItem::create([
+            DB::table('quote_line_items')->insertGetId([
                 'quote_id' => $quote->id,
                 'product_id' => $item['product_id'] ?? null,
                 'description' => $item['description'],
@@ -123,7 +119,7 @@ class QuoteService
             })->toArray(),
         ];
 
-        $version = QuoteVersion::create([
+        $version = DB::table('quote_versions')->insertGetId([
             'quote_id' => $quote->id,
             'version' => $quote->version,
             'snapshot' => $snapshot,
@@ -154,7 +150,7 @@ class QuoteService
         return DB::transaction(function () use ($quote, $userId) {
             $settings = BillingSetting::getSettings();
 
-            $newQuote = Quote::create([
+            $newQuote = DB::table('quotes')->insertGetId([
                 'quote_number' => $settings->generateQuoteNumber(),
                 'deal_id' => $quote->deal_id,
                 'contact_id' => $quote->contact_id,
@@ -174,7 +170,7 @@ class QuoteService
 
             // Copy line items
             foreach ($quote->lineItems as $item) {
-                QuoteLineItem::create([
+                DB::table('quote_line_items')->insertGetId([
                     'quote_id' => $newQuote->id,
                     'product_id' => $item->product_id,
                     'description' => $item->description,

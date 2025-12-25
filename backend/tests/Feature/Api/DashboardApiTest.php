@@ -4,13 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Dashboard;
-use App\Models\DashboardWidget;
-use App\Models\Module;
-use App\Models\Permission;
-use App\Models\Report;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -18,6 +11,7 @@ use Tests\TestCase;
 class DashboardApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -27,15 +21,15 @@ class DashboardApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
-        $this->module = Module::factory()->create([
+        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
         ]);
 
         // Create role with dashboard permissions
-        $this->role = Role::create(['name' => 'admin', 'guard_name' => 'web']);
+        $this->role = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web']);
         $permissions = [
             'dashboards.view',
             'dashboards.create',
@@ -43,7 +37,7 @@ class DashboardApiTest extends TestCase
             'dashboards.delete',
         ];
         foreach ($permissions as $permName) {
-            $perm = Permission::create(['name' => $permName, 'guard_name' => 'web']);
+            $perm = DB::table('permissions')->insertGetId(['name' => $permName, 'guard_name' => 'web']);
             $this->role->givePermissionTo($perm);
         }
         $this->user->assignRole($this->role);
@@ -57,7 +51,7 @@ class DashboardApiTest extends TestCase
 
     public function test_can_list_dashboards(): void
     {
-        Dashboard::factory()->count(3)->create([
+        /* Dashboard factory - use DB::table('dashboards') */->count(3)->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -116,7 +110,7 @@ class DashboardApiTest extends TestCase
 
     public function test_can_show_dashboard(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -145,7 +139,7 @@ class DashboardApiTest extends TestCase
 
     public function test_can_update_dashboard(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'name' => 'Original Name',
             'user_id' => $this->user->id,
         ]);
@@ -172,7 +166,7 @@ class DashboardApiTest extends TestCase
 
     public function test_can_delete_dashboard(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -192,11 +186,11 @@ class DashboardApiTest extends TestCase
 
     public function test_can_set_dashboard_as_default(): void
     {
-        $dashboard1 = Dashboard::factory()->create([
+        $dashboard1 = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
             'is_default' => true,
         ]);
-        $dashboard2 = Dashboard::factory()->create([
+        $dashboard2 = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
             'is_default' => false,
         ]);
@@ -210,11 +204,11 @@ class DashboardApiTest extends TestCase
 
     public function test_can_get_default_dashboard(): void
     {
-        Dashboard::factory()->create([
+        /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
             'is_default' => false,
         ]);
-        $defaultDashboard = Dashboard::factory()->create([
+        $defaultDashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
             'is_default' => true,
         ]);
@@ -231,7 +225,7 @@ class DashboardApiTest extends TestCase
 
     public function test_can_add_widget_to_dashboard(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -259,10 +253,10 @@ class DashboardApiTest extends TestCase
 
     public function test_can_update_widget(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
         ]);
-        $widget = DashboardWidget::factory()->create([
+        $widget = /* DashboardWidget factory - use DB::table('dashboard_widgets') */->create([
             'dashboard_id' => $dashboard->id,
             'title' => 'Original Title',
         ]);
@@ -277,10 +271,10 @@ class DashboardApiTest extends TestCase
 
     public function test_can_delete_widget(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
         ]);
-        $widget = DashboardWidget::factory()->create([
+        $widget = /* DashboardWidget factory - use DB::table('dashboard_widgets') */->create([
             'dashboard_id' => $dashboard->id,
         ]);
 
@@ -292,13 +286,13 @@ class DashboardApiTest extends TestCase
 
     public function test_can_update_widget_positions(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
         ]);
-        $widget1 = DashboardWidget::factory()->create([
+        $widget1 = /* DashboardWidget factory - use DB::table('dashboard_widgets') */->create([
             'dashboard_id' => $dashboard->id,
         ]);
-        $widget2 = DashboardWidget::factory()->create([
+        $widget2 = /* DashboardWidget factory - use DB::table('dashboard_widgets') */->create([
             'dashboard_id' => $dashboard->id,
         ]);
 
@@ -318,7 +312,7 @@ class DashboardApiTest extends TestCase
 
     public function test_can_toggle_dashboard_public(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $this->user->id,
             'is_public' => false,
         ]);
@@ -331,13 +325,13 @@ class DashboardApiTest extends TestCase
 
     public function test_can_see_public_dashboards_from_other_users(): void
     {
-        $otherUser = User::factory()->create();
+        $otherUser = /* User factory - use DB::table('users') */->create();
 
-        Dashboard::factory()->create([
+        /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $otherUser->id,
             'is_public' => true,
         ]);
-        Dashboard::factory()->create([
+        /* Dashboard factory - use DB::table('dashboards') */->create([
             'user_id' => $otherUser->id,
             'is_public' => false,
         ]);
@@ -356,11 +350,11 @@ class DashboardApiTest extends TestCase
 
     public function test_can_clone_dashboard(): void
     {
-        $dashboard = Dashboard::factory()->create([
+        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
             'name' => 'Original Dashboard',
             'user_id' => $this->user->id,
         ]);
-        DashboardWidget::factory()->count(3)->create([
+        /* DashboardWidget factory - use DB::table('dashboard_widgets') */->count(3)->create([
             'dashboard_id' => $dashboard->id,
         ]);
 

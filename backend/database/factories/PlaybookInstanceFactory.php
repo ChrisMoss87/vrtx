@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Playbook;
-use App\Models\PlaybookInstance;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\Playbook;
+use App\Infrastructure\Persistence\Eloquent\Models\PlaybookInstance;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\PlaybookInstance>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\PlaybookInstance>
  */
 class PlaybookInstanceFactory extends Factory
 {
@@ -106,7 +106,7 @@ class PlaybookInstanceFactory extends Factory
     public function withTaskInstances(int $count = 5): static
     {
         return $this->has(
-            \App\Models\PlaybookTaskInstance::factory()->count($count),
+            \App\Infrastructure\Persistence\Eloquent\Models\PlaybookTaskInstance::factory()->count($count),
             'taskInstances'
         );
     }

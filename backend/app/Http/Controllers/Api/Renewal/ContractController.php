@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\Renewal;
 
 use App\Http\Controllers\Controller;
-use App\Models\Contract;
 use App\Services\Renewal\RenewalService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class ContractController extends Controller
 {
@@ -93,7 +93,7 @@ class ContractController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $contract = Contract::findOrFail($id);
+        $contract = DB::table('contracts')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -126,7 +126,7 @@ class ContractController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $contract = Contract::findOrFail($id);
+        $contract = DB::table('contracts')->where('id', $id)->first();
 
         // Check for active renewals
         if ($contract->renewals()->whereIn('status', ['pending', 'in_progress'])->exists()) {

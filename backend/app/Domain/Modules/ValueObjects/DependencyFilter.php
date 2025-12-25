@@ -81,7 +81,7 @@ final readonly class DependencyFilter implements JsonSerializable
     }
 
     /**
-     * Build WHERE clause for Eloquent query.
+     * Build WHERE clause for Database query.
      *
      * @param mixed $parentValue
      * @return array [method, parameters]

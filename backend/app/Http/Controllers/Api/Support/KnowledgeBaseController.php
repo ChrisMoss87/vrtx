@@ -2,59 +2,68 @@
 
 namespace App\Http\Controllers\Api\Support;
 
+use App\Domain\KnowledgeBase\Repositories\KbArticleRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\KbArticle;
-use App\Models\KbCategory;
-use App\Models\KbArticleFeedback;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 
 class KnowledgeBaseController extends Controller
 {
+    public function __construct(
+        private readonly KbArticleRepositoryInterface $articleRepository
+    ) {
+    }
     // Articles
     public function articles(Request $request): JsonResponse
     {
-        $query = KbArticle::with(['category', 'author']);
+        $filters = [];
 
         if ($request->has('status')) {
-            $query->where('status', $request->input('status'));
+            $filters['status'] = $request->input('status');
         } else {
             // By default show published only for non-admin requests
             if (!$request->boolean('include_drafts')) {
-                $query->published();
+                $filters['published_only'] = true;
             }
         }
 
         if ($request->has('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
+            $filters['category_id'] = $request->input('category_id');
         }
 
         if ($request->has('search')) {
-            $query->search($request->input('search'));
+            $filters['search'] = $request->input('search');
         }
 
         if ($request->boolean('public_only')) {
-            $query->public();
+            $filters['public_only'] = true;
         }
 
-        $sortField = $request->input('sort', 'published_at');
-        $sortDirection = $request->input('direction', 'desc');
-        $query->orderBy($sortField, $sortDirection);
+        $filters['sort_by'] = $request->input('sort', 'published_at');
+        $filters['sort_dir'] = $request->input('direction', 'desc');
 
-        $articles = $query->paginate($request->input('per_page', 20));
+        $perPage = $request->input('per_page', 20);
+        $page = $request->input('page', 1);
 
-        return response()->json($articles);
+        $result = $this->articleRepository->listArticles($filters, $perPage, $page);
+
+        return response()->json($result);
     }
 
     public function article(string $slug): JsonResponse
     {
-        $article = KbArticle::with(['category', 'author'])
-            ->where('slug', $slug)
-            ->firstOrFail();
+        $article = $this->articleRepository->getArticleBySlug($slug);
+
+        if (!$article) {
+            return response()->json(['message' => 'Article not found'], 404);
+        }
 
         // Increment view count
-        $article->incrementViews();
+        $this->articleRepository->incrementArticleViews($article['id']);
+
+        // Reload article to get updated view count
+        $article = $this->articleRepository->getArticleBySlug($slug);
 
         return response()->json(['article' => $article]);
     }
@@ -77,25 +86,27 @@ class KnowledgeBaseController extends Controller
         // Ensure unique slug
         $baseSlug = $validated['slug'];
         $counter = 1;
-        while (KbArticle::where('slug', $validated['slug'])->exists()) {
+        $existingArticle = $this->articleRepository->getArticleBySlug($validated['slug']);
+        while ($existingArticle !== null) {
             $validated['slug'] = $baseSlug . '-' . $counter++;
+            $existingArticle = $this->articleRepository->getArticleBySlug($validated['slug']);
         }
 
-        if (($validated['status'] ?? 'draft') === 'published') {
-            $validated['published_at'] = now();
-        }
-
-        $article = KbArticle::create($validated);
+        $article = $this->articleRepository->createArticle($validated);
 
         return response()->json([
-            'article' => $article->load(['category', 'author']),
+            'article' => $article,
             'message' => 'Article created successfully',
         ], 201);
     }
 
     public function updateArticle(Request $request, int $id): JsonResponse
     {
-        $article = KbArticle::findOrFail($id);
+        $article = $this->articleRepository->getArticle($id);
+
+        if (!$article) {
+            return response()->json(['message' => 'Article not found'], 404);
+        }
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -108,82 +119,88 @@ class KnowledgeBaseController extends Controller
         ]);
 
         // Update slug if title changed
-        if (isset($validated['title']) && $validated['title'] !== $article->title) {
+        if (isset($validated['title']) && $validated['title'] !== $article['title']) {
             $validated['slug'] = Str::slug($validated['title']);
             $baseSlug = $validated['slug'];
             $counter = 1;
-            while (KbArticle::where('slug', $validated['slug'])->where('id', '!=', $id)->exists()) {
+            $existingArticle = $this->articleRepository->getArticleBySlug($validated['slug']);
+            while ($existingArticle !== null && $existingArticle['id'] !== $id) {
                 $validated['slug'] = $baseSlug . '-' . $counter++;
+                $existingArticle = $this->articleRepository->getArticleBySlug($validated['slug']);
             }
         }
 
-        // Set published_at if publishing for the first time
-        if (
-            isset($validated['status']) &&
-            $validated['status'] === 'published' &&
-            $article->status !== 'published'
-        ) {
-            $validated['published_at'] = now();
-        }
+        $updatedArticle = $this->articleRepository->updateArticle($id, $validated);
 
-        $article->update($validated);
-
-        return response()->json(['article' => $article->fresh()->load(['category', 'author'])]);
+        return response()->json(['article' => $updatedArticle]);
     }
 
     public function destroyArticle(int $id): JsonResponse
     {
-        $article = KbArticle::findOrFail($id);
-        $article->delete();
+        $article = $this->articleRepository->getArticle($id);
+
+        if (!$article) {
+            return response()->json(['message' => 'Article not found'], 404);
+        }
+
+        $this->articleRepository->deleteArticle($id);
 
         return response()->json(['message' => 'Article deleted']);
     }
 
     public function publishArticle(int $id): JsonResponse
     {
-        $article = KbArticle::findOrFail($id);
-        $article->publish();
+        $article = $this->articleRepository->getArticle($id);
+
+        if (!$article) {
+            return response()->json(['message' => 'Article not found'], 404);
+        }
+
+        $publishedArticle = $this->articleRepository->publishArticle($id);
 
         return response()->json([
-            'article' => $article->fresh(),
+            'article' => $publishedArticle,
             'message' => 'Article published',
         ]);
     }
 
     public function unpublishArticle(int $id): JsonResponse
     {
-        $article = KbArticle::findOrFail($id);
-        $article->unpublish();
+        $article = $this->articleRepository->getArticle($id);
+
+        if (!$article) {
+            return response()->json(['message' => 'Article not found'], 404);
+        }
+
+        $unpublishedArticle = $this->articleRepository->unpublishArticle($id);
 
         return response()->json([
-            'article' => $article->fresh(),
+            'article' => $unpublishedArticle,
             'message' => 'Article unpublished',
         ]);
     }
 
     public function articleFeedback(Request $request, int $id): JsonResponse
     {
-        $article = KbArticle::findOrFail($id);
+        $article = $this->articleRepository->getArticle($id);
+
+        if (!$article) {
+            return response()->json(['message' => 'Article not found'], 404);
+        }
 
         $validated = $request->validate([
             'is_helpful' => 'required|boolean',
             'comment' => 'nullable|string|max:1000',
         ]);
 
-        KbArticleFeedback::create([
-            'article_id' => $article->id,
+        $feedbackData = [
             'is_helpful' => $validated['is_helpful'],
             'comment' => $validated['comment'] ?? null,
             'user_id' => auth()->id(),
             'ip_address' => $request->ip(),
-        ]);
+        ];
 
-        // Update article counters
-        if ($validated['is_helpful']) {
-            $article->increment('helpful_count');
-        } else {
-            $article->increment('not_helpful_count');
-        }
+        $this->articleRepository->submitFeedback($id, $feedbackData);
 
         return response()->json(['message' => 'Feedback recorded']);
     }
@@ -191,27 +208,28 @@ class KnowledgeBaseController extends Controller
     // Categories
     public function categories(Request $request): JsonResponse
     {
-        $query = KbCategory::withCount(['articles', 'publishedArticles']);
+        $filters = [];
 
         if ($request->boolean('public_only')) {
-            $query->where('is_public', true);
+            $filters['public_only'] = true;
         }
 
         if ($request->boolean('top_level_only')) {
-            $query->whereNull('parent_id');
+            $filters['top_level'] = true;
         }
 
-        $categories = $query->orderBy('display_order')->get();
+        $categories = $this->articleRepository->listCategories($filters);
 
         return response()->json(['categories' => $categories]);
     }
 
     public function category(string $slug): JsonResponse
     {
-        $category = KbCategory::with(['parent', 'children'])
-            ->withCount(['articles', 'publishedArticles'])
-            ->where('slug', $slug)
-            ->firstOrFail();
+        $category = $this->articleRepository->getCategoryBySlug($slug);
+
+        if (!$category) {
+            return response()->json(['message' => 'Category not found'], 404);
+        }
 
         return response()->json(['category' => $category]);
     }
@@ -231,11 +249,13 @@ class KnowledgeBaseController extends Controller
         // Ensure unique slug
         $baseSlug = $validated['slug'];
         $counter = 1;
-        while (KbCategory::where('slug', $validated['slug'])->exists()) {
+        $existingCategory = $this->articleRepository->getCategoryBySlug($validated['slug']);
+        while ($existingCategory !== null) {
             $validated['slug'] = $baseSlug . '-' . $counter++;
+            $existingCategory = $this->articleRepository->getCategoryBySlug($validated['slug']);
         }
 
-        $category = KbCategory::create($validated);
+        $category = $this->articleRepository->createCategory($validated);
 
         return response()->json([
             'category' => $category,
@@ -245,7 +265,11 @@ class KnowledgeBaseController extends Controller
 
     public function updateCategory(Request $request, int $id): JsonResponse
     {
-        $category = KbCategory::findOrFail($id);
+        $category = $this->articleRepository->getCategory($id);
+
+        if (!$category) {
+            return response()->json(['message' => 'Category not found'], 404);
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -264,39 +288,45 @@ class KnowledgeBaseController extends Controller
         }
 
         // Update slug if name changed
-        if (isset($validated['name']) && $validated['name'] !== $category->name) {
+        if (isset($validated['name']) && $validated['name'] !== $category['name']) {
             $validated['slug'] = Str::slug($validated['name']);
             $baseSlug = $validated['slug'];
             $counter = 1;
-            while (KbCategory::where('slug', $validated['slug'])->where('id', '!=', $id)->exists()) {
+            $existingCategory = $this->articleRepository->getCategoryBySlug($validated['slug']);
+            while ($existingCategory !== null && $existingCategory['id'] !== $id) {
                 $validated['slug'] = $baseSlug . '-' . $counter++;
+                $existingCategory = $this->articleRepository->getCategoryBySlug($validated['slug']);
             }
         }
 
-        $category->update($validated);
+        $updatedCategory = $this->articleRepository->updateCategory($id, $validated);
 
-        return response()->json(['category' => $category->fresh()]);
+        return response()->json(['category' => $updatedCategory]);
     }
 
     public function destroyCategory(int $id): JsonResponse
     {
-        $category = KbCategory::findOrFail($id);
+        $category = $this->articleRepository->getCategory($id);
+
+        if (!$category) {
+            return response()->json(['message' => 'Category not found'], 404);
+        }
 
         // Check if category has articles
-        if ($category->articles()->exists()) {
+        if ($category['articles_count'] > 0) {
             return response()->json([
                 'message' => 'Cannot delete category with existing articles',
             ], 422);
         }
 
         // Check if category has children
-        if ($category->children()->exists()) {
+        if (!empty($category['children'])) {
             return response()->json([
                 'message' => 'Cannot delete category with sub-categories',
             ], 422);
         }
 
-        $category->delete();
+        $this->articleRepository->deleteCategory($id);
 
         return response()->json(['message' => 'Category deleted']);
     }
@@ -307,13 +337,13 @@ class KnowledgeBaseController extends Controller
             'q' => 'required|string|min:2',
         ]);
 
-        $articles = KbArticle::published()
-            ->public()
-            ->search($validated['q'])
-            ->with('category')
-            ->limit(20)
-            ->get();
+        $filters = [
+            'published_only' => true,
+            'public_only' => true,
+        ];
 
-        return response()->json(['results' => $articles]);
+        $result = $this->articleRepository->searchArticles($validated['q'], $filters, 20, 1);
+
+        return response()->json(['results' => $result->items]);
     }
 }

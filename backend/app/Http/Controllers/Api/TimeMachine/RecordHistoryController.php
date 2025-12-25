@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\TimeMachine;
 
 use App\Http\Controllers\Controller;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use App\Services\TimeMachine\DiffService;
 use App\Services\TimeMachine\RecordHistoryService;
 use App\Services\TimeMachine\SnapshotService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class RecordHistoryController extends Controller
 {
@@ -27,7 +26,7 @@ class RecordHistoryController extends Controller
      */
     public function history(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
 
         $validated = $request->validate([
             'start_date' => 'nullable|date',
@@ -58,7 +57,7 @@ class RecordHistoryController extends Controller
      */
     public function atTimestamp(string $moduleApiName, int $recordId, string $timestamp): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
 
         // Validate and parse timestamp
         try {
@@ -100,7 +99,7 @@ class RecordHistoryController extends Controller
      */
     public function diff(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
 
         $validated = $request->validate([
             'from' => 'required|date',
@@ -135,7 +134,7 @@ class RecordHistoryController extends Controller
      */
     public function compare(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
 
         $validated = $request->validate([
             'from' => 'required|date',
@@ -175,7 +174,7 @@ class RecordHistoryController extends Controller
      */
     public function timeline(string $moduleApiName, int $recordId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
 
         $timeline = $this->historyService->getTimeline($module->id, $recordId);
 
@@ -194,7 +193,7 @@ class RecordHistoryController extends Controller
      */
     public function timelineMarkers(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
 
         $validated = $request->validate([
             'start_date' => 'nullable|date',
@@ -219,7 +218,7 @@ class RecordHistoryController extends Controller
      */
     public function fieldChanges(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
 
         $validated = $request->validate([
             'start_date' => 'nullable|date',
@@ -246,9 +245,9 @@ class RecordHistoryController extends Controller
      */
     public function createSnapshot(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
 
-        $record = ModuleRecord::where('module_id', $module->id)
+        $record = DB::table('module_records')->where('module_id', $module->id)
             ->where('id', $recordId)
             ->firstOrFail();
 

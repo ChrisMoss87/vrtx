@@ -7,16 +7,12 @@ namespace App\Application\Services\Document;
 use App\Domain\Document\Repositories\SignatureRequestRepositoryInterface;
 use App\Domain\Shared\Contracts\AuthContextInterface;
 use App\Domain\Shared\ValueObjects\PaginatedResult;
-use App\Models\DocumentSendLog;
-use App\Models\DocumentTemplate;
-use App\Models\GeneratedDocument;
-use App\Models\ModuleRecord;
-use App\Models\SignatureTemplate;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class DocumentApplicationService
 {
@@ -34,7 +30,7 @@ class DocumentApplicationService
      */
     public function listTemplates(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = DocumentTemplate::query()->with(['createdBy']);
+        $query = DB::table('document_templates')->with(['createdBy']);
 
         // Filter by active status
         if (!empty($filters['active_only'])) {
@@ -82,7 +78,7 @@ class DocumentApplicationService
      */
     public function createTemplate(array $data): DocumentTemplate
     {
-        return DocumentTemplate::create([
+        return DB::table('document_templates')->insertGetId([
             'name' => $data['name'],
             'category' => $data['category'] ?? DocumentTemplate::CATEGORY_OTHER,
             'description' => $data['description'] ?? null,
@@ -105,7 +101,7 @@ class DocumentApplicationService
      */
     public function updateTemplate(int $templateId, array $data): DocumentTemplate
     {
-        $template = DocumentTemplate::findOrFail($templateId);
+        $template = DB::table('document_templates')->where('id', $templateId)->first();
 
         $template->update([
             'name' => $data['name'] ?? $template->name,
@@ -135,7 +131,7 @@ class DocumentApplicationService
      */
     public function deleteTemplate(int $templateId): bool
     {
-        return DocumentTemplate::findOrFail($templateId)->delete();
+        return DB::table('document_templates')->where('id', $templateId)->first()->delete();
     }
 
     /**
@@ -143,7 +139,7 @@ class DocumentApplicationService
      */
     public function duplicateTemplate(int $templateId): DocumentTemplate
     {
-        $template = DocumentTemplate::findOrFail($templateId);
+        $template = DB::table('document_templates')->where('id', $templateId)->first();
         return $template->duplicate(Auth::id());
     }
 
@@ -152,7 +148,7 @@ class DocumentApplicationService
      */
     public function previewTemplate(int $templateId, array $sampleData = []): string
     {
-        $template = DocumentTemplate::findOrFail($templateId);
+        $template = DB::table('document_templates')->where('id', $templateId)->first();
         return $this->mergeContent($template->content, $sampleData);
     }
 
@@ -165,7 +161,7 @@ class DocumentApplicationService
      */
     public function generateDocument(int $templateId, array $data, ?string $recordType = null, ?int $recordId = null): GeneratedDocument
     {
-        $template = DocumentTemplate::findOrFail($templateId);
+        $template = DB::table('document_templates')->where('id', $templateId)->first();
 
         // Get merge data from record if provided
         $mergeData = $data['merge_data'] ?? [];
@@ -186,7 +182,7 @@ class DocumentApplicationService
         // Store content (actual implementation would generate proper file)
         Storage::put($filePath, $mergedContent);
 
-        return GeneratedDocument::create([
+        return DB::table('generated_documents')->insertGetId([
             'template_id' => $templateId,
             'record_type' => $recordType,
             'record_id' => $recordId,
@@ -205,7 +201,7 @@ class DocumentApplicationService
      */
     public function listGeneratedDocuments(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = GeneratedDocument::query()->with(['template', 'createdBy']);
+        $query = DB::table('generated_documents')->with(['template', 'createdBy']);
 
         // Filter by template
         if (!empty($filters['template_id'])) {
@@ -248,7 +244,7 @@ class DocumentApplicationService
      */
     public function deleteGeneratedDocument(int $documentId): bool
     {
-        $document = GeneratedDocument::findOrFail($documentId);
+        $document = DB::table('generated_documents')->where('id', $documentId)->first();
 
         // Delete file if exists
         if ($document->file_path && Storage::exists($document->file_path)) {
@@ -263,9 +259,9 @@ class DocumentApplicationService
      */
     public function sendDocument(int $documentId, array $recipients, ?string $subject = null, ?string $message = null): DocumentSendLog
     {
-        $document = GeneratedDocument::findOrFail($documentId);
+        $document = DB::table('generated_documents')->where('id', $documentId)->first();
 
-        $sendLog = DocumentSendLog::create([
+        $sendLog = DB::table('document_send_logs')->insertGetId([
             'document_id' => $documentId,
             'recipients' => $recipients,
             'subject' => $subject ?? "Document: {$document->name}",
@@ -425,7 +421,7 @@ class DocumentApplicationService
      */
     public function listSignatureTemplates(array $filters = []): Collection
     {
-        $query = SignatureTemplate::query()->with(['createdBy']);
+        $query = DB::table('signature_templates')->with(['createdBy']);
 
         if (!empty($filters['active_only'])) {
             $query->where('is_active', true);
@@ -461,7 +457,7 @@ class DocumentApplicationService
             'height' => $f->height,
         ])->toArray();
 
-        return SignatureTemplate::create([
+        return DB::table('signature_templates')->insertGetId([
             'name' => $name,
             'signer_roles' => $signerRoles,
             'field_templates' => $fieldTemplates,

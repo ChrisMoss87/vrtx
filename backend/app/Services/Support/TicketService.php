@@ -2,13 +2,7 @@
 
 namespace App\Services\Support;
 
-use App\Models\SupportTicket;
-use App\Models\TicketReply;
-use App\Models\TicketActivity;
-use App\Models\TicketCategory;
-use App\Models\TicketEscalation;
-use App\Models\User;
-use App\Models\PortalUser;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Facades\DB;
 
 class TicketService
@@ -20,7 +14,7 @@ class TicketService
                 ? TicketCategory::find($data['category_id'])
                 : null;
 
-            $ticket = SupportTicket::create([
+            $ticket = DB::table('support_tickets')->insertGetId([
                 'ticket_number' => SupportTicket::generateTicketNumber(),
                 'subject' => $data['subject'],
                 'description' => $data['description'],
@@ -125,7 +119,7 @@ class TicketService
         array $attachments = []
     ): TicketReply {
         return DB::transaction(function () use ($ticket, $content, $user, $portalUser, $isInternal, $attachments) {
-            $reply = TicketReply::create([
+            $reply = DB::table('ticket_replies')->insertGetId([
                 'ticket_id' => $ticket->id,
                 'content' => $content,
                 'user_id' => $user?->id,
@@ -176,7 +170,7 @@ class TicketService
         string $reason,
         User $escalatedBy
     ): TicketEscalation {
-        $escalation = TicketEscalation::create([
+        $escalation = DB::table('ticket_escalations')->insertGetId([
             'ticket_id' => $ticket->id,
             'type' => $type,
             'level' => $level,
@@ -222,7 +216,7 @@ class TicketService
     {
         return DB::transaction(function () use ($primaryTicket, $secondaryTicket, $user) {
             // Move all replies to primary ticket
-            TicketReply::where('ticket_id', $secondaryTicket->id)
+            DB::table('ticket_replies')->where('ticket_id', $secondaryTicket->id)
                 ->update(['ticket_id' => $primaryTicket->id]);
 
             // Add merge note
@@ -300,7 +294,7 @@ class TicketService
         ?PortalUser $portalUser = null,
         ?string $note = null
     ): TicketActivity {
-        return TicketActivity::create([
+        return DB::table('ticket_activities')->insertGetId([
             'ticket_id' => $ticket->id,
             'action' => $action,
             'changes' => $changes,
@@ -312,7 +306,7 @@ class TicketService
 
     public function getTicketStats(?int $userId = null): array
     {
-        $query = SupportTicket::query();
+        $query = DB::table('support_tickets');
 
         if ($userId) {
             $query->where('assigned_to', $userId);

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\EmailMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -26,7 +26,8 @@ class ProcessScheduledEmailsJob implements ShouldQueue
     public function handle(): void
     {
         // Find all queued emails that are scheduled to be sent now or in the past
-        $emails = EmailMessage::where('status', EmailMessage::STATUS_QUEUED)
+        $emails = DB::table('email_messages')
+            ->where('status', 'queued')
             ->where(function ($query) {
                 $query->whereNull('scheduled_at')
                     ->orWhere('scheduled_at', '<=', now());
@@ -43,9 +44,9 @@ class ProcessScheduledEmailsJob implements ShouldQueue
             SendEmailJob::dispatch($email);
 
             // Update status to indicate it's being processed
-            $email->update([
-                'status' => EmailMessage::STATUS_SENDING,
-            ]);
+            DB::table('email_messages')
+                ->where('id', $email->id)
+                ->update(['status' => 'sending']);
         }
     }
 }

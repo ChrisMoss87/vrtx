@@ -2,18 +2,11 @@
 
 namespace Database\Seeders;
 
-use App\Models\BillingSetting;
-use App\Models\Invoice;
-use App\Models\InvoiceLineItem;
-use App\Models\InvoicePayment;
-use App\Models\Product;
-use App\Models\ProductCategory;
-use App\Models\Quote;
-use App\Models\QuoteLineItem;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class BillingSeeder extends Seeder
 {
@@ -27,9 +20,9 @@ class BillingSeeder extends Seeder
         }
 
         // Initialize billing settings
-        $settings = BillingSetting::first();
+        $settings = DB::table('billing_settings')->first();
         if (!$settings) {
-            $settings = BillingSetting::create([
+            $settings = DB::table('billing_settings')->insertGetId([
                 'company_name' => 'VRTX Corporation',
                 'company_address' => "123 Innovation Drive\nSuite 500\nSan Francisco, CA 94102",
                 'company_phone' => '+1 (415) 555-0100',
@@ -359,7 +352,7 @@ class BillingSeeder extends Seeder
             $quoteNumber = $settings->quote_prefix . str_pad($settings->next_quote_number, 4, '0', STR_PAD_LEFT);
             $settings->next_quote_number++;
 
-            $quote = Quote::create([
+            $quote = DB::table('quotes')->insertGetId([
                 'quote_number' => $quoteNumber,
                 'title' => $data['title'],
                 'status' => $data['status'],
@@ -402,7 +395,7 @@ class BillingSeeder extends Seeder
                 $total = $quantity * $unitPrice;
                 $subtotal += $total;
 
-                QuoteLineItem::create([
+                DB::table('quote_line_items')->insertGetId([
                     'quote_id' => $quote->id,
                     'product_id' => $product->id,
                     'description' => $item['desc'] ?? $product->description,
@@ -562,7 +555,7 @@ class BillingSeeder extends Seeder
             $invoiceNumber = $settings->invoice_prefix . str_pad($settings->next_invoice_number, 4, '0', STR_PAD_LEFT);
             $settings->next_invoice_number++;
 
-            $invoice = Invoice::create([
+            $invoice = DB::table('invoices')->insertGetId([
                 'invoice_number' => $invoiceNumber,
                 'title' => $data['title'],
                 'status' => $data['status'],
@@ -594,7 +587,7 @@ class BillingSeeder extends Seeder
                 $total = $quantity * $unitPrice;
                 $subtotal += $total;
 
-                InvoiceLineItem::create([
+                DB::table('invoice_line_items')->insertGetId([
                     'invoice_id' => $invoice->id,
                     'product_id' => $product->id,
                     'description' => $item['desc'] ?? $product->description,
@@ -616,7 +609,7 @@ class BillingSeeder extends Seeder
             // Handle payments
             if ($data['status'] === 'paid') {
                 $paidAt = Carbon::now()->subDays($data['paid_ago']);
-                InvoicePayment::create([
+                DB::table('invoice_payments')->insertGetId([
                     'invoice_id' => $invoice->id,
                     'amount' => $subtotal,
                     'payment_method' => collect(['credit_card', 'bank_transfer', 'check'])->random(),
@@ -630,7 +623,7 @@ class BillingSeeder extends Seeder
 
             if ($data['status'] === 'partial') {
                 $partialAmount = $subtotal * ($data['partial_percent'] / 100);
-                InvoicePayment::create([
+                DB::table('invoice_payments')->insertGetId([
                     'invoice_id' => $invoice->id,
                     'amount' => $partialAmount,
                     'payment_method' => 'bank_transfer',

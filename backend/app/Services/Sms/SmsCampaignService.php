@@ -2,12 +2,9 @@
 
 namespace App\Services\Sms;
 
-use App\Models\SmsCampaign;
-use App\Models\SmsConnection;
-use App\Models\SmsTemplate;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class SmsCampaignService
 {
@@ -23,7 +20,7 @@ class SmsCampaignService
      */
     public function create(array $data): SmsCampaign
     {
-        return SmsCampaign::create([
+        return DB::table('sms_campaigns')->insertGetId([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'connection_id' => $data['connection_id'],
@@ -102,7 +99,7 @@ class SmsCampaignService
             return collect();
         }
 
-        $query = ModuleRecord::where('module_api_name', $campaign->target_module);
+        $query = DB::table('module_records')->where('module_api_name', $campaign->target_module);
 
         // Apply filters
         if ($campaign->target_filters) {

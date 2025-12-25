@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api\Billing;
 
 use App\Http\Controllers\Controller;
-use App\Models\TenantSubscription;
 use App\Services\PluginLicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class SubscriptionController extends Controller
 {
@@ -167,7 +167,7 @@ class SubscriptionController extends Controller
 
         // In production, this would create/update a Stripe subscription
         // For now, we'll update directly (for development/testing)
-        $subscription = TenantSubscription::first();
+        $subscription = DB::table('tenant_subscriptions')->first();
 
         if ($subscription) {
             $subscription->update([
@@ -181,7 +181,7 @@ class SubscriptionController extends Controller
                     : now()->addMonth(),
             ]);
         } else {
-            $subscription = TenantSubscription::create([
+            $subscription = DB::table('tenant_subscriptions')->insertGetId([
                 'plan' => $plan,
                 'status' => TenantSubscription::STATUS_ACTIVE,
                 'billing_cycle' => $billingCycle,
@@ -207,7 +207,7 @@ class SubscriptionController extends Controller
      */
     public function cancel(): JsonResponse
     {
-        $subscription = TenantSubscription::first();
+        $subscription = DB::table('tenant_subscriptions')->first();
 
         if (!$subscription) {
             return response()->json(['error' => 'No subscription found'], 404);

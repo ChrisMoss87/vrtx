@@ -2,10 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Models\DuplicateRule;
-use App\Models\Module;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\DuplicateRule>
@@ -22,7 +21,7 @@ class DuplicateRuleFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'name' => $this->faker->words(3, true) . ' Rule',
             'description' => $this->faker->optional()->sentence(),
             'is_active' => true,

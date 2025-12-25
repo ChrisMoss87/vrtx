@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Billing;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
-use App\Models\ProductCategory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -50,7 +49,7 @@ class ProductController extends Controller
             'settings' => 'nullable|array',
         ]);
 
-        $product = Product::create($validated);
+        $product = DB::table('products')->insertGetId($validated);
 
         return response()->json([
             'data' => $product->load('category'),
@@ -118,7 +117,7 @@ class ProductController extends Controller
             'display_order' => 'nullable|integer',
         ]);
 
-        $category = ProductCategory::create($validated);
+        $category = DB::table('product_categories')->insertGetId($validated);
 
         return response()->json([
             'data' => $category,
@@ -145,10 +144,10 @@ class ProductController extends Controller
     public function destroyCategory(ProductCategory $category): JsonResponse
     {
         // Move products to uncategorized
-        Product::where('category_id', $category->id)->update(['category_id' => null]);
+        DB::table('products')->where('category_id', $category->id)->update(['category_id' => null]);
 
         // Move child categories to parent or root
-        ProductCategory::where('parent_id', $category->id)->update(['parent_id' => $category->parent_id]);
+        DB::table('product_categories')->where('parent_id', $category->id)->update(['parent_id' => $category->parent_id]);
 
         $category->delete();
 

@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\BlueprintApproval;
-use App\Models\BlueprintApprovalRequest;
-use App\Models\BlueprintTransitionExecution;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\BlueprintApprovalRequest>

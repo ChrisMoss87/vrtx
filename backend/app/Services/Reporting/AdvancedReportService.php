@@ -6,7 +6,6 @@ namespace App\Services\Reporting;
 
 use App\Domain\Reporting\ValueObjects\CalculatedField;
 use App\Domain\Reporting\ValueObjects\ReportJoin;
-use App\Models\Module;
 use Illuminate\Support\Facades\DB;
 
 /**

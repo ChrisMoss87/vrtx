@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\Export;
-use App\Models\Module;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -17,6 +15,7 @@ use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
+use Illuminate\Support\Facades\DB;
 
 class ProcessExportJob implements ShouldQueue
 {

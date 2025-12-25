@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Email;
 
 use App\Http\Controllers\Controller;
-use App\Models\EmailTemplate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class EmailTemplateController extends Controller
 {
@@ -26,7 +26,7 @@ class EmailTemplateController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = EmailTemplate::query()
+        $query = DB::table('email_templates')
             ->with('module:id,name,api_name')
             ->orderBy('is_default', 'desc')
             ->orderBy('usage_count', 'desc')
@@ -98,11 +98,11 @@ class EmailTemplateController extends Controller
 
         // If this is set as default for a module, unset other defaults
         if ($validated['is_default'] ?? false) {
-            EmailTemplate::where('module_id', $validated['module_id'] ?? null)
+            DB::table('email_templates')->where('module_id', $validated['module_id'] ?? null)
                 ->update(['is_default' => false]);
         }
 
-        $template = EmailTemplate::create([
+        $template = DB::table('email_templates')->insertGetId([
             ...$validated,
             'created_by' => Auth::id(),
             'updated_by' => Auth::id(),
@@ -150,7 +150,7 @@ class EmailTemplateController extends Controller
 
         // If this is set as default, unset other defaults
         if ($validated['is_default'] ?? false) {
-            EmailTemplate::where('module_id', $validated['module_id'] ?? $emailTemplate->module_id)
+            DB::table('email_templates')->where('module_id', $validated['module_id'] ?? $emailTemplate->module_id)
                 ->where('id', '!=', $emailTemplate->id)
                 ->update(['is_default' => false]);
         }

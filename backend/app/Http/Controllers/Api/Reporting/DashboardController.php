@@ -6,8 +6,6 @@ namespace App\Http\Controllers\Api\Reporting;
 
 use App\Application\Services\Reporting\ReportingApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Dashboard;
-use App\Models\DashboardWidget;
 use App\Services\Reporting\PdfExportService;
 use App\Services\Reporting\ExcelExportService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -15,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -67,7 +66,7 @@ class DashboardController extends Controller
             'refresh_interval' => 'integer|min:0',
         ]);
 
-        $dashboard = Dashboard::create([
+        $dashboard = DB::table('dashboards')->insertGetId([
             ...$validated,
             'user_id' => Auth::id(),
         ]);
@@ -297,7 +296,7 @@ class DashboardController extends Controller
         ]);
 
         foreach ($validated['widgets'] as $item) {
-            DashboardWidget::where('id', $item['id'])
+            DB::table('dashboard_widgets')->where('id', $item['id'])
                 ->where('dashboard_id', $dashboard->id)
                 ->update([
                     'grid_position' => [

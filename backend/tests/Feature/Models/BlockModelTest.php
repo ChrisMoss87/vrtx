@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Models;
 
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\Module;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class BlockModelTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -26,9 +24,9 @@ class BlockModelTest extends TestCase
 
     public function test_can_create_block(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $block = Block::create([
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Contact Information',
             'type' => 'section',
@@ -43,8 +41,8 @@ class BlockModelTest extends TestCase
 
     public function test_block_belongs_to_module(): void
     {
-        $module = Module::factory()->create();
-        $block = Block::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
             'type' => 'section',
@@ -56,14 +54,14 @@ class BlockModelTest extends TestCase
 
     public function test_block_has_fields_relationship(): void
     {
-        $module = Module::factory()->create();
-        $block = Block::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
             'type' => 'section',
         ]);
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'block_id' => $block->id,
             'label' => 'Email',
@@ -77,11 +75,11 @@ class BlockModelTest extends TestCase
 
     public function test_block_ordered_scope(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        Block::create(['module_id' => $module->id, 'name' => 'Third', 'type' => 'section', 'display_order' => 2]);
-        Block::create(['module_id' => $module->id, 'name' => 'First', 'type' => 'section', 'display_order' => 0]);
-        Block::create(['module_id' => $module->id, 'name' => 'Second', 'type' => 'section', 'display_order' => 1]);
+        DB::table('blocks')->insertGetId(['module_id' => $module->id, 'name' => 'Third', 'type' => 'section', 'display_order' => 2]);
+        DB::table('blocks')->insertGetId(['module_id' => $module->id, 'name' => 'First', 'type' => 'section', 'display_order' => 0]);
+        DB::table('blocks')->insertGetId(['module_id' => $module->id, 'name' => 'Second', 'type' => 'section', 'display_order' => 1]);
 
         $blocks = Block::ordered()->get();
 
@@ -92,8 +90,8 @@ class BlockModelTest extends TestCase
 
     public function test_block_settings_are_cast_to_array(): void
     {
-        $module = Module::factory()->create();
-        $block = Block::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test',
             'type' => 'section',
@@ -120,8 +118,8 @@ class BlockModelTest extends TestCase
 
     public function test_block_cascade_deletes_with_module(): void
     {
-        $module = Module::factory()->create();
-        $block = Block::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
             'type' => 'section',
@@ -136,14 +134,14 @@ class BlockModelTest extends TestCase
 
     public function test_block_cascade_deletes_fields(): void
     {
-        $module = Module::factory()->create();
-        $block = Block::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
             'type' => 'section',
         ]);
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'block_id' => $block->id,
             'label' => 'Test Field',
@@ -158,12 +156,12 @@ class BlockModelTest extends TestCase
 
     public function test_block_supports_different_types(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
         $types = ['section', 'tab', 'accordion', 'card'];
 
         foreach ($types as $type) {
-            $block = Block::create([
+            $block = DB::table('blocks')->insertGetId([
                 'module_id' => $module->id,
                 'name' => ucfirst($type),
                 'type' => $type,
@@ -172,6 +170,6 @@ class BlockModelTest extends TestCase
             $this->assertEquals($type, $block->type);
         }
 
-        $this->assertCount(4, Block::all());
+        $this->assertCount(4, DB::table('blocks')->get());
     }
 }

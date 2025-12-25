@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\Tenant;
 use App\Services\Blueprint\ApprovalService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,6 +11,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Job to check and expire old approval requests across all tenants.
@@ -26,7 +26,7 @@ class ProcessExpiredApprovalsJob implements ShouldQueue
      */
     public function handle(ApprovalService $approvalService): void
     {
-        $tenants = Tenant::all();
+        $tenants = DB::table('tenants')->get();
 
         Log::info('Starting expired approvals processing', [
             'tenant_count' => $tenants->count(),

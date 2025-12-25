@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Api\TeamChat;
 
 use App\Http\Controllers\Controller;
-use App\Models\TeamChatNotification;
-use App\Models\TeamChatConnection;
 use App\Services\TeamChat\TeamChatService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class TeamChatNotificationController extends Controller
 {
@@ -57,7 +56,7 @@ class TeamChatNotificationController extends Controller
 
         $validated['created_by'] = auth()->id();
 
-        $notification = TeamChatNotification::create($validated);
+        $notification = DB::table('team_chat_notifications')->insertGetId($validated);
 
         return response()->json(['data' => $notification], 201);
     }

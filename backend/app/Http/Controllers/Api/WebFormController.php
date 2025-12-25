@@ -5,17 +5,37 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Application\Services\WebForm\WebFormApplicationService;
+use App\Domain\WebForm\Repositories\WebFormRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\WebForm;
-use App\Models\WebFormField;
 use App\Services\WebForms\WebFormService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class WebFormController extends Controller
 {
+    // Field type constants for validation
+    private const FIELD_TYPES = [
+        'text' => 'Text Input',
+        'email' => 'Email',
+        'phone' => 'Phone',
+        'textarea' => 'Text Area',
+        'select' => 'Select Dropdown',
+        'multi_select' => 'Multi-Select',
+        'checkbox' => 'Checkbox',
+        'radio' => 'Radio Buttons',
+        'date' => 'Date Picker',
+        'datetime' => 'Date & Time',
+        'number' => 'Number',
+        'currency' => 'Currency',
+        'file' => 'File Upload',
+        'hidden' => 'Hidden Field',
+        'url' => 'URL',
+    ];
+
     public function __construct(
+        protected WebFormRepositoryInterface $webFormRepository,
         protected WebFormService $webFormService,
         protected WebFormApplicationService $webFormApplicationService
     ) {}
@@ -28,19 +48,36 @@ class WebFormController extends Controller
     public function index(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'is_active' => 'nullable|boolean',
+            'active' => 'nullable|boolean',
             'module_id' => 'nullable|integer|exists:modules,id',
             'search' => 'nullable|string|max:100',
+            'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $forms = $this->webFormService->listForms($request->only(['is_active', 'module_id', 'search']));
+        $filters = [
+            'active' => $request->active,
+            'module_id' => $request->module_id,
+            'search' => $request->search,
+        ];
+
+        $result = $this->webFormRepository->listForms(
+            $filters,
+            $request->per_page ?? 25,
+            $request->page ?? 1
+        );
 
         return response()->json([
-            'data' => $forms->map(fn ($form) => $this->transformForm($form)),
+            'data' => array_map(fn ($form) => $this->transformFormArray($form), $result->items()),
+            'meta' => [
+                'current_page' => $result->currentPage(),
+                'last_page' => $result->lastPage(),
+                'per_page' => $result->perPage(),
+                'total' => $result->total(),
+            ],
         ]);
     }
 
@@ -51,14 +88,14 @@ class WebFormController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $form = $this->webFormService->getForm($id);
+        $form = $this->webFormRepository->findByIdAsArray($id, ['creator', 'module', 'assignee', 'fields']);
 
         if (!$form) {
             return response()->json(['error' => 'Form not found'], 404);
         }
 
         return response()->json([
-            'data' => $this->transformForm($form, true),
+            'data' => $this->transformFormArray($form, true),
         ]);
     }
 
@@ -81,7 +118,7 @@ class WebFormController extends Controller
             'spam_protection' => 'nullable|array',
             'assign_to_user_id' => 'nullable|integer|exists:users,id',
             'fields' => 'nullable|array',
-            'fields.*.field_type' => 'required_with:fields|string|in:' . implode(',', array_keys(WebFormField::FIELD_TYPES)),
+            'fields.*.field_type' => 'required_with:fields|string|in:' . implode(',', array_keys(self::FIELD_TYPES)),
             'fields.*.label' => 'required_with:fields|string|max:255',
             'fields.*.name' => 'nullable|string|max:100',
             'fields.*.placeholder' => 'nullable|string|max:255',
@@ -97,10 +134,11 @@ class WebFormController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $form = $this->webFormService->createForm($request->all());
+        $userId = Auth::id();
+        $form = $this->webFormRepository->createForm($request->all(), $userId);
 
         return response()->json([
-            'data' => $this->transformForm($form, true),
+            'data' => $this->transformFormArray($form, true),
             'message' => 'Web form created successfully',
         ], 201);
     }
@@ -112,7 +150,7 @@ class WebFormController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $form = WebForm::find($id);
+        $form = $this->webFormRepository->findByIdAsArray($id);
 
         if (!$form) {
             return response()->json(['error' => 'Form not found'], 404);
@@ -130,7 +168,7 @@ class WebFormController extends Controller
             'spam_protection' => 'nullable|array',
             'assign_to_user_id' => 'nullable|integer|exists:users,id',
             'fields' => 'nullable|array',
-            'fields.*.field_type' => 'required_with:fields|string|in:' . implode(',', array_keys(WebFormField::FIELD_TYPES)),
+            'fields.*.field_type' => 'required_with:fields|string|in:' . implode(',', array_keys(self::FIELD_TYPES)),
             'fields.*.label' => 'required_with:fields|string|max:255',
             'fields.*.name' => 'nullable|string|max:100',
             'fields.*.placeholder' => 'nullable|string|max:255',
@@ -146,10 +184,10 @@ class WebFormController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $form = $this->webFormService->updateForm($form, $request->all());
+        $updatedForm = $this->webFormRepository->updateForm($id, $request->all());
 
         return response()->json([
-            'data' => $this->transformForm($form, true),
+            'data' => $this->transformFormArray($updatedForm, true),
             'message' => 'Web form updated successfully',
         ]);
     }
@@ -161,13 +199,13 @@ class WebFormController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $form = WebForm::find($id);
+        $form = $this->webFormRepository->findByIdAsArray($id);
 
         if (!$form) {
             return response()->json(['error' => 'Form not found'], 404);
         }
 
-        $this->webFormService->deleteForm($form);
+        $this->webFormRepository->deleteForm($id);
 
         return response()->json([
             'message' => 'Web form deleted successfully',
@@ -181,7 +219,7 @@ class WebFormController extends Controller
      */
     public function duplicate(Request $request, int $id): JsonResponse
     {
-        $form = WebForm::find($id);
+        $form = $this->webFormRepository->findByIdAsArray($id);
 
         if (!$form) {
             return response()->json(['error' => 'Form not found'], 404);
@@ -195,10 +233,11 @@ class WebFormController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $newForm = $this->webFormService->duplicateForm($form, $request->name);
+        $userId = Auth::id();
+        $newForm = $this->webFormRepository->duplicateForm($id, $userId);
 
         return response()->json([
-            'data' => $this->transformForm($newForm, true),
+            'data' => $this->transformFormArray($newForm, true),
             'message' => 'Web form duplicated successfully',
         ], 201);
     }
@@ -210,17 +249,18 @@ class WebFormController extends Controller
      */
     public function toggleActive(int $id): JsonResponse
     {
-        $form = WebForm::find($id);
+        $form = $this->webFormRepository->findByIdAsArray($id);
 
         if (!$form) {
             return response()->json(['error' => 'Form not found'], 404);
         }
 
-        $form = $this->webFormService->toggleActive($form);
+        $isActive = $form['is_active'] ?? false;
+        $updatedForm = $this->webFormRepository->updateForm($id, ['is_active' => !$isActive]);
 
         return response()->json([
-            'data' => $this->transformForm($form),
-            'message' => $form->is_active ? 'Form activated' : 'Form deactivated',
+            'data' => $this->transformFormArray($updatedForm),
+            'message' => $updatedForm['is_active'] ? 'Form activated' : 'Form deactivated',
         ]);
     }
 
@@ -231,7 +271,7 @@ class WebFormController extends Controller
      */
     public function submissions(Request $request, int $id): JsonResponse
     {
-        $form = WebForm::find($id);
+        $form = $this->webFormRepository->findByIdAsArray($id);
 
         if (!$form) {
             return response()->json(['error' => 'Form not found'], 404);
@@ -239,8 +279,8 @@ class WebFormController extends Controller
 
         $validator = Validator::make($request->all(), [
             'status' => 'nullable|string|in:processed,failed,spam,pending',
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
@@ -248,33 +288,37 @@ class WebFormController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $submissions = $this->webFormService->getSubmissions(
-            $form,
-            $request->only(['status', 'start_date', 'end_date']),
-            $request->per_page ?? 20
+        $filters = [
+            'status' => $request->status,
+            'from_date' => $request->from_date,
+            'to_date' => $request->to_date,
+        ];
+
+        $result = $this->webFormRepository->listSubmissions(
+            $id,
+            $filters,
+            $request->per_page ?? 20,
+            $request->page ?? 1
         );
 
         return response()->json([
-            'data' => $submissions->through(fn ($sub) => [
-                'id' => $sub->id,
-                'submission_data' => $sub->submission_data,
-                'record_id' => $sub->record_id,
-                'record' => $sub->record ? [
-                    'id' => $sub->record->id,
-                    'data' => $sub->record->data,
-                ] : null,
-                'status' => $sub->status,
-                'error_message' => $sub->error_message,
-                'ip_address' => $sub->ip_address,
-                'referrer' => $sub->referrer,
-                'utm_params' => $sub->utm_params,
-                'submitted_at' => $sub->submitted_at?->toIso8601String(),
-            ])->items(),
+            'data' => array_map(fn ($sub) => [
+                'id' => $sub['id'],
+                'submission_data' => $sub['submission_data'],
+                'record_id' => $sub['record_id'] ?? null,
+                'record' => $sub['record'] ?? null,
+                'status' => $sub['status'],
+                'error_message' => $sub['error_message'] ?? null,
+                'ip_address' => $sub['ip_address'] ?? null,
+                'referrer' => $sub['referrer'] ?? null,
+                'utm_params' => $sub['utm_params'] ?? [],
+                'submitted_at' => $sub['submitted_at'] ?? null,
+            ], $result->items()),
             'meta' => [
-                'current_page' => $submissions->currentPage(),
-                'last_page' => $submissions->lastPage(),
-                'per_page' => $submissions->perPage(),
-                'total' => $submissions->total(),
+                'current_page' => $result->currentPage(),
+                'last_page' => $result->lastPage(),
+                'per_page' => $result->perPage(),
+                'total' => $result->total(),
             ],
         ]);
     }
@@ -286,25 +330,25 @@ class WebFormController extends Controller
      */
     public function analytics(Request $request, int $id): JsonResponse
     {
-        $form = WebForm::find($id);
+        $form = $this->webFormRepository->findByIdAsArray($id);
 
         if (!$form) {
             return response()->json(['error' => 'Form not found'], 404);
         }
 
         $validator = Validator::make($request->all(), [
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $startDate = $request->start_date ?? now()->subDays(30)->toDateString();
-        $endDate = $request->end_date ?? now()->toDateString();
+        $fromDate = $request->from_date ?? now()->subDays(30)->toDateString();
+        $toDate = $request->to_date ?? now()->toDateString();
 
-        $analytics = $this->webFormService->getAnalytics($form, $startDate, $endDate);
+        $analytics = $this->webFormRepository->getFormAnalytics($id, $fromDate, $toDate);
 
         return response()->json([
             'data' => $analytics,
@@ -318,17 +362,21 @@ class WebFormController extends Controller
      */
     public function embedCode(Request $request, int $id): JsonResponse
     {
-        $form = WebForm::find($id);
+        $form = $this->webFormRepository->findByIdAsArray($id);
 
         if (!$form) {
             return response()->json(['error' => 'Form not found'], 404);
         }
 
+        $publicUrl = url("/forms/{$form['slug']}");
+        $iframeCode = '<iframe src="' . url("/forms/{$form['slug']}/render") . '" width="100%" height="600" frameborder="0"></iframe>';
+        $jsCode = '<div id="vrtx-form-' . $form['slug'] . '"></div><script src="' . url("/forms/{$form['slug']}/embed.js") . '"></script>';
+
         return response()->json([
             'data' => [
-                'iframe' => $form->iframe_embed_code,
-                'javascript' => $form->js_embed_code,
-                'public_url' => $form->public_url,
+                'iframe' => $iframeCode,
+                'javascript' => $jsCode,
+                'public_url' => $publicUrl,
             ],
         ]);
     }
@@ -367,8 +415,70 @@ class WebFormController extends Controller
     public function fieldTypes(): JsonResponse
     {
         return response()->json([
-            'data' => $this->webFormService->getFieldTypes(),
+            'data' => self::FIELD_TYPES,
         ]);
+    }
+
+    /**
+     * Transform a form array for API response.
+     */
+    protected function transformFormArray(array $form, bool $includeDetails = false): array
+    {
+        $publicUrl = url("/forms/{$form['slug']}");
+
+        $data = [
+            'id' => $form['id'],
+            'name' => $form['name'],
+            'slug' => $form['slug'],
+            'description' => $form['description'] ?? null,
+            'module' => isset($form['module']) ? [
+                'id' => $form['module']['id'],
+                'name' => $form['module']['name'],
+                'api_name' => $form['module']['api_name'] ?? null,
+            ] : null,
+            'is_active' => $form['is_active'] ?? false,
+            'public_url' => $publicUrl,
+            'created_by' => isset($form['creator']) ? [
+                'id' => $form['creator']['id'],
+                'name' => $form['creator']['name'],
+            ] : null,
+            'created_at' => $form['created_at'] ?? null,
+            'updated_at' => $form['updated_at'] ?? null,
+        ];
+
+        if ($includeDetails) {
+            $data['settings'] = $form['settings'] ?? [];
+            $data['styling'] = $form['styling'] ?? [];
+            $data['thank_you_config'] = $form['thank_you_config'] ?? [];
+            $data['spam_protection'] = $form['spam_protection'] ?? [];
+            $data['assign_to_user'] = isset($form['assignee']) ? [
+                'id' => $form['assignee']['id'],
+                'name' => $form['assignee']['name'],
+            ] : null;
+            $data['fields'] = array_map(fn ($field) => [
+                'id' => $field['id'],
+                'field_type' => $field['field_type'],
+                'label' => $field['label'],
+                'name' => $field['name'] ?? null,
+                'placeholder' => $field['placeholder'] ?? null,
+                'is_required' => $field['is_required'] ?? false,
+                'module_field_id' => $field['module_field_id'] ?? null,
+                'options' => $field['options'] ?? [],
+                'validation_rules' => $field['validation_rules'] ?? [],
+                'display_order' => $field['display_order'] ?? 0,
+                'settings' => $field['settings'] ?? [],
+            ], $form['fields'] ?? []);
+
+            $iframeCode = '<iframe src="' . url("/forms/{$form['slug']}/render") . '" width="100%" height="600" frameborder="0"></iframe>';
+            $jsCode = '<div id="vrtx-form-' . $form['slug'] . '"></div><script src="' . url("/forms/{$form['slug']}/embed.js") . '"></script>';
+
+            $data['embed_code'] = [
+                'iframe' => $iframeCode,
+                'javascript' => $jsCode,
+            ];
+        }
+
+        return $data;
     }
 
     /**

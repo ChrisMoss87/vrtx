@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Module;
-use App\Models\Pipeline;
-use App\Models\Stage;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class StageApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -23,12 +20,12 @@ class StageApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
-        $this->module = Module::factory()->create([
+        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Deals',
             'api_name' => 'deals',
         ]);
-        $this->pipeline = Pipeline::factory()->create([
+        $this->pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
             'module_id' => $this->module->id,
             'name' => 'Sales Pipeline',
         ]);
@@ -36,7 +33,7 @@ class StageApiTest extends TestCase
 
     public function test_can_create_stage(): void
     {
-        $stage = Stage::create([
+        $stage = DB::table('stages')->insertGetId([
             'pipeline_id' => $this->pipeline->id,
             'name' => 'Lead',
             'color' => '#3b82f6',
@@ -53,7 +50,7 @@ class StageApiTest extends TestCase
 
     public function test_stage_belongs_to_pipeline(): void
     {
-        $stage = Stage::factory()->create([
+        $stage = /* Stage factory - use DB::table('stages') */->create([
             'pipeline_id' => $this->pipeline->id,
         ]);
 
@@ -63,7 +60,7 @@ class StageApiTest extends TestCase
 
     public function test_can_update_stage(): void
     {
-        $stage = Stage::factory()->create([
+        $stage = /* Stage factory - use DB::table('stages') */->create([
             'pipeline_id' => $this->pipeline->id,
             'name' => 'Original Name',
             'probability' => 25,
@@ -82,7 +79,7 @@ class StageApiTest extends TestCase
 
     public function test_can_soft_delete_stage(): void
     {
-        $stage = Stage::factory()->create([
+        $stage = /* Stage factory - use DB::table('stages') */->create([
             'pipeline_id' => $this->pipeline->id,
         ]);
 
@@ -90,17 +87,17 @@ class StageApiTest extends TestCase
         $stage->delete();
 
         $this->assertSoftDeleted('stages', ['id' => $stageId]);
-        $this->assertNull(Stage::find($stageId));
+        $this->assertNull(DB::table('stages')->where('id', $stageId)->first());
         $this->assertNotNull(Stage::withTrashed()->find($stageId));
     }
 
     public function test_ordered_scope_orders_by_display_order(): void
     {
-        Stage::factory()->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage C', 'display_order' => 3]);
-        Stage::factory()->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage A', 'display_order' => 1]);
-        Stage::factory()->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage B', 'display_order' => 2]);
+        /* Stage factory - use DB::table('stages') */->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage C', 'display_order' => 3]);
+        /* Stage factory - use DB::table('stages') */->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage A', 'display_order' => 1]);
+        /* Stage factory - use DB::table('stages') */->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage B', 'display_order' => 2]);
 
-        $orderedStages = Stage::where('pipeline_id', $this->pipeline->id)->ordered()->get();
+        $orderedStages = DB::table('stages')->where('pipeline_id', $this->pipeline->id)->ordered()->get();
 
         $this->assertEquals('Stage A', $orderedStages[0]->name);
         $this->assertEquals('Stage B', $orderedStages[1]->name);
@@ -109,7 +106,7 @@ class StageApiTest extends TestCase
 
     public function test_won_stage_state(): void
     {
-        $stage = Stage::factory()->won()->create([
+        $stage = /* Stage factory - use DB::table('stages') */->won()->create([
             'pipeline_id' => $this->pipeline->id,
         ]);
 
@@ -120,7 +117,7 @@ class StageApiTest extends TestCase
 
     public function test_lost_stage_state(): void
     {
-        $stage = Stage::factory()->lost()->create([
+        $stage = /* Stage factory - use DB::table('stages') */->lost()->create([
             'pipeline_id' => $this->pipeline->id,
         ]);
 
@@ -131,7 +128,7 @@ class StageApiTest extends TestCase
 
     public function test_settings_is_cast_to_array(): void
     {
-        $stage = Stage::factory()->create([
+        $stage = /* Stage factory - use DB::table('stages') */->create([
             'pipeline_id' => $this->pipeline->id,
             'settings' => ['time_limit_days' => 7, 'required_fields' => ['amount', 'close_date']],
         ]);
@@ -143,7 +140,7 @@ class StageApiTest extends TestCase
 
     public function test_default_values_are_set(): void
     {
-        $stage = Stage::create([
+        $stage = DB::table('stages')->insertGetId([
             'pipeline_id' => $this->pipeline->id,
             'name' => 'Test Stage',
         ]);

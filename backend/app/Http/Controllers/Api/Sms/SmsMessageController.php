@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Api\Sms;
 
 use App\Application\Services\Sms\SmsApplicationService;
+use App\Domain\Sms\Repositories\SmsMessageRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\SmsConnection;
-use App\Models\SmsMessage;
-use App\Models\SmsTemplate;
 use App\Services\Sms\SmsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -15,37 +13,59 @@ class SmsMessageController extends Controller
 {
     public function __construct(
         protected SmsApplicationService $smsApplicationService,
-        protected SmsService $smsService
+        protected SmsService $smsService,
+        protected SmsMessageRepositoryInterface $messageRepository
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $query = SmsMessage::with(['connection:id,name,phone_number', 'template:id,name', 'sender:id,name']);
+        $filters = [];
 
         if ($request->filled('connection_id')) {
-            $query->where('connection_id', $request->connection_id);
+            $filters['connection_id'] = $request->connection_id;
         }
 
         if ($request->filled('direction')) {
-            $query->where('direction', $request->direction);
+            $filters['direction'] = $request->direction;
         }
 
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $filters['status'] = $request->status;
         }
 
         if ($request->filled('phone')) {
-            $query->forPhone($request->phone);
+            $filters['phone'] = $request->phone;
         }
 
         if ($request->filled('module_api_name') && $request->filled('module_record_id')) {
-            $query->forRecord($request->module_api_name, $request->module_record_id);
+            $filters['module_api_name'] = $request->module_api_name;
+            $filters['module_record_id'] = $request->module_record_id;
         }
 
-        $messages = $query->orderBy('created_at', 'desc')
-            ->paginate($request->input('per_page', 50));
+        if ($request->filled('search')) {
+            $filters['search'] = $request->search;
+        }
 
-        return response()->json($messages);
+        if ($request->filled('from_date')) {
+            $filters['from_date'] = $request->from_date;
+        }
+
+        if ($request->filled('to_date')) {
+            $filters['to_date'] = $request->to_date;
+        }
+
+        $perPage = (int) $request->input('per_page', 50);
+        $page = (int) $request->input('page', 1);
+
+        $result = $this->messageRepository->listMessages($filters, $perPage, $page);
+
+        return response()->json([
+            'data' => $result->items(),
+            'current_page' => $result->currentPage(),
+            'per_page' => $result->perPage(),
+            'total' => $result->total(),
+            'last_page' => $result->lastPage(),
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -60,20 +80,26 @@ class SmsMessageController extends Controller
             'module_api_name' => 'nullable|string',
         ]);
 
-        $connection = SmsConnection::findOrFail($validated['connection_id']);
-        $template = isset($validated['template_id'])
-            ? SmsTemplate::find($validated['template_id'])
-            : null;
+        $connection = $this->messageRepository->findConnectionById($validated['connection_id']);
+        if (!$connection) {
+            return response()->json(['message' => 'Connection not found'], 404);
+        }
 
-        $content = $template
-            ? $template->content
-            : $validated['content'];
+        $template = null;
+        $content = $validated['content'] ?? null;
+
+        if (isset($validated['template_id'])) {
+            $template = $this->messageRepository->findTemplateById($validated['template_id']);
+            if ($template) {
+                $content = $template['content'];
+            }
+        }
 
         $message = $this->smsService->sendMessage(
-            connection: $connection,
+            connection: (object) $connection,
             to: $validated['to'],
             content: $content,
-            template: $template,
+            template: $template ? (object) $template : null,
             mergeData: $validated['merge_data'] ?? null,
             recordId: $validated['module_record_id'] ?? null,
             moduleApiName: $validated['module_api_name'] ?? null
@@ -82,11 +108,15 @@ class SmsMessageController extends Controller
         return response()->json(['data' => $message], 201);
     }
 
-    public function show(SmsMessage $smsMessage): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $smsMessage->load(['connection:id,name,phone_number', 'template:id,name', 'sender:id,name']);
+        $message = $this->messageRepository->findByIdAsArray($id);
 
-        return response()->json(['data' => $smsMessage]);
+        if (!$message) {
+            return response()->json(['message' => 'Message not found'], 404);
+        }
+
+        return response()->json(['data' => $message]);
     }
 
     public function conversation(Request $request): JsonResponse
@@ -113,11 +143,11 @@ class SmsMessageController extends Controller
             'module_record_id' => 'required|integer',
         ]);
 
-        $messages = SmsMessage::forRecord($validated['module_api_name'], $validated['module_record_id'])
-            ->with(['connection:id,name,phone_number', 'sender:id,name'])
-            ->orderBy('created_at', 'desc')
-            ->limit(100)
-            ->get();
+        $messages = $this->messageRepository->getRecordMessages(
+            $validated['module_api_name'],
+            $validated['module_record_id'],
+            100
+        );
 
         return response()->json(['data' => $messages]);
     }

@@ -2,16 +2,11 @@
 
 namespace App\Services\Scheduling;
 
-use App\Models\AvailabilityRule;
-use App\Models\CalendarConnection;
-use App\Models\CalendarEventCache;
-use App\Models\MeetingType;
-use App\Models\ScheduledMeeting;
-use App\Models\SchedulingOverride;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AvailabilityService
 {
@@ -69,7 +64,7 @@ class AvailabilityService
     public function getAvailabilityWindows(User $user, int $dayOfWeek, Carbon $date): array
     {
         // Check for date-specific override first
-        $override = SchedulingOverride::where('user_id', $user->id)
+        $override = DB::table('scheduling_overrides')->where('user_id', $user->id)
             ->where('date', $date->toDateString())
             ->first();
 
@@ -87,7 +82,7 @@ class AvailabilityService
         }
 
         // Get regular availability rules
-        $rules = AvailabilityRule::where('user_id', $user->id)
+        $rules = DB::table('availability_rules')->where('user_id', $user->id)
             ->where('day_of_week', $dayOfWeek)
             ->where('is_available', true)
             ->orderBy('start_time')
@@ -189,7 +184,7 @@ class AvailabilityService
         $busyPeriods = [];
 
         // Get scheduled meetings
-        $meetings = ScheduledMeeting::where('host_user_id', $user->id)
+        $meetings = DB::table('scheduled_meetings')->where('host_user_id', $user->id)
             ->where('status', ScheduledMeeting::STATUS_SCHEDULED)
             ->where('start_time', '>=', $dayStart)
             ->where('start_time', '<=', $dayEnd)
@@ -206,12 +201,12 @@ class AvailabilityService
         }
 
         // Get calendar events from connected calendars
-        $calendarConnections = CalendarConnection::where('user_id', $user->id)
+        $calendarConnections = DB::table('calendar_connections')->where('user_id', $user->id)
             ->where('sync_enabled', true)
             ->get();
 
         foreach ($calendarConnections as $connection) {
-            $events = CalendarEventCache::where('calendar_connection_id', $connection->id)
+            $events = DB::table('calendar_event_caches')->where('calendar_connection_id', $connection->id)
                 ->active()
                 ->inRange($dayStart, $dayEnd)
                 ->get();

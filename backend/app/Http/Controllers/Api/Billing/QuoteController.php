@@ -6,12 +6,11 @@ namespace App\Http\Controllers\Api\Billing;
 
 use App\Application\Services\Billing\BillingApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Quote;
-use App\Models\QuoteTemplate;
 use App\Services\Billing\PdfGeneratorService;
 use App\Services\Billing\QuoteService; // @deprecated - use BillingApplicationService
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class QuoteController extends Controller
 {
@@ -236,7 +235,7 @@ class QuoteController extends Controller
             'company_info' => 'nullable|array',
         ]);
 
-        $template = QuoteTemplate::create($validated);
+        $template = DB::table('quote_templates')->insertGetId($validated);
 
         if ($request->boolean('is_default')) {
             $template->setAsDefault();
@@ -285,7 +284,7 @@ class QuoteController extends Controller
     {
         return response()->json([
             'stats' => [
-                'total' => Quote::count(),
+                'total' => DB::table('quotes')->count(),
                 'draft' => Quote::draft()->count(),
                 'sent' => Quote::sent()->count(),
                 'accepted' => Quote::accepted()->count(),

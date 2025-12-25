@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\Renewal;
 
 use App\Http\Controllers\Controller;
-use App\Models\CustomerHealthScore;
 use App\Services\Renewal\HealthScoreService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class HealthScoreController extends Controller
 {
@@ -112,7 +112,7 @@ class HealthScoreController extends Controller
      */
     public function updateNotes(Request $request, int $id): JsonResponse
     {
-        $healthScore = CustomerHealthScore::findOrFail($id);
+        $healthScore = DB::table('customer_health_scores')->where('id', $id)->first();
 
         $validated = $request->validate([
             'notes' => 'nullable|string',

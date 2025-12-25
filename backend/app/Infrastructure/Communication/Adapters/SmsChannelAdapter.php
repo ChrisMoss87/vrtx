@@ -14,8 +14,7 @@ use App\Domain\Communication\ValueObjects\MessageParticipant;
 use App\Domain\Communication\ValueObjects\RecordContext;
 use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\Sms\Repositories\SmsMessageRepositoryInterface;
-use App\Models\SmsConnection;
-use App\Models\SmsMessage;
+use Illuminate\Support\Facades\DB;
 
 class SmsChannelAdapter extends AbstractChannelAdapter
 {
@@ -30,68 +29,74 @@ class SmsChannelAdapter extends AbstractChannelAdapter
 
     public function isAvailable(): bool
     {
-        return SmsConnection::where('is_active', true)->exists();
+        $connections = $this->smsRepository->listConnections(activeOnly: true);
+        return !empty($connections);
     }
 
     public function getConversations(array $filters = [], int $perPage = 20, int $page = 1): PaginatedResult
     {
         // SMS doesn't have native conversations - group by phone number
-        $query = SmsMessage::select('to_number as phone_number')
+        $query = DB::table('sms_messages')
+            ->select('to_number as phone_number')
             ->selectRaw('MAX(id) as latest_message_id')
             ->selectRaw('COUNT(*) as message_count')
             ->selectRaw('MAX(created_at) as last_message_at')
             ->groupBy('to_number')
             ->orderByDesc('last_message_at');
 
-        $paginated = $query->paginate($perPage, ['*'], 'page', $page);
+        $offset = ($page - 1) * $perPage;
+        $total = $query->count();
+        $items = $query->offset($offset)->limit($perPage)->get();
 
-        $conversations = collect($paginated->items())->map(function ($item) {
+        $conversations = array_map(function ($item) {
             return $this->createSmsConversation($item);
-        });
+        }, $items->all());
 
         return new PaginatedResult(
-            items: $conversations->all(),
-            total: $paginated->total(),
-            perPage: $paginated->perPage(),
-            currentPage: $paginated->currentPage(),
+            items: $conversations,
+            total: $total,
+            perPage: $perPage,
+            currentPage: $page,
         );
     }
 
     public function getConversation(string $sourceId): ?UnifiedConversation
     {
         // sourceId is the phone number for SMS
-        $latestMessage = SmsMessage::where('to_number', $sourceId)
+        $latestMessage = DB::table('sms_messages')
+            ->where('to_number', $sourceId)
             ->orWhere('from_number', $sourceId)
-            ->latest()
+            ->orderByDesc('created_at')
             ->first();
 
         if (!$latestMessage) {
             return null;
         }
 
+        $messageCount = DB::table('sms_messages')
+            ->where('to_number', $sourceId)
+            ->orWhere('from_number', $sourceId)
+            ->count();
+
         return $this->createSmsConversation((object) [
             'phone_number' => $sourceId,
-            'message_count' => SmsMessage::where('to_number', $sourceId)
-                ->orWhere('from_number', $sourceId)
-                ->count(),
+            'message_count' => $messageCount,
             'last_message_at' => $latestMessage->created_at,
         ]);
     }
 
     public function getConversationsForRecord(RecordContext $context): array
     {
-        $messages = SmsMessage::where('module_api_name', $context->moduleApiName)
-            ->where('module_record_id', $context->recordId)
-            ->get();
+        $messages = $this->smsRepository->getRecordMessages($context->moduleApiName, $context->recordId);
 
         // Group by phone number
-        $grouped = $messages->groupBy(fn($m) => $m->to_number ?: $m->from_number);
+        $grouped = collect($messages)->groupBy(fn($m) => $m['to_number'] ?: $m['from_number']);
 
         return $grouped->map(function ($msgs, $phone) {
             return $this->createSmsConversation((object) [
                 'phone_number' => $phone,
-                'message_count' => $msgs->count(),
-                'last_message_at' => $msgs->max('created_at'),
+                'message_count' => count($msgs),
+                'last_message_at' => max(array_column($msgs->all(), 'created_at')),
             ]);
         })->values()->all();
     }
@@ -99,19 +104,18 @@ class SmsChannelAdapter extends AbstractChannelAdapter
     public function getMessages(string $sourceConversationId, int $limit = 50): array
     {
         // sourceConversationId is phone number
-        $messages = SmsMessage::where('to_number', $sourceConversationId)
-            ->orWhere('from_number', $sourceConversationId)
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
+        $messages = $this->smsRepository->getConversation($sourceConversationId, $limit);
 
-        return $messages->map(fn($m) => $this->toUnifiedMessage($m))->all();
+        return array_map(fn($m) => $this->toUnifiedMessage((object) $m), $messages);
     }
 
     public function sendMessage(SendMessageDTO $message): UnifiedMessage
     {
-        $smsMessage = SmsMessage::create([
-            'connection_id' => SmsConnection::where('is_active', true)->first()?->id,
+        $activeConnection = $this->smsRepository->listConnections(activeOnly: true);
+        $connectionId = !empty($activeConnection) ? $activeConnection[0]['id'] : null;
+
+        $smsMessage = $this->smsRepository->create([
+            'connection_id' => $connectionId,
             'to_number' => $message->recipients[0]->phone ?? '',
             'from_number' => $message->metadata['from_number'] ?? null,
             'content' => $message->content,
@@ -122,7 +126,7 @@ class SmsChannelAdapter extends AbstractChannelAdapter
             'module_record_id' => $message->recordContext?->recordId,
         ]);
 
-        return $this->toUnifiedMessage($smsMessage);
+        return $this->toUnifiedMessage((object) $smsMessage);
     }
 
     public function toUnifiedConversation(mixed $sourceConversation): UnifiedConversation

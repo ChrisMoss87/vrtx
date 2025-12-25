@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Services\Blueprint;
 
-use App\Models\Blueprint;
-use App\Models\BlueprintRecordState;
-use App\Models\BlueprintState;
-use App\Models\BlueprintTransition;
-use App\Models\BlueprintTransitionExecution;
-use App\Models\Module;
+use App\Domain\Blueprint\Entities\Blueprint;
+use App\Domain\Blueprint\Entities\BlueprintRecordState;
+use App\Domain\Blueprint\Entities\BlueprintState;
+use App\Domain\Blueprint\Entities\BlueprintTransition;
+use App\Domain\Blueprint\Entities\TransitionExecution as BlueprintTransitionExecution;
+use App\Domain\Blueprint\Repositories\BlueprintRepositoryInterface;
+use App\Domain\Blueprint\Repositories\BlueprintRecordStateRepositoryInterface;
+use App\Domain\Blueprint\Repositories\BlueprintTransitionRepositoryInterface;
+use App\Domain\Blueprint\Repositories\TransitionExecutionRepositoryInterface;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +26,11 @@ use Illuminate\Support\Facades\DB;
 class BlueprintEngine
 {
     public function __construct(
+        protected BlueprintRepositoryInterface $blueprintRepository,
+        protected BlueprintRecordStateRepositoryInterface $recordStateRepository,
+        protected BlueprintTransitionRepositoryInterface $transitionRepository,
+        protected TransitionExecutionRepositoryInterface $executionRepository,
+        protected ModuleRepositoryInterface $moduleRepository,
         protected ConditionService $conditionService,
         protected RequirementService $requirementService,
         protected TransitionService $transitionService,
@@ -34,9 +44,7 @@ class BlueprintEngine
      */
     public function getBlueprintForField(int $fieldId): ?Blueprint
     {
-        return Blueprint::where('field_id', $fieldId)
-            ->where('is_active', true)
-            ->first();
+        return $this->blueprintRepository->findByFieldId($fieldId);
     }
 
     /**
@@ -44,10 +52,7 @@ class BlueprintEngine
      */
     public function getBlueprintForModuleField(int $moduleId, int $fieldId): ?Blueprint
     {
-        return Blueprint::where('module_id', $moduleId)
-            ->where('field_id', $fieldId)
-            ->where('is_active', true)
-            ->first();
+        return $this->blueprintRepository->findByModuleAndField($moduleId, $fieldId);
     }
 
     /**
@@ -55,10 +60,7 @@ class BlueprintEngine
      */
     public function getBlueprintsForModule(int $moduleId): Collection
     {
-        return Blueprint::where('module_id', $moduleId)
-            ->where('is_active', true)
-            ->with(['field', 'states', 'transitions'])
-            ->get();
+        return $this->blueprintRepository->findByModuleId($moduleId);
     }
 
     /**
@@ -66,10 +68,7 @@ class BlueprintEngine
      */
     public function getRecordState(int $blueprintId, int $recordId): ?BlueprintRecordState
     {
-        return BlueprintRecordState::where('blueprint_id', $blueprintId)
-            ->where('record_id', $recordId)
-            ->with('currentState')
-            ->first();
+        return $this->recordStateRepository->findByBlueprintAndRecord($blueprintId, $recordId);
     }
 
     /**
@@ -78,7 +77,7 @@ class BlueprintEngine
     public function initializeRecordState(Blueprint $blueprint, int $recordId, ?string $currentFieldValue = null): BlueprintRecordState
     {
         // First check if state already exists
-        $existingState = $this->getRecordState($blueprint->id, $recordId);
+        $existingState = $this->getRecordState($blueprint->getId(), $recordId);
         if ($existingState) {
             return $existingState;
         }
@@ -86,9 +85,7 @@ class BlueprintEngine
         // Find the matching state based on field value
         $state = null;
         if ($currentFieldValue !== null) {
-            $state = $blueprint->states()
-                ->where('field_option_value', $currentFieldValue)
-                ->first();
+            $state = $blueprint->getStateByFieldValue($currentFieldValue);
         }
 
         // Fall back to initial state if no match
@@ -98,19 +95,22 @@ class BlueprintEngine
 
         // If still no state, get the first state
         if (!$state) {
-            $state = $blueprint->states()->first();
+            $states = $blueprint->getStates();
+            $state = $states->first();
         }
 
         if (!$state) {
-            throw new \RuntimeException("Blueprint {$blueprint->id} has no states defined");
+            throw new \RuntimeException("Blueprint {$blueprint->getId()} has no states defined");
         }
 
-        $recordState = BlueprintRecordState::create([
-            'blueprint_id' => $blueprint->id,
-            'record_id' => $recordId,
-            'current_state_id' => $state->id,
-            'state_entered_at' => now(),
-        ]);
+        $recordState = new BlueprintRecordState(
+            blueprintId: $blueprint->getId(),
+            recordId: $recordId,
+            currentStateId: $state->getId(),
+            stateEnteredAt: now()
+        );
+
+        $recordState = $this->recordStateRepository->save($recordState);
 
         // Start SLA if configured
         $this->slaService->startSLA($recordId, $state);
@@ -127,20 +127,19 @@ class BlueprintEngine
 
         if (!$recordState) {
             // Initialize state if not exists
-            $blueprint = Blueprint::find($blueprintId);
+            $blueprint = $this->blueprintRepository->findById($blueprintId);
             if (!$blueprint) {
                 return collect();
             }
-            $recordState = $this->initializeRecordState($blueprint, $recordId, $recordData[$blueprint->field->api_name] ?? null);
+            $field = $blueprint->getField();
+            $recordState = $this->initializeRecordState($blueprint, $recordId, $recordData[$field->getApiName()] ?? null);
         }
 
         // Get transitions from current state
-        $transitions = BlueprintTransition::where('blueprint_id', $blueprintId)
-            ->where('from_state_id', $recordState->current_state_id)
-            ->where('is_active', true)
-            ->with(['toState', 'conditions', 'requirements', 'approval'])
-            ->orderBy('display_order')
-            ->get();
+        $transitions = $this->transitionRepository->findActiveByBlueprintAndFromState(
+            $blueprintId,
+            $recordState->getCurrentStateId()
+        );
 
         // Filter by conditions (before-phase)
         return $transitions->filter(function (BlueprintTransition $transition) use ($recordData) {

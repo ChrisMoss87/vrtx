@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Module;
-use App\Models\Report;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Report>
@@ -26,7 +25,7 @@ class ReportFactory extends Factory
         return [
             'name' => $this->faker->words(3, true) . ' Report',
             'description' => $this->faker->sentence(),
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'user_id' => User::factory(),
             'type' => Report::TYPE_TABLE,
             'chart_type' => null,

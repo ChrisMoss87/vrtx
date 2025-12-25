@@ -6,8 +6,6 @@ namespace App\Http\Controllers\Api\Blueprints;
 
 use App\Application\Services\Blueprint\BlueprintApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Blueprint;
-use App\Models\BlueprintTransitionExecution;
 use App\Services\Blueprint\ApprovalService;
 use App\Services\Blueprint\BlueprintEngine;
 use App\Services\Blueprint\RequirementService;
@@ -15,6 +13,7 @@ use App\Services\Blueprint\SLAService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class BlueprintExecutionController extends Controller
 {
@@ -39,7 +38,7 @@ class BlueprintExecutionController extends Controller
             // Find the blueprint
             $blueprint = null;
             if ($blueprintId) {
-                $blueprint = Blueprint::find($blueprintId);
+                $blueprint = DB::table('blueprints')->where('id', $blueprintId)->first();
             } elseif ($moduleId && $fieldId) {
                 $blueprint = $this->engine->getBlueprintForModuleField($moduleId, $fieldId);
             }

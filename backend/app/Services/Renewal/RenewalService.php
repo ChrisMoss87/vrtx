@@ -2,12 +2,6 @@
 
 namespace App\Services\Renewal;
 
-use App\Models\Contract;
-use App\Models\ContractLineItem;
-use App\Models\Renewal;
-use App\Models\RenewalActivity;
-use App\Models\RenewalReminder;
-use App\Models\RenewalForecast;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,7 +13,7 @@ class RenewalService
     public function createContract(array $data): Contract
     {
         return DB::transaction(function () use ($data) {
-            $contract = Contract::create([
+            $contract = DB::table('contracts')->insertGetId([
                 'name' => $data['name'],
                 'contract_number' => $data['contract_number'] ?? Contract::generateContractNumber(),
                 'related_module' => $data['related_module'],
@@ -134,7 +128,7 @@ class RenewalService
      */
     public function createRenewal(Contract $contract, ?int $ownerId = null): Renewal
     {
-        $renewal = Renewal::create([
+        $renewal = DB::table('renewals')->insertGetId([
             'contract_id' => $contract->id,
             'status' => 'pending',
             'original_value' => $contract->value,
@@ -401,7 +395,7 @@ class RenewalService
         $count = 0;
         foreach ($contracts as $contract) {
             // Check if renewal already exists
-            $existingRenewal = Renewal::where('contract_id', $contract->id)
+            $existingRenewal = DB::table('renewals')->where('contract_id', $contract->id)
                 ->whereIn('status', ['pending', 'in_progress'])
                 ->exists();
 

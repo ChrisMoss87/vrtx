@@ -2,9 +2,6 @@
 
 namespace App\Services\Recording;
 
-use App\Models\Recording;
-use App\Models\Workflow;
-use App\Models\WorkflowStep;
 
 class WorkflowGeneratorService
 {
@@ -44,7 +41,7 @@ class WorkflowGeneratorService
         ?string $description = null
     ): Workflow {
         // Create the workflow
-        $workflow = Workflow::create([
+        $workflow = DB::table('workflows')->insertGetId([
             'name' => $name,
             'description' => $description ?? "Generated from recording #{$recording->id}",
             'module_id' => $recording->module_id,
@@ -58,7 +55,7 @@ class WorkflowGeneratorService
         foreach ($recording->steps as $index => $recordingStep) {
             $stepData = $recordingStep->toWorkflowStep();
 
-            WorkflowStep::create([
+            DB::table('workflow_steps')->insertGetId([
                 'workflow_id' => $workflow->id,
                 'step_order' => $index + 1,
                 'type' => $stepData['type'],

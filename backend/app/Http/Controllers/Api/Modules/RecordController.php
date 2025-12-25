@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Services\RbacService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 final class RecordController extends Controller
 {
@@ -24,7 +25,7 @@ final class RecordController extends Controller
     public function index(Request $request, string $moduleApiName): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -96,7 +97,7 @@ final class RecordController extends Controller
     public function show(string $moduleApiName, int $recordId): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -121,7 +122,7 @@ final class RecordController extends Controller
     public function store(Request $request, string $moduleApiName): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -164,7 +165,7 @@ final class RecordController extends Controller
     public function update(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -180,7 +181,7 @@ final class RecordController extends Controller
         }
 
         // Check record-level access (ownership rules)
-        $existingRecord = \App\Models\ModuleRecord::find($recordId);
+        $existingRecord = DB::table('module_records')->where('id', $recordId)->first();
         if ($existingRecord && !$this->rbacService->canEditRecord($request->user(), $existingRecord)) {
             return response()->json([
                 'error' => 'You do not have permission to edit this record',
@@ -216,7 +217,7 @@ final class RecordController extends Controller
     public function patch(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -262,7 +263,7 @@ final class RecordController extends Controller
     public function bulkUpdate(Request $request, string $moduleApiName): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -329,7 +330,7 @@ final class RecordController extends Controller
     public function destroy(Request $request, string $moduleApiName, int $recordId): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -345,7 +346,7 @@ final class RecordController extends Controller
         }
 
         // Check record-level access (ownership rules)
-        $existingRecord = \App\Models\ModuleRecord::find($recordId);
+        $existingRecord = DB::table('module_records')->where('id', $recordId)->first();
         if ($existingRecord && !$this->rbacService->canDeleteRecord($request->user(), $existingRecord)) {
             return response()->json([
                 'error' => 'You do not have permission to delete this record',
@@ -372,7 +373,7 @@ final class RecordController extends Controller
     public function lookup(Request $request, string $moduleApiName): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -490,7 +491,7 @@ final class RecordController extends Controller
     public function bulkDestroy(Request $request, string $moduleApiName): JsonResponse
     {
         // Get module by API name
-        $module = \App\Models\Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([

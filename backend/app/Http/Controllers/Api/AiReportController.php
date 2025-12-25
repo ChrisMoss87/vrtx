@@ -9,6 +9,7 @@ use App\Services\AI\ReportGeneratorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AiReportController extends Controller
 {
@@ -64,7 +65,7 @@ class AiReportController extends Controller
      */
     public function suggest(Request $request, int $reportId): JsonResponse
     {
-        $report = \App\Models\Report::findOrFail($reportId);
+        $report = DB::table('reports')->where('id', $reportId)->first();
 
         $suggestions = $this->reportGenerator->suggestImprovements($report, Auth::id());
 

@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Tenant;
 use Stancl\Tenancy\Database\Models\Domain;
+use Illuminate\Support\Facades\DB;
 
 class TenantSeeder extends Seeder
 {
@@ -41,7 +41,7 @@ class TenantSeeder extends Seeder
     public function run(): void
     {
         foreach (self::TENANTS as $id => $config) {
-            $tenant = Tenant::create([
+            $tenant = DB::table('tenants')->insertGetId([
                 'id' => $id,
                 'data' => [
                     'name' => $config['name'],

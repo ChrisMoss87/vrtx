@@ -4,34 +4,61 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Integration;
 
+use App\Domain\Webhook\Repositories\WebhookRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\Module;
-use App\Models\Webhook;
-use App\Models\WebhookDelivery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class WebhookController extends Controller
 {
+    // Webhook Event Constants
+    private const EVENT_RECORD_CREATED = 'record.created';
+    private const EVENT_RECORD_UPDATED = 'record.updated';
+    private const EVENT_RECORD_DELETED = 'record.deleted';
+    private const EVENT_DEAL_STAGE_CHANGED = 'deal.stage_changed';
+    private const EVENT_DEAL_WON = 'deal.won';
+    private const EVENT_DEAL_LOST = 'deal.lost';
+    private const EVENT_EMAIL_RECEIVED = 'email.received';
+    private const EVENT_EMAIL_OPENED = 'email.opened';
+    private const EVENT_EMAIL_CLICKED = 'email.clicked';
+    private const EVENT_WORKFLOW_TRIGGERED = 'workflow.triggered';
+    private const EVENT_IMPORT_COMPLETED = 'import.completed';
+    private const EVENT_EXPORT_COMPLETED = 'export.completed';
+
+    // Webhook Delivery Status Constants
+    private const STATUS_PENDING = 'pending';
+    private const STATUS_SUCCESS = 'success';
+    private const STATUS_FAILED = 'failed';
+
+    public function __construct(
+        private readonly WebhookRepositoryInterface $webhookRepository
+    ) {
+    }
     /**
      * List all webhooks for the current user.
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Webhook::where('user_id', Auth::id())
-            ->with(['module:id,name,api_name'])
-            ->orderBy('created_at', 'desc');
+        $filters = [
+            'user_id' => Auth::id(),
+        ];
 
         if ($request->boolean('active_only')) {
-            $query->active();
+            $filters['is_active'] = true;
         }
 
-        $webhooks = $query->get()->map(fn ($webhook) => $this->formatWebhook($webhook));
+        $perPage = $request->integer('per_page', 1000);
+        $page = $request->integer('page', 1);
+
+        $result = $this->webhookRepository->listWebhooks($filters, $perPage, $page);
 
         return response()->json([
-            'data' => $webhooks,
-            'available_events' => Webhook::getAvailableEvents(),
+            'data' => $result->items(),
+            'total' => $result->total(),
+            'per_page' => $result->perPage(),
+            'current_page' => $result->currentPage(),
+            'available_events' => $this->webhookRepository->getAvailableEvents(),
         ]);
     }
 
@@ -55,12 +82,11 @@ class WebhookController extends Controller
             'retry_delay' => ['integer', 'min:10', 'max:3600'],
         ]);
 
-        $webhook = Webhook::create([
+        $data = [
             'user_id' => Auth::id(),
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'url' => $validated['url'],
-            'secret' => Webhook::generateSecret(),
             'events' => $validated['events'],
             'module_id' => $validated['module_id'] ?? null,
             'headers' => $validated['headers'] ?? null,
@@ -69,12 +95,17 @@ class WebhookController extends Controller
             'timeout' => $validated['timeout'] ?? 30,
             'retry_count' => $validated['retry_count'] ?? 3,
             'retry_delay' => $validated['retry_delay'] ?? 60,
-        ]);
+        ];
+
+        $webhook = $this->webhookRepository->createWebhook($data);
+
+        // Get the secret for the newly created webhook
+        $secret = $this->webhookRepository->regenerateSecret($webhook['id']);
 
         return response()->json([
             'message' => 'Webhook created successfully',
-            'webhook' => $this->formatWebhook($webhook),
-            'secret' => $webhook->secret, // Show once
+            'webhook' => $webhook,
+            'secret' => $secret, // Show once
             'warning' => 'Store this secret securely for signature verification.',
         ], 201);
     }
@@ -84,29 +115,18 @@ class WebhookController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $webhook = Webhook::where('user_id', Auth::id())
-            ->with(['module:id,name,api_name'])
-            ->findOrFail($id);
+        $webhook = $this->webhookRepository->getWebhook($id);
 
-        // Get recent deliveries
-        $recentDeliveries = $webhook->deliveries()
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get()
-            ->map(fn ($delivery) => $this->formatDelivery($delivery));
+        if (!$webhook || $webhook['user_id'] !== Auth::id()) {
+            abort(404, 'Webhook not found');
+        }
 
-        // Get delivery stats
-        $stats = [
-            'total' => $webhook->deliveries()->count(),
-            'success' => $webhook->deliveries()->where('status', WebhookDelivery::STATUS_SUCCESS)->count(),
-            'failed' => $webhook->deliveries()->where('status', WebhookDelivery::STATUS_FAILED)->count(),
-            'pending' => $webhook->deliveries()->where('status', WebhookDelivery::STATUS_PENDING)->count(),
-        ];
+        // Get webhook stats
+        $stats = $this->webhookRepository->getWebhookStats($id);
 
         return response()->json([
-            'webhook' => $this->formatWebhook($webhook),
-            'recent_deliveries' => $recentDeliveries,
-            'delivery_stats' => $stats,
+            'webhook' => $webhook,
+            'stats' => $stats,
         ]);
     }
 
@@ -115,8 +135,11 @@ class WebhookController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $webhook = Webhook::where('user_id', Auth::id())
-            ->findOrFail($id);
+        $webhook = $this->webhookRepository->getWebhook($id);
+
+        if (!$webhook || $webhook['user_id'] !== Auth::id()) {
+            abort(404, 'Webhook not found');
+        }
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -134,11 +157,11 @@ class WebhookController extends Controller
             'retry_delay' => ['sometimes', 'integer', 'min:10', 'max:3600'],
         ]);
 
-        $webhook->update($validated);
+        $updatedWebhook = $this->webhookRepository->updateWebhook($id, $validated);
 
         return response()->json([
             'message' => 'Webhook updated successfully',
-            'webhook' => $this->formatWebhook($webhook->fresh(['module:id,name,api_name'])),
+            'webhook' => $updatedWebhook,
         ]);
     }
 
@@ -147,10 +170,13 @@ class WebhookController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $webhook = Webhook::where('user_id', Auth::id())
-            ->findOrFail($id);
+        $webhook = $this->webhookRepository->getWebhook($id);
 
-        $webhook->delete();
+        if (!$webhook || $webhook['user_id'] !== Auth::id()) {
+            abort(404, 'Webhook not found');
+        }
+
+        $this->webhookRepository->deleteWebhook($id);
 
         return response()->json([
             'message' => 'Webhook deleted successfully',
@@ -162,11 +188,13 @@ class WebhookController extends Controller
      */
     public function rotateSecret(int $id): JsonResponse
     {
-        $webhook = Webhook::where('user_id', Auth::id())
-            ->findOrFail($id);
+        $webhook = $this->webhookRepository->getWebhook($id);
 
-        $newSecret = Webhook::generateSecret();
-        $webhook->update(['secret' => $newSecret]);
+        if (!$webhook || $webhook['user_id'] !== Auth::id()) {
+            abort(404, 'Webhook not found');
+        }
+
+        $newSecret = $this->webhookRepository->regenerateSecret($id);
 
         return response()->json([
             'message' => 'Webhook secret rotated successfully',
@@ -180,33 +208,27 @@ class WebhookController extends Controller
      */
     public function test(int $id): JsonResponse
     {
-        $webhook = Webhook::where('user_id', Auth::id())
-            ->findOrFail($id);
+        $webhook = $this->webhookRepository->getWebhook($id);
+
+        if (!$webhook || $webhook['user_id'] !== Auth::id()) {
+            abort(404, 'Webhook not found');
+        }
 
         $testPayload = [
-            'event' => 'webhook.test',
-            'timestamp' => now()->toIso8601String(),
-            'data' => [
-                'message' => 'This is a test webhook from VRTX CRM',
-                'webhook_id' => $webhook->id,
-                'webhook_name' => $webhook->name,
-            ],
+            'message' => 'This is a test webhook from VRTX CRM',
+            'webhook_id' => $webhook['id'],
+            'webhook_name' => $webhook['name'],
         ];
 
         // Create a test delivery
-        $delivery = WebhookDelivery::create([
-            'webhook_id' => $webhook->id,
-            'event' => 'webhook.test',
-            'payload' => $testPayload,
-            'status' => WebhookDelivery::STATUS_PENDING,
-        ]);
+        $delivery = $this->webhookRepository->queueDelivery($id, 'webhook.test', $testPayload);
 
         // Dispatch job to send
         \App\Jobs\SendWebhookJob::dispatch($delivery);
 
         return response()->json([
             'message' => 'Test webhook queued for delivery',
-            'delivery_id' => $delivery->id,
+            'delivery_id' => $delivery['id'],
         ]);
     }
 
@@ -215,13 +237,20 @@ class WebhookController extends Controller
      */
     public function getDelivery(int $webhookId, int $deliveryId): JsonResponse
     {
-        $webhook = Webhook::where('user_id', Auth::id())
-            ->findOrFail($webhookId);
+        $webhook = $this->webhookRepository->getWebhook($webhookId);
 
-        $delivery = $webhook->deliveries()->findOrFail($deliveryId);
+        if (!$webhook || $webhook['user_id'] !== Auth::id()) {
+            abort(404, 'Webhook not found');
+        }
+
+        $delivery = $this->webhookRepository->getDelivery($deliveryId);
+
+        if (!$delivery || $delivery['webhook_id'] !== $webhookId) {
+            abort(404, 'Delivery not found');
+        }
 
         return response()->json([
-            'delivery' => $this->formatDelivery($delivery, true),
+            'delivery' => $delivery,
         ]);
     }
 
@@ -230,21 +259,30 @@ class WebhookController extends Controller
      */
     public function retryDelivery(int $webhookId, int $deliveryId): JsonResponse
     {
-        $webhook = Webhook::where('user_id', Auth::id())
-            ->findOrFail($webhookId);
+        $webhook = $this->webhookRepository->getWebhook($webhookId);
 
-        $delivery = $webhook->deliveries()
-            ->where('status', WebhookDelivery::STATUS_FAILED)
-            ->findOrFail($deliveryId);
+        if (!$webhook || $webhook['user_id'] !== Auth::id()) {
+            abort(404, 'Webhook not found');
+        }
+
+        $delivery = $this->webhookRepository->getDelivery($deliveryId);
+
+        if (!$delivery || $delivery['webhook_id'] !== $webhookId) {
+            abort(404, 'Delivery not found');
+        }
+
+        if ($delivery['status'] !== self::STATUS_FAILED) {
+            abort(400, 'Only failed deliveries can be retried');
+        }
 
         // Reset and queue for retry
-        $delivery->update([
-            'status' => WebhookDelivery::STATUS_PENDING,
+        $updatedDelivery = $this->webhookRepository->updateDeliveryStatus($deliveryId, [
+            'status' => self::STATUS_PENDING,
             'attempts' => 0,
             'next_retry_at' => null,
         ]);
 
-        \App\Jobs\SendWebhookJob::dispatch($delivery);
+        \App\Jobs\SendWebhookJob::dispatch($updatedDelivery);
 
         return response()->json([
             'message' => 'Delivery queued for retry',
@@ -256,77 +294,23 @@ class WebhookController extends Controller
      */
     public function deliveries(Request $request, int $id): JsonResponse
     {
-        $webhook = Webhook::where('user_id', Auth::id())
-            ->findOrFail($id);
+        $webhook = $this->webhookRepository->getWebhook($id);
 
-        $query = $webhook->deliveries()
-            ->orderBy('created_at', 'desc');
-
-        if ($request->has('status')) {
-            $query->where('status', $request->input('status'));
+        if (!$webhook || $webhook['user_id'] !== Auth::id()) {
+            abort(404, 'Webhook not found');
         }
 
-        $deliveries = $query->paginate($request->integer('per_page', 25));
+        $perPage = $request->integer('per_page', 25);
+        $page = $request->integer('page', 1);
 
-        $deliveries->getCollection()->transform(fn ($d) => $this->formatDelivery($d));
+        $result = $this->webhookRepository->getDeliveryHistory($id, $perPage, $page);
 
-        return response()->json($deliveries);
+        return response()->json([
+            'data' => $result->items(),
+            'total' => $result->total(),
+            'per_page' => $result->perPage(),
+            'current_page' => $result->currentPage(),
+        ]);
     }
 
-    /**
-     * Format webhook for response.
-     */
-    protected function formatWebhook(Webhook $webhook): array
-    {
-        return [
-            'id' => $webhook->id,
-            'name' => $webhook->name,
-            'description' => $webhook->description,
-            'url' => $webhook->url,
-            'events' => $webhook->events,
-            'module' => $webhook->module ? [
-                'id' => $webhook->module->id,
-                'name' => $webhook->module->name,
-                'api_name' => $webhook->module->api_name,
-            ] : null,
-            'headers' => $webhook->headers,
-            'is_active' => $webhook->is_active,
-            'verify_ssl' => $webhook->verify_ssl,
-            'timeout' => $webhook->timeout,
-            'retry_count' => $webhook->retry_count,
-            'retry_delay' => $webhook->retry_delay,
-            'last_triggered_at' => $webhook->last_triggered_at?->toIso8601String(),
-            'last_status' => $webhook->last_status,
-            'success_count' => $webhook->success_count,
-            'failure_count' => $webhook->failure_count,
-            'created_at' => $webhook->created_at->toIso8601String(),
-            'updated_at' => $webhook->updated_at->toIso8601String(),
-        ];
-    }
-
-    /**
-     * Format delivery for response.
-     */
-    protected function formatDelivery(WebhookDelivery $delivery, bool $includePayload = false): array
-    {
-        $data = [
-            'id' => $delivery->id,
-            'event' => $delivery->event,
-            'status' => $delivery->status,
-            'attempts' => $delivery->attempts,
-            'response_code' => $delivery->response_code,
-            'response_time_ms' => $delivery->response_time_ms,
-            'error_message' => $delivery->error_message,
-            'delivered_at' => $delivery->delivered_at?->toIso8601String(),
-            'next_retry_at' => $delivery->next_retry_at?->toIso8601String(),
-            'created_at' => $delivery->created_at->toIso8601String(),
-        ];
-
-        if ($includePayload) {
-            $data['payload'] = $delivery->payload;
-            $data['response_body'] = $delivery->response_body;
-        }
-
-        return $data;
-    }
 }

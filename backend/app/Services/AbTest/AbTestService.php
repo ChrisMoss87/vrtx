@@ -2,10 +2,9 @@
 
 namespace App\Services\AbTest;
 
-use App\Models\AbTest;
-use App\Models\AbTestVariant;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AbTestService
 {
@@ -38,7 +37,7 @@ class AbTestService
 
     public function createTest(array $data, int $userId): AbTest
     {
-        $test = AbTest::create([
+        $test = DB::table('ab_tests')->insertGetId([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'type' => $data['type'],
@@ -197,7 +196,7 @@ class AbTestService
         if ($statistics['significance']['is_significant'] ?? false) {
             $winnerId = $statistics['recommended_winner'];
             if ($winnerId) {
-                $winner = AbTestVariant::find($winnerId);
+                $winner = DB::table('ab_test_variants')->where('id', $winnerId)->first();
                 if ($winner) {
                     $winner->declareWinner();
                     return $winner;

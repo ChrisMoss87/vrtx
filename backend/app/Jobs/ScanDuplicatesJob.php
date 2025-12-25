@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\Module;
 use App\Services\Duplicates\DuplicateDetectionService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -14,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 class ScanDuplicatesJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+use Illuminate\Support\Facades\DB;
 
     /**
      * The number of times the job may be attempted.

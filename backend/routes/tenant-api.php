@@ -323,11 +323,11 @@ Route::middleware([
             Route::get('/categories', [WorkflowEmailTemplateController::class, 'categories']);
             Route::get('/variables', [WorkflowEmailTemplateController::class, 'variables']);
             Route::post('/', [WorkflowEmailTemplateController::class, 'store']);
-            Route::get('/{workflowEmailTemplate}', [WorkflowEmailTemplateController::class, 'show']);
-            Route::put('/{workflowEmailTemplate}', [WorkflowEmailTemplateController::class, 'update']);
-            Route::delete('/{workflowEmailTemplate}', [WorkflowEmailTemplateController::class, 'destroy']);
-            Route::post('/{workflowEmailTemplate}/duplicate', [WorkflowEmailTemplateController::class, 'duplicate']);
-            Route::post('/{workflowEmailTemplate}/preview', [WorkflowEmailTemplateController::class, 'preview']);
+            Route::get('/{id}', [WorkflowEmailTemplateController::class, 'show']);
+            Route::put('/{id}', [WorkflowEmailTemplateController::class, 'update']);
+            Route::delete('/{id}', [WorkflowEmailTemplateController::class, 'destroy']);
+            Route::post('/{id}/duplicate', [WorkflowEmailTemplateController::class, 'duplicate']);
+            Route::post('/{id}/preview', [WorkflowEmailTemplateController::class, 'preview']);
         });
 
         // Blueprint Routes (Stage Transitions & SLAs)

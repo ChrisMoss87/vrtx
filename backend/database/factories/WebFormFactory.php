@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Module;
-use App\Models\User;
-use App\Models\WebForm;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\WebForm>
@@ -39,7 +38,7 @@ class WebFormFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name),
             'description' => $this->faker->sentence(),
-            'module_id' => fn () => Module::where('api_name', 'leads')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'leads')->first()?->id ?? DB::table('modules')->first()?->id,
             'is_active' => true,
             'settings' => [
                 'submit_button_text' => 'Submit',

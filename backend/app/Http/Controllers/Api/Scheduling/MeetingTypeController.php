@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api\Scheduling;
 
 use App\Http\Controllers\Controller;
-use App\Models\MeetingType;
-use App\Models\SchedulingPage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class MeetingTypeController extends Controller
 {
@@ -65,7 +64,7 @@ class MeetingTypeController extends Controller
 
         // Ensure unique slug within the page
         if (!empty($validated['slug'])) {
-            $existingSlug = MeetingType::where('scheduling_page_id', $schedulingPage->id)
+            $existingSlug = DB::table('meeting_types')->where('scheduling_page_id', $schedulingPage->id)
                 ->where('slug', $validated['slug'])
                 ->exists();
 
@@ -80,7 +79,7 @@ class MeetingTypeController extends Controller
         // Get next display order
         $maxOrder = $schedulingPage->meetingTypes()->max('display_order') ?? -1;
 
-        $meetingType = MeetingType::create([
+        $meetingType = DB::table('meeting_types')->insertGetId([
             'scheduling_page_id' => $schedulingPage->id,
             'name' => $validated['name'],
             'slug' => $validated['slug'] ?? null,
@@ -153,7 +152,7 @@ class MeetingTypeController extends Controller
 
         // Check slug uniqueness if changed
         if (!empty($validated['slug']) && $validated['slug'] !== $meetingType->slug) {
-            $existingSlug = MeetingType::where('scheduling_page_id', $schedulingPage->id)
+            $existingSlug = DB::table('meeting_types')->where('scheduling_page_id', $schedulingPage->id)
                 ->where('slug', $validated['slug'])
                 ->where('id', '!=', $meetingType->id)
                 ->exists();
@@ -225,7 +224,7 @@ class MeetingTypeController extends Controller
         ]);
 
         foreach ($validated['order'] as $index => $id) {
-            MeetingType::where('id', $id)
+            DB::table('meeting_types')->where('id', $id)
                 ->where('scheduling_page_id', $schedulingPage->id)
                 ->update(['display_order' => $index]);
         }

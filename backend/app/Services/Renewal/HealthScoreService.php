@@ -2,11 +2,6 @@
 
 namespace App\Services\Renewal;
 
-use App\Models\CustomerHealthScore;
-use App\Models\Contract;
-use App\Models\Activity;
-use App\Models\SupportTicket;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Facades\DB;
 
 class HealthScoreService
@@ -53,12 +48,12 @@ class HealthScoreService
     protected function calculateEngagementScore(string $module, int $recordId): int
     {
         // Get recent activities (last 90 days)
-        $activityCount = Activity::where('related_module', $module)
+        $activityCount = DB::table('activities')->where('related_module', $module)
             ->where('related_id', $recordId)
             ->where('created_at', '>=', now()->subDays(90))
             ->count();
 
-        $lastActivityDays = Activity::where('related_module', $module)
+        $lastActivityDays = DB::table('activities')->where('related_module', $module)
             ->where('related_id', $recordId)
             ->max('created_at');
 
@@ -85,7 +80,7 @@ class HealthScoreService
             return 70; // Default neutral score if no support module
         }
 
-        $tickets = SupportTicket::where('related_module', $module)
+        $tickets = DB::table('support_tickets')->where('related_module', $module)
             ->where('related_id', $recordId)
             ->where('created_at', '>=', now()->subDays(180))
             ->get();
@@ -161,7 +156,7 @@ class HealthScoreService
     protected function calculateRelationshipScore(string $module, int $recordId): int
     {
         // Count unique contacts/stakeholders engaged
-        $contactCount = Activity::where('related_module', $module)
+        $contactCount = DB::table('activities')->where('related_module', $module)
             ->where('related_id', $recordId)
             ->whereNotNull('contact_id')
             ->distinct('contact_id')
@@ -171,7 +166,7 @@ class HealthScoreService
         $contactScore = min(50, $contactCount * 10);
 
         // Check for executive engagement (meetings, calls)
-        $executiveEngagement = Activity::where('related_module', $module)
+        $executiveEngagement = DB::table('activities')->where('related_module', $module)
             ->where('related_id', $recordId)
             ->whereIn('type', ['meeting', 'call'])
             ->where('created_at', '>=', now()->subDays(90))
@@ -285,7 +280,7 @@ class HealthScoreService
      */
     public function getHealthSummary(): array
     {
-        $scores = CustomerHealthScore::all();
+        $scores = DB::table('customer_health_scores')->get();
 
         return [
             'total_customers' => $scores->count(),

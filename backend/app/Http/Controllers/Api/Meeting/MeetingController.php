@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api\Meeting;
 
 use App\Http\Controllers\Controller;
-use App\Models\SyncedMeeting;
 use App\Services\Meeting\MeetingService;
 use App\Services\Meeting\MeetingAnalyticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class MeetingController extends Controller
 {
@@ -76,7 +76,7 @@ class MeetingController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $meeting = SyncedMeeting::findOrFail($id);
+        $meeting = DB::table('synced_meetings')->where('id', $id)->first();
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:500',
@@ -100,7 +100,7 @@ class MeetingController extends Controller
 
     public function destroy(int $id): JsonResponse
     {
-        $meeting = SyncedMeeting::findOrFail($id);
+        $meeting = DB::table('synced_meetings')->where('id', $id)->first();
         $this->meetingService->deleteMeeting($meeting);
 
         return response()->json(['message' => 'Meeting deleted']);
@@ -127,7 +127,7 @@ class MeetingController extends Controller
 
     public function linkToDeal(Request $request, int $id): JsonResponse
     {
-        $meeting = SyncedMeeting::findOrFail($id);
+        $meeting = DB::table('synced_meetings')->where('id', $id)->first();
 
         $validated = $request->validate([
             'deal_id' => 'required|integer',
@@ -143,7 +143,7 @@ class MeetingController extends Controller
 
     public function logOutcome(Request $request, int $id): JsonResponse
     {
-        $meeting = SyncedMeeting::findOrFail($id);
+        $meeting = DB::table('synced_meetings')->where('id', $id)->first();
 
         $validated = $request->validate([
             'outcome' => 'required|string|in:completed,no_show,rescheduled,cancelled',

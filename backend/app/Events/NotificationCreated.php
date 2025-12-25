@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Events;
 
-use App\Models\Notification;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -17,7 +16,7 @@ class NotificationCreated implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(
-        public Notification $notification
+        public object $notification
     ) {}
 
     /**
@@ -42,16 +41,18 @@ class NotificationCreated implements ShouldBroadcast
         return [
             'id' => $this->notification->id,
             'type' => $this->notification->type,
-            'category' => $this->notification->category,
+            'category' => $this->notification->category ?? null,
             'title' => $this->notification->title,
-            'body' => $this->notification->body,
-            'icon' => $this->notification->icon,
-            'icon_color' => $this->notification->icon_color,
-            'action_url' => $this->notification->action_url,
-            'action_label' => $this->notification->action_label,
-            'data' => $this->notification->data,
-            'read_at' => $this->notification->read_at,
-            'created_at' => $this->notification->created_at->toISOString(),
+            'body' => $this->notification->body ?? null,
+            'icon' => $this->notification->icon ?? null,
+            'icon_color' => $this->notification->icon_color ?? null,
+            'action_url' => $this->notification->action_url ?? null,
+            'action_label' => $this->notification->action_label ?? null,
+            'data' => is_string($this->notification->data ?? null)
+                ? json_decode($this->notification->data, true)
+                : ($this->notification->data ?? null),
+            'read_at' => $this->notification->read_at ?? null,
+            'created_at' => $this->notification->created_at,
         ];
     }
 

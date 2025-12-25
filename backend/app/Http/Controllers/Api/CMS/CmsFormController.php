@@ -4,16 +4,28 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\CMS;
 
+use App\Domain\CMS\Repositories\CmsFormRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\CmsForm;
-use App\Models\CmsFormSubmission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CmsFormController extends Controller
 {
+    private const TABLE_FORMS = 'cms_forms';
+    private const TABLE_SUBMISSIONS = 'cms_form_submissions';
+    private const TABLE_USERS = 'users';
+    private const TABLE_MODULES = 'modules';
+    private const TABLE_TEMPLATES = 'cms_templates';
+
+    public const ACTION_CREATE_LEAD = 'create_lead';
+
+    public function __construct(
+        private readonly CmsFormRepositoryInterface $formRepository
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -22,40 +34,58 @@ class CmsFormController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = CmsForm::query()
-            ->with(['creator:id,name', 'targetModule:id,name,api_name'])
-            ->withCount('submissions');
-
+        $filters = [];
         if (isset($validated['is_active'])) {
-            if ($validated['is_active']) {
-                $query->active();
-            } else {
-                $query->where('is_active', false);
-            }
+            $filters['is_active'] = $validated['is_active'];
         }
-
         if (isset($validated['search'])) {
-            $query->search($validated['search']);
+            $filters['search'] = $validated['search'];
         }
-
-        $query->orderByDesc('created_at');
+        $filters['sort_by'] = 'created_at';
+        $filters['sort_dir'] = 'desc';
 
         $perPage = $validated['per_page'] ?? 25;
-        $forms = $query->paginate($perPage);
+        $page = $request->integer('page', 1);
 
-        // Add conversion rate to each form
-        $items = collect($forms->items())->map(function ($form) {
-            $form->conversion_rate = $form->getConversionRate();
-            return $form;
-        });
+        $result = $this->formRepository->paginate($filters, $perPage, $page);
+
+        // Enrich with relations
+        $items = [];
+        foreach ($result->items as $item) {
+            // Load creator
+            if ($item['created_by']) {
+                $creator = DB::table(self::TABLE_USERS)
+                    ->where('id', $item['created_by'])
+                    ->select(['id', 'name'])
+                    ->first();
+                $item['creator'] = $creator ? (array) $creator : null;
+            }
+
+            // Load target module
+            if ($item['target_module_id'] ?? null) {
+                $module = DB::table(self::TABLE_MODULES)
+                    ->where('id', $item['target_module_id'])
+                    ->select(['id', 'name', 'api_name'])
+                    ->first();
+                $item['target_module'] = $module ? (array) $module : null;
+            }
+
+            // Count submissions
+            $submissionsCount = DB::table(self::TABLE_SUBMISSIONS)
+                ->where('form_id', $item['id'])
+                ->count();
+            $item['submissions_count'] = $submissionsCount;
+
+            $items[] = $item;
+        }
 
         return response()->json([
             'data' => $items,
             'meta' => [
-                'current_page' => $forms->currentPage(),
-                'last_page' => $forms->lastPage(),
-                'per_page' => $forms->perPage(),
-                'total' => $forms->total(),
+                'current_page' => $result->currentPage,
+                'last_page' => $result->lastPage,
+                'per_page' => $result->perPage,
+                'total' => $result->total,
             ],
         ]);
     }
@@ -91,49 +121,97 @@ class CmsFormController extends Controller
         // Ensure unique slug
         $originalSlug = $slug;
         $counter = 1;
-        while (CmsForm::where('slug', $slug)->exists()) {
+        while ($this->formRepository->findBySlug($slug) !== null) {
             $slug = $originalSlug . '-' . $counter++;
         }
 
-        $form = CmsForm::create([
+        $formId = DB::table(self::TABLE_FORMS)->insertGetId([
             'name' => $validated['name'],
             'slug' => $slug,
             'description' => $validated['description'] ?? null,
-            'fields' => $validated['fields'],
-            'settings' => $validated['settings'] ?? null,
-            'submit_action' => $validated['submit_action'] ?? CmsForm::ACTION_CREATE_LEAD,
+            'fields' => json_encode($validated['fields']),
+            'settings' => isset($validated['settings']) ? json_encode($validated['settings']) : null,
+            'submit_action' => $validated['submit_action'] ?? self::ACTION_CREATE_LEAD,
             'target_module_id' => $validated['target_module_id'] ?? null,
-            'field_mapping' => $validated['field_mapping'] ?? null,
+            'field_mapping' => isset($validated['field_mapping']) ? json_encode($validated['field_mapping']) : null,
             'submit_button_text' => $validated['submit_button_text'] ?? 'Submit',
             'success_message' => $validated['success_message'] ?? 'Thank you for your submission!',
             'redirect_url' => $validated['redirect_url'] ?? null,
-            'notification_emails' => $validated['notification_emails'] ?? null,
+            'notification_emails' => isset($validated['notification_emails']) ? json_encode($validated['notification_emails']) : null,
             'notification_template_id' => $validated['notification_template_id'] ?? null,
+            'is_active' => true,
+            'view_count' => 0,
+            'submission_count' => 0,
             'created_by' => Auth::id(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
+        $formArray = $this->formRepository->findByIdAsArray($formId);
+
         return response()->json([
-            'data' => $form,
+            'data' => $formArray,
             'message' => 'Form created successfully',
         ], 201);
     }
 
-    public function show(CmsForm $cmsForm): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $cmsForm->load(['creator:id,name', 'targetModule:id,name,api_name', 'notificationTemplate:id,name']);
-        $cmsForm->loadCount('submissions');
-        $cmsForm->conversion_rate = $cmsForm->getConversionRate();
+        $formArray = $this->formRepository->findByIdAsArray($id);
+
+        if (!$formArray) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
+        // Load creator
+        if ($formArray['created_by']) {
+            $creator = DB::table(self::TABLE_USERS)
+                ->where('id', $formArray['created_by'])
+                ->select(['id', 'name'])
+                ->first();
+            $formArray['creator'] = $creator ? (array) $creator : null;
+        }
+
+        // Load target module
+        if ($formArray['target_module_id'] ?? null) {
+            $module = DB::table(self::TABLE_MODULES)
+                ->where('id', $formArray['target_module_id'])
+                ->select(['id', 'name', 'api_name'])
+                ->first();
+            $formArray['target_module'] = $module ? (array) $module : null;
+        }
+
+        // Load notification template
+        if ($formArray['notification_template_id'] ?? null) {
+            $template = DB::table(self::TABLE_TEMPLATES)
+                ->where('id', $formArray['notification_template_id'])
+                ->select(['id', 'name'])
+                ->first();
+            $formArray['notification_template'] = $template ? (array) $template : null;
+        }
+
+        // Count submissions
+        $submissionsCount = DB::table(self::TABLE_SUBMISSIONS)
+            ->where('form_id', $id)
+            ->count();
+        $formArray['submissions_count'] = $submissionsCount;
 
         return response()->json([
-            'data' => $cmsForm,
+            'data' => $formArray,
         ]);
     }
 
-    public function update(Request $request, CmsForm $cmsForm): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
+        $form = $this->formRepository->findById($id);
+
+        if (!$form) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:cms_forms,slug,' . $cmsForm->id,
+            'slug' => 'nullable|string|max:255|unique:cms_forms,slug,' . $id,
             'description' => 'nullable|string',
             'fields' => 'sometimes|array|min:1',
             'fields.*.name' => 'required|string|max:255',
@@ -156,109 +234,233 @@ class CmsFormController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
-        $cmsForm->update($validated);
+        $updateData = [];
+        foreach ($validated as $key => $value) {
+            if (in_array($key, ['fields', 'settings', 'field_mapping', 'notification_emails'])) {
+                $updateData[$key] = is_array($value) ? json_encode($value) : $value;
+            } else {
+                $updateData[$key] = $value;
+            }
+        }
+        $updateData['updated_at'] = now();
+
+        DB::table(self::TABLE_FORMS)->where('id', $id)->update($updateData);
+
+        $formArray = $this->formRepository->findByIdAsArray($id);
 
         return response()->json([
-            'data' => $cmsForm->fresh(),
+            'data' => $formArray,
             'message' => 'Form updated successfully',
         ]);
     }
 
-    public function destroy(CmsForm $cmsForm): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $cmsForm->delete();
+        $form = $this->formRepository->findById($id);
+
+        if (!$form) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
+        $this->formRepository->delete($id);
 
         return response()->json([
             'message' => 'Form deleted successfully',
         ]);
     }
 
-    public function duplicate(CmsForm $cmsForm): JsonResponse
+    public function duplicate(int $id): JsonResponse
     {
-        $copy = $cmsForm->duplicate(Auth::id());
+        $form = $this->formRepository->findById($id);
+
+        if (!$form) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
+        $slug = $form->getSlug() . '-copy';
+        $originalSlug = $slug;
+        $counter = 1;
+        while ($this->formRepository->findBySlug($slug) !== null) {
+            $slug = $originalSlug . '-' . $counter++;
+        }
+
+        // Use DB to duplicate with all fields
+        $formRecord = DB::table(self::TABLE_FORMS)->where('id', $id)->first();
+        $formData = (array) $formRecord;
+        unset($formData['id'], $formData['created_at'], $formData['updated_at'], $formData['deleted_at']);
+        $formData['name'] = $form->getName() . ' (Copy)';
+        $formData['slug'] = $slug;
+        $formData['view_count'] = 0;
+        $formData['submission_count'] = 0;
+        $formData['created_by'] = Auth::id();
+        $formData['created_at'] = now();
+        $formData['updated_at'] = now();
+
+        $newFormId = DB::table(self::TABLE_FORMS)->insertGetId($formData);
+        $formArray = $this->formRepository->findByIdAsArray($newFormId);
 
         return response()->json([
-            'data' => $copy,
+            'data' => $formArray,
             'message' => 'Form duplicated successfully',
         ], 201);
     }
 
-    public function submissions(Request $request, CmsForm $cmsForm): JsonResponse
+    public function submissions(Request $request, int $id): JsonResponse
     {
+        $form = $this->formRepository->findById($id);
+
+        if (!$form) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
         $validated = $request->validate([
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $submissions = $cmsForm->submissions()
-            ->recent()
-            ->paginate($validated['per_page'] ?? 25);
+        $query = DB::table(self::TABLE_SUBMISSIONS)
+            ->where('form_id', $id)
+            ->orderByDesc('created_at');
+
+        // Get total count
+        $total = $query->count();
+
+        // Get paginated items
+        $perPage = $validated['per_page'] ?? 25;
+        $page = $request->integer('page', 1);
+        $offset = ($page - 1) * $perPage;
+        $submissions = $query->skip($offset)->take($perPage)->get();
+
+        // Decode JSON data
+        $items = [];
+        foreach ($submissions as $submission) {
+            $submissionArray = (array) $submission;
+            if ($submission->data) {
+                $submissionArray['data'] = json_decode($submission->data, true);
+            }
+            if ($submission->metadata) {
+                $submissionArray['metadata'] = json_decode($submission->metadata, true);
+            }
+            $items[] = $submissionArray;
+        }
+
+        $lastPage = (int) ceil($total / $perPage);
 
         return response()->json([
-            'data' => $submissions->items(),
+            'data' => $items,
             'meta' => [
-                'current_page' => $submissions->currentPage(),
-                'last_page' => $submissions->lastPage(),
-                'per_page' => $submissions->perPage(),
-                'total' => $submissions->total(),
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $total,
             ],
         ]);
     }
 
-    public function submission(CmsForm $cmsForm, CmsFormSubmission $submission): JsonResponse
+    public function submission(int $formId, int $submissionId): JsonResponse
     {
-        if ($submission->form_id !== $cmsForm->id) {
+        $form = $this->formRepository->findById($formId);
+
+        if (!$form) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
+        $submission = DB::table(self::TABLE_SUBMISSIONS)
+            ->where('id', $submissionId)
+            ->where('form_id', $formId)
+            ->first();
+
+        if (!$submission) {
             return response()->json([
                 'message' => 'Submission not found',
             ], 404);
+        }
+
+        $submissionArray = (array) $submission;
+        if ($submission->data) {
+            $submissionArray['data'] = json_decode($submission->data, true);
+        }
+        if ($submission->metadata) {
+            $submissionArray['metadata'] = json_decode($submission->metadata, true);
         }
 
         return response()->json([
-            'data' => $submission,
+            'data' => $submissionArray,
         ]);
     }
 
-    public function deleteSubmission(CmsForm $cmsForm, CmsFormSubmission $submission): JsonResponse
+    public function deleteSubmission(int $formId, int $submissionId): JsonResponse
     {
-        if ($submission->form_id !== $cmsForm->id) {
+        $form = $this->formRepository->findById($formId);
+
+        if (!$form) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
+        $submission = DB::table(self::TABLE_SUBMISSIONS)
+            ->where('id', $submissionId)
+            ->where('form_id', $formId)
+            ->first();
+
+        if (!$submission) {
             return response()->json([
                 'message' => 'Submission not found',
             ], 404);
         }
 
-        $submission->delete();
+        DB::table(self::TABLE_SUBMISSIONS)->where('id', $submissionId)->delete();
 
         return response()->json([
             'message' => 'Submission deleted successfully',
         ]);
     }
 
-    public function embedCode(CmsForm $cmsForm): JsonResponse
+    public function embedCode(int $id): JsonResponse
     {
+        $form = $this->formRepository->findById($id);
+
+        if (!$form) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
+        $embedCode = '<script src="' . config('app.url') . '/js/form-embed.js"></script>' . "\n" .
+            '<div data-vrtx-form="' . $form->getSlug() . '"></div>';
+
         return response()->json([
             'data' => [
-                'embed_code' => $cmsForm->getEmbedCode(),
-                'api_endpoint' => config('app.url') . "/api/v1/cms/forms/{$cmsForm->slug}/submit",
+                'embed_code' => $embedCode,
+                'api_endpoint' => config('app.url') . "/api/v1/cms/forms/{$form->getSlug()}/submit",
             ],
         ]);
     }
 
-    public function analytics(CmsForm $cmsForm): JsonResponse
+    public function analytics(int $id): JsonResponse
     {
+        $form = $this->formRepository->findById($id);
+
+        if (!$form) {
+            return response()->json(['message' => 'Form not found'], 404);
+        }
+
         $last30Days = now()->subDays(30);
 
-        $dailySubmissions = CmsFormSubmission::where('form_id', $cmsForm->id)
+        $dailySubmissions = DB::table(self::TABLE_SUBMISSIONS)
+            ->where('form_id', $id)
             ->where('created_at', '>=', $last30Days)
             ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
             ->groupBy('date')
             ->orderBy('date')
             ->get();
 
+        $submissionCount = $form->getSubmissionCount();
+        $viewCount = $form->getViewCount();
+        $conversionRate = $viewCount > 0 ? round(($submissionCount / $viewCount) * 100, 2) : 0;
+
         return response()->json([
             'data' => [
-                'total_submissions' => $cmsForm->submission_count,
-                'total_views' => $cmsForm->view_count,
-                'conversion_rate' => $cmsForm->getConversionRate(),
-                'daily_submissions' => $dailySubmissions,
+                'total_submissions' => $submissionCount,
+                'total_views' => $viewCount,
+                'conversion_rate' => $conversionRate,
+                'daily_submissions' => array_map(fn($item) => (array) $item, $dailySubmissions->all()),
             ],
         ]);
     }

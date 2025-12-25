@@ -2,11 +2,6 @@
 
 namespace App\Services\AI;
 
-use App\Models\EmailMessage;
-use App\Models\Note;
-use App\Models\SentimentAggregate;
-use App\Models\SentimentAlert;
-use App\Models\SentimentScore;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -115,7 +110,7 @@ class SentimentAnalysisService
      */
     public function analyzeRecordEmails(string $module, int $recordId): int
     {
-        $emails = EmailMessage::where('entity_type', $module)
+        $emails = DB::table('email_messages')->where('entity_type', $module)
             ->where('entity_id', $recordId)
             ->whereDoesntHave('sentimentScore')
             ->get();
@@ -139,7 +134,7 @@ class SentimentAnalysisService
      */
     public function getRecordSummary(string $module, int $recordId): array
     {
-        $aggregate = SentimentAggregate::where('record_module', $module)
+        $aggregate = DB::table('sentiment_aggregates')->where('record_module', $module)
             ->where('record_id', $recordId)
             ->first();
 
@@ -178,7 +173,7 @@ class SentimentAnalysisService
      */
     public function getTimeline(string $module, int $recordId, int $limit = 20): Collection
     {
-        return SentimentScore::where('record_module', $module)
+        return DB::table('sentiment_scores')->where('record_module', $module)
             ->where('record_id', $recordId)
             ->orderBy('analyzed_at', 'desc')
             ->limit($limit)
@@ -214,7 +209,7 @@ class SentimentAnalysisService
      */
     public function getDecliningRecords(string $module): Collection
     {
-        return SentimentAggregate::where('record_module', $module)
+        return DB::table('sentiment_aggregates')->where('record_module', $module)
             ->where('trend', '<', -0.1)
             ->orderBy('trend', 'asc')
             ->limit(20)
@@ -226,7 +221,7 @@ class SentimentAnalysisService
      */
     public function getNegativeRecords(string $module): Collection
     {
-        return SentimentAggregate::where('record_module', $module)
+        return DB::table('sentiment_aggregates')->where('record_module', $module)
             ->where('overall_sentiment', SentimentScore::CATEGORY_NEGATIVE)
             ->orderBy('average_score', 'asc')
             ->limit(20)
@@ -238,7 +233,7 @@ class SentimentAnalysisService
      */
     public function getDistribution(string $module): array
     {
-        $counts = SentimentAggregate::where('record_module', $module)
+        $counts = DB::table('sentiment_aggregates')->where('record_module', $module)
             ->select('overall_sentiment', DB::raw('count(*) as count'))
             ->groupBy('overall_sentiment')
             ->pluck('count', 'overall_sentiment')
@@ -262,7 +257,7 @@ class SentimentAnalysisService
         ?int $recordId,
         string $model
     ): SentimentScore {
-        return SentimentScore::create([
+        return DB::table('sentiment_scores')->insertGetId([
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'record_module' => $recordModule,
@@ -308,7 +303,7 @@ class SentimentAnalysisService
             default => 'Sentiment alert',
         };
 
-        SentimentAlert::create([
+        DB::table('sentiment_alerts')->insertGetId([
             'record_module' => $score->record_module,
             'record_id' => $score->record_id,
             'sentiment_id' => $score->id,

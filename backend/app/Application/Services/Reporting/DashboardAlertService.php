@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Services\Reporting;
 
-use App\Models\DashboardWidget;
-use App\Models\DashboardWidgetAlert;
-use App\Models\DashboardWidgetAlertHistory;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +20,7 @@ class DashboardAlertService
      */
     public function createAlert(int $widgetId, int $userId, array $data): DashboardWidgetAlert
     {
-        return DashboardWidgetAlert::create([
+        return DB::table('dashboard_widget_alerts')->insertGetId([
             'widget_id' => $widgetId,
             'user_id' => $userId,
             'name' => $data['name'],
@@ -293,7 +290,7 @@ class DashboardAlertService
      */
     public function getAlertHistory(int $userId, ?int $dashboardId = null, int $limit = 50): array
     {
-        $query = DashboardWidgetAlertHistory::query()
+        $query = DB::table('dashboard_widget_alert_histories')
             ->whereHas('alert', function ($q) use ($userId, $dashboardId) {
                 $q->where('user_id', $userId);
                 if ($dashboardId) {

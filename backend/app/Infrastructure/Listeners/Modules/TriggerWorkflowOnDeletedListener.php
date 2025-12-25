@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Listeners\Modules;
 
+use App\Domain\Modules\Entities\ModuleRecord;
 use App\Domain\Modules\Events\ModuleRecordDeleted;
-use App\Models\ModuleRecord;
 use App\Services\Workflow\WorkflowTriggerService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -21,12 +21,17 @@ class TriggerWorkflowOnDeletedListener
 
     public function handle(ModuleRecordDeleted $event): void
     {
-        // For deleted records, we need to reconstruct a temporary model
+        // For deleted records, we need to reconstruct the entity
         // since the record no longer exists in the database
-        $record = new ModuleRecord();
-        $record->id = $event->recordId();
-        $record->module_id = $event->moduleId();
-        $record->data = $event->data();
+        $record = ModuleRecord::reconstitute(
+            id: $event->recordId(),
+            moduleId: $event->moduleId(),
+            data: $event->data(),
+            createdBy: null,
+            updatedBy: null,
+            createdAt: new \DateTimeImmutable(),
+            updatedAt: null,
+        );
 
         try {
             $this->workflowTriggerService->onRecordDeleted($record);

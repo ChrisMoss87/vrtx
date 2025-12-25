@@ -6,10 +6,10 @@ namespace App\Http\Controllers\Api\Quotas;
 
 use App\Application\Services\Goal\GoalApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\QuotaPeriod;
 use App\Services\Quotas\QuotaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class QuotaPeriodController extends Controller
 {
@@ -152,7 +152,7 @@ class QuotaPeriodController extends Controller
 
         foreach ($validated['types'] as $type) {
             if ($type === 'year') {
-                $existing = QuotaPeriod::where('period_type', 'year')
+                $existing = DB::table('quota_periods')->where('period_type', 'year')
                     ->whereYear('start_date', $validated['year'])
                     ->exists();
 
@@ -161,7 +161,7 @@ class QuotaPeriodController extends Controller
                 }
             } elseif ($type === 'quarter') {
                 for ($q = 1; $q <= 4; $q++) {
-                    $existing = QuotaPeriod::where('period_type', 'quarter')
+                    $existing = DB::table('quota_periods')->where('period_type', 'quarter')
                         ->whereYear('start_date', $validated['year'])
                         ->whereRaw("EXTRACT(QUARTER FROM start_date) = ?", [$q])
                         ->exists();
@@ -172,7 +172,7 @@ class QuotaPeriodController extends Controller
                 }
             } elseif ($type === 'month') {
                 for ($m = 1; $m <= 12; $m++) {
-                    $existing = QuotaPeriod::where('period_type', 'month')
+                    $existing = DB::table('quota_periods')->where('period_type', 'month')
                         ->whereYear('start_date', $validated['year'])
                         ->whereMonth('start_date', $m)
                         ->exists();

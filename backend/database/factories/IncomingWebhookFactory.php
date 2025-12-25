@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\IncomingWebhook;
-use App\Models\Module;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends Factory<IncomingWebhook>
@@ -28,7 +27,7 @@ class IncomingWebhookFactory extends Factory
             'name' => fake()->words(3, true) . ' Webhook',
             'description' => fake()->optional()->sentence(),
             'token' => IncomingWebhook::generateToken(),
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'field_mapping' => [
                 'name' => 'name',
                 'email' => 'email',

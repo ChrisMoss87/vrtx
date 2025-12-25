@@ -4,17 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Approval;
 
-use App\Models\ApprovalDelegation;
-use App\Models\ApprovalHistory;
-use App\Models\ApprovalNotification;
-use App\Models\ApprovalQuickAction;
-use App\Models\ApprovalRequest;
-use App\Models\ApprovalRule;
-use App\Models\ApprovalStep;
-use App\Models\Notification;
 use App\Services\Notification\NotificationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 
 class ApprovalService
 {
@@ -34,7 +27,7 @@ class ApprovalService
         }
 
         // Create the approval request
-        $request = ApprovalRequest::create([
+        $request = DB::table('approval_requests')->insertGetId([
             'rule_id' => $rule->id,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
@@ -125,7 +118,7 @@ class ApprovalService
         $data['delegator_id'] = Auth::id();
         $data['created_by'] = Auth::id();
 
-        return ApprovalDelegation::create($data);
+        return DB::table('approval_delegations')->insertGetId($data);
     }
 
     public function removeDelegation(ApprovalDelegation $delegation): void
@@ -143,7 +136,7 @@ class ApprovalService
 
     public function getMyRequests(int $userId): \Illuminate\Database\Eloquent\Collection
     {
-        return ApprovalRequest::where('requested_by', $userId)
+        return DB::table('approval_requests')->where('requested_by', $userId)
             ->with(['rule', 'steps.approver'])
             ->orderByDesc('created_at')
             ->get();
@@ -290,7 +283,7 @@ class ApprovalService
         int $userId,
         string $type
     ): ApprovalNotification {
-        return ApprovalNotification::create([
+        return DB::table('approval_notifications')->insertGetId([
             'request_id' => $request->id,
             'step_id' => $step?->id,
             'user_id' => $userId,
@@ -367,7 +360,7 @@ class ApprovalService
     public function createQuickAction(array $data): ApprovalQuickAction
     {
         $data['user_id'] = Auth::id();
-        return ApprovalQuickAction::create($data);
+        return DB::table('approval_quick_actions')->insertGetId($data);
     }
 
     public function useQuickAction(ApprovalQuickAction $action, ApprovalRequest $request): void

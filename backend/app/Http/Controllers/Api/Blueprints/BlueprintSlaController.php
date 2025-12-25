@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Blueprints;
 
 use App\Http\Controllers\Controller;
-use App\Models\Blueprint;
-use App\Models\BlueprintSla;
-use App\Models\BlueprintSlaEscalation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class BlueprintSlaController extends Controller
 {
@@ -20,7 +18,7 @@ class BlueprintSlaController extends Controller
      */
     public function index(int $blueprintId): JsonResponse
     {
-        $blueprint = Blueprint::findOrFail($blueprintId);
+        $blueprint = DB::table('blueprints')->where('id', $blueprintId)->first();
 
         $slas = $blueprint->slas()
             ->with(['state:id,name,color', 'escalations'])
@@ -35,7 +33,7 @@ class BlueprintSlaController extends Controller
      */
     public function store(Request $request, int $blueprintId): JsonResponse
     {
-        $blueprint = Blueprint::findOrFail($blueprintId);
+        $blueprint = DB::table('blueprints')->where('id', $blueprintId)->first();
 
         $validated = $request->validate([
             'state_id' => 'required|integer|exists:blueprint_states,id',
@@ -81,7 +79,7 @@ class BlueprintSlaController extends Controller
      */
     public function show(int $blueprintId, int $slaId): JsonResponse
     {
-        $sla = BlueprintSla::where('blueprint_id', $blueprintId)
+        $sla = DB::table('blueprint_slas')->where('blueprint_id', $blueprintId)
             ->with(['state:id,name,color', 'escalations'])
             ->findOrFail($slaId);
 
@@ -93,7 +91,7 @@ class BlueprintSlaController extends Controller
      */
     public function update(Request $request, int $blueprintId, int $slaId): JsonResponse
     {
-        $sla = BlueprintSla::where('blueprint_id', $blueprintId)
+        $sla = DB::table('blueprint_slas')->where('blueprint_id', $blueprintId)
             ->findOrFail($slaId);
 
         $validated = $request->validate([
@@ -115,7 +113,7 @@ class BlueprintSlaController extends Controller
      */
     public function destroy(int $blueprintId, int $slaId): JsonResponse
     {
-        $sla = BlueprintSla::where('blueprint_id', $blueprintId)
+        $sla = DB::table('blueprint_slas')->where('blueprint_id', $blueprintId)
             ->findOrFail($slaId);
 
         $sla->delete();
@@ -130,7 +128,7 @@ class BlueprintSlaController extends Controller
      */
     public function getEscalations(int $slaId): JsonResponse
     {
-        $sla = BlueprintSla::findOrFail($slaId);
+        $sla = DB::table('blueprint_slas')->where('id', $slaId)->first();
 
         $escalations = $sla->escalations()
             ->orderBy('display_order')
@@ -144,7 +142,7 @@ class BlueprintSlaController extends Controller
      */
     public function storeEscalation(Request $request, int $slaId): JsonResponse
     {
-        $sla = BlueprintSla::findOrFail($slaId);
+        $sla = DB::table('blueprint_slas')->where('id', $slaId)->first();
 
         $validated = $request->validate([
             'trigger_type' => 'required|string|in:approaching,breached',
@@ -178,7 +176,7 @@ class BlueprintSlaController extends Controller
      */
     public function updateEscalation(Request $request, int $slaId, int $escalationId): JsonResponse
     {
-        $escalation = BlueprintSlaEscalation::where('sla_id', $slaId)
+        $escalation = DB::table('blueprint_sla_escalations')->where('sla_id', $slaId)
             ->findOrFail($escalationId);
 
         $validated = $request->validate([
@@ -199,7 +197,7 @@ class BlueprintSlaController extends Controller
      */
     public function destroyEscalation(int $slaId, int $escalationId): JsonResponse
     {
-        $escalation = BlueprintSlaEscalation::where('sla_id', $slaId)
+        $escalation = DB::table('blueprint_sla_escalations')->where('sla_id', $slaId)
             ->findOrFail($escalationId);
 
         $escalation->delete();

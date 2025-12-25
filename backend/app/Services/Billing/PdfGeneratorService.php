@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
-use App\Models\BillingSetting;
-use App\Models\Invoice;
-use App\Models\Quote;
-use App\Models\QuoteTemplate;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\DB;
 
 class PdfGeneratorService
 {

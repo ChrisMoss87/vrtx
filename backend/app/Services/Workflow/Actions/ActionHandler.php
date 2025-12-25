@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\WorkflowStep;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Handles dispatching workflow actions to their implementations.
@@ -24,21 +24,22 @@ class ActionHandler
      */
     protected function registerDefaults(): void
     {
-        $this->register(WorkflowStep::ACTION_SEND_EMAIL, SendEmailAction::class);
-        $this->register(WorkflowStep::ACTION_CREATE_RECORD, CreateRecordAction::class);
-        $this->register(WorkflowStep::ACTION_UPDATE_RECORD, UpdateRecordAction::class);
-        $this->register(WorkflowStep::ACTION_UPDATE_FIELD, UpdateFieldAction::class);
-        $this->register(WorkflowStep::ACTION_DELETE_RECORD, DeleteRecordAction::class);
-        $this->register(WorkflowStep::ACTION_WEBHOOK, WebhookAction::class);
-        $this->register(WorkflowStep::ACTION_ASSIGN_USER, AssignUserAction::class);
-        $this->register(WorkflowStep::ACTION_SEND_NOTIFICATION, SendNotificationAction::class);
-        $this->register(WorkflowStep::ACTION_DELAY, DelayAction::class);
-        $this->register(WorkflowStep::ACTION_MOVE_STAGE, MoveStageAction::class);
-        $this->register(WorkflowStep::ACTION_ADD_TAG, AddTagAction::class);
-        $this->register(WorkflowStep::ACTION_REMOVE_TAG, RemoveTagAction::class);
-        $this->register(WorkflowStep::ACTION_CREATE_TASK, CreateTaskAction::class);
-        $this->register(WorkflowStep::ACTION_CONDITION, ConditionBranchAction::class);
-        $this->register(WorkflowStep::ACTION_UPDATE_RELATED, UpdateRelatedRecordAction::class);
+        // Action type constants from workflow_steps table
+        $this->register('send_email', SendEmailAction::class);
+        $this->register('create_record', CreateRecordAction::class);
+        $this->register('update_record', UpdateRecordAction::class);
+        $this->register('update_field', UpdateFieldAction::class);
+        $this->register('delete_record', DeleteRecordAction::class);
+        $this->register('webhook', WebhookAction::class);
+        $this->register('assign_user', AssignUserAction::class);
+        $this->register('send_notification', SendNotificationAction::class);
+        $this->register('delay', DelayAction::class);
+        $this->register('move_stage', MoveStageAction::class);
+        $this->register('add_tag', AddTagAction::class);
+        $this->register('remove_tag', RemoveTagAction::class);
+        $this->register('create_task', CreateTaskAction::class);
+        $this->register('condition', ConditionBranchAction::class);
+        $this->register('update_related', UpdateRelatedRecordAction::class);
     }
 
     /**

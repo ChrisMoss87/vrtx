@@ -2,28 +2,32 @@
 
 namespace App\Http\Controllers\Api\Inbox;
 
+use App\Domain\Inbox\Repositories\InboxConversationRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\SharedInbox;
-use App\Models\InboxRule;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class InboxRuleController extends Controller
 {
-    public function index(Request $request, SharedInbox $sharedInbox): JsonResponse
-    {
-        $query = $sharedInbox->rules()->with('creator:id,name');
+    public function __construct(
+        protected InboxConversationRepositoryInterface $conversationRepository
+    ) {}
 
-        if ($request->boolean('active_only', false)) {
-            $query->active();
+    public function index(Request $request, int $inboxId): JsonResponse
+    {
+        // Verify inbox exists
+        $inbox = DB::table('shared_inboxes')->where('id', $inboxId)->first();
+        if (!$inbox) {
+            return response()->json(['message' => 'Inbox not found'], 404);
         }
 
-        $rules = $query->ordered()->get();
+        $rules = $this->conversationRepository->listRules($inboxId);
 
         return response()->json(['data' => $rules]);
     }
 
-    public function store(Request $request, SharedInbox $sharedInbox): JsonResponse
+    public function store(Request $request, int $inboxId): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -41,21 +45,50 @@ class InboxRuleController extends Controller
             'stop_processing' => 'boolean',
         ]);
 
-        $validated['inbox_id'] = $sharedInbox->id;
-        $validated['created_by'] = auth()->id();
+        // Verify inbox exists
+        $inbox = DB::table('shared_inboxes')->where('id', $inboxId)->first();
+        if (!$inbox) {
+            return response()->json(['message' => 'Inbox not found'], 404);
+        }
 
-        $rule = InboxRule::create($validated);
+        $rule = $this->conversationRepository->createRule($inboxId, $validated, auth()->id());
 
         return response()->json(['data' => $rule], 201);
     }
 
-    public function show(SharedInbox $sharedInbox, InboxRule $rule): JsonResponse
+    public function show(int $inboxId, int $ruleId): JsonResponse
     {
-        $rule->load('creator:id,name');
-        return response()->json(['data' => $rule]);
+        // Verify inbox exists
+        $inbox = DB::table('shared_inboxes')->where('id', $inboxId)->first();
+        if (!$inbox) {
+            return response()->json(['message' => 'Inbox not found'], 404);
+        }
+
+        $rule = DB::table('inbox_rules')->where('id', $ruleId)->where('inbox_id', $inboxId)->first();
+        if (!$rule) {
+            return response()->json(['message' => 'Rule not found'], 404);
+        }
+
+        $ruleArray = (array) $rule;
+
+        // Decode JSON fields
+        if (isset($ruleArray['conditions']) && is_string($ruleArray['conditions'])) {
+            $ruleArray['conditions'] = json_decode($ruleArray['conditions'], true);
+        }
+        if (isset($ruleArray['actions']) && is_string($ruleArray['actions'])) {
+            $ruleArray['actions'] = json_decode($ruleArray['actions'], true);
+        }
+
+        // Load creator
+        if (isset($ruleArray['created_by'])) {
+            $creator = DB::table('users')->where('id', $ruleArray['created_by'])->first(['id', 'name']);
+            $ruleArray['creator'] = $creator ? (array) $creator : null;
+        }
+
+        return response()->json(['data' => $ruleArray]);
     }
 
-    public function update(Request $request, SharedInbox $sharedInbox, InboxRule $rule): JsonResponse
+    public function update(Request $request, int $inboxId, int $ruleId): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -73,37 +106,60 @@ class InboxRuleController extends Controller
             'stop_processing' => 'boolean',
         ]);
 
-        $rule->update($validated);
+        // Verify rule belongs to inbox
+        $rule = DB::table('inbox_rules')->where('id', $ruleId)->where('inbox_id', $inboxId)->first();
+        if (!$rule) {
+            return response()->json(['message' => 'Rule not found'], 404);
+        }
 
-        return response()->json(['data' => $rule]);
+        $updated = $this->conversationRepository->updateRule($ruleId, $validated);
+
+        return response()->json(['data' => $updated]);
     }
 
-    public function destroy(SharedInbox $sharedInbox, InboxRule $rule): JsonResponse
+    public function destroy(int $inboxId, int $ruleId): JsonResponse
     {
-        $rule->delete();
+        // Verify rule belongs to inbox
+        $rule = DB::table('inbox_rules')->where('id', $ruleId)->where('inbox_id', $inboxId)->first();
+        if (!$rule) {
+            return response()->json(['message' => 'Rule not found'], 404);
+        }
+
+        $this->conversationRepository->deleteRule($ruleId);
         return response()->json(null, 204);
     }
 
-    public function reorder(Request $request, SharedInbox $sharedInbox): JsonResponse
+    public function reorder(Request $request, int $inboxId): JsonResponse
     {
         $validated = $request->validate([
             'rule_ids' => 'required|array',
-            'rule_ids.*' => 'exists:inbox_rules,id',
+            'rule_ids.*' => 'integer|exists:inbox_rules,id',
         ]);
 
-        foreach ($validated['rule_ids'] as $priority => $ruleId) {
-            InboxRule::where('id', $ruleId)
-                ->where('inbox_id', $sharedInbox->id)
-                ->update(['priority' => $priority]);
+        // Verify inbox exists
+        $inbox = DB::table('shared_inboxes')->where('id', $inboxId)->first();
+        if (!$inbox) {
+            return response()->json(['message' => 'Inbox not found'], 404);
         }
+
+        $this->conversationRepository->reorderRules($inboxId, $validated['rule_ids']);
 
         return response()->json(['success' => true]);
     }
 
-    public function toggle(SharedInbox $sharedInbox, InboxRule $rule): JsonResponse
+    public function toggle(int $inboxId, int $ruleId): JsonResponse
     {
-        $rule->update(['is_active' => !$rule->is_active]);
-        return response()->json(['data' => $rule]);
+        // Verify rule belongs to inbox
+        $rule = DB::table('inbox_rules')->where('id', $ruleId)->where('inbox_id', $inboxId)->first();
+        if (!$rule) {
+            return response()->json(['message' => 'Rule not found'], 404);
+        }
+
+        $updated = $this->conversationRepository->updateRule($ruleId, [
+            'is_active' => !$rule->is_active,
+        ]);
+
+        return response()->json(['data' => $updated]);
     }
 
     public function availableFields(): JsonResponse

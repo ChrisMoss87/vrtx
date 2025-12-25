@@ -7,11 +7,10 @@ namespace App\Services\Analytics;
 use App\Domain\Analytics\Repositories\AnalyticsAlertRepositoryInterface;
 use App\Domain\Analytics\Repositories\AnalyticsAlertHistoryRepositoryInterface;
 use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
-use App\Models\AnalyticsAlert;
-use App\Models\AnalyticsAlertHistory;
 use App\Services\AI\AiService;
 use App\Services\Reporting\ReportService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Service for processing and triggering analytics alerts.

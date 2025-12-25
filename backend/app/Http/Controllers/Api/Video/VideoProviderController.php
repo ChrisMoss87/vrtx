@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api\Video;
 
 use App\Application\Services\Video\VideoApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\VideoProvider;
 use App\Services\Video\ZoomService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class VideoProviderController extends Controller
 {
@@ -45,7 +45,7 @@ class VideoProviderController extends Controller
             'scopes' => 'nullable|array',
         ]);
 
-        $provider = VideoProvider::create($validated);
+        $provider = DB::table('video_providers')->insertGetId($validated);
 
         return response()->json([
             'data' => $provider,

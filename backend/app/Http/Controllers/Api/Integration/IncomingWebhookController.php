@@ -5,10 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Integration;
 
 use App\Http\Controllers\Controller;
-use App\Models\IncomingWebhook;
-use App\Models\IncomingWebhookLog;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,7 +18,7 @@ class IncomingWebhookController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = IncomingWebhook::where('user_id', Auth::id())
+        $query = DB::table('incoming_webhooks')->where('user_id', Auth::id())
             ->with(['module:id,name,api_name'])
             ->orderBy('created_at', 'desc');
 
@@ -57,7 +53,7 @@ class IncomingWebhookController extends Controller
             'upsert_field' => ['required_if:action,update,upsert', 'nullable', 'string'],
         ]);
 
-        $webhook = IncomingWebhook::create([
+        $webhook = DB::table('incoming_webhooks')->insertGetId([
             'user_id' => Auth::id(),
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
@@ -84,7 +80,7 @@ class IncomingWebhookController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $webhook = IncomingWebhook::where('user_id', Auth::id())
+        $webhook = DB::table('incoming_webhooks')->where('user_id', Auth::id())
             ->with(['module:id,name,api_name'])
             ->findOrFail($id);
 
@@ -115,7 +111,7 @@ class IncomingWebhookController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $webhook = IncomingWebhook::where('user_id', Auth::id())
+        $webhook = DB::table('incoming_webhooks')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $validated = $request->validate([
@@ -142,7 +138,7 @@ class IncomingWebhookController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $webhook = IncomingWebhook::where('user_id', Auth::id())
+        $webhook = DB::table('incoming_webhooks')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $webhook->delete();
@@ -157,7 +153,7 @@ class IncomingWebhookController extends Controller
      */
     public function regenerateToken(int $id): JsonResponse
     {
-        $webhook = IncomingWebhook::where('user_id', Auth::id())
+        $webhook = DB::table('incoming_webhooks')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $newToken = IncomingWebhook::generateToken();
@@ -176,7 +172,7 @@ class IncomingWebhookController extends Controller
      */
     public function logs(Request $request, int $id): JsonResponse
     {
-        $webhook = IncomingWebhook::where('user_id', Auth::id())
+        $webhook = DB::table('incoming_webhooks')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $query = $webhook->logs()
@@ -291,7 +287,7 @@ class IncomingWebhookController extends Controller
         return DB::transaction(function () use ($webhook, $mappedData, $module) {
             switch ($webhook->action) {
                 case IncomingWebhook::ACTION_CREATE:
-                    $record = ModuleRecord::create([
+                    $record = DB::table('module_records')->insertGetId([
                         'module_id' => $module->id,
                         'data' => $mappedData,
                         'created_by' => $webhook->user_id,
@@ -319,7 +315,7 @@ class IncomingWebhookController extends Controller
                         ]);
                         return $record->id;
                     } else {
-                        $record = ModuleRecord::create([
+                        $record = DB::table('module_records')->insertGetId([
                             'module_id' => $module->id,
                             'data' => $mappedData,
                             'created_by' => $webhook->user_id,
@@ -345,7 +341,7 @@ class IncomingWebhookController extends Controller
             return null;
         }
 
-        return ModuleRecord::where('module_id', $webhook->module_id)
+        return DB::table('module_records')->where('module_id', $webhook->module_id)
             ->whereJsonContains("data->{$upsertField}", $mappedData[$upsertField])
             ->first();
     }

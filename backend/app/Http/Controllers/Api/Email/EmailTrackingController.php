@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Email;
 
 use App\Http\Controllers\Controller;
-use App\Models\EmailMessage;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class EmailTrackingController extends Controller
 {
@@ -15,7 +15,7 @@ class EmailTrackingController extends Controller
      */
     public function trackOpen(string $trackingId): Response
     {
-        $message = EmailMessage::where('tracking_id', $trackingId)->first();
+        $message = DB::table('email_messages')->where('tracking_id', $trackingId)->first();
 
         if ($message) {
             $message->recordOpen();
@@ -36,7 +36,7 @@ class EmailTrackingController extends Controller
      */
     public function trackClick(string $trackingId, string $url): Response
     {
-        $message = EmailMessage::where('tracking_id', $trackingId)->first();
+        $message = DB::table('email_messages')->where('tracking_id', $trackingId)->first();
 
         if ($message) {
             $message->recordClick();

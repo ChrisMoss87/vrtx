@@ -4,14 +4,12 @@ namespace App\Http\Controllers\Api\Call;
 
 use App\Application\Services\Call\CallApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Call;
-use App\Models\CallProvider;
-use App\Models\CallQueue;
 use App\Services\Call\CallService;
 use App\Services\Call\TwilioCallService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class CallWebhookController extends Controller
 {
@@ -32,7 +30,7 @@ class CallWebhookController extends Controller
         $callSid = $request->input('CallSid');
 
         // Find provider by phone number
-        $provider = CallProvider::where('phone_number', $toNumber)
+        $provider = DB::table('call_providers')->where('phone_number', $toNumber)
             ->where('is_active', true)
             ->first();
 
@@ -55,7 +53,7 @@ class CallWebhookController extends Controller
         );
 
         // Find queue for this number
-        $queue = CallQueue::where('phone_number', $toNumber)
+        $queue = DB::table('call_queues')->where('phone_number', $toNumber)
             ->where('is_active', true)
             ->first();
 
@@ -129,7 +127,7 @@ class CallWebhookController extends Controller
         $transcriptionStatus = $request->input('TranscriptionStatus');
 
         if ($transcriptionStatus === 'completed' && $transcriptionText) {
-            $call = Call::where('external_call_id', $callSid)->first();
+            $call = DB::table('calls')->where('external_call_id', $callSid)->first();
 
             if ($call) {
                 $call->transcription()->updateOrCreate(
@@ -153,7 +151,7 @@ class CallWebhookController extends Controller
     public function outboundTwiml(Request $request): Response
     {
         $callSid = $request->input('CallSid');
-        $call = Call::where('external_call_id', $callSid)->first();
+        $call = DB::table('calls')->where('external_call_id', $callSid)->first();
 
         if (!$call) {
             return $this->twimlResponse('<Response><Say>Call not found.</Say><Hangup/></Response>');
@@ -176,7 +174,7 @@ class CallWebhookController extends Controller
         $digits = $request->input('Digits');
         $callSid = $request->input('CallSid');
 
-        $call = Call::where('external_call_id', $callSid)->first();
+        $call = DB::table('calls')->where('external_call_id', $callSid)->first();
 
         if (!$call) {
             return $this->twimlResponse('<Response><Say>Call not found.</Say><Hangup/></Response>');
@@ -198,7 +196,7 @@ class CallWebhookController extends Controller
         };
 
         if ($queueName) {
-            $queue = CallQueue::where('name', 'like', "%{$queueName}%")
+            $queue = DB::table('call_queues')->where('name', 'like', "%{$queueName}%")
                 ->where('is_active', true)
                 ->first();
 
@@ -224,7 +222,7 @@ class CallWebhookController extends Controller
         $callSid = $request->input('CallSid');
         $recordingUrl = $request->input('RecordingUrl');
 
-        $call = Call::where('external_call_id', $callSid)->first();
+        $call = DB::table('calls')->where('external_call_id', $callSid)->first();
 
         if ($call) {
             $call->update([
@@ -328,7 +326,7 @@ class CallWebhookController extends Controller
         $dialStatus = $request->input('DialCallStatus');
         $callSid = $request->input('CallSid');
 
-        $call = Call::where('external_call_id', $callSid)->first();
+        $call = DB::table('calls')->where('external_call_id', $callSid)->first();
 
         if (!$call) {
             return $this->twimlResponse('<Response><Hangup/></Response>');

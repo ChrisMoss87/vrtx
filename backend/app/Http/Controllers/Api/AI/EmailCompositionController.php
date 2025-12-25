@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api\AI;
 
 use App\Application\Services\AI\AIApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\AiEmailDraft;
 use App\Services\AI\EmailCompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class EmailCompositionController extends Controller
 {
@@ -196,7 +196,7 @@ class EmailCompositionController extends Controller
      */
     public function drafts(Request $request): JsonResponse
     {
-        $drafts = AiEmailDraft::where('user_id', Auth::id())
+        $drafts = DB::table('ai_email_drafts')->where('user_id', Auth::id())
             ->when($request->record_module, fn ($q) => $q->where('record_module', $request->record_module))
             ->when($request->record_id, fn ($q) => $q->where('record_id', $request->record_id))
             ->orderBy('created_at', 'desc')
@@ -214,7 +214,7 @@ class EmailCompositionController extends Controller
      */
     public function getDraft(int $id): JsonResponse
     {
-        $draft = AiEmailDraft::where('user_id', Auth::id())
+        $draft = DB::table('ai_email_drafts')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         return response()->json([
@@ -227,7 +227,7 @@ class EmailCompositionController extends Controller
      */
     public function deleteDraft(int $id): JsonResponse
     {
-        $draft = AiEmailDraft::where('user_id', Auth::id())
+        $draft = DB::table('ai_email_drafts')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $draft->delete();
@@ -242,7 +242,7 @@ class EmailCompositionController extends Controller
      */
     public function markUsed(int $id): JsonResponse
     {
-        $draft = AiEmailDraft::where('user_id', Auth::id())
+        $draft = DB::table('ai_email_drafts')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $draft->markAsUsed();

@@ -4,13 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Blueprint;
-use App\Models\BlueprintState;
-use App\Models\BlueprintTransition;
-use App\Models\Module;
-use App\Models\Permission;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -18,6 +11,7 @@ use Tests\TestCase;
 class BlueprintApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -27,15 +21,15 @@ class BlueprintApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
-        $this->module = Module::factory()->create([
+        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
         ]);
 
         // Create role with blueprint permissions
-        $this->role = Role::create(['name' => 'admin', 'guard_name' => 'web']);
+        $this->role = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web']);
         $permissions = [
             'blueprints.view',
             'blueprints.create',
@@ -43,7 +37,7 @@ class BlueprintApiTest extends TestCase
             'blueprints.delete',
         ];
         foreach ($permissions as $permName) {
-            $perm = Permission::create(['name' => $permName, 'guard_name' => 'web']);
+            $perm = DB::table('permissions')->insertGetId(['name' => $permName, 'guard_name' => 'web']);
             $this->role->givePermissionTo($perm);
         }
         $this->user->assignRole($this->role);
@@ -57,7 +51,7 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_list_all_blueprints(): void
     {
-        Blueprint::factory()->count(3)->create([
+        /* Blueprint factory - use DB::table('blueprints') */->count(3)->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -75,13 +69,13 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_filter_blueprints_by_module(): void
     {
-        $otherModule = Module::factory()->create();
+        $otherModule = /* Module factory - use DB::table('modules') */->create();
 
-        Blueprint::factory()->count(2)->create([
+        /* Blueprint factory - use DB::table('blueprints') */->count(2)->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        Blueprint::factory()->create([
+        /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $otherModule->id,
             'created_by' => $this->user->id,
         ]);
@@ -147,7 +141,7 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_show_blueprint(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -177,7 +171,7 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_update_blueprint(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'name' => 'Original Name',
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
@@ -205,7 +199,7 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_delete_blueprint(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -226,7 +220,7 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_toggle_blueprint_active_status(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'is_active' => false,
             'created_by' => $this->user->id,
@@ -244,11 +238,11 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_list_blueprint_states(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        BlueprintState::factory()->count(3)->create([
+        /* BlueprintState factory - use DB::table('blueprint_states') */->count(3)->create([
             'blueprint_id' => $blueprint->id,
         ]);
 
@@ -265,7 +259,7 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_create_blueprint_state(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -290,11 +284,11 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_update_blueprint_state(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $state = BlueprintState::factory()->create([
+        $state = /* BlueprintState factory - use DB::table('blueprint_states') */->create([
             'blueprint_id' => $blueprint->id,
             'name' => 'Original',
         ]);
@@ -309,11 +303,11 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_delete_blueprint_state(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $state = BlueprintState::factory()->create([
+        $state = /* BlueprintState factory - use DB::table('blueprint_states') */->create([
             'blueprint_id' => $blueprint->id,
         ]);
 
@@ -329,13 +323,13 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_list_blueprint_transitions(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $fromState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
-        $toState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
-        BlueprintTransition::factory()->create([
+        $fromState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        $toState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        /* BlueprintTransition factory - use DB::table('blueprint_transitions') */->create([
             'blueprint_id' => $blueprint->id,
             'from_state_id' => $fromState->id,
             'to_state_id' => $toState->id,
@@ -354,12 +348,12 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_create_blueprint_transition(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $fromState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id, 'name' => 'Draft']);
-        $toState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id, 'name' => 'Review']);
+        $fromState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id, 'name' => 'Draft']);
+        $toState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id, 'name' => 'Review']);
 
         $response = $this->postJson("/api/v1/blueprints/{$blueprint->id}/transitions", [
             'name' => 'Submit for Review',
@@ -380,11 +374,11 @@ class BlueprintApiTest extends TestCase
 
     public function test_cannot_create_transition_to_same_state(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $state = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        $state = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
 
         $response = $this->postJson("/api/v1/blueprints/{$blueprint->id}/transitions", [
             'name' => 'Invalid Transition',
@@ -397,13 +391,13 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_update_blueprint_transition(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $fromState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
-        $toState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
-        $transition = BlueprintTransition::factory()->create([
+        $fromState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        $toState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        $transition = /* BlueprintTransition factory - use DB::table('blueprint_transitions') */->create([
             'blueprint_id' => $blueprint->id,
             'from_state_id' => $fromState->id,
             'to_state_id' => $toState->id,
@@ -420,13 +414,13 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_delete_blueprint_transition(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $fromState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
-        $toState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
-        $transition = BlueprintTransition::factory()->create([
+        $fromState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        $toState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        $transition = /* BlueprintTransition factory - use DB::table('blueprint_transitions') */->create([
             'blueprint_id' => $blueprint->id,
             'from_state_id' => $fromState->id,
             'to_state_id' => $toState->id,
@@ -444,11 +438,11 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_sync_blueprint_states(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $existingState = BlueprintState::factory()->create([
+        $existingState = /* BlueprintState factory - use DB::table('blueprint_states') */->create([
             'blueprint_id' => $blueprint->id,
             'name' => 'Existing',
         ]);
@@ -482,12 +476,12 @@ class BlueprintApiTest extends TestCase
 
     public function test_can_update_blueprint_layout(): void
     {
-        $blueprint = Blueprint::factory()->create([
+        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $state1 = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
-        $state2 = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        $state1 = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        $state2 = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
 
         $response = $this->putJson("/api/v1/blueprints/{$blueprint->id}/layout", [
             'layout' => [

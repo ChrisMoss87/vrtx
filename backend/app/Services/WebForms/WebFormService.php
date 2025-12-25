@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\WebForms;
 
-use App\Models\Module;
-use App\Models\WebForm;
-use App\Models\WebFormAnalytics;
-use App\Models\WebFormField;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -64,7 +60,7 @@ class WebFormService
     public function createForm(array $data): WebForm
     {
         return DB::transaction(function () use ($data) {
-            $form = WebForm::create([
+            $form = DB::table('web_forms')->insertGetId([
                 'name' => $data['name'],
                 'slug' => $data['slug'] ?? null,
                 'description' => $data['description'] ?? null,

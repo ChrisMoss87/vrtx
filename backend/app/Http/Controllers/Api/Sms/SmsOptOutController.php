@@ -2,33 +2,33 @@
 
 namespace App\Http\Controllers\Api\Sms;
 
+use App\Domain\Sms\Repositories\SmsMessageRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\SmsOptOut;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class SmsOptOutController extends Controller
 {
+    public function __construct(
+        protected SmsMessageRepositoryInterface $messageRepository
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
-        $query = SmsOptOut::with('connection:id,name');
+        $connectionId = $request->filled('connection_id') ? (int) $request->connection_id : null;
+        $perPage = (int) $request->input('per_page', 50);
+        $page = (int) $request->input('page', 1);
 
-        if ($request->boolean('active_only', true)) {
-            $query->active();
-        }
+        $result = $this->messageRepository->listOptOuts($connectionId, $perPage, $page);
 
-        if ($request->filled('type')) {
-            $query->byType($request->type);
-        }
-
-        if ($request->filled('search')) {
-            $query->where('phone_number', 'like', '%' . $request->search . '%');
-        }
-
-        $optOuts = $query->orderBy('opted_out_at', 'desc')
-            ->paginate($request->input('per_page', 50));
-
-        return response()->json($optOuts);
+        return response()->json([
+            'data' => $result->items(),
+            'current_page' => $result->currentPage(),
+            'per_page' => $result->perPage(),
+            'total' => $result->total(),
+            'last_page' => $result->lastPage(),
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -40,11 +40,12 @@ class SmsOptOutController extends Controller
             'connection_id' => 'nullable|exists:sms_connections,id',
         ]);
 
-        $optOut = SmsOptOut::optOut(
-            $validated['phone_number'],
-            $validated['type'],
-            $validated['reason'] ?? 'Manual opt-out',
-            $validated['connection_id'] ?? null
+        $phoneNumber = SmsOptOut::normalizePhone($validated['phone_number']);
+
+        $optOut = $this->messageRepository->recordOptOut(
+            $phoneNumber,
+            $validated['connection_id'] ?? null,
+            $validated['reason'] ?? 'Manual opt-out'
         );
 
         return response()->json(['data' => $optOut], 201);
@@ -55,11 +56,14 @@ class SmsOptOutController extends Controller
         $validated = $request->validate([
             'phone_number' => 'required|string|max:20',
             'type' => 'nullable|in:all,marketing,transactional',
+            'connection_id' => 'nullable|exists:sms_connections,id',
         ]);
 
-        $isOptedOut = SmsOptOut::isOptedOut(
-            $validated['phone_number'],
-            $validated['type'] ?? 'all'
+        $phoneNumber = SmsOptOut::normalizePhone($validated['phone_number']);
+
+        $isOptedOut = $this->messageRepository->isOptedOut(
+            $phoneNumber,
+            $validated['connection_id'] ?? null
         );
 
         return response()->json([
@@ -75,11 +79,14 @@ class SmsOptOutController extends Controller
         $validated = $request->validate([
             'phone_number' => 'required|string|max:20',
             'type' => 'nullable|in:all,marketing,transactional',
+            'connection_id' => 'nullable|exists:sms_connections,id',
         ]);
 
-        $result = SmsOptOut::optIn(
-            $validated['phone_number'],
-            $validated['type'] ?? 'all'
+        $phoneNumber = SmsOptOut::normalizePhone($validated['phone_number']);
+
+        $result = $this->messageRepository->removeOptOut(
+            $phoneNumber,
+            $validated['connection_id'] ?? null
         );
 
         return response()->json([
@@ -90,9 +97,23 @@ class SmsOptOutController extends Controller
         ]);
     }
 
-    public function destroy(SmsOptOut $smsOptOut): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $smsOptOut->delete();
+        // Get the opt-out record to extract phone number
+        $optOut = \DB::table('sms_opt_outs')->where('id', $id)->first();
+
+        if (!$optOut) {
+            return response()->json(['message' => 'Opt-out record not found'], 404);
+        }
+
+        $result = $this->messageRepository->removeOptOut(
+            $optOut->phone_number,
+            $optOut->connection_id
+        );
+
+        if (!$result) {
+            return response()->json(['message' => 'Failed to remove opt-out'], 500);
+        }
 
         return response()->json(null, 204);
     }
@@ -104,13 +125,16 @@ class SmsOptOutController extends Controller
             'phone_numbers.*' => 'string|max:20',
             'type' => 'required|in:all,marketing,transactional',
             'reason' => 'nullable|string|max:255',
+            'connection_id' => 'nullable|exists:sms_connections,id',
         ]);
 
         $count = 0;
         foreach ($validated['phone_numbers'] as $phone) {
-            SmsOptOut::optOut(
-                $phone,
-                $validated['type'],
+            $phoneNumber = SmsOptOut::normalizePhone($phone);
+
+            $this->messageRepository->recordOptOut(
+                $phoneNumber,
+                $validated['connection_id'] ?? null,
                 $validated['reason'] ?? 'Bulk opt-out'
             );
             $count++;

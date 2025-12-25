@@ -6,11 +6,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Application\Services\Activity\ActivityApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Activity;
 use App\Services\ActivityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ActivityController extends Controller
 {
@@ -35,7 +35,7 @@ class ActivityController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = Activity::query()
+        $query = DB::table('activities')
             ->with('user:id,name,email')
             ->orderBy('created_at', 'desc');
 
@@ -109,7 +109,7 @@ class ActivityController extends Controller
             'metadata' => 'nullable|array',
         ]);
 
-        $activity = Activity::create([
+        $activity = DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => $validated['type'],
             'action' => isset($validated['scheduled_at']) ? Activity::ACTION_SCHEDULED : Activity::ACTION_CREATED,

@@ -2,12 +2,8 @@
 
 namespace App\Http\Controllers\Api\LandingPage;
 
-use App\Application\Services\LandingPage\LandingPageApplicationService;
+use App\Domain\LandingPage\Repositories\LandingPageRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\LandingPage;
-use App\Models\LandingPageTemplate;
-use App\Models\LandingPageVariant;
-use App\Services\LandingPage\LandingPageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -15,34 +11,46 @@ use Illuminate\Support\Facades\Auth;
 
 class LandingPageController extends Controller
 {
+    private const STATUSES = ['draft', 'published', 'archived'];
+    private const THANK_YOU_TYPES = ['message', 'redirect', 'page'];
+    private const TEMPLATE_CATEGORIES = ['general', 'business', 'ecommerce', 'education', 'event', 'nonprofit'];
+
     public function __construct(
-        protected LandingPageService $landingPageService,
-        protected LandingPageApplicationService $landingPageApplicationService
+        protected LandingPageRepositoryInterface $repository
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['status', 'campaign_id', 'search', 'sort_field', 'sort_order']);
+        $filters = $request->only(['status', 'campaign_id', 'template_id', 'ab_testing', 'created_by', 'search']);
+        $filters['sort_by'] = $request->input('sort_field', 'created_at');
+        $filters['sort_dir'] = $request->input('sort_order', 'desc');
         $perPage = $request->integer('per_page', 20);
+        $page = $request->integer('page', 1);
 
-        $pages = $this->landingPageService->getPages($filters, $perPage);
+        $result = $this->repository->listPages($filters, $perPage, $page);
 
         return response()->json([
             'success' => true,
-            'data' => $pages->items(),
+            'data' => $result->items,
             'meta' => [
-                'current_page' => $pages->currentPage(),
-                'last_page' => $pages->lastPage(),
-                'per_page' => $pages->perPage(),
-                'total' => $pages->total(),
+                'current_page' => $result->currentPage,
+                'last_page' => $result->lastPage,
+                'per_page' => $result->perPage,
+                'total' => $result->total,
             ],
         ]);
     }
 
     public function show(int $id): JsonResponse
     {
-        $page = LandingPage::with(['template', 'webForm', 'campaign', 'creator', 'variants'])
-            ->findOrFail($id);
+        $page = $this->repository->getPageById($id, ['template', 'creator', 'campaign', 'variants']);
+
+        if (!$page) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Landing page not found',
+            ], Response::HTTP_NOT_FOUND);
+        }
 
         return response()->json([
             'success' => true,
@@ -68,19 +76,19 @@ class LandingPageController extends Controller
             'campaign_id' => 'nullable|integer|exists:campaigns,id',
         ]);
 
-        $page = $this->landingPageService->createPage($validated, Auth::id());
+        $validated['created_by'] = Auth::id();
+
+        $page = $this->repository->createPage($validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Landing page created successfully',
-            'data' => $page->load(['template', 'webForm', 'campaign', 'creator']),
+            'data' => $page,
         ], Response::HTTP_CREATED);
     }
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'slug' => 'nullable|string|max:255|regex:/^[a-z0-9-]+$/',
@@ -100,27 +108,34 @@ class LandingPageController extends Controller
             'custom_domain' => 'nullable|string|max:255',
         ]);
 
-        $page = $this->landingPageService->updatePage($page, $validated);
+        $page = $this->repository->updatePage($id, $validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Landing page updated successfully',
-            'data' => $page->load(['template', 'webForm', 'campaign', 'creator', 'variants']),
+            'data' => $page,
         ]);
     }
 
     public function destroy(int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
+        $page = $this->repository->getPageById($id);
 
-        if ($page->isPublished()) {
+        if (!$page) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Landing page not found',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($page['status'] === 'published') {
             return response()->json([
                 'success' => false,
                 'message' => 'Cannot delete a published page. Please unpublish it first.',
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $page->delete();
+        $this->repository->deletePage($id);
 
         return response()->json([
             'success' => true,
@@ -130,22 +145,28 @@ class LandingPageController extends Controller
 
     public function duplicate(int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
+        $page = $this->repository->getPageById($id);
 
-        $newPage = $this->landingPageService->duplicatePage($page, Auth::id());
+        if (!$page) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Landing page not found',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        $newName = $page['name'] . ' (Copy)';
+        $newPage = $this->repository->duplicatePage($id, $newName, Auth::id());
 
         return response()->json([
             'success' => true,
             'message' => 'Landing page duplicated successfully',
-            'data' => $newPage->load(['template', 'webForm', 'campaign', 'creator']),
+            'data' => $newPage,
         ], Response::HTTP_CREATED);
     }
 
     public function publish(int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-
-        $page = $this->landingPageService->publishPage($page);
+        $page = $this->repository->publishPage($id);
 
         return response()->json([
             'success' => true,
@@ -156,9 +177,7 @@ class LandingPageController extends Controller
 
     public function unpublish(int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-
-        $page = $this->landingPageService->unpublishPage($page);
+        $page = $this->repository->unpublishPage($id);
 
         return response()->json([
             'success' => true,
@@ -169,23 +188,19 @@ class LandingPageController extends Controller
 
     public function archive(int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-
-        $page->archive();
+        $page = $this->repository->archivePage($id);
 
         return response()->json([
             'success' => true,
             'message' => 'Landing page archived successfully',
-            'data' => $page->fresh(),
+            'data' => $page,
         ]);
     }
 
     public function analytics(Request $request, int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-
-        $analytics = $this->landingPageService->getPageAnalytics(
-            $page,
+        $analytics = $this->repository->getPageAnalytics(
+            $id,
             $request->query('start_date'),
             $request->query('end_date')
         );
@@ -200,7 +215,7 @@ class LandingPageController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => LandingPage::getStatuses(),
+            'data' => self::STATUSES,
         ]);
     }
 
@@ -208,7 +223,7 @@ class LandingPageController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => LandingPage::getThankYouTypes(),
+            'data' => self::THANK_YOU_TYPES,
         ]);
     }
 
@@ -216,9 +231,7 @@ class LandingPageController extends Controller
 
     public function variants(int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-
-        $comparison = $this->landingPageService->getVariantComparison($page);
+        $comparison = $this->repository->getVariantAnalytics($id);
 
         return response()->json([
             'success' => true,
@@ -228,8 +241,6 @@ class LandingPageController extends Controller
 
     public function createVariant(Request $request, int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',
             'content' => 'nullable|array',
@@ -237,7 +248,7 @@ class LandingPageController extends Controller
             'traffic_percentage' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $variant = $this->landingPageService->createVariant($page, $validated);
+        $variant = $this->repository->createVariant($id, $validated);
 
         return response()->json([
             'success' => true,
@@ -248,9 +259,6 @@ class LandingPageController extends Controller
 
     public function updateVariant(Request $request, int $id, int $variantId): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-        $variant = LandingPageVariant::where('page_id', $page->id)->findOrFail($variantId);
-
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',
             'content' => 'nullable|array',
@@ -259,7 +267,7 @@ class LandingPageController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
-        $variant = $this->landingPageService->updateVariant($variant, $validated);
+        $variant = $this->repository->updateVariant($variantId, $validated);
 
         return response()->json([
             'success' => true,
@@ -270,17 +278,23 @@ class LandingPageController extends Controller
 
     public function deleteVariant(int $id, int $variantId): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-        $variant = LandingPageVariant::where('page_id', $page->id)->findOrFail($variantId);
+        $variant = $this->repository->getVariantById($variantId);
 
-        if ($variant->is_winner) {
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Variant not found',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($variant['is_winner']) {
             return response()->json([
                 'success' => false,
                 'message' => 'Cannot delete the winning variant',
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $this->landingPageService->deleteVariant($variant);
+        $this->repository->deleteVariant($variantId);
 
         return response()->json([
             'success' => true,
@@ -290,15 +304,12 @@ class LandingPageController extends Controller
 
     public function declareWinner(int $id, int $variantId): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
-        $variant = LandingPageVariant::where('page_id', $page->id)->findOrFail($variantId);
-
-        $variant->declareWinner();
+        $variant = $this->repository->declareVariantWinner($variantId);
 
         return response()->json([
             'success' => true,
             'message' => 'Variant declared as winner',
-            'data' => $page->fresh(['variants']),
+            'data' => $variant,
         ]);
     }
 
@@ -306,13 +317,17 @@ class LandingPageController extends Controller
 
     public function templates(Request $request): JsonResponse
     {
-        $query = LandingPageTemplate::active();
+        $filters = [];
 
         if ($category = $request->query('category')) {
-            $query->byCategory($category);
+            $filters['category'] = $category;
         }
 
-        $templates = $query->orderBy('usage_count', 'desc')->orderBy('name')->get();
+        if ($search = $request->query('search')) {
+            $filters['search'] = $search;
+        }
+
+        $templates = $this->repository->listTemplates($filters);
 
         return response()->json([
             'success' => true,
@@ -322,7 +337,14 @@ class LandingPageController extends Controller
 
     public function showTemplate(int $templateId): JsonResponse
     {
-        $template = LandingPageTemplate::findOrFail($templateId);
+        $template = $this->repository->getTemplateById($templateId);
+
+        if (!$template) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found',
+            ], Response::HTTP_NOT_FOUND);
+        }
 
         return response()->json([
             'success' => true,
@@ -341,10 +363,9 @@ class LandingPageController extends Controller
             'styles' => 'nullable|array',
         ]);
 
-        $template = LandingPageTemplate::create([
-            ...$validated,
-            'created_by' => Auth::id(),
-        ]);
+        $validated['created_by'] = Auth::id();
+
+        $template = $this->repository->createTemplate($validated);
 
         return response()->json([
             'success' => true,
@@ -355,7 +376,21 @@ class LandingPageController extends Controller
 
     public function updateTemplate(Request $request, int $templateId): JsonResponse
     {
-        $template = LandingPageTemplate::where('is_system', false)->findOrFail($templateId);
+        $template = $this->repository->getTemplateById($templateId);
+
+        if (!$template) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($template['is_system']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot update system templates',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -367,20 +402,34 @@ class LandingPageController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
-        $template->update($validated);
+        $template = $this->repository->updateTemplate($templateId, $validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Template updated successfully',
-            'data' => $template->fresh(),
+            'data' => $template,
         ]);
     }
 
     public function destroyTemplate(int $templateId): JsonResponse
     {
-        $template = LandingPageTemplate::where('is_system', false)->findOrFail($templateId);
+        $template = $this->repository->getTemplateById($templateId);
 
-        $template->delete();
+        if (!$template) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($template['is_system']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete system templates',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $this->repository->deleteTemplate($templateId);
 
         return response()->json([
             'success' => true,
@@ -392,13 +441,20 @@ class LandingPageController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => LandingPageTemplate::getCategories(),
+            'data' => self::TEMPLATE_CATEGORIES,
         ]);
     }
 
     public function saveAsTemplate(Request $request, int $id): JsonResponse
     {
-        $page = LandingPage::findOrFail($id);
+        $page = $this->repository->getPageById($id);
+
+        if (!$page) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Landing page not found',
+            ], Response::HTTP_NOT_FOUND);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -406,14 +462,16 @@ class LandingPageController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        $template = LandingPageTemplate::create([
+        $templateData = [
             'name' => $validated['name'],
             'category' => $validated['category'] ?? 'general',
             'description' => $validated['description'] ?? null,
-            'content' => $page->content,
-            'styles' => $page->styles,
+            'content' => $page['content'],
+            'styles' => $page['styles'],
             'created_by' => Auth::id(),
-        ]);
+        ];
+
+        $template = $this->repository->createTemplate($templateData);
 
         return response()->json([
             'success' => true,

@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Models\Activity;
-use App\Models\AuditLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ActivityService
 {
@@ -22,7 +21,7 @@ class ActivityService
         bool $isInternal = false,
         bool $isPinned = false
     ): Activity {
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_NOTE,
             'action' => Activity::ACTION_CREATED,
@@ -46,7 +45,7 @@ class ActivityService
         ?int $durationMinutes = null,
         ?\DateTimeInterface $scheduledAt = null
     ): Activity {
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_CALL,
             'action' => $scheduledAt ? Activity::ACTION_SCHEDULED : Activity::ACTION_COMPLETED,
@@ -72,7 +71,7 @@ class ActivityService
         ?int $durationMinutes = null,
         ?array $metadata = null
     ): Activity {
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_MEETING,
             'action' => Activity::ACTION_SCHEDULED,
@@ -95,7 +94,7 @@ class ActivityService
         ?string $description = null,
         ?\DateTimeInterface $dueAt = null
     ): Activity {
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_TASK,
             'action' => Activity::ACTION_CREATED,
@@ -116,7 +115,7 @@ class ActivityService
         ?Model $emailMessage = null,
         string $action = 'sent'
     ): Activity {
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_EMAIL,
             'action' => $action,
@@ -138,7 +137,7 @@ class ActivityService
         mixed $oldValue,
         mixed $newValue
     ): Activity {
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_STATUS_CHANGE,
             'action' => Activity::ACTION_UPDATED,
@@ -165,7 +164,7 @@ class ActivityService
         $fieldCount = count($changes);
         $fieldNames = array_keys($changes);
 
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_FIELD_UPDATE,
             'action' => Activity::ACTION_UPDATED,
@@ -186,7 +185,7 @@ class ActivityService
     {
         $modelName = class_basename($subject);
 
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_CREATED,
             'action' => Activity::ACTION_CREATED,
@@ -204,7 +203,7 @@ class ActivityService
     {
         $modelName = class_basename($subject);
 
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_DELETED,
             'action' => Activity::ACTION_DELETED,
@@ -223,7 +222,7 @@ class ActivityService
         string $content,
         ?Model $parentActivity = null
     ): Activity {
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_COMMENT,
             'action' => Activity::ACTION_CREATED,
@@ -244,7 +243,7 @@ class ActivityService
         string $fileName,
         ?array $fileInfo = null
     ): Activity {
-        return Activity::create([
+        return DB::table('activities')->insertGetId([
             'user_id' => Auth::id(),
             'type' => Activity::TYPE_ATTACHMENT,
             'action' => Activity::ACTION_CREATED,

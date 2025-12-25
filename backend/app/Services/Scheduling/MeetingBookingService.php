@@ -2,11 +2,7 @@
 
 namespace App\Services\Scheduling;
 
-use App\Models\MeetingType;
-use App\Models\ModuleRecord;
-use App\Models\ScheduledMeeting;
-use App\Models\SchedulingPage;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -42,7 +38,7 @@ class MeetingBookingService
             $contactId = $this->findOrCreateContact($host, $data);
 
             // Create the meeting
-            $meeting = ScheduledMeeting::create([
+            $meeting = DB::table('scheduled_meetings')->insertGetId([
                 'meeting_type_id' => $meetingType->id,
                 'host_user_id' => $host->id,
                 'contact_id' => $contactId,
@@ -138,7 +134,7 @@ class MeetingBookingService
             }
 
             // Get contacts module
-            $contactsModule = \App\Models\Module::where('api_name', 'contacts')->first();
+            $contactsModule = DB::table('modules')->where('api_name', 'contacts')->first();
             if (!$contactsModule) {
                 return null;
             }
@@ -149,7 +145,7 @@ class MeetingBookingService
             $lastName = $nameParts[1] ?? '';
 
             // Create new contact
-            $contact = ModuleRecord::create([
+            $contact = DB::table('module_records')->insertGetId([
                 'module_id' => $contactsModule->id,
                 'owner_id' => $host->id,
                 'data' => [
@@ -177,7 +173,7 @@ class MeetingBookingService
     protected function logMeetingActivity(ScheduledMeeting $meeting, int $contactId): void
     {
         try {
-            \App\Models\Activity::create([
+            DB::table('activities')->insertGetId([
                 'module_record_id' => $contactId,
                 'user_id' => $meeting->host_user_id,
                 'type' => 'meeting',
@@ -220,7 +216,7 @@ class MeetingBookingService
      */
     public function getMeetingByToken(string $token): ?ScheduledMeeting
     {
-        return ScheduledMeeting::where('manage_token', $token)
+        return DB::table('scheduled_meetings')->where('manage_token', $token)
             ->with(['meetingType.schedulingPage', 'host'])
             ->first();
     }

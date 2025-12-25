@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Application\Services\Reporting\DashboardAlertService;
-use App\Models\Dashboard;
-use App\Models\DashboardWidgetAlert;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -14,6 +12,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Stancl\Tenancy\Contracts\Tenant;
+use Illuminate\Support\Facades\DB;
 
 class ProcessDashboardWidgetAlertsJob implements ShouldQueue
 {
@@ -141,7 +140,7 @@ class ProcessDashboardWidgetAlertsJob implements ShouldQueue
         }
 
         // Get the module
-        $module = \App\Models\Module::find($moduleId);
+        $module = DB::table('modules')->where('id', $moduleId)->first();
 
         if (! $module) {
             return null;

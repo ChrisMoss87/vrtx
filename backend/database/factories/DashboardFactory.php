@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Dashboard;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Dashboard>
@@ -63,17 +63,6 @@ class DashboardFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'refresh_interval' => $seconds,
         ]);
-    }
-
-    /**
-     * Create dashboard with widgets.
-     */
-    public function withWidgets(int $count = 4): static
-    {
-        return $this->has(
-            \App\Models\DashboardWidget::factory()->count($count),
-            'widgets'
-        );
     }
 
     /**

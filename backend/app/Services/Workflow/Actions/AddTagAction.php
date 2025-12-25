@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\ModuleRecord;
-use App\Models\Tag;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Action to add tags to a record.
@@ -24,7 +24,7 @@ class AddTagAction implements ActionInterface
             throw new \InvalidArgumentException('Record ID is required');
         }
 
-        $record = ModuleRecord::find($recordId);
+        $record = DB::table('module_records')->where('id', $recordId)->first();
         if (!$record) {
             throw new \InvalidArgumentException("Record not found: {$recordId}");
         }
@@ -33,8 +33,8 @@ class AddTagAction implements ActionInterface
 
         // Collect tags by ID
         if (!empty($tagIds)) {
-            $existingTags = Tag::whereIn('id', $tagIds)->get();
-            $tagsToAdd = array_merge($tagsToAdd, $existingTags->pluck('id')->toArray());
+            $existingTags = DB::table('tags')->whereIn('id', $tagIds)->pluck('id')->toArray();
+            $tagsToAdd = array_merge($tagsToAdd, $existingTags);
         }
 
         // Collect or create tags by name
@@ -45,17 +45,18 @@ class AddTagAction implements ActionInterface
                     continue;
                 }
 
-                $tag = Tag::where('name', $name)->first();
+                $tag = DB::table('tags')->where('name', $name)->first();
 
                 if (!$tag && $createMissing) {
-                    $tag = Tag::create([
+                    $tagId = DB::table('tags')->insertGetId([
                         'name' => $name,
-                        'slug' => \Str::slug($name),
+                        'slug' => Str::slug($name),
                         'color' => $this->generateRandomColor(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ]);
-                }
-
-                if ($tag) {
+                    $tagsToAdd[] = $tagId;
+                } elseif ($tag) {
                     $tagsToAdd[] = $tag->id;
                 }
             }
@@ -73,14 +74,29 @@ class AddTagAction implements ActionInterface
         }
 
         // Add tags to record (sync without detaching existing)
-        $existingTags = $record->tags()->pluck('tags.id')->toArray();
+        $existingTags = DB::table('taggables')
+            ->where('taggable_id', $recordId)
+            ->where('taggable_type', 'App\\Models\\ModuleRecord')
+            ->pluck('tag_id')
+            ->toArray();
+
         $newTags = array_diff($tagsToAdd, $existingTags);
 
         if (!empty($newTags)) {
-            $record->tags()->attach($newTags);
+            $inserts = [];
+            foreach ($newTags as $tagId) {
+                $inserts[] = [
+                    'tag_id' => $tagId,
+                    'taggable_id' => $recordId,
+                    'taggable_type' => 'App\\Models\\ModuleRecord',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+            DB::table('taggables')->insert($inserts);
         }
 
-        $addedTagNames = Tag::whereIn('id', $newTags)->pluck('name')->toArray();
+        $addedTagNames = DB::table('tags')->whereIn('id', $newTags)->pluck('name')->toArray();
 
         Log::info('Workflow added tags to record', [
             'record_id' => $recordId,

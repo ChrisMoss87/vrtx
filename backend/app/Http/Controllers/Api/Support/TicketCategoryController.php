@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\Support;
 
 use App\Http\Controllers\Controller;
-use App\Models\TicketCategory;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class TicketCategoryController extends Controller
 {
@@ -50,11 +50,11 @@ class TicketCategoryController extends Controller
         // Ensure unique slug
         $baseSlug = $validated['slug'];
         $counter = 1;
-        while (TicketCategory::where('slug', $validated['slug'])->exists()) {
+        while (DB::table('ticket_categories')->where('slug', $validated['slug'])->exists()) {
             $validated['slug'] = $baseSlug . '-' . $counter++;
         }
 
-        $category = TicketCategory::create($validated);
+        $category = DB::table('ticket_categories')->insertGetId($validated);
 
         return response()->json([
             'category' => $category,
@@ -64,7 +64,7 @@ class TicketCategoryController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $category = TicketCategory::findOrFail($id);
+        $category = DB::table('ticket_categories')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -83,7 +83,7 @@ class TicketCategoryController extends Controller
             $validated['slug'] = Str::slug($validated['name']);
             $baseSlug = $validated['slug'];
             $counter = 1;
-            while (TicketCategory::where('slug', $validated['slug'])->where('id', '!=', $id)->exists()) {
+            while (DB::table('ticket_categories')->where('slug', $validated['slug'])->where('id', '!=', $id)->exists()) {
                 $validated['slug'] = $baseSlug . '-' . $counter++;
             }
         }
@@ -95,7 +95,7 @@ class TicketCategoryController extends Controller
 
     public function destroy(int $id): JsonResponse
     {
-        $category = TicketCategory::findOrFail($id);
+        $category = DB::table('ticket_categories')->where('id', $id)->first();
 
         // Check if category has tickets
         if ($category->tickets()->exists()) {
@@ -118,7 +118,7 @@ class TicketCategoryController extends Controller
         ]);
 
         foreach ($validated['categories'] as $item) {
-            TicketCategory::where('id', $item['id'])
+            DB::table('ticket_categories')->where('id', $item['id'])
                 ->update(['display_order' => $item['display_order']]);
         }
 

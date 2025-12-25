@@ -5,13 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Module;
-use App\Models\SavedSearch;
-use App\Models\SearchHistory;
-use App\Models\SearchIndex;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SearchController extends Controller
 {
@@ -44,7 +41,7 @@ class SearchController extends Controller
         foreach ($results as $result) {
             $moduleApiName = $result->module_api_name;
             if (!isset($groupedResults[$moduleApiName])) {
-                $module = Module::where('api_name', $moduleApiName)->first();
+                $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
                 $groupedResults[$moduleApiName] = [
                     'module' => [
                         'api_name' => $moduleApiName,
@@ -102,7 +99,7 @@ class SearchController extends Controller
         $searchTerm = '%' . strtolower($query) . '%';
 
         // Fast search on primary value only
-        $results = SearchIndex::query()
+        $results = DB::table('search_indexs')
             ->whereRaw('LOWER(primary_value) LIKE ?', [$searchTerm])
             ->with(['module:id,name,api_name,icon'])
             ->orderBy('primary_value')
@@ -137,7 +134,7 @@ class SearchController extends Controller
 
         // Add matching recent searches
         if ($query) {
-            $recentMatches = SearchHistory::where('user_id', Auth::id())
+            $recentMatches = DB::table('search_histories')->where('user_id', Auth::id())
                 ->whereRaw('LOWER(query) LIKE ?', ['%' . strtolower($query) . '%'])
                 ->selectRaw('query, MAX(created_at) as last_searched')
                 ->groupBy('query')
@@ -150,7 +147,7 @@ class SearchController extends Controller
         }
 
         // Add matching saved searches
-        $savedMatches = SavedSearch::where('user_id', Auth::id())
+        $savedMatches = DB::table('saved_searchs')->where('user_id', Auth::id())
             ->when($query, function ($q) use ($query) {
                 $q->whereRaw('LOWER(name) LIKE ? OR LOWER(query) LIKE ?', [
                     '%' . strtolower($query) . '%',
@@ -167,7 +164,7 @@ class SearchController extends Controller
         // Add modules for quick navigation
         $moduleMatches = [];
         if ($query) {
-            $modules = Module::where('is_active', true)
+            $modules = DB::table('modules')->where('is_active', true)
                 ->whereRaw('LOWER(name) LIKE ? OR LOWER(api_name) LIKE ?', [
                     '%' . strtolower($query) . '%',
                     '%' . strtolower($query) . '%',
@@ -259,7 +256,7 @@ class SearchController extends Controller
             'is_pinned' => ['sometimes', 'boolean'],
         ]);
 
-        $search = SavedSearch::create([
+        $search = DB::table('saved_searchs')->insertGetId([
             'user_id' => Auth::id(),
             'name' => $validated['name'],
             'query' => $validated['query'],
@@ -285,7 +282,7 @@ class SearchController extends Controller
      */
     public function deleteSavedSearch(int $id): JsonResponse
     {
-        $search = SavedSearch::where('user_id', Auth::id())
+        $search = DB::table('saved_searchs')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $search->delete();
@@ -300,7 +297,7 @@ class SearchController extends Controller
      */
     public function togglePin(int $id): JsonResponse
     {
-        $search = SavedSearch::where('user_id', Auth::id())
+        $search = DB::table('saved_searchs')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $search->togglePin();
@@ -319,7 +316,7 @@ class SearchController extends Controller
         $moduleApiName = $request->input('module');
 
         if ($moduleApiName) {
-            $module = Module::where('api_name', $moduleApiName)->firstOrFail();
+            $module = DB::table('modules')->where('api_name', $moduleApiName)->firstOrFail();
             $count = SearchIndex::reindexModule($module);
 
             return response()->json([
@@ -330,7 +327,7 @@ class SearchController extends Controller
 
         // Reindex all modules
         $totalCount = 0;
-        $modules = Module::where('is_active', true)->get();
+        $modules = DB::table('modules')->where('is_active', true)->get();
 
         foreach ($modules as $module) {
             $count = SearchIndex::reindexModule($module);
@@ -351,7 +348,7 @@ class SearchController extends Controller
         $userId = Auth::id();
 
         // Get active modules for navigation
-        $modules = Module::where('is_active', true)
+        $modules = DB::table('modules')->where('is_active', true)
             ->orderBy('display_order')
             ->get(['id', 'name', 'api_name', 'icon']);
 

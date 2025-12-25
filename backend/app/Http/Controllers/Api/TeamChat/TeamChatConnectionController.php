@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api\TeamChat;
 
 use App\Http\Controllers\Controller;
-use App\Models\TeamChatConnection;
 use App\Services\TeamChat\SlackService;
 use App\Services\TeamChat\TeamsService;
 use App\Services\TeamChat\TeamChatService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class TeamChatConnectionController extends Controller
 {
@@ -39,7 +39,7 @@ class TeamChatConnectionController extends Controller
             'settings' => 'nullable|array',
         ]);
 
-        $connection = TeamChatConnection::create($validated);
+        $connection = DB::table('team_chat_connections')->insertGetId($validated);
 
         // Verify connection
         if ($validated['provider'] === 'slack') {

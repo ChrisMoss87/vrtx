@@ -2,11 +2,9 @@
 
 namespace App\Services\Competitor;
 
-use App\Models\Competitor;
-use App\Models\CompetitorObjection;
-use App\Models\ObjectionFeedback;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ObjectionService
 {
@@ -25,7 +23,7 @@ class ObjectionService
         string $counterScript,
         User $user
     ): CompetitorObjection {
-        return CompetitorObjection::create([
+        return DB::table('competitor_objections')->insertGetId([
             'competitor_id' => $competitor->id,
             'objection' => $objection,
             'counter_script' => $counterScript,
@@ -57,7 +55,7 @@ class ObjectionService
         ?int $dealId = null,
         ?string $feedbackText = null
     ): ObjectionFeedback {
-        return ObjectionFeedback::create([
+        return DB::table('objection_feedbacks')->insertGetId([
             'objection_id' => $objection->id,
             'deal_id' => $dealId,
             'was_successful' => $wasSuccessful,

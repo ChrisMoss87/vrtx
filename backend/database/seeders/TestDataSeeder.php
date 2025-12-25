@@ -4,29 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Activity;
-use App\Models\ApiKey;
-use App\Models\AuditLog;
-use App\Models\Blueprint;
-use App\Models\BlueprintState;
-use App\Models\BlueprintTransition;
-use App\Models\Dashboard;
-use App\Models\DashboardWidget;
-use App\Models\EmailAccount;
-use App\Models\EmailMessage;
-use App\Models\EmailTemplate;
-use App\Models\Export;
-use App\Models\Import;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
-use App\Models\Report;
-use App\Models\Stage;
-use App\Models\User;
-use App\Models\Webhook;
-use App\Models\Workflow;
-use App\Models\WorkflowExecution;
-use App\Models\WorkflowStep;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -191,7 +169,7 @@ class TestDataSeeder extends Seeder
 
     private function cacheModules(): void
     {
-        $modules = Module::all();
+        $modules = DB::table('modules')->get();
         foreach ($modules as $module) {
             $this->moduleCache[$module->api_name] = $module;
         }
@@ -249,7 +227,7 @@ class TestDataSeeder extends Seeder
         // Deals
         $dealIds = $this->seedRecordsForModule('deals', $this->counts['deals'], function ($faker) use ($orgIds, $contactIds) {
             $module = $this->getModule('deals');
-            $pipeline = $module ? Pipeline::where('module_id', $module->id)->first() : null;
+            $pipeline = $module ? DB::table('pipelines')->where('module_id', $module->id)->first() : null;
             $stage = $pipeline ? $pipeline->stages()->inRandomOrder()->first() : null;
 
             return [

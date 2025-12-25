@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api\Video;
 
 use App\Application\Services\Video\VideoApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\VideoProvider;
 use App\Services\Video\ZoomService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class VideoWebhookController extends Controller
 {
@@ -21,7 +21,7 @@ class VideoWebhookController extends Controller
         // Handle Zoom URL validation challenge
         if ($request->has('payload') && isset($request->payload['plainToken'])) {
             $plainToken = $request->payload['plainToken'];
-            $provider = VideoProvider::where('provider', 'zoom')
+            $provider = DB::table('video_providers')->where('provider', 'zoom')
                 ->where('is_active', true)
                 ->first();
 
@@ -39,7 +39,7 @@ class VideoWebhookController extends Controller
         $signature = $request->header('x-zm-signature');
         $timestamp = $request->header('x-zm-request-timestamp');
 
-        $provider = VideoProvider::where('provider', 'zoom')
+        $provider = DB::table('video_providers')->where('provider', 'zoom')
             ->where('is_active', true)
             ->first();
 
@@ -99,7 +99,7 @@ class VideoWebhookController extends Controller
 
         try {
             $providerId = decrypt($state);
-            $provider = VideoProvider::findOrFail($providerId);
+            $provider = DB::table('video_providers')->where('id', $providerId)->first();
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Invalid state parameter',

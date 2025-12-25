@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
-use App\Models\StageHistory;
 
 class MoveStageAction implements ActionInterface
 {
@@ -20,8 +17,8 @@ class MoveStageAction implements ActionInterface
             throw new \InvalidArgumentException('Record ID, Pipeline ID, and Stage ID are required');
         }
 
-        $record = ModuleRecord::find($recordId);
-        $pipeline = Pipeline::find($pipelineId);
+        $record = DB::table('module_records')->where('id', $recordId)->first();
+        $pipeline = DB::table('pipelines')->where('id', $pipelineId)->first();
 
         if (!$record || !$pipeline) {
             throw new \InvalidArgumentException('Record or Pipeline not found');

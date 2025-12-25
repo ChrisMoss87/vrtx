@@ -4,12 +4,10 @@ namespace App\Http\Controllers\Api\Cadence;
 
 use App\Application\Services\Cadence\CadenceApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Cadence;
-use App\Models\CadenceStep;
-use App\Models\CadenceEnrollment;
 use App\Services\Cadence\CadenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CadenceController extends Controller
 {

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\Module;
-use App\Models\ModuleRecord;
 
 /**
  * Action to create a new record.
@@ -20,7 +18,7 @@ class CreateRecordAction implements ActionInterface
             throw new \InvalidArgumentException('Module is required');
         }
 
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             throw new \InvalidArgumentException("Module not found: {$moduleApiName}");
@@ -37,7 +35,7 @@ class CreateRecordAction implements ActionInterface
             }
         }
 
-        $record = ModuleRecord::create([
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => $data,
             'created_by' => $context['user_id'] ?? null,

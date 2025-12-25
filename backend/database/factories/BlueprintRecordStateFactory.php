@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Blueprint;
-use App\Models\BlueprintRecordState;
-use App\Models\BlueprintState;
-use App\Models\ModuleRecord;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends Factory<BlueprintRecordState>

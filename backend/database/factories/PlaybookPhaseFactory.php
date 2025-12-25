@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Playbook;
-use App\Models\PlaybookPhase;
+use App\Infrastructure\Persistence\Eloquent\Models\Playbook;
+use App\Infrastructure\Persistence\Eloquent\Models\PlaybookPhase;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\PlaybookPhase>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\PlaybookPhase>
  */
 class PlaybookPhaseFactory extends Factory
 {

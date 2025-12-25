@@ -4,17 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
-use App\Models\Stage;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class PipelineApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -23,8 +19,8 @@ class PipelineApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
-        $this->module = Module::factory()->create([
+        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
@@ -33,7 +29,7 @@ class PipelineApiTest extends TestCase
 
     public function test_can_create_pipeline(): void
     {
-        $pipeline = Pipeline::create([
+        $pipeline = DB::table('pipelines')->insertGetId([
             'name' => 'Sales Pipeline',
             'module_id' => $this->module->id,
             'stage_field_api_name' => 'stage_id',
@@ -50,7 +46,7 @@ class PipelineApiTest extends TestCase
 
     public function test_pipeline_belongs_to_module(): void
     {
-        $pipeline = Pipeline::factory()->create([
+        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
             'module_id' => $this->module->id,
         ]);
 
@@ -60,11 +56,11 @@ class PipelineApiTest extends TestCase
 
     public function test_pipeline_has_many_stages(): void
     {
-        $pipeline = Pipeline::factory()->create([
+        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
             'module_id' => $this->module->id,
         ]);
 
-        Stage::factory()->count(3)->create([
+        /* Stage factory - use DB::table('stages') */->count(3)->create([
             'pipeline_id' => $pipeline->id,
         ]);
 
@@ -73,7 +69,7 @@ class PipelineApiTest extends TestCase
 
     public function test_can_create_pipeline_with_stages(): void
     {
-        $pipeline = Pipeline::factory()->withStages()->create([
+        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->withStages()->create([
             'module_id' => $this->module->id,
         ]);
 
@@ -83,7 +79,7 @@ class PipelineApiTest extends TestCase
 
     public function test_can_update_pipeline(): void
     {
-        $pipeline = Pipeline::factory()->create([
+        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
             'module_id' => $this->module->id,
             'name' => 'Original Name',
         ]);
@@ -101,7 +97,7 @@ class PipelineApiTest extends TestCase
 
     public function test_can_soft_delete_pipeline(): void
     {
-        $pipeline = Pipeline::factory()->create([
+        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
             'module_id' => $this->module->id,
         ]);
 
@@ -109,14 +105,14 @@ class PipelineApiTest extends TestCase
         $pipeline->delete();
 
         $this->assertSoftDeleted('pipelines', ['id' => $pipelineId]);
-        $this->assertNull(Pipeline::find($pipelineId));
+        $this->assertNull(DB::table('pipelines')->where('id', $pipelineId)->first());
         $this->assertNotNull(Pipeline::withTrashed()->find($pipelineId));
     }
 
     public function test_active_scope_returns_only_active_pipelines(): void
     {
-        Pipeline::factory()->count(3)->create(['module_id' => $this->module->id, 'is_active' => true]);
-        Pipeline::factory()->count(2)->create(['module_id' => $this->module->id, 'is_active' => false]);
+        /* Pipeline factory - use DB::table('pipelines') */->count(3)->create(['module_id' => $this->module->id, 'is_active' => true]);
+        /* Pipeline factory - use DB::table('pipelines') */->count(2)->create(['module_id' => $this->module->id, 'is_active' => false]);
 
         $activePipelines = Pipeline::active()->get();
 
@@ -128,10 +124,10 @@ class PipelineApiTest extends TestCase
 
     public function test_for_module_scope_filters_by_module(): void
     {
-        $otherModule = Module::factory()->create();
+        $otherModule = /* Module factory - use DB::table('modules') */->create();
 
-        Pipeline::factory()->count(2)->create(['module_id' => $this->module->id]);
-        Pipeline::factory()->count(3)->create(['module_id' => $otherModule->id]);
+        /* Pipeline factory - use DB::table('pipelines') */->count(2)->create(['module_id' => $this->module->id]);
+        /* Pipeline factory - use DB::table('pipelines') */->count(3)->create(['module_id' => $otherModule->id]);
 
         $modulePipelines = Pipeline::forModule($this->module->id)->get();
 
@@ -140,7 +136,7 @@ class PipelineApiTest extends TestCase
 
     public function test_settings_is_cast_to_array(): void
     {
-        $pipeline = Pipeline::factory()->create([
+        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
             'module_id' => $this->module->id,
             'settings' => ['show_totals' => true, 'value_field' => 'amount'],
         ]);

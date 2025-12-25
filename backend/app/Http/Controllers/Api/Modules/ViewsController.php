@@ -5,10 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Modules;
 
 use App\Http\Controllers\Controller;
-use App\Models\Field;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\ModuleView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -23,7 +19,7 @@ class ViewsController extends Controller
      */
     public function index(Request $request, string $moduleApiName): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -34,7 +30,7 @@ class ViewsController extends Controller
 
         $userId = Auth::id();
 
-        $views = ModuleView::where('module_id', $module->id)
+        $views = DB::table('module_views')->where('module_id', $module->id)
             ->accessibleBy($userId)
             ->ordered()
             ->get();
@@ -50,7 +46,7 @@ class ViewsController extends Controller
      */
     public function show(Request $request, string $moduleApiName, int $viewId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -61,7 +57,7 @@ class ViewsController extends Controller
 
         $userId = Auth::id();
 
-        $view = ModuleView::where('module_id', $module->id)
+        $view = DB::table('module_views')->where('module_id', $module->id)
             ->where('id', $viewId)
             ->accessibleBy($userId)
             ->first();
@@ -84,7 +80,7 @@ class ViewsController extends Controller
      */
     public function store(Request $request, string $moduleApiName): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -117,12 +113,12 @@ class ViewsController extends Controller
 
         // If setting as default, unset other default views for this user
         if ($validated['is_default'] ?? false) {
-            ModuleView::where('module_id', $module->id)
+            DB::table('module_views')->where('module_id', $module->id)
                 ->where('user_id', $userId)
                 ->update(['is_default' => false]);
         }
 
-        $view = ModuleView::create([
+        $view = DB::table('module_views')->insertGetId([
             'module_id' => $module->id,
             'user_id' => $userId,
             ...$validated,
@@ -140,7 +136,7 @@ class ViewsController extends Controller
      */
     public function update(Request $request, string $moduleApiName, int $viewId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -151,7 +147,7 @@ class ViewsController extends Controller
 
         $userId = Auth::id();
 
-        $view = ModuleView::where('module_id', $module->id)
+        $view = DB::table('module_views')->where('module_id', $module->id)
             ->where('id', $viewId)
             ->where('user_id', $userId)
             ->first();
@@ -185,7 +181,7 @@ class ViewsController extends Controller
 
         // If setting as default, unset other default views for this user
         if (($validated['is_default'] ?? false) && !$view->is_default) {
-            ModuleView::where('module_id', $module->id)
+            DB::table('module_views')->where('module_id', $module->id)
                 ->where('user_id', $userId)
                 ->where('id', '!=', $viewId)
                 ->update(['is_default' => false]);
@@ -205,7 +201,7 @@ class ViewsController extends Controller
      */
     public function destroy(Request $request, string $moduleApiName, int $viewId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -216,7 +212,7 @@ class ViewsController extends Controller
 
         $userId = Auth::id();
 
-        $view = ModuleView::where('module_id', $module->id)
+        $view = DB::table('module_views')->where('module_id', $module->id)
             ->where('id', $viewId)
             ->where('user_id', $userId)
             ->first();
@@ -241,7 +237,7 @@ class ViewsController extends Controller
      */
     public function getDefaultView(Request $request, string $moduleApiName): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -253,7 +249,7 @@ class ViewsController extends Controller
         $userId = Auth::id();
 
         // First, try to find user's default view
-        $view = ModuleView::where('module_id', $module->id)
+        $view = DB::table('module_views')->where('module_id', $module->id)
             ->where('user_id', $userId)
             ->where('is_default', true)
             ->first();
@@ -284,7 +280,7 @@ class ViewsController extends Controller
      */
     public function getKanbanFields(Request $request, string $moduleApiName): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -294,7 +290,7 @@ class ViewsController extends Controller
         }
 
         // Get fields with options (select, multiselect, radio)
-        $fields = Field::where('module_id', $module->id)
+        $fields = DB::table('fields')->where('module_id', $module->id)
             ->whereIn('type', ['select', 'radio'])
             ->with('options')
             ->orderBy('display_order')
@@ -326,7 +322,7 @@ class ViewsController extends Controller
      */
     public function getKanbanData(Request $request, string $moduleApiName, int $viewId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -354,7 +350,7 @@ class ViewsController extends Controller
             ];
         } else {
             // Saved view mode
-            $view = ModuleView::where('module_id', $module->id)
+            $view = DB::table('module_views')->where('module_id', $module->id)
                 ->where('id', $viewId)
                 ->accessibleBy($userId)
                 ->first();
@@ -378,7 +374,7 @@ class ViewsController extends Controller
         }
 
         // Get the field and its options
-        $field = Field::where('module_id', $module->id)
+        $field = DB::table('fields')->where('module_id', $module->id)
             ->where('api_name', $groupByField)
             ->with('options')
             ->first();
@@ -421,7 +417,7 @@ class ViewsController extends Controller
         ];
 
         // Fetch records with view filters applied
-        $query = ModuleRecord::where('module_id', $module->id);
+        $query = DB::table('module_records')->where('module_id', $module->id);
 
         // Apply view filters (only if view exists)
         if ($view && !empty($view->filters)) {
@@ -501,7 +497,7 @@ class ViewsController extends Controller
      */
     public function moveKanbanRecord(Request $request, string $moduleApiName, int $viewId): JsonResponse
     {
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
         if (!$module) {
             return response()->json([
@@ -523,7 +519,7 @@ class ViewsController extends Controller
             $groupByField = $validated['group_by_field'];
         } else {
             // Saved view mode
-            $view = ModuleView::where('module_id', $module->id)
+            $view = DB::table('module_views')->where('module_id', $module->id)
                 ->where('id', $viewId)
                 ->accessibleBy($userId)
                 ->first();
@@ -543,7 +539,7 @@ class ViewsController extends Controller
             $groupByField = $view->getKanbanGroupByField();
         }
 
-        $record = ModuleRecord::where('module_id', $module->id)
+        $record = DB::table('module_records')->where('module_id', $module->id)
             ->where('id', $validated['record_id'])
             ->first();
 

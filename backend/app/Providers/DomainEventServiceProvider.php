@@ -9,7 +9,7 @@ use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvi
 /**
  * Domain Event Service Provider.
  *
- * Registers domain event to listener mappings. This replaces Eloquent observers
+ * Registers domain event to listener mappings. This replaces Database observers
  * with a proper event-driven architecture where domain events are dispatched
  * and handled by dedicated listeners.
  */

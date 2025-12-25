@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services\Email;
 
-use App\Models\EmailAccount;
-use App\Models\EmailMessage;
-use App\Models\EmailTemplate;
+use App\Domain\Email\Entities\EmailAccount;
+use App\Domain\Email\Entities\EmailMessage;
+use App\Domain\Email\Entities\EmailTemplate;
+use App\Domain\Email\Repositories\EmailAccountRepositoryInterface;
+use App\Domain\Email\Repositories\EmailMessageRepositoryInterface;
+use App\Domain\Email\Repositories\EmailTemplateRepositoryInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -16,13 +19,19 @@ class EmailService
     protected ?ImapConnection $imapConnection = null;
     protected ?SmtpConnection $smtpConnection = null;
 
+    public function __construct(
+        protected EmailAccountRepositoryInterface $accountRepository,
+        protected EmailMessageRepositoryInterface $messageRepository,
+        protected EmailTemplateRepositoryInterface $templateRepository,
+    ) {}
+
     /**
      * Connect to an email account.
      */
     public function connect(EmailAccount $account): bool
     {
         try {
-            if ($account->provider === EmailAccount::PROVIDER_SMTP_ONLY) {
+            if ($account->getProvider() === 'smtp_only') {
                 $this->smtpConnection = new SmtpConnection($account);
                 return $this->smtpConnection->connect();
             }
@@ -33,7 +42,7 @@ class EmailService
             return $this->imapConnection->connect() && $this->smtpConnection->connect();
         } catch (\Exception $e) {
             Log::error('Email connection failed', [
-                'account_id' => $account->id,
+                'account_id' => $account->getId(),
                 'error' => $e->getMessage(),
             ]);
             return false;
@@ -60,13 +69,13 @@ class EmailService
             $this->connect($account);
         }
 
-        $folders = $folder ? [$folder] : $account->sync_folders;
+        $folders = $folder ? [$folder] : $account->getSyncFolders();
         $messages = collect();
 
         foreach ($folders as $syncFolder) {
             $newMessages = $this->imapConnection->fetchMessages(
                 $syncFolder,
-                $account->last_sync_uid
+                $account->getLastSyncUid()
             );
 
             foreach ($newMessages as $message) {
@@ -76,10 +85,8 @@ class EmailService
         }
 
         // Update last sync
-        $account->update([
-            'last_sync_at' => now(),
-            'last_sync_uid' => $this->imapConnection->getLastUid(),
-        ]);
+        $account->updateLastSync(now(), $this->imapConnection->getLastUid());
+        $this->accountRepository->save($account);
 
         return $messages;
     }

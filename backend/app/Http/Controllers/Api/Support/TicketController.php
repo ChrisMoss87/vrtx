@@ -4,12 +4,10 @@ namespace App\Http\Controllers\Api\Support;
 
 use App\Application\Services\Support\SupportApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\SupportTicket;
-use App\Models\TicketCategory;
-use App\Models\TicketReply;
 use App\Services\Support\TicketService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class TicketController extends Controller
 {
@@ -123,7 +121,7 @@ class TicketController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $ticket = SupportTicket::findOrFail($id);
+        $ticket = DB::table('support_tickets')->where('id', $id)->first();
 
         $validated = $request->validate([
             'subject' => 'sometimes|string|max:255',
@@ -144,7 +142,7 @@ class TicketController extends Controller
 
     public function destroy(int $id): JsonResponse
     {
-        $ticket = SupportTicket::findOrFail($id);
+        $ticket = DB::table('support_tickets')->where('id', $id)->first();
         $ticket->delete();
 
         return response()->json(['message' => 'Ticket deleted']);
@@ -152,7 +150,7 @@ class TicketController extends Controller
 
     public function reply(Request $request, int $id): JsonResponse
     {
-        $ticket = SupportTicket::findOrFail($id);
+        $ticket = DB::table('support_tickets')->where('id', $id)->first();
 
         $validated = $request->validate([
             'content' => 'required|string',
@@ -177,7 +175,7 @@ class TicketController extends Controller
 
     public function assign(Request $request, int $id): JsonResponse
     {
-        $ticket = SupportTicket::findOrFail($id);
+        $ticket = DB::table('support_tickets')->where('id', $id)->first();
 
         $validated = $request->validate([
             'assigned_to' => 'required|exists:users,id',
@@ -197,7 +195,7 @@ class TicketController extends Controller
 
     public function resolve(Request $request, int $id): JsonResponse
     {
-        $ticket = SupportTicket::findOrFail($id);
+        $ticket = DB::table('support_tickets')->where('id', $id)->first();
 
         $validated = $request->validate([
             'resolution_note' => 'nullable|string',
@@ -217,7 +215,7 @@ class TicketController extends Controller
 
     public function close(int $id): JsonResponse
     {
-        $ticket = SupportTicket::findOrFail($id);
+        $ticket = DB::table('support_tickets')->where('id', $id)->first();
         $ticket = $this->ticketService->closeTicket($ticket, auth()->user());
 
         return response()->json([
@@ -228,7 +226,7 @@ class TicketController extends Controller
 
     public function reopen(int $id): JsonResponse
     {
-        $ticket = SupportTicket::findOrFail($id);
+        $ticket = DB::table('support_tickets')->where('id', $id)->first();
         $ticket = $this->ticketService->updateTicket($ticket, ['status' => 'open'], auth()->user());
 
         return response()->json([
@@ -239,7 +237,7 @@ class TicketController extends Controller
 
     public function escalate(Request $request, int $id): JsonResponse
     {
-        $ticket = SupportTicket::findOrFail($id);
+        $ticket = DB::table('support_tickets')->where('id', $id)->first();
 
         $validated = $request->validate([
             'type' => 'required|string|in:response_sla,resolution_sla,manual',
@@ -265,7 +263,7 @@ class TicketController extends Controller
 
     public function merge(Request $request, int $id): JsonResponse
     {
-        $primaryTicket = SupportTicket::findOrFail($id);
+        $primaryTicket = DB::table('support_tickets')->where('id', $id)->first();
 
         $validated = $request->validate([
             'secondary_ticket_id' => 'required|exists:support_tickets,id',

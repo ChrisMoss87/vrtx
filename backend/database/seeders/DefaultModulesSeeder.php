@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\FieldOption;
-use App\Models\Module;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds the default modules for a new tenant.

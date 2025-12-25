@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Api\Lookalike;
 
 use App\Http\Controllers\Controller;
-use App\Models\LookalikeAudience;
-use App\Models\LookalikeExportLog;
 use App\Services\Lookalike\LookalikeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class LookalikeController extends Controller
 {
@@ -76,7 +75,7 @@ class LookalikeController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $audience = LookalikeAudience::findOrFail($id);
+        $audience = DB::table('lookalike_audiences')->where('id', $id)->first();
 
         if ($audience->isBuilding()) {
             return response()->json([
@@ -108,7 +107,7 @@ class LookalikeController extends Controller
 
     public function destroy(int $id): JsonResponse
     {
-        $audience = LookalikeAudience::findOrFail($id);
+        $audience = DB::table('lookalike_audiences')->where('id', $id)->first();
 
         if ($audience->isBuilding()) {
             return response()->json([
@@ -127,7 +126,7 @@ class LookalikeController extends Controller
 
     public function build(int $id): JsonResponse
     {
-        $audience = LookalikeAudience::findOrFail($id);
+        $audience = DB::table('lookalike_audiences')->where('id', $id)->first();
 
         if ($audience->isBuilding()) {
             return response()->json([
@@ -150,7 +149,7 @@ class LookalikeController extends Controller
 
     public function matches(Request $request, int $id): JsonResponse
     {
-        $audience = LookalikeAudience::findOrFail($id);
+        $audience = DB::table('lookalike_audiences')->where('id', $id)->first();
         $perPage = $request->integer('per_page', 50);
 
         $matches = $this->lookalikeService->getMatches($audience, $perPage);
@@ -169,7 +168,7 @@ class LookalikeController extends Controller
 
     public function export(Request $request, int $id): JsonResponse
     {
-        $audience = LookalikeAudience::findOrFail($id);
+        $audience = DB::table('lookalike_audiences')->where('id', $id)->first();
 
         if (!$audience->isReady()) {
             return response()->json([

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use App\Models\WizardDraft;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds demo modules and records for tenant databases.
@@ -128,7 +128,7 @@ class TenantDemoSeeder extends Seeder
         ];
 
         foreach ($drafts as $draftData) {
-            WizardDraft::create($draftData);
+            DB::table('wizard_drafts')->insertGetId($draftData);
         }
 
         $this->command->info('  - Created ' . count($drafts) . ' wizard drafts');

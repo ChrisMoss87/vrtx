@@ -2,12 +2,10 @@
 
 namespace App\Services\Whatsapp;
 
-use App\Models\WhatsappConnection;
-use App\Models\WhatsappMessage;
-use App\Models\WhatsappTemplate;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class WhatsappApiService
 {

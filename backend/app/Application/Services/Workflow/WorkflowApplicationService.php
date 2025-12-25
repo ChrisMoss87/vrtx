@@ -22,8 +22,8 @@ use App\Domain\Workflow\Services\WorkflowTriggerEvaluatorService;
 use App\Domain\Workflow\Services\WorkflowValidationService;
 use App\Domain\Workflow\ValueObjects\TriggerType;
 use App\Jobs\ExecuteWorkflowJob;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Application Service for Workflow operations.

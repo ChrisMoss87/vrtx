@@ -2,10 +2,6 @@
 
 namespace App\Services\Duplicates;
 
-use App\Models\DuplicateCandidate;
-use App\Models\MergeLog;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,7 +26,7 @@ class DuplicateMergeService
     ): ModuleRecord {
         return DB::transaction(function () use ($survivingRecordId, $mergeRecordIds, $fieldSelections, $userId) {
             // Load the surviving record
-            $survivingRecord = ModuleRecord::findOrFail($survivingRecordId);
+            $survivingRecord = DB::table('module_records')->where('id', $survivingRecordId)->first();
             $module = $survivingRecord->module;
 
             // Load records to merge
@@ -76,7 +72,7 @@ class DuplicateMergeService
             $this->updateDuplicateCandidates($survivingRecord, $mergeRecordIds, $userId);
 
             // Create merge log
-            MergeLog::create([
+            DB::table('merge_logs')->insertGetId([
                 'module_id' => $module->id,
                 'surviving_record_id' => $survivingRecordId,
                 'merged_record_ids' => $mergeRecordIds,
@@ -222,7 +218,7 @@ class DuplicateMergeService
         int $userId
     ): void {
         // Mark candidates as merged
-        DuplicateCandidate::where(function ($query) use ($survivingRecord, $mergedRecordIds) {
+        DB::table('duplicate_candidates')->where(function ($query) use ($survivingRecord, $mergedRecordIds) {
             $allIds = array_merge([$survivingRecord->id], $mergedRecordIds);
             $query->whereIn('record_id_a', $allIds)
                 ->whereIn('record_id_b', $allIds);
@@ -246,8 +242,8 @@ class DuplicateMergeService
         int $recordBId,
         array $fieldSelections
     ): array {
-        $recordA = ModuleRecord::findOrFail($recordAId);
-        $recordB = ModuleRecord::findOrFail($recordBId);
+        $recordA = DB::table('module_records')->where('id', $recordAId)->first();
+        $recordB = DB::table('module_records')->where('id', $recordBId)->first();
         $module = $recordA->module;
 
         // Get field definitions

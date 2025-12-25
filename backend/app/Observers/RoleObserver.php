@@ -12,7 +12,7 @@ use Spatie\Permission\Models\Role;
 /**
  * Observer for Role model.
  *
- * This observer acts as a bridge between Eloquent model events and domain events.
+ * This observer acts as a bridge between Database model events and domain events.
  * It dispatches domain events which are handled by dedicated listeners for
  * permission setup when roles are created/deleted.
  */

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\CadenceEnrollment;
-use App\Models\CadenceStep;
-use App\Models\CadenceStepExecution;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\CadenceStepExecution>

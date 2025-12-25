@@ -6,12 +6,11 @@ namespace App\Http\Controllers\Api\Quotas;
 
 use App\Application\Services\Goal\GoalApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Quota;
-use App\Models\QuotaPeriod;
 use App\Services\Quotas\LeaderboardService;
 use App\Services\Quotas\QuotaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class QuotaController extends Controller
 {

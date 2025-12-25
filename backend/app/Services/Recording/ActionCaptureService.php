@@ -2,10 +2,9 @@
 
 namespace App\Services\Recording;
 
-use App\Models\Recording;
-use App\Models\RecordingStep;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ActionCaptureService
 {

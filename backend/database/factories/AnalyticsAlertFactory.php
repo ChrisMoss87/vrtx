@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\AnalyticsAlert;
-use App\Models\Module;
-use App\Models\Report;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\AnalyticsAlert>
@@ -40,7 +38,7 @@ class AnalyticsAlertFactory extends Factory
                 AnalyticsAlert::TYPE_ANOMALY,
                 AnalyticsAlert::TYPE_TREND,
             ]),
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'report_id' => null,
             'metric_field' => $this->faker->randomElement(['amount', 'count', 'conversion_rate']),
             'aggregation' => $this->faker->randomElement(['sum', 'count', 'avg']),

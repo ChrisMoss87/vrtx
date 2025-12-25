@@ -6,9 +6,6 @@ namespace App\Http\Controllers\Api\Blueprints;
 
 use App\Application\Services\Blueprint\BlueprintApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Blueprint;
-use App\Models\BlueprintState;
-use App\Models\BlueprintTransition;
 use App\Services\Blueprint\BlueprintEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,7 +66,7 @@ class BlueprintController extends Controller
             ]);
 
             // Check if blueprint already exists for this field
-            $existing = Blueprint::where('module_id', $validated['module_id'])
+            $existing = DB::table('blueprints')->where('module_id', $validated['module_id'])
                 ->where('field_id', $validated['field_id'])
                 ->first();
 
@@ -82,7 +79,7 @@ class BlueprintController extends Controller
             }
 
             $blueprint = DB::transaction(function () use ($validated, $request) {
-                $blueprint = Blueprint::create([
+                $blueprint = DB::table('blueprints')->insertGetId([
                     'name' => $validated['name'],
                     'module_id' => $validated['module_id'],
                     'field_id' => $validated['field_id'],
@@ -164,7 +161,7 @@ class BlueprintController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -208,7 +205,7 @@ class BlueprintController extends Controller
     public function updateLayout(Request $request, int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -242,7 +239,7 @@ class BlueprintController extends Controller
     public function destroy(int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -272,7 +269,7 @@ class BlueprintController extends Controller
     public function toggleActive(int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -303,7 +300,7 @@ class BlueprintController extends Controller
     public function syncStates(int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -336,7 +333,7 @@ class BlueprintController extends Controller
     public function states(int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -364,7 +361,7 @@ class BlueprintController extends Controller
     public function storeState(Request $request, int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -417,7 +414,7 @@ class BlueprintController extends Controller
     public function updateState(Request $request, int $id, int $stateId): JsonResponse
     {
         try {
-            $state = BlueprintState::where('blueprint_id', $id)->find($stateId);
+            $state = DB::table('blueprint_states')->where('blueprint_id', $id)->find($stateId);
 
             if (!$state) {
                 return response()->json([
@@ -439,7 +436,7 @@ class BlueprintController extends Controller
 
             // If setting as initial, unset other initial states
             if ($request->boolean('is_initial') && !$state->is_initial) {
-                BlueprintState::where('blueprint_id', $id)
+                DB::table('blueprint_states')->where('blueprint_id', $id)
                     ->where('is_initial', true)
                     ->update(['is_initial' => false]);
             }
@@ -472,7 +469,7 @@ class BlueprintController extends Controller
     public function destroyState(int $id, int $stateId): JsonResponse
     {
         try {
-            $state = BlueprintState::where('blueprint_id', $id)->find($stateId);
+            $state = DB::table('blueprint_states')->where('blueprint_id', $id)->find($stateId);
 
             if (!$state) {
                 return response()->json([
@@ -512,7 +509,7 @@ class BlueprintController extends Controller
     public function transitions(int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -544,7 +541,7 @@ class BlueprintController extends Controller
     public function storeTransition(Request $request, int $id): JsonResponse
     {
         try {
-            $blueprint = Blueprint::find($id);
+            $blueprint = DB::table('blueprints')->where('id', $id)->first();
 
             if (!$blueprint) {
                 return response()->json([
@@ -591,7 +588,7 @@ class BlueprintController extends Controller
     public function updateTransition(Request $request, int $id, int $transitionId): JsonResponse
     {
         try {
-            $transition = BlueprintTransition::where('blueprint_id', $id)->find($transitionId);
+            $transition = DB::table('blueprint_transitions')->where('blueprint_id', $id)->find($transitionId);
 
             if (!$transition) {
                 return response()->json([
@@ -638,7 +635,7 @@ class BlueprintController extends Controller
     public function destroyTransition(int $id, int $transitionId): JsonResponse
     {
         try {
-            $transition = BlueprintTransition::where('blueprint_id', $id)->find($transitionId);
+            $transition = DB::table('blueprint_transitions')->where('blueprint_id', $id)->find($transitionId);
 
             if (!$transition) {
                 return response()->json([

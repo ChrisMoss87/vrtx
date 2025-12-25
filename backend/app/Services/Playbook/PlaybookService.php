@@ -2,12 +2,6 @@
 
 namespace App\Services\Playbook;
 
-use App\Models\Playbook;
-use App\Models\PlaybookActivity;
-use App\Models\PlaybookGoalResult;
-use App\Models\PlaybookInstance;
-use App\Models\PlaybookTask;
-use App\Models\PlaybookTaskInstance;
 use Illuminate\Support\Facades\DB;
 
 class PlaybookService
@@ -28,7 +22,7 @@ class PlaybookService
                 : null;
 
             // Create the instance
-            $instance = PlaybookInstance::create([
+            $instance = DB::table('playbook_instances')->insertGetId([
                 'playbook_id' => $playbook->id,
                 'related_module' => $relatedModule,
                 'related_id' => $relatedId,
@@ -70,7 +64,7 @@ class PlaybookService
             // Determine assignee
             $assignedTo = $this->resolveAssignee($task, $instance);
 
-            PlaybookTaskInstance::create([
+            DB::table('playbook_task_instances')->insertGetId([
                 'instance_id' => $instance->id,
                 'task_id' => $task->id,
                 'status' => 'pending',
@@ -102,7 +96,7 @@ class PlaybookService
         $goals = $instance->playbook->goals;
 
         foreach ($goals as $goal) {
-            PlaybookGoalResult::create([
+            DB::table('playbook_goal_results')->insertGetId([
                 'instance_id' => $instance->id,
                 'goal_id' => $goal->id,
                 'achieved' => false,

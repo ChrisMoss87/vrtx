@@ -4,14 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Signature;
 
-use App\Models\GeneratedDocument;
-use App\Models\SignatureAuditLog;
-use App\Models\SignatureField;
-use App\Models\SignatureRequest;
-use App\Models\SignatureSigner;
-use App\Models\SignatureTemplate;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 
 class SignatureService
 {
@@ -19,7 +14,7 @@ class SignatureService
     {
         $data['created_by'] = Auth::id();
 
-        $request = SignatureRequest::create($data);
+        $request = DB::table('signature_requests')->insertGetId($data);
 
         // Add signers
         if (!empty($data['signers'])) {
@@ -245,7 +240,7 @@ class SignatureService
 
     public function getSignerByToken(string $token): ?SignatureSigner
     {
-        return SignatureSigner::where('access_token', $token)->first();
+        return DB::table('signature_signers')->where('access_token', $token)->first();
     }
 
     public function checkExpiredRequests(): int

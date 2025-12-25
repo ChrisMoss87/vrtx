@@ -6,11 +6,11 @@ namespace App\Http\Controllers\Api\Billing;
 
 use App\Application\Services\Billing\BillingApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Invoice;
 use App\Services\Billing\InvoiceService; // @deprecated - use BillingApplicationService
 use App\Services\Billing\PdfGeneratorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class InvoiceController extends Controller
 {

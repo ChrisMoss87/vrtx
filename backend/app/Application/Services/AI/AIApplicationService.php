@@ -6,11 +6,9 @@ namespace App\Application\Services\AI;
 
 use App\Domain\AI\Repositories\AiPromptRepositoryInterface;
 use App\Domain\Shared\Contracts\AuthContextInterface;
-use App\Models\AiEmailDraft;
-use App\Models\AiSetting;
-use App\Models\AiUsageLog;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 
 class AIApplicationService
 {
@@ -28,7 +26,7 @@ class AIApplicationService
      */
     public function getSettings(): ?AiSetting
     {
-        return AiSetting::first();
+        return DB::table('ai_settings')->first();
     }
 
     /**
@@ -200,7 +198,7 @@ class AIApplicationService
             null
         );
 
-        return AiEmailDraft::create([
+        return DB::table('ai_email_drafts')->insertGetId([
             'user_id' => $this->authContext->userId(),
             'type' => AiEmailDraft::TYPE_COMPOSE,
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
@@ -241,7 +239,7 @@ class AIApplicationService
             null
         );
 
-        return AiEmailDraft::create([
+        return DB::table('ai_email_drafts')->insertGetId([
             'user_id' => $this->authContext->userId(),
             'type' => AiEmailDraft::TYPE_IMPROVE,
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
@@ -283,7 +281,7 @@ class AIApplicationService
             null
         );
 
-        return AiEmailDraft::create([
+        return DB::table('ai_email_drafts')->insertGetId([
             'user_id' => $this->authContext->userId(),
             'type' => AiEmailDraft::TYPE_REPLY,
             'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
@@ -340,7 +338,7 @@ class AIApplicationService
      */
     public function getUserEmailDrafts(int $limit = 20): array
     {
-        return AiEmailDraft::where('user_id', $this->authContext->userId())
+        return DB::table('ai_email_drafts')->where('user_id', $this->authContext->userId())
             ->orderByDesc('created_at')
             ->limit($limit)
             ->get()
@@ -353,7 +351,7 @@ class AIApplicationService
      */
     public function markDraftAsUsed(int $draftId): AiEmailDraft
     {
-        $draft = AiEmailDraft::findOrFail($draftId);
+        $draft = DB::table('ai_email_drafts')->where('id', $draftId)->first();
         $draft->markAsUsed();
         return $draft;
     }
@@ -474,7 +472,7 @@ class AIApplicationService
      */
     public function getUsageByUser(?string $startDate = null, ?string $endDate = null): array
     {
-        $query = AiUsageLog::query()
+        $query = DB::table('ai_usage_logs')
             ->selectRaw('user_id, COUNT(*) as request_count, SUM(cost_cents) as total_cost, SUM(input_tokens + output_tokens) as total_tokens')
             ->groupBy('user_id')
             ->with(['user:id,name,email']);
@@ -499,7 +497,7 @@ class AIApplicationService
     {
         $startDate = Carbon::now()->subDays($days);
 
-        $usage = AiUsageLog::where('created_at', '>=', $startDate)
+        $usage = DB::table('ai_usage_logs')->where('created_at', '>=', $startDate)
             ->selectRaw("DATE(created_at) as date, COUNT(*) as requests, SUM(cost_cents) as cost")
             ->groupByRaw('DATE(created_at)')
             ->orderBy('date')
@@ -593,7 +591,7 @@ class AIApplicationService
         $costCents = $settings->calculateCost($inputTokens, $outputTokens);
 
         // Log usage
-        AiUsageLog::create([
+        DB::table('ai_usage_logs')->insertGetId([
             'feature' => $feature,
             'model' => $settings->model,
             'input_tokens' => $inputTokens,

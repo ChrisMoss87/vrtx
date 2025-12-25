@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Blueprint;
 
 use App\Domain\Workflow\Services\ConditionEvaluationService;
-use App\Models\BlueprintTransition;
-use App\Models\BlueprintTransitionCondition;
+use App\Domain\Blueprint\Entities\BlueprintTransition;
 use Illuminate\Support\Collection;
 
 /**
@@ -24,14 +23,14 @@ class ConditionService
      */
     public function evaluate(BlueprintTransition $transition, array $recordData): bool
     {
-        $conditions = $transition->conditions;
+        $conditions = $transition->getConditions();
 
         if ($conditions->isEmpty()) {
             return true;
         }
 
         // Group conditions by logical_group
-        $groups = $conditions->groupBy('logical_group');
+        $groups = $conditions->groupBy(fn($c) => $c->getLogicalGroup());
 
         // Evaluate each group
         $groupResults = [];
@@ -62,17 +61,17 @@ class ConditionService
     /**
      * Evaluate a single condition.
      */
-    protected function evaluateCondition(BlueprintTransitionCondition $condition, array $recordData): bool
+    protected function evaluateCondition($condition, array $recordData): bool
     {
-        $field = $condition->field;
+        $field = $condition->getField();
         if (!$field) {
             return true; // No field specified, condition passes
         }
 
-        $fieldName = $field->api_name;
+        $fieldName = $field->getApiName();
         $actualValue = $recordData[$fieldName] ?? null;
-        $operator = $condition->operator;
-        $expectedValue = $this->parseValue($condition->value, $field->type);
+        $operator = $condition->getOperator();
+        $expectedValue = $this->parseValue($condition->getValue(), $field->getType());
 
         // Build context for the evaluator
         $context = ['record' => $recordData];

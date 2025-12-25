@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\CustomerHealthScore;
+use App\Infrastructure\Persistence\Eloquent\Models\CustomerHealthScore;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

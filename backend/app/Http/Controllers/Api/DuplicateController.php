@@ -5,14 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Application\Services\Duplicate\DuplicateApplicationService;
 use App\Http\Controllers\Controller;
 use App\Jobs\ScanDuplicatesJob;
-use App\Models\DuplicateCandidate;
-use App\Models\DuplicateRule;
-use App\Models\Module;
 use App\Services\Duplicates\DuplicateDetectionService;
 use App\Services\Duplicates\DuplicateMergeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class DuplicateController extends Controller
 {
@@ -296,7 +294,7 @@ class DuplicateController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $rule = DuplicateRule::create([
+        $rule = DB::table('duplicate_rules')->insertGetId([
             'module_id' => $request->module_id,
             'name' => $request->name,
             'description' => $request->description,
@@ -320,7 +318,7 @@ class DuplicateController extends Controller
      */
     public function updateRule(Request $request, int $id): JsonResponse
     {
-        $rule = DuplicateRule::findOrFail($id);
+        $rule = DB::table('duplicate_rules')->where('id', $id)->first();
 
         $validator = Validator::make($request->all(), [
             'name' => 'nullable|string|max:255',
@@ -357,7 +355,7 @@ class DuplicateController extends Controller
      */
     public function deleteRule(int $id): JsonResponse
     {
-        $rule = DuplicateRule::findOrFail($id);
+        $rule = DB::table('duplicate_rules')->where('id', $id)->first();
         $rule->delete();
 
         return response()->json([
@@ -453,7 +451,7 @@ class DuplicateController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $query = DuplicateCandidate::query();
+        $query = DB::table('duplicate_candidates');
         if ($request->module_id) {
             $query->forModule($request->module_id);
         }
@@ -462,7 +460,7 @@ class DuplicateController extends Controller
         $merged = (clone $query)->where('status', 'merged')->count();
         $dismissed = (clone $query)->where('status', 'dismissed')->count();
 
-        $ruleQuery = DuplicateRule::query();
+        $ruleQuery = DB::table('duplicate_rules');
         if ($request->module_id) {
             $ruleQuery->forModule($request->module_id);
         }

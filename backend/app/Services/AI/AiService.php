@@ -2,11 +2,9 @@
 
 namespace App\Services\AI;
 
-use App\Models\AiSetting;
-use App\Models\AiUsageLog;
-use App\Models\AiPrompt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class AiService
 {
@@ -18,7 +16,7 @@ class AiService
     public function getSettings(): ?AiSetting
     {
         if ($this->settings === null) {
-            $this->settings = AiSetting::first();
+            $this->settings = DB::table('ai_settings')->first();
         }
 
         return $this->settings;
@@ -188,7 +186,7 @@ class AiService
             $response['output_tokens']
         );
 
-        AiUsageLog::create([
+        DB::table('ai_usage_logs')->insertGetId([
             'feature' => $feature,
             'model' => $response['model'],
             'input_tokens' => $response['input_tokens'],

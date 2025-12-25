@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Workflow;
 
 use App\Http\Controllers\Controller;
-use App\Models\WorkflowEmailTemplate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * API controller for workflow email templates.
@@ -26,11 +26,12 @@ class WorkflowEmailTemplateController extends Controller
             'include_system' => 'nullable|boolean',
         ]);
 
-        $query = WorkflowEmailTemplate::query()
+        $query = DB::table('workflow_email_templates')
+            ->whereNull('deleted_at')
             ->orderBy('name');
 
         if (isset($validated['category'])) {
-            $query->inCategory($validated['category']);
+            $query->where('category', $validated['category']);
         }
 
         if (isset($validated['search'])) {
@@ -43,10 +44,12 @@ class WorkflowEmailTemplateController extends Controller
         }
 
         if (!($validated['include_system'] ?? true)) {
-            $query->userCreated();
+            $query->where('is_system', false);
         }
 
-        $templates = $query->get();
+        $templates = $query->get()->map(function ($template) {
+            return $this->decodeJsonFields($template);
+        });
 
         return response()->json([
             'success' => true,
@@ -57,12 +60,24 @@ class WorkflowEmailTemplateController extends Controller
     /**
      * Get a single template.
      */
-    public function show(WorkflowEmailTemplate $workflowEmailTemplate): JsonResponse
+    public function show(int $id): JsonResponse
     {
+        $template = DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$template) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found',
+            ], 404);
+        }
+
         return response()->json([
             'success' => true,
-            'template' => $workflowEmailTemplate,
-            'available_variables' => WorkflowEmailTemplate::getDefaultVariables(),
+            'template' => $this->decodeJsonFields($template),
+            'available_variables' => $this->getDefaultVariables(),
         ]);
     }
 
@@ -84,15 +99,33 @@ class WorkflowEmailTemplateController extends Controller
             'category' => 'nullable|string|max:255',
         ]);
 
-        $template = WorkflowEmailTemplate::create([
-            ...$validated,
+        $now = now()->toDateTimeString();
+
+        $id = DB::table('workflow_email_templates')->insertGetId([
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'subject' => $validated['subject'],
+            'body_html' => $validated['body_html'],
+            'body_text' => $validated['body_text'] ?? null,
+            'from_name' => $validated['from_name'] ?? null,
+            'from_email' => $validated['from_email'] ?? null,
+            'reply_to' => $validated['reply_to'] ?? null,
+            'available_variables' => isset($validated['available_variables']) ? json_encode($validated['available_variables']) : null,
+            'category' => $validated['category'] ?? null,
+            'is_system' => false,
             'created_by' => Auth::id(),
             'updated_by' => Auth::id(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
+
+        $template = DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->first();
 
         return response()->json([
             'success' => true,
-            'template' => $template,
+            'template' => $this->decodeJsonFields($template),
             'message' => 'Email template created successfully',
         ], 201);
     }
@@ -100,10 +133,22 @@ class WorkflowEmailTemplateController extends Controller
     /**
      * Update a template.
      */
-    public function update(Request $request, WorkflowEmailTemplate $workflowEmailTemplate): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
+        $template = DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$template) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found',
+            ], 404);
+        }
+
         // Prevent editing system templates
-        if ($workflowEmailTemplate->is_system) {
+        if ($template->is_system) {
             return response()->json([
                 'success' => false,
                 'message' => 'System templates cannot be modified',
@@ -123,14 +168,28 @@ class WorkflowEmailTemplateController extends Controller
             'category' => 'nullable|string|max:255',
         ]);
 
-        $workflowEmailTemplate->update([
-            ...$validated,
-            'updated_by' => Auth::id(),
-        ]);
+        $updateData = [];
+        foreach ($validated as $key => $value) {
+            if ($key === 'available_variables' && is_array($value)) {
+                $updateData[$key] = json_encode($value);
+            } else {
+                $updateData[$key] = $value;
+            }
+        }
+        $updateData['updated_by'] = Auth::id();
+        $updateData['updated_at'] = now()->toDateTimeString();
+
+        DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->update($updateData);
+
+        $updatedTemplate = DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->first();
 
         return response()->json([
             'success' => true,
-            'template' => $workflowEmailTemplate->fresh(),
+            'template' => $this->decodeJsonFields($updatedTemplate),
             'message' => 'Email template updated successfully',
         ]);
     }
@@ -138,17 +197,31 @@ class WorkflowEmailTemplateController extends Controller
     /**
      * Delete a template.
      */
-    public function destroy(WorkflowEmailTemplate $workflowEmailTemplate): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
+        $template = DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$template) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found',
+            ], 404);
+        }
+
         // Prevent deleting system templates
-        if ($workflowEmailTemplate->is_system) {
+        if ($template->is_system) {
             return response()->json([
                 'success' => false,
                 'message' => 'System templates cannot be deleted',
             ], 403);
         }
 
-        $workflowEmailTemplate->delete();
+        DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->update(['deleted_at' => now()->toDateTimeString()]);
 
         return response()->json([
             'success' => true,
@@ -159,18 +232,47 @@ class WorkflowEmailTemplateController extends Controller
     /**
      * Duplicate a template.
      */
-    public function duplicate(WorkflowEmailTemplate $workflowEmailTemplate): JsonResponse
+    public function duplicate(int $id): JsonResponse
     {
-        $copy = $workflowEmailTemplate->replicate();
-        $copy->name = $workflowEmailTemplate->name . ' (Copy)';
-        $copy->is_system = false;
-        $copy->created_by = Auth::id();
-        $copy->updated_by = Auth::id();
-        $copy->save();
+        $template = DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$template) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found',
+            ], 404);
+        }
+
+        $now = now()->toDateTimeString();
+
+        $newId = DB::table('workflow_email_templates')->insertGetId([
+            'name' => $template->name . ' (Copy)',
+            'description' => $template->description,
+            'subject' => $template->subject,
+            'body_html' => $template->body_html,
+            'body_text' => $template->body_text,
+            'from_name' => $template->from_name,
+            'from_email' => $template->from_email,
+            'reply_to' => $template->reply_to,
+            'available_variables' => $template->available_variables,
+            'category' => $template->category,
+            'is_system' => false,
+            'created_by' => Auth::id(),
+            'updated_by' => Auth::id(),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $copy = DB::table('workflow_email_templates')
+            ->where('id', $newId)
+            ->first();
 
         return response()->json([
             'success' => true,
-            'template' => $copy,
+            'template' => $this->decodeJsonFields($copy),
             'message' => 'Email template duplicated successfully',
         ], 201);
     }
@@ -178,8 +280,20 @@ class WorkflowEmailTemplateController extends Controller
     /**
      * Preview template with sample data.
      */
-    public function preview(Request $request, WorkflowEmailTemplate $workflowEmailTemplate): JsonResponse
+    public function preview(Request $request, int $id): JsonResponse
     {
+        $template = DB::table('workflow_email_templates')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$template) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found',
+            ], 404);
+        }
+
         $validated = $request->validate([
             'data' => 'nullable|array',
         ]);
@@ -189,9 +303,9 @@ class WorkflowEmailTemplateController extends Controller
         return response()->json([
             'success' => true,
             'preview' => [
-                'subject' => $workflowEmailTemplate->renderSubject($sampleData),
-                'body_html' => $workflowEmailTemplate->renderBodyHtml($sampleData),
-                'body_text' => $workflowEmailTemplate->renderBodyText($sampleData),
+                'subject' => $this->renderSubject($template->subject, $sampleData),
+                'body_html' => $this->renderBodyHtml($template->body_html, $sampleData),
+                'body_text' => $template->body_text ? $this->renderBodyText($template->body_text, $sampleData) : null,
             ],
             'sample_data' => $sampleData,
         ]);
@@ -202,7 +316,9 @@ class WorkflowEmailTemplateController extends Controller
      */
     public function categories(): JsonResponse
     {
-        $categories = WorkflowEmailTemplate::whereNotNull('category')
+        $categories = DB::table('workflow_email_templates')
+            ->whereNull('deleted_at')
+            ->whereNotNull('category')
             ->distinct()
             ->pluck('category')
             ->sort()
@@ -221,7 +337,7 @@ class WorkflowEmailTemplateController extends Controller
     {
         return response()->json([
             'success' => true,
-            'variables' => WorkflowEmailTemplate::getDefaultVariables(),
+            'variables' => $this->getDefaultVariables(),
         ]);
     }
 
@@ -262,6 +378,122 @@ class WorkflowEmailTemplateController extends Controller
                 'time' => now()->format('H:i:s'),
                 'datetime' => now()->format('Y-m-d H:i:s'),
                 'timestamp' => now()->timestamp,
+            ],
+        ];
+    }
+
+    /**
+     * Decode JSON fields from database record.
+     */
+    private function decodeJsonFields(object $template): array
+    {
+        $data = (array) $template;
+
+        if (isset($data['available_variables']) && is_string($data['available_variables'])) {
+            $data['available_variables'] = json_decode($data['available_variables'], true);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Render the subject with variable substitution.
+     */
+    private function renderSubject(string $subject, array $variables): string
+    {
+        return $this->substituteVariables($subject, $variables);
+    }
+
+    /**
+     * Render the HTML body with variable substitution.
+     */
+    private function renderBodyHtml(string $bodyHtml, array $variables): string
+    {
+        return $this->substituteVariables($bodyHtml, $variables);
+    }
+
+    /**
+     * Render the text body with variable substitution.
+     */
+    private function renderBodyText(string $bodyText, array $variables): string
+    {
+        return $this->substituteVariables($bodyText, $variables);
+    }
+
+    /**
+     * Substitute variables in a template string.
+     * Variables are in the format {{variable_name}} or {{record.field_name}}.
+     */
+    private function substituteVariables(string $template, array $variables): string
+    {
+        return preg_replace_callback(
+            '/\{\{([^}]+)\}\}/',
+            function ($matches) use ($variables) {
+                $key = trim($matches[1]);
+
+                // Handle nested keys (e.g., record.name, user.email)
+                $value = $this->getNestedValue($variables, $key);
+
+                if ($value === null) {
+                    return $matches[0]; // Keep original if not found
+                }
+
+                if (is_array($value) || is_object($value)) {
+                    return json_encode($value);
+                }
+
+                return (string) $value;
+            },
+            $template
+        );
+    }
+
+    /**
+     * Get a nested value from an array using dot notation.
+     */
+    private function getNestedValue(array $data, string $path): mixed
+    {
+        $keys = explode('.', $path);
+        $value = $data;
+
+        foreach ($keys as $key) {
+            if (is_array($value) && array_key_exists($key, $value)) {
+                $value = $value[$key];
+            } elseif (is_object($value) && property_exists($value, $key)) {
+                $value = $value->{$key};
+            } else {
+                return null;
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * Get default available variables for workflows.
+     */
+    private function getDefaultVariables(): array
+    {
+        return [
+            'record' => [
+                'description' => 'The triggering record',
+                'fields' => ['id', 'name', 'created_at', 'updated_at', '...module fields'],
+            ],
+            'user' => [
+                'description' => 'The user who triggered the workflow',
+                'fields' => ['id', 'name', 'email'],
+            ],
+            'current_user' => [
+                'description' => 'The currently logged in user',
+                'fields' => ['id', 'name', 'email'],
+            ],
+            'trigger' => [
+                'description' => 'Information about the trigger event',
+                'fields' => ['type', 'changed_fields', 'old_values', 'new_values'],
+            ],
+            'now' => [
+                'description' => 'Current date/time',
+                'fields' => ['date', 'time', 'datetime', 'timestamp'],
             ],
         ];
     }

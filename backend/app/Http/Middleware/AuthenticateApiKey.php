@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
-use App\Models\ApiKey;
-use App\Models\ApiRequestLog;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateApiKey
@@ -28,7 +27,7 @@ class AuthenticateApiKey
             ], 401);
         }
 
-        $apiKey = ApiKey::verify($apiKeyString);
+        $apiKey = $this->verifyApiKey($apiKeyString);
 
         if (!$apiKey) {
             return response()->json([
@@ -38,7 +37,7 @@ class AuthenticateApiKey
         }
 
         // Check IP whitelist
-        if (!$apiKey->isIpAllowed($request->ip())) {
+        if (!$this->isIpAllowed($apiKey, $request->ip())) {
             $this->logRequest($apiKey, $request, 403, $startTime);
 
             return response()->json([
@@ -48,7 +47,7 @@ class AuthenticateApiKey
         }
 
         // Check required scopes
-        if (!empty($scopes) && !$apiKey->hasAllScopes($scopes)) {
+        if (!empty($scopes) && !$this->hasAllScopes($apiKey, $scopes)) {
             $this->logRequest($apiKey, $request, 403, $startTime);
 
             return response()->json([
@@ -58,7 +57,7 @@ class AuthenticateApiKey
         }
 
         // Check rate limit
-        if ($apiKey->isRateLimited()) {
+        if ($this->isRateLimited($apiKey)) {
             $this->logRequest($apiKey, $request, 429, $startTime);
 
             return response()->json([
@@ -69,7 +68,7 @@ class AuthenticateApiKey
         }
 
         // Record usage
-        $apiKey->recordUsage($request->ip());
+        $this->recordUsage($apiKey, $request->ip());
 
         // Attach API key to request for use in controllers
         $request->attributes->set('api_key', $apiKey);
@@ -81,6 +80,92 @@ class AuthenticateApiKey
         $this->logRequest($apiKey, $request, $response->getStatusCode(), $startTime);
 
         return $response;
+    }
+
+    /**
+     * Verify API key and return it if valid.
+     */
+    protected function verifyApiKey(string $keyString): ?object
+    {
+        $hashedKey = hash('sha256', $keyString);
+
+        $apiKey = DB::table('api_keys')
+            ->where('key', $hashedKey)
+            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            })
+            ->first();
+
+        return $apiKey;
+    }
+
+    /**
+     * Check if IP is allowed.
+     */
+    protected function isIpAllowed(object $apiKey, ?string $ip): bool
+    {
+        if (empty($apiKey->ip_whitelist)) {
+            return true;
+        }
+
+        $whitelist = is_string($apiKey->ip_whitelist)
+            ? json_decode($apiKey->ip_whitelist, true)
+            : $apiKey->ip_whitelist;
+
+        if (empty($whitelist)) {
+            return true;
+        }
+
+        return in_array($ip, $whitelist);
+    }
+
+    /**
+     * Check if API key has all required scopes.
+     */
+    protected function hasAllScopes(object $apiKey, array $requiredScopes): bool
+    {
+        $keyScopes = is_string($apiKey->scopes ?? null)
+            ? json_decode($apiKey->scopes, true)
+            : ($apiKey->scopes ?? []);
+
+        foreach ($requiredScopes as $scope) {
+            if (!in_array($scope, $keyScopes)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if API key is rate limited.
+     */
+    protected function isRateLimited(object $apiKey): bool
+    {
+        $rateLimit = $apiKey->rate_limit ?? 1000;
+
+        $requestCount = DB::table('api_request_logs')
+            ->where('api_key_id', $apiKey->id)
+            ->where('created_at', '>=', now()->subMinute())
+            ->count();
+
+        return $requestCount >= $rateLimit;
+    }
+
+    /**
+     * Record API key usage.
+     */
+    protected function recordUsage(object $apiKey, ?string $ip): void
+    {
+        DB::table('api_keys')
+            ->where('id', $apiKey->id)
+            ->update([
+                'last_used_at' => now(),
+                'last_used_ip' => $ip,
+                'usage_count' => DB::raw('usage_count + 1'),
+            ]);
     }
 
     /**
@@ -112,19 +197,20 @@ class AuthenticateApiKey
     /**
      * Log the API request.
      */
-    protected function logRequest(ApiKey $apiKey, Request $request, int $statusCode, float $startTime): void
+    protected function logRequest(object $apiKey, Request $request, int $statusCode, float $startTime): void
     {
         $responseTimeMs = (int) ((microtime(true) - $startTime) * 1000);
 
-        ApiRequestLog::create([
+        DB::table('api_request_logs')->insert([
             'api_key_id' => $apiKey->id,
             'method' => $request->method(),
             'path' => $request->path(),
-            'query_params' => $request->query() ?: null,
+            'query_params' => $request->query() ? json_encode($request->query()) : null,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'status_code' => $statusCode,
             'response_time_ms' => $responseTimeMs,
+            'created_at' => now(),
         ]);
     }
 }

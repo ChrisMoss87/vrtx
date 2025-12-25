@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\DealRoom;
-use App\Models\ModuleRecord;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\DealRoom>
@@ -84,38 +83,5 @@ class DealRoomFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'status' => DealRoom::STATUS_LOST,
         ]);
-    }
-
-    /**
-     * With members.
-     */
-    public function withMembers(int $count = 3): static
-    {
-        return $this->has(
-            \App\Models\DealRoomMember::factory()->count($count),
-            'members'
-        );
-    }
-
-    /**
-     * With documents.
-     */
-    public function withDocuments(int $count = 3): static
-    {
-        return $this->has(
-            \App\Models\DealRoomDocument::factory()->count($count),
-            'documents'
-        );
-    }
-
-    /**
-     * With action items.
-     */
-    public function withActionItems(int $count = 5): static
-    {
-        return $this->has(
-            \App\Models\DealRoomActionItem::factory()->count($count),
-            'actionItems'
-        );
     }
 }

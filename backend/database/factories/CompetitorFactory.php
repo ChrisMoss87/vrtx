@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Competitor;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\Competitor;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Competitor>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\Competitor>
  */
 class CompetitorFactory extends Factory
 {
@@ -79,7 +79,7 @@ class CompetitorFactory extends Factory
     public function withSections(int $count = 4): static
     {
         return $this->has(
-            \App\Models\BattlecardSection::factory()->count($count),
+            \App\Infrastructure\Persistence\Eloquent\Models\BattlecardSection::factory()->count($count),
             'sections'
         );
     }
@@ -90,7 +90,7 @@ class CompetitorFactory extends Factory
     public function withObjections(int $count = 5): static
     {
         return $this->has(
-            \App\Models\CompetitorObjection::factory()->count($count),
+            \App\Infrastructure\Persistence\Eloquent\Models\CompetitorObjection::factory()->count($count),
             'objections'
         );
     }

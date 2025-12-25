@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Cadence;
-use App\Models\Module;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Cadence>
@@ -34,7 +33,7 @@ class CadenceFactory extends Factory
                 'Win-Back Campaign',
             ]) . ' ' . $this->faker->unique()->numberBetween(1, 1000),
             'description' => $this->faker->paragraph(),
-            'module_id' => fn () => Module::where('api_name', 'contacts')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'contacts')->first()?->id ?? DB::table('modules')->first()?->id,
             'status' => $this->faker->randomElement([
                 Cadence::STATUS_DRAFT,
                 Cadence::STATUS_ACTIVE,
@@ -87,17 +86,6 @@ class CadenceFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'status' => Cadence::STATUS_PAUSED,
         ]);
-    }
-
-    /**
-     * Create cadence with steps.
-     */
-    public function withSteps(int $count = 5): static
-    {
-        return $this->has(
-            \App\Models\CadenceStep::factory()->count($count),
-            'steps'
-        );
     }
 
     /**

@@ -8,16 +8,13 @@ use App\Domain\Modules\DTOs\BlockDefinitionDTO;
 use App\Domain\Modules\DTOs\FieldDefinitionDTO;
 use App\Domain\Modules\DTOs\FieldOptionDefinitionDTO;
 use App\Domain\Modules\DTOs\ModuleDefinitionDTO;
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\FieldOption;
-use App\Models\Module;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Mapper for converting Eloquent models to Domain DTOs.
+ * Mapper for converting Database models to Domain DTOs.
  *
  * This class belongs in the Infrastructure layer as it has knowledge
- * of both the Eloquent models and Domain DTOs.
+ * of both the Database models and Domain DTOs.
  */
 final class ModuleMapper
 {

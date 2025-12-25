@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\AnalyticsAlert;
-use App\Models\AnalyticsAlertHistory;
-use App\Models\AnalyticsAlertSubscription;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use App\Notifications\AlertTriggeredNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\DB;
 
 class SendAlertNotificationsJob implements ShouldQueue
 {
@@ -84,7 +82,7 @@ class SendAlertNotificationsJob implements ShouldQueue
         $channels = $alert->getChannels();
 
         // Check subscriptions for overrides
-        $subscriptions = AnalyticsAlertSubscription::where('alert_id', $alert->id)
+        $subscriptions = DB::table('analytics_alert_subscriptions')->where('alert_id', $alert->id)
             ->whereIn('user_id', $recipientIds)
             ->get()
             ->keyBy('user_id');

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Models\AnalyticsAlert;
-use App\Models\Dashboard;
-use App\Models\ModuleRecord;
-use App\Models\Report;
-use App\Models\SchedulingPage;
+use App\Domain\Analytics\Entities\AnalyticsAlert;
+use App\Domain\Modules\Entities\ModuleRecord;
+use App\Domain\Reporting\Entities\Dashboard;
+use App\Domain\Reporting\Entities\Report;
+use App\Domain\Scheduling\Entities\SchedulingPage;
 use App\Policies\AnalyticsAlertPolicy;
 use App\Policies\DashboardPolicy;
 use App\Policies\ModuleRecordPolicy;

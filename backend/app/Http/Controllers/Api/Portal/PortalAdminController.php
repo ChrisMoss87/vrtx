@@ -4,12 +4,10 @@ namespace App\Http\Controllers\Api\Portal;
 
 use App\Application\Services\Portal\PortalApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\PortalUser;
-use App\Models\PortalInvitation;
-use App\Models\PortalAnnouncement;
 use App\Services\Portal\PortalService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class PortalAdminController extends Controller
 {
@@ -21,7 +19,7 @@ class PortalAdminController extends Controller
     // Portal Users Management
     public function users(Request $request): JsonResponse
     {
-        $query = PortalUser::query();
+        $query = DB::table('portal_users');
 
         if ($request->has('search')) {
             $search = $request->input('search');
@@ -55,7 +53,7 @@ class PortalAdminController extends Controller
 
     public function updateUser(Request $request, int $id): JsonResponse
     {
-        $user = PortalUser::findOrFail($id);
+        $user = DB::table('portal_users')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -70,7 +68,7 @@ class PortalAdminController extends Controller
 
     public function deactivateUser(int $id): JsonResponse
     {
-        $user = PortalUser::findOrFail($id);
+        $user = DB::table('portal_users')->where('id', $id)->first();
         $user->update(['is_active' => false]);
 
         // Revoke all tokens
@@ -81,7 +79,7 @@ class PortalAdminController extends Controller
 
     public function activateUser(int $id): JsonResponse
     {
-        $user = PortalUser::findOrFail($id);
+        $user = DB::table('portal_users')->where('id', $id)->first();
         $user->update(['is_active' => true]);
 
         return response()->json(['message' => 'User activated successfully']);
@@ -121,7 +119,7 @@ class PortalAdminController extends Controller
         ]);
 
         // Check if user already exists
-        if (PortalUser::where('email', $validated['email'])->exists()) {
+        if (DB::table('portal_users')->where('email', $validated['email'])->exists()) {
             return response()->json([
                 'message' => 'A portal user with this email already exists',
             ], 422);
@@ -145,7 +143,7 @@ class PortalAdminController extends Controller
 
     public function resendInvitation(int $id): JsonResponse
     {
-        $invitation = PortalInvitation::findOrFail($id);
+        $invitation = DB::table('portal_invitations')->where('id', $id)->first();
 
         if ($invitation->isAccepted()) {
             return response()->json([
@@ -169,7 +167,7 @@ class PortalAdminController extends Controller
 
     public function cancelInvitation(int $id): JsonResponse
     {
-        $invitation = PortalInvitation::findOrFail($id);
+        $invitation = DB::table('portal_invitations')->where('id', $id)->first();
 
         if ($invitation->isAccepted()) {
             return response()->json([
@@ -210,7 +208,7 @@ class PortalAdminController extends Controller
             'target_accounts.*' => 'integer',
         ]);
 
-        $announcement = PortalAnnouncement::create([
+        $announcement = DB::table('portal_announcements')->insertGetId([
             ...$validated,
             'created_by' => auth()->id(),
         ]);
@@ -222,7 +220,7 @@ class PortalAdminController extends Controller
 
     public function updateAnnouncement(Request $request, int $id): JsonResponse
     {
-        $announcement = PortalAnnouncement::findOrFail($id);
+        $announcement = DB::table('portal_announcements')->where('id', $id)->first();
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -244,7 +242,7 @@ class PortalAdminController extends Controller
 
     public function deleteAnnouncement(int $id): JsonResponse
     {
-        $announcement = PortalAnnouncement::findOrFail($id);
+        $announcement = DB::table('portal_announcements')->where('id', $id)->first();
         $announcement->delete();
 
         return response()->json(['message' => 'Announcement deleted']);
@@ -304,8 +302,8 @@ class PortalAdminController extends Controller
             ->limit(10)
             ->get();
 
-        $activeUsers = PortalUser::where('last_login_at', '>=', $startDate)->count();
-        $totalUsers = PortalUser::where('is_active', true)->count();
+        $activeUsers = DB::table('portal_users')->where('last_login_at', '>=', $startDate)->count();
+        $totalUsers = DB::table('portal_users')->where('is_active', true)->count();
 
         return response()->json([
             'logins_by_day' => $loginsByDay,

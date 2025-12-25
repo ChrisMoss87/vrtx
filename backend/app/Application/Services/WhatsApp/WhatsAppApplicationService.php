@@ -7,9 +7,6 @@ namespace App\Application\Services\WhatsApp;
 use App\Domain\Shared\Contracts\AuthContextInterface;
 use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\WhatsApp\Repositories\WhatsappConversationRepositoryInterface;
-use App\Models\WhatsappConnection;
-use App\Models\WhatsappMessage;
-use App\Models\WhatsappTemplate;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -29,7 +26,7 @@ class WhatsAppApplicationService
      */
     public function listConnections(array $filters = []): Collection
     {
-        $query = WhatsappConnection::query();
+        $query = DB::table('whatsapp_connections');
 
         if (!empty($filters['active'])) {
             $query->active();
@@ -47,7 +44,7 @@ class WhatsAppApplicationService
      */
     public function getConnection(int $id): ?WhatsappConnection
     {
-        return WhatsappConnection::find($id);
+        return DB::table('whatsapp_connections')->where('id', $id)->first();
     }
 
     /**
@@ -67,7 +64,7 @@ class WhatsAppApplicationService
      */
     public function createConnection(array $data): WhatsappConnection
     {
-        return WhatsappConnection::create([
+        return DB::table('whatsapp_connections')->insertGetId([
             'name' => $data['name'],
             'phone_number_id' => $data['phone_number_id'],
             'waba_id' => $data['waba_id'],
@@ -87,7 +84,7 @@ class WhatsAppApplicationService
      */
     public function updateConnection(int $id, array $data): WhatsappConnection
     {
-        $connection = WhatsappConnection::findOrFail($id);
+        $connection = DB::table('whatsapp_connections')->where('id', $id)->first();
 
         $updateData = [];
 
@@ -112,7 +109,7 @@ class WhatsAppApplicationService
      */
     public function deleteConnection(int $id): bool
     {
-        $connection = WhatsappConnection::findOrFail($id);
+        $connection = DB::table('whatsapp_connections')->where('id', $id)->first();
 
         // Check if connection has active conversations
         if ($connection->conversations()->unresolved()->count() > 0) {
@@ -243,7 +240,7 @@ class WhatsAppApplicationService
      */
     public function listMessages(int $conversationId, int $limit = 100): Collection
     {
-        return WhatsappMessage::where('conversation_id', $conversationId)
+        return DB::table('whatsapp_messages')->where('conversation_id', $conversationId)
             ->with(['sender:id,name', 'template:id,name'])
             ->orderBy('created_at', 'asc')
             ->limit($limit)
@@ -263,7 +260,7 @@ class WhatsAppApplicationService
      */
     public function getMessageByWaId(string $waMessageId): ?WhatsappMessage
     {
-        return WhatsappMessage::where('wa_message_id', $waMessageId)
+        return DB::table('whatsapp_messages')->where('wa_message_id', $waMessageId)
             ->with('conversation')
             ->first();
     }
@@ -284,7 +281,7 @@ class WhatsAppApplicationService
         }
 
         return DB::transaction(function () use ($conversation, $content, $userId) {
-            $message = WhatsappMessage::create([
+            $message = DB::table('whatsapp_messages')->insertGetId([
                 'conversation_id' => $conversation['id'],
                 'connection_id' => $conversation['connection_id'],
                 'direction' => 'outbound',
@@ -315,14 +312,14 @@ class WhatsAppApplicationService
             throw new \InvalidArgumentException('Conversation not found');
         }
 
-        $template = WhatsappTemplate::findOrFail($templateId);
+        $template = DB::table('whatsapp_templates')->where('id', $templateId)->first();
 
         if (!$template->isUsable()) {
             throw new \InvalidArgumentException('Template is not usable');
         }
 
         return DB::transaction(function () use ($conversation, $templateId, $params, $userId) {
-            $message = WhatsappMessage::create([
+            $message = DB::table('whatsapp_messages')->insertGetId([
                 'conversation_id' => $conversation['id'],
                 'connection_id' => $conversation['connection_id'],
                 'direction' => 'outbound',
@@ -355,7 +352,7 @@ class WhatsAppApplicationService
         }
 
         return DB::transaction(function () use ($conversation, $type, $media, $caption, $userId) {
-            $message = WhatsappMessage::create([
+            $message = DB::table('whatsapp_messages')->insertGetId([
                 'conversation_id' => $conversation['id'],
                 'connection_id' => $conversation['connection_id'],
                 'direction' => 'outbound',
@@ -388,7 +385,7 @@ class WhatsAppApplicationService
         }
 
         return DB::transaction(function () use ($conversation, $waMessageId, $type, $content, $media) {
-            $message = WhatsappMessage::create([
+            $message = DB::table('whatsapp_messages')->insertGetId([
                 'conversation_id' => $conversation['id'],
                 'connection_id' => $conversation['connection_id'],
                 'wa_message_id' => $waMessageId,
@@ -415,7 +412,7 @@ class WhatsAppApplicationService
      */
     public function markMessageSent(int $messageId, string $waMessageId): WhatsappMessage
     {
-        $message = WhatsappMessage::findOrFail($messageId);
+        $message = DB::table('whatsapp_messages')->where('id', $messageId)->first();
         $message->markAsSent($waMessageId);
         return $message->fresh();
     }
@@ -455,7 +452,7 @@ class WhatsAppApplicationService
      */
     public function markMessageFailed(int $messageId, string $errorCode, string $errorMessage): WhatsappMessage
     {
-        $message = WhatsappMessage::findOrFail($messageId);
+        $message = DB::table('whatsapp_messages')->where('id', $messageId)->first();
         $message->markAsFailed($errorCode, $errorMessage);
         return $message->fresh();
     }
@@ -469,7 +466,7 @@ class WhatsAppApplicationService
      */
     public function listTemplates(array $filters = []): Collection
     {
-        $query = WhatsappTemplate::query()
+        $query = DB::table('whatsapp_templates')
             ->with('connection:id,name');
 
         // Filter by connection
@@ -512,7 +509,7 @@ class WhatsAppApplicationService
      */
     public function getApprovedTemplates(int $connectionId): Collection
     {
-        return WhatsappTemplate::where('connection_id', $connectionId)
+        return DB::table('whatsapp_templates')->where('connection_id', $connectionId)
             ->approved()
             ->orderBy('name')
             ->get();
@@ -527,7 +524,7 @@ class WhatsAppApplicationService
      */
     public function createTemplate(array $data): WhatsappTemplate
     {
-        return WhatsappTemplate::create([
+        return DB::table('whatsapp_templates')->insertGetId([
             'connection_id' => $data['connection_id'],
             'template_id' => $data['template_id'] ?? null,
             'name' => $data['name'],
@@ -545,7 +542,7 @@ class WhatsAppApplicationService
      */
     public function updateTemplate(int $id, array $data): WhatsappTemplate
     {
-        $template = WhatsappTemplate::findOrFail($id);
+        $template = DB::table('whatsapp_templates')->where('id', $id)->first();
 
         $updateData = [];
 
@@ -565,7 +562,7 @@ class WhatsAppApplicationService
      */
     public function deleteTemplate(int $id): bool
     {
-        $template = WhatsappTemplate::findOrFail($id);
+        $template = DB::table('whatsapp_templates')->where('id', $id)->first();
         return $template->delete();
     }
 
@@ -580,7 +577,7 @@ class WhatsAppApplicationService
     {
         $stats = $this->repository->getStats($connectionId, $fromDate, $toDate);
 
-        $avgResponseTime = WhatsappMessage::query()
+        $avgResponseTime = DB::table('whatsapp_messages')
             ->where('direction', 'outbound')
             ->whereNotNull('sent_at')
             ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, created_at, sent_at)) as avg_seconds')
@@ -596,7 +593,7 @@ class WhatsAppApplicationService
      */
     public function getMessageStats(?int $connectionId = null, ?string $fromDate = null, ?string $toDate = null): array
     {
-        $query = WhatsappMessage::query();
+        $query = DB::table('whatsapp_messages');
 
         if ($connectionId) {
             $query->where('connection_id', $connectionId);
@@ -616,7 +613,7 @@ class WhatsAppApplicationService
         $read = (clone $query)->read()->count();
         $failed = (clone $query)->failed()->count();
 
-        $byType = WhatsappMessage::query()
+        $byType = DB::table('whatsapp_messages')
             ->selectRaw('type, COUNT(*) as count')
             ->groupBy('type')
             ->pluck('count', 'type')
@@ -640,7 +637,7 @@ class WhatsAppApplicationService
      */
     public function getDailyMessageCount(?int $connectionId = null, int $days = 30): Collection
     {
-        $query = WhatsappMessage::query()
+        $query = DB::table('whatsapp_messages')
             ->selectRaw('DATE(created_at) as date, direction, COUNT(*) as count')
             ->where('created_at', '>=', now()->subDays($days))
             ->groupBy('date', 'direction')
@@ -658,7 +655,7 @@ class WhatsAppApplicationService
      */
     public function getTemplateUsageStats(?int $connectionId = null): array
     {
-        $query = WhatsappTemplate::query();
+        $query = DB::table('whatsapp_templates');
 
         if ($connectionId) {
             $query->where('connection_id', $connectionId);
@@ -669,7 +666,7 @@ class WhatsAppApplicationService
         $pending = (clone $query)->where('status', 'PENDING')->count();
         $rejected = (clone $query)->where('status', 'REJECTED')->count();
 
-        $usage = WhatsappMessage::query()
+        $usage = DB::table('whatsapp_messages')
             ->where('type', 'template')
             ->whereNotNull('template_id')
             ->selectRaw('template_id, COUNT(*) as usage_count')
@@ -698,7 +695,7 @@ class WhatsAppApplicationService
     {
         $userId = $userId ?? $this->authContext->userId();
 
-        $conversationsQuery = \App\Models\WhatsappConversation::assignedTo($userId);
+        $conversationsQuery = DB::table('whatsapp_conversations')->where('assigned_to', $userId);
 
         if ($fromDate) {
             $conversationsQuery->where('created_at', '>=', $fromDate);
@@ -710,7 +707,7 @@ class WhatsAppApplicationService
         $totalConversations = $conversationsQuery->count();
         $resolvedConversations = (clone $conversationsQuery)->where('is_resolved', true)->count();
 
-        $messagesQuery = WhatsappMessage::where('sent_by', $userId)->outbound();
+        $messagesQuery = DB::table('whatsapp_messages')->where('sent_by', $userId)->outbound();
 
         if ($fromDate) {
             $messagesQuery->where('created_at', '>=', $fromDate);
@@ -721,7 +718,7 @@ class WhatsAppApplicationService
 
         $messagesSent = $messagesQuery->count();
 
-        $avgResponseTime = WhatsappMessage::where('sent_by', $userId)
+        $avgResponseTime = DB::table('whatsapp_messages')->where('sent_by', $userId)
             ->outbound()
             ->whereNotNull('sent_at')
             ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, created_at, sent_at)) as avg_seconds')

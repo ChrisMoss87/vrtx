@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Integration\Webhooks;
 
+use App\Domain\Integration\Repositories\IntegrationConnectionRepositoryInterface;
 use App\Http\Controllers\Controller;
 use App\Infrastructure\Services\Integration\QuickBooks\QuickBooksSyncService;
-use App\Models\IntegrationConnection;
-use App\Models\IntegrationWebhook;
-use App\Models\IntegrationWebhookLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class QuickBooksWebhookController extends Controller
@@ -19,6 +18,7 @@ class QuickBooksWebhookController extends Controller
 
     public function __construct(
         private readonly QuickBooksSyncService $syncService,
+        private readonly IntegrationConnectionRepositoryInterface $connectionRepository,
     ) {}
 
     /**
@@ -85,55 +85,67 @@ class QuickBooksWebhookController extends Controller
         }
 
         // Find the connection for this realm
-        $connection = IntegrationConnection::where('provider', self::PROVIDER)
+        // Using DB::table directly for JSON queries as repository doesn't support this specific query
+        $connectionData = DB::table('integration_connections')
+            ->where('integration_slug', self::PROVIDER)
             ->where('status', 'active')
-            ->whereRaw("JSON_EXTRACT(settings, '$.realm_id') = ?", [$realmId])
-            ->orWhereRaw("JSON_EXTRACT(credentials, '$.realm_id') = ?", [$realmId])
+            ->where(function ($query) use ($realmId) {
+                $query->whereRaw("JSON_EXTRACT(settings, '$.realm_id') = ?", [$realmId])
+                    ->orWhereRaw("JSON_EXTRACT(credentials, '$.realm_id') = ?", [$realmId]);
+            })
             ->first();
 
-        if (!$connection) {
+        if (!$connectionData) {
             Log::warning('QuickBooks webhook: No connection found for realm', ['realm_id' => $realmId]);
             return;
         }
 
-        // Log the webhook event
-        $webhookLog = IntegrationWebhookLog::create([
-            'integration_connection_id' => $connection->id,
+        // Log the webhook event using DB::table
+        $webhookLogId = DB::table('integration_webhook_logs')->insertGetId([
+            'integration_connection_id' => $connectionData->id,
             'event_type' => 'data_change',
-            'payload' => $notification,
+            'payload' => json_encode($notification),
             'status' => 'processing',
             'received_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         try {
             $entities = $dataChangeEvent['entities'] ?? [];
 
             foreach ($entities as $entity) {
-                $this->processEntityChange($connection, $entity);
+                $this->processEntityChange($connectionData->id, $entity);
             }
 
-            $webhookLog->update([
-                'status' => 'processed',
-                'processed_at' => now(),
-            ]);
+            DB::table('integration_webhook_logs')
+                ->where('id', $webhookLogId)
+                ->update([
+                    'status' => 'processed',
+                    'processed_at' => now(),
+                    'updated_at' => now(),
+                ]);
         } catch (\Throwable $e) {
             Log::error('QuickBooks webhook processing failed', [
                 'error' => $e->getMessage(),
                 'notification' => $notification,
             ]);
 
-            $webhookLog->update([
-                'status' => 'failed',
-                'error_message' => $e->getMessage(),
-                'processed_at' => now(),
-            ]);
+            DB::table('integration_webhook_logs')
+                ->where('id', $webhookLogId)
+                ->update([
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                    'processed_at' => now(),
+                    'updated_at' => now(),
+                ]);
         }
     }
 
     /**
      * Process an entity change from QuickBooks
      */
-    private function processEntityChange(IntegrationConnection $connection, array $entity): void
+    private function processEntityChange(int $connectionId, array $entity): void
     {
         $entityName = $entity['name'] ?? null;
         $entityId = $entity['id'] ?? null;
@@ -162,6 +174,14 @@ class QuickBooksWebhookController extends Controller
         };
 
         if (!$entityType) {
+            return;
+        }
+
+        // Get connection data from repository
+        $connection = $this->connectionRepository->findById($connectionId);
+
+        if (!$connection) {
+            Log::error('Connection not found', ['connection_id' => $connectionId]);
             return;
         }
 

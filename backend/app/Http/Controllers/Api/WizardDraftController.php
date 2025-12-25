@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\WizardDraft;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class WizardDraftController extends Controller
 {
@@ -109,7 +109,7 @@ class WizardDraftController extends Controller
             }
         } else {
             // Create new draft
-            $draft = WizardDraft::create([
+            $draft = DB::table('wizard_drafts')->insertGetId([
                 'user_id' => $userId,
                 'wizard_type' => $validated['wizard_type'],
                 'reference_id' => $validated['reference_id'] ?? null,

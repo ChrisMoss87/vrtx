@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\User;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Modules\Entities\ModuleRecord;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use App\Services\RbacService;
 use Illuminate\Auth\Access\HandlesAuthorization;
 

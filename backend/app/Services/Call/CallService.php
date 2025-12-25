@@ -2,11 +2,7 @@
 
 namespace App\Services\Call;
 
-use App\Models\Call;
-use App\Models\CallProvider;
-use App\Models\CallQueue;
-use App\Models\CallQueueMember;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -43,7 +39,7 @@ class CallService
         );
 
         if ($result['success']) {
-            $call = Call::create([
+            $call = DB::table('calls')->insertGetId([
                 'provider_id' => $provider->id,
                 'external_call_id' => $result['external_call_id'],
                 'direction' => 'outbound',
@@ -73,7 +69,7 @@ class CallService
         // Try to find contact by phone number
         $contact = $this->findContactByPhone($fromNumber);
 
-        $call = Call::create([
+        $call = DB::table('calls')->insertGetId([
             'provider_id' => $provider->id,
             'external_call_id' => $externalCallId,
             'direction' => 'inbound',
@@ -141,7 +137,7 @@ class CallService
 
         // Update queue member status if applicable
         if ($call->user_id && isset($call->metadata['queue_id'])) {
-            $member = CallQueueMember::where('queue_id', $call->metadata['queue_id'])
+            $member = DB::table('call_queue_members')->where('queue_id', $call->metadata['queue_id'])
                 ->where('user_id', $call->user_id)
                 ->first();
 
@@ -154,7 +150,7 @@ class CallService
 
     public function updateCallStatus(string $externalCallId, string $status, array $data = []): ?Call
     {
-        $call = Call::where('external_call_id', $externalCallId)->first();
+        $call = DB::table('calls')->where('external_call_id', $externalCallId)->first();
 
         if (!$call) {
             Log::warning('Call not found for status update', ['external_call_id' => $externalCallId]);
@@ -187,7 +183,7 @@ class CallService
         string $recordingSid,
         int $duration
     ): ?Call {
-        $call = Call::where('external_call_id', $externalCallId)->first();
+        $call = DB::table('calls')->where('external_call_id', $externalCallId)->first();
 
         if (!$call) {
             Log::warning('Call not found for recording attachment', ['external_call_id' => $externalCallId]);

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Email;
 
-use App\Models\EmailAccount;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class ImapConnection
 {

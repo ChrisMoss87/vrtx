@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Email;
 
-use App\Models\EmailAccount;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Service to handle OAuth token refresh for email accounts.

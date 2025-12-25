@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Scenario;
 
-use App\Models\ForecastScenario;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class GapAnalysisService
 {
@@ -73,7 +71,7 @@ class GapAnalysisService
      */
     protected function getCurrentWeightedPipeline(string $periodStart, string $periodEnd): array
     {
-        $dealsModule = Module::where('api_name', 'deals')
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')
             ->orWhere('api_name', 'opportunities')
             ->first();
 
@@ -88,7 +86,7 @@ class GapAnalysisService
             ];
         }
 
-        $deals = ModuleRecord::where('module_id', $dealsModule->id)
+        $deals = DB::table('module_records')->where('module_id', $dealsModule->id)
             ->get()
             ->filter(function ($deal) use ($periodStart, $periodEnd) {
                 $closeDate = $deal->data['close_date'] ?? null;

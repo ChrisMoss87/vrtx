@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Api\Renewal;
 
 use App\Http\Controllers\Controller;
-use App\Models\Contract;
-use App\Models\Renewal;
 use App\Services\Renewal\RenewalService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class RenewalController extends Controller
 {
@@ -82,7 +81,7 @@ class RenewalController extends Controller
      */
     public function start(int $id): JsonResponse
     {
-        $renewal = Renewal::findOrFail($id);
+        $renewal = DB::table('renewals')->where('id', $id)->first();
 
         if ($renewal->status !== 'pending') {
             return response()->json([
@@ -103,7 +102,7 @@ class RenewalController extends Controller
      */
     public function win(Request $request, int $id): JsonResponse
     {
-        $renewal = Renewal::findOrFail($id);
+        $renewal = DB::table('renewals')->where('id', $id)->first();
 
         if (!in_array($renewal->status, ['pending', 'in_progress'])) {
             return response()->json([
@@ -134,7 +133,7 @@ class RenewalController extends Controller
      */
     public function lose(Request $request, int $id): JsonResponse
     {
-        $renewal = Renewal::findOrFail($id);
+        $renewal = DB::table('renewals')->where('id', $id)->first();
 
         if (!in_array($renewal->status, ['pending', 'in_progress'])) {
             return response()->json([
@@ -160,7 +159,7 @@ class RenewalController extends Controller
      */
     public function addActivity(Request $request, int $id): JsonResponse
     {
-        $renewal = Renewal::findOrFail($id);
+        $renewal = DB::table('renewals')->where('id', $id)->first();
 
         $validated = $request->validate([
             'type' => 'required|string',

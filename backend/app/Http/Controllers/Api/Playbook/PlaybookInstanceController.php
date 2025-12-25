@@ -4,12 +4,10 @@ namespace App\Http\Controllers\Api\Playbook;
 
 use App\Application\Services\Playbook\PlaybookApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Playbook;
-use App\Models\PlaybookInstance;
-use App\Models\PlaybookTaskInstance;
 use App\Services\Playbook\PlaybookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PlaybookInstanceController extends Controller
 {
@@ -86,7 +84,7 @@ class PlaybookInstanceController extends Controller
         $playbook = Playbook::findOrFail($validated['playbook_id']);
 
         // Check for existing active instance
-        $existing = PlaybookInstance::where('playbook_id', $validated['playbook_id'])
+        $existing = DB::table('playbook_instances')->where('playbook_id', $validated['playbook_id'])
             ->forRecord($validated['related_module'], $validated['related_id'])
             ->active()
             ->first();
@@ -116,7 +114,7 @@ class PlaybookInstanceController extends Controller
      */
     public function pause(Request $request, int $id): JsonResponse
     {
-        $instance = PlaybookInstance::findOrFail($id);
+        $instance = DB::table('playbook_instances')->where('id', $id)->first();
 
         if ($instance->status !== 'active') {
             return response()->json([
@@ -140,7 +138,7 @@ class PlaybookInstanceController extends Controller
      */
     public function resume(int $id): JsonResponse
     {
-        $instance = PlaybookInstance::findOrFail($id);
+        $instance = DB::table('playbook_instances')->where('id', $id)->first();
 
         if ($instance->status !== 'paused') {
             return response()->json([
@@ -161,7 +159,7 @@ class PlaybookInstanceController extends Controller
      */
     public function cancel(Request $request, int $id): JsonResponse
     {
-        $instance = PlaybookInstance::findOrFail($id);
+        $instance = DB::table('playbook_instances')->where('id', $id)->first();
 
         if (!in_array($instance->status, ['active', 'paused'])) {
             return response()->json([
@@ -185,7 +183,7 @@ class PlaybookInstanceController extends Controller
      */
     public function tasks(int $id): JsonResponse
     {
-        $instance = PlaybookInstance::findOrFail($id);
+        $instance = DB::table('playbook_instances')->where('id', $id)->first();
 
         $tasks = $instance->taskInstances()
             ->with(['task.phase', 'assignee'])
@@ -200,7 +198,7 @@ class PlaybookInstanceController extends Controller
      */
     public function startTask(int $instanceId, int $taskInstanceId): JsonResponse
     {
-        $taskInstance = PlaybookTaskInstance::where('instance_id', $instanceId)
+        $taskInstance = DB::table('playbook_task_instances')->where('instance_id', $instanceId)
             ->findOrFail($taskInstanceId);
 
         if ($taskInstance->status !== 'pending') {
@@ -228,7 +226,7 @@ class PlaybookInstanceController extends Controller
      */
     public function completeTask(Request $request, int $instanceId, int $taskInstanceId): JsonResponse
     {
-        $taskInstance = PlaybookTaskInstance::where('instance_id', $instanceId)
+        $taskInstance = DB::table('playbook_task_instances')->where('instance_id', $instanceId)
             ->findOrFail($taskInstanceId);
 
         if (!in_array($taskInstance->status, ['pending', 'in_progress'])) {
@@ -260,7 +258,7 @@ class PlaybookInstanceController extends Controller
      */
     public function skipTask(Request $request, int $instanceId, int $taskInstanceId): JsonResponse
     {
-        $taskInstance = PlaybookTaskInstance::where('instance_id', $instanceId)
+        $taskInstance = DB::table('playbook_task_instances')->where('instance_id', $instanceId)
             ->findOrFail($taskInstanceId);
 
         // Check if task is required
@@ -287,7 +285,7 @@ class PlaybookInstanceController extends Controller
      */
     public function reassignTask(Request $request, int $instanceId, int $taskInstanceId): JsonResponse
     {
-        $taskInstance = PlaybookTaskInstance::where('instance_id', $instanceId)
+        $taskInstance = DB::table('playbook_task_instances')->where('instance_id', $instanceId)
             ->findOrFail($taskInstanceId);
 
         $validated = $request->validate([
@@ -307,7 +305,7 @@ class PlaybookInstanceController extends Controller
      */
     public function updateTaskChecklist(Request $request, int $instanceId, int $taskInstanceId): JsonResponse
     {
-        $taskInstance = PlaybookTaskInstance::where('instance_id', $instanceId)
+        $taskInstance = DB::table('playbook_task_instances')->where('instance_id', $instanceId)
             ->findOrFail($taskInstanceId);
 
         $validated = $request->validate([
@@ -328,7 +326,7 @@ class PlaybookInstanceController extends Controller
      */
     public function activities(int $id): JsonResponse
     {
-        $instance = PlaybookInstance::findOrFail($id);
+        $instance = DB::table('playbook_instances')->where('id', $id)->first();
 
         $activities = $instance->activities()
             ->with(['user', 'taskInstance.task'])

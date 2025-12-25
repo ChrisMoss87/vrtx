@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Api\Billing;
 
 use App\Http\Controllers\Controller;
-use App\Models\Plugin;
-use App\Models\PluginBundle;
-use App\Models\PluginLicense;
 use App\Services\PluginLicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PluginController extends Controller
 {
@@ -42,7 +40,7 @@ class PluginController extends Controller
      */
     public function show(string $slug): JsonResponse
     {
-        $plugin = Plugin::where('slug', $slug)->first();
+        $plugin = DB::table('plugins')->where('slug', $slug)->first();
 
         if (!$plugin) {
             return response()->json(['error' => 'Plugin not found'], 404);
@@ -62,7 +60,7 @@ class PluginController extends Controller
             ->where('status', PluginLicense::STATUS_ACTIVE)
             ->get()
             ->map(function ($license) {
-                $license->plugin = Plugin::where('slug', $license->plugin_slug)->first();
+                $license->plugin = DB::table('plugins')->where('slug', $license->plugin_slug)->first();
                 return $license;
             });
 
@@ -76,7 +74,7 @@ class PluginController extends Controller
      */
     public function activate(Request $request, string $slug): JsonResponse
     {
-        $plugin = Plugin::where('slug', $slug)->first();
+        $plugin = DB::table('plugins')->where('slug', $slug)->first();
 
         if (!$plugin) {
             return response()->json(['error' => 'Plugin not found'], 404);
@@ -88,7 +86,7 @@ class PluginController extends Controller
 
         // In production, this would create a Stripe checkout session
         // For now, we'll create a license directly (for development/testing)
-        $license = PluginLicense::create([
+        $license = DB::table('plugin_licenses')->insertGetId([
             'plugin_slug' => $slug,
             'status' => PluginLicense::STATUS_ACTIVE,
             'pricing_model' => $plugin->pricing_model,
@@ -110,7 +108,7 @@ class PluginController extends Controller
      */
     public function deactivate(string $slug): JsonResponse
     {
-        $license = PluginLicense::where('plugin_slug', $slug)
+        $license = DB::table('plugin_licenses')->where('plugin_slug', $slug)
             ->where('status', PluginLicense::STATUS_ACTIVE)
             ->first();
 

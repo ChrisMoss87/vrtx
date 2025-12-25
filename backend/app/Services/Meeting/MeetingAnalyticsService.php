@@ -2,10 +2,7 @@
 
 namespace App\Services\Meeting;
 
-use App\Models\SyncedMeeting;
-use App\Models\MeetingParticipant;
-use App\Models\MeetingAnalyticsCache;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 

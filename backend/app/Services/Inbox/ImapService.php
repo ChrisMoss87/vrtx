@@ -2,13 +2,11 @@
 
 namespace App\Services\Inbox;
 
-use App\Models\SharedInbox;
-use App\Models\InboxConversation;
-use App\Models\InboxMessage;
 use Webklex\PHPIMAP\ClientManager;
 use Webklex\PHPIMAP\Client;
 use Webklex\PHPIMAP\Message;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class ImapService
 {
@@ -102,7 +100,7 @@ class ImapService
         $messageId = $imapMessage->getMessageId()?->toString();
 
         // Check if message already exists
-        $existing = InboxMessage::where('external_message_id', $messageId)->first();
+        $existing = DB::table('inbox_messages')->where('external_message_id', $messageId)->first();
         if ($existing) {
             return null;
         }
@@ -118,7 +116,7 @@ class ImapService
         $toAddresses = collect($imapMessage->getTo())->map(fn($addr) => $addr->mail)->toArray();
         $ccAddresses = collect($imapMessage->getCc())->map(fn($addr) => $addr->mail)->toArray();
 
-        $message = InboxMessage::create([
+        $message = DB::table('inbox_messages')->insertGetId([
             'conversation_id' => $conversation->id,
             'direction' => 'inbound',
             'type' => $inReplyTo ? 'reply' : 'original',
@@ -154,7 +152,7 @@ class ImapService
     protected function findOrCreateConversation(Message $imapMessage, string $threadId): InboxConversation
     {
         // Try to find existing conversation by thread ID
-        $conversation = InboxConversation::where('inbox_id', $this->inbox->id)
+        $conversation = DB::table('inbox_conversations')->where('inbox_id', $this->inbox->id)
             ->where('external_thread_id', $threadId)
             ->first();
 
@@ -169,7 +167,7 @@ class ImapService
         // Create new conversation
         $fromAddress = $imapMessage->getFrom()[0] ?? null;
 
-        $conversation = InboxConversation::create([
+        $conversation = DB::table('inbox_conversations')->insertGetId([
             'inbox_id' => $this->inbox->id,
             'subject' => $imapMessage->getSubject()?->toString() ?? '(No Subject)',
             'status' => 'open',

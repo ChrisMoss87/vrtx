@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Traits;
 
-use App\Models\AuditLog;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 trait Auditable
 {
@@ -66,7 +66,7 @@ trait Auditable
         ?array $oldValues,
         ?array $newValues
     ): void {
-        AuditLog::create([
+        DB::table('audit_logs')->insertGetId([
             'user_id' => auth()->id(),
             'auditable_type' => get_class($model),
             'auditable_id' => $model->getKey(),

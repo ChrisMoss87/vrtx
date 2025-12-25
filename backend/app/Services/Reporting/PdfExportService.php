@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Reporting;
 
-use App\Models\Report;
-use App\Models\Dashboard;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class PdfExportService
 {

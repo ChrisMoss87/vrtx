@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\MeetingType;
-use App\Models\SchedulingPage;
+use App\Infrastructure\Persistence\Eloquent\Models\MeetingType;
+use App\Infrastructure\Persistence\Eloquent\Models\SchedulingPage;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\MeetingType>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\MeetingType>
  */
 class MeetingTypeFactory extends Factory
 {

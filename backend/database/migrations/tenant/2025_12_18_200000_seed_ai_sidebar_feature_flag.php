@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\FeatureFlag;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -21,6 +21,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        FeatureFlag::where('feature_key', 'ai.sidebar')->delete();
+        DB::table('feature_flags')->where('feature_key', 'ai.sidebar')->delete();
     }
 };

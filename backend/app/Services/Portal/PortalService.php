@@ -2,15 +2,9 @@
 
 namespace App\Services\Portal;
 
-use App\Models\PortalUser;
-use App\Models\PortalInvitation;
-use App\Models\PortalActivityLog;
-use App\Models\PortalNotification;
-use App\Models\PortalDocumentShare;
-use App\Models\PortalAnnouncement;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class PortalService
 {
@@ -22,12 +16,12 @@ class PortalService
         int $invitedBy
     ): PortalInvitation {
         // Cancel any existing pending invitations
-        PortalInvitation::where('email', $email)
+        DB::table('portal_invitations')->where('email', $email)
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
             ->update(['expires_at' => now()]);
 
-        return PortalInvitation::create([
+        return DB::table('portal_invitations')->insertGetId([
             'email' => $email,
             'token' => PortalInvitation::generateToken(),
             'contact_id' => $contactId,
@@ -48,7 +42,7 @@ class PortalService
             throw new \Exception('Invitation has already been accepted');
         }
 
-        $user = PortalUser::create([
+        $user = DB::table('portal_users')->insertGetId([
             'email' => $invitation->email,
             'password' => Hash::make($data['password']),
             'name' => $data['name'],
@@ -69,7 +63,7 @@ class PortalService
 
     public function authenticate(string $email, string $password): ?PortalUser
     {
-        $user = PortalUser::where('email', $email)
+        $user = DB::table('portal_users')->where('email', $email)
             ->where('is_active', true)
             ->first();
 
@@ -111,7 +105,7 @@ class PortalService
         ?string $ipAddress = null,
         ?string $userAgent = null
     ): PortalActivityLog {
-        return PortalActivityLog::create([
+        return DB::table('portal_activity_logs')->insertGetId([
             'portal_user_id' => $user->id,
             'action' => $action,
             'resource_type' => $resourceType,
@@ -139,7 +133,7 @@ class PortalService
 
     public function getInvoicesForUser(PortalUser $user): \Illuminate\Database\Eloquent\Collection
     {
-        $query = \App\Models\Invoice::query();
+        $query = DB::table('invoices');
 
         if ($user->account_id) {
             $query->where('account_id', $user->account_id);
@@ -152,7 +146,7 @@ class PortalService
 
     public function getQuotesForUser(PortalUser $user): \Illuminate\Database\Eloquent\Collection
     {
-        $query = \App\Models\Quote::query();
+        $query = DB::table('quotes');
 
         if ($user->account_id) {
             $query->where('account_id', $user->account_id);
@@ -165,7 +159,7 @@ class PortalService
 
     public function getDocumentsForUser(PortalUser $user): \Illuminate\Database\Eloquent\Collection
     {
-        return PortalDocumentShare::where('portal_user_id', $user->id)
+        return DB::table('portal_document_shares')->where('portal_user_id', $user->id)
             ->orWhere('account_id', $user->account_id)
             ->where(function ($q) {
                 $q->whereNull('expires_at')
@@ -183,7 +177,7 @@ class PortalService
         int $sharedBy,
         array $options = []
     ): PortalDocumentShare {
-        return PortalDocumentShare::create([
+        return DB::table('portal_document_shares')->insertGetId([
             'portal_user_id' => $portalUserId,
             'account_id' => $accountId,
             'document_type' => $documentType,
@@ -203,7 +197,7 @@ class PortalService
         ?string $actionUrl = null,
         array $data = []
     ): PortalNotification {
-        return PortalNotification::create([
+        return DB::table('portal_notifications')->insertGetId([
             'portal_user_id' => $user->id,
             'type' => $type,
             'title' => $title,

@@ -8,13 +8,13 @@ use App\Application\Services\Forecasting\ForecastingApplicationService;
 use App\Domain\Forecasting\DTOs\CreateForecastScenarioDTO;
 use App\Domain\Forecasting\ValueObjects\ScenarioType;
 use App\Http\Controllers\Controller;
-use App\Models\ForecastScenario;
 use App\Services\Scenario\GapAnalysisService;
 use App\Services\Scenario\ScenarioCalculatorService;
 use App\Services\Scenario\ScenarioService;
 use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ScenarioController extends Controller
 {
@@ -181,7 +181,7 @@ class ScenarioController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $scenario = ForecastScenario::findOrFail($id);
+        $scenario = DB::table('forecast_scenarios')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',
@@ -207,7 +207,7 @@ class ScenarioController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $scenario = ForecastScenario::findOrFail($id);
+        $scenario = DB::table('forecast_scenarios')->where('id', $id)->first();
         $scenario->delete();
 
         return response()->json([
@@ -221,7 +221,7 @@ class ScenarioController extends Controller
      */
     public function duplicate(Request $request, int $id): JsonResponse
     {
-        $scenario = ForecastScenario::findOrFail($id);
+        $scenario = DB::table('forecast_scenarios')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',
@@ -275,7 +275,7 @@ class ScenarioController extends Controller
      */
     public function updateDeal(Request $request, int $id, int $dealId): JsonResponse
     {
-        $scenario = ForecastScenario::findOrFail($id);
+        $scenario = DB::table('forecast_scenarios')->where('id', $id)->first();
 
         $validated = $request->validate([
             'amount' => 'nullable|numeric|min:0',
@@ -320,7 +320,7 @@ class ScenarioController extends Controller
      */
     public function commitDeal(int $id, int $dealId): JsonResponse
     {
-        $scenario = ForecastScenario::findOrFail($id);
+        $scenario = DB::table('forecast_scenarios')->where('id', $id)->first();
         $deal = $this->scenarioService->commitDeal($scenario, $dealId);
 
         return response()->json([
@@ -335,7 +335,7 @@ class ScenarioController extends Controller
      */
     public function resetDeal(int $id, int $dealId): JsonResponse
     {
-        $scenario = ForecastScenario::findOrFail($id);
+        $scenario = DB::table('forecast_scenarios')->where('id', $id)->first();
         $deal = $this->scenarioService->resetDeal($scenario, $dealId);
 
         return response()->json([

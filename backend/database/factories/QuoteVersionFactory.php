@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Quote;
-use App\Models\QuoteVersion;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\Quote;
+use App\Infrastructure\Persistence\Eloquent\Models\QuoteVersion;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\QuoteVersion>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\QuoteVersion>
  */
 class QuoteVersionFactory extends Factory
 {

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Product;
-use App\Models\Quote;
-use App\Models\QuoteLineItem;
+use App\Infrastructure\Persistence\Eloquent\Models\Product;
+use App\Infrastructure\Persistence\Eloquent\Models\Quote;
+use App\Infrastructure\Persistence\Eloquent\Models\QuoteLineItem;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\QuoteLineItem>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\QuoteLineItem>
  */
 class QuoteLineItemFactory extends Factory
 {

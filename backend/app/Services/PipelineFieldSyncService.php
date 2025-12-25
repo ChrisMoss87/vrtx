@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Models\Field;
-use App\Models\FieldOption;
-use App\Models\Module;
-use App\Models\Pipeline;
-use App\Models\Stage;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -36,7 +31,7 @@ class PipelineFieldSyncService
             return;
         }
 
-        $field = Field::where('module_id', $module->id)
+        $field = DB::table('fields')->where('module_id', $module->id)
             ->where('api_name', $pipeline->stage_field_api_name)
             ->first();
 
@@ -46,7 +41,7 @@ class PipelineFieldSyncService
 
         DB::transaction(function () use ($pipeline, $field) {
             $stages = $pipeline->stages()->orderBy('display_order')->get();
-            $existingOptions = FieldOption::where('field_id', $field->id)->get()->keyBy('value');
+            $existingOptions = DB::table('field_options')->where('field_id', $field->id)->get()->keyBy('value');
             $processedValues = [];
 
             foreach ($stages as $stage) {
@@ -71,7 +66,7 @@ class PipelineFieldSyncService
                     ]);
                 } else {
                     // Create new option
-                    FieldOption::create([
+                    DB::table('field_options')->insertGetId([
                         'field_id' => $field->id,
                         'label' => $stage->name,
                         'value' => $stageValue,
@@ -91,7 +86,7 @@ class PipelineFieldSyncService
 
             // Deactivate options that no longer have corresponding stages
             // (but don't delete to preserve historical data)
-            FieldOption::where('field_id', $field->id)
+            DB::table('field_options')->where('field_id', $field->id)
                 ->whereNotIn('value', $processedValues)
                 ->whereNotNull('metadata->pipeline_id')
                 ->where('metadata->pipeline_id', $pipeline->id)
@@ -109,7 +104,7 @@ class PipelineFieldSyncService
     {
         $module = $pipeline->module;
 
-        $field = Field::where('module_id', $module->id)
+        $field = DB::table('fields')->where('module_id', $module->id)
             ->where('api_name', $fieldApiName)
             ->first();
 
@@ -118,9 +113,9 @@ class PipelineFieldSyncService
         }
 
         // Create the stage field
-        $maxOrder = Field::where('module_id', $module->id)->max('display_order') ?? 0;
+        $maxOrder = DB::table('fields')->where('module_id', $module->id)->max('display_order') ?? 0;
 
-        return Field::create([
+        return DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Stage',
             'api_name' => $fieldApiName,

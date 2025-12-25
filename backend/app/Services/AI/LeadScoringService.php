@@ -2,11 +2,6 @@
 
 namespace App\Services\AI;
 
-use App\Models\LeadScore;
-use App\Models\LeadScoreHistory;
-use App\Models\ModuleRecord;
-use App\Models\ScoringFactor;
-use App\Models\ScoringModel;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -50,7 +45,7 @@ class LeadScoringService
             );
 
             // Record history
-            LeadScoreHistory::create([
+            DB::table('lead_score_histories')->insertGetId([
                 'lead_score_id' => $leadScore->id,
                 'score' => $result['score'],
                 'grade' => $result['grade'],
@@ -74,7 +69,7 @@ class LeadScoringService
             return 0;
         }
 
-        $query = ModuleRecord::where('module_api_name', $moduleApiName);
+        $query = DB::table('module_records')->where('module_api_name', $moduleApiName);
 
         if ($recordIds) {
             $query->whereIn('id', $recordIds);
@@ -152,7 +147,7 @@ class LeadScoringService
                     ]
                 );
 
-                LeadScoreHistory::create([
+                DB::table('lead_score_histories')->insertGetId([
                     'lead_score_id' => $leadScore->id,
                     'score' => $leadScore->score,
                     'grade' => $leadScore->grade,
@@ -172,7 +167,7 @@ class LeadScoringService
      */
     public function getScoreHistory(string $module, int $recordId, int $days = 30): Collection
     {
-        $leadScore = LeadScore::where('record_module', $module)
+        $leadScore = DB::table('lead_scores')->where('record_module', $module)
             ->where('record_id', $recordId)
             ->first();
 
@@ -180,7 +175,7 @@ class LeadScoringService
             return collect();
         }
 
-        return LeadScoreHistory::where('lead_score_id', $leadScore->id)
+        return DB::table('lead_score_histories')->where('lead_score_id', $leadScore->id)
             ->where('created_at', '>=', now()->subDays($days))
             ->orderBy('created_at', 'desc')
             ->get();
@@ -191,7 +186,7 @@ class LeadScoringService
      */
     public function getTopScored(string $moduleApiName, int $limit = 10): Collection
     {
-        return LeadScore::where('record_module', $moduleApiName)
+        return DB::table('lead_scores')->where('record_module', $moduleApiName)
             ->where('grade', 'A')
             ->orderBy('score', 'desc')
             ->limit($limit)
@@ -204,7 +199,7 @@ class LeadScoringService
      */
     public function getByGrade(string $moduleApiName, string $grade): Collection
     {
-        return LeadScore::where('record_module', $moduleApiName)
+        return DB::table('lead_scores')->where('record_module', $moduleApiName)
             ->where('grade', $grade)
             ->orderBy('score', 'desc')
             ->with('record')
@@ -216,7 +211,7 @@ class LeadScoringService
      */
     public function getDistribution(string $moduleApiName): array
     {
-        $grades = LeadScore::where('record_module', $moduleApiName)
+        $grades = DB::table('lead_scores')->where('record_module', $moduleApiName)
             ->select('grade', DB::raw('count(*) as count'))
             ->groupBy('grade')
             ->pluck('count', 'grade')
@@ -236,7 +231,7 @@ class LeadScoringService
      */
     public function getAverageScore(string $moduleApiName): float
     {
-        return LeadScore::where('record_module', $moduleApiName)
+        return DB::table('lead_scores')->where('record_module', $moduleApiName)
             ->avg('score') ?? 0;
     }
 

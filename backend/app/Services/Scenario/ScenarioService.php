@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Scenario;
 
-use App\Models\ForecastScenario;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\ScenarioDeal;
-use App\Models\Stage;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -56,7 +51,7 @@ class ScenarioService
     public function createScenario(array $data, int $userId): ForecastScenario
     {
         return DB::transaction(function () use ($data, $userId) {
-            $scenario = ForecastScenario::create([
+            $scenario = DB::table('forecast_scenarios')->insertGetId([
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,
                 'user_id' => $userId,
@@ -83,7 +78,7 @@ class ScenarioService
     protected function populateScenarioDeals(ForecastScenario $scenario, array $options = []): void
     {
         // Find deals module
-        $dealsModule = Module::where('api_name', 'deals')
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')
             ->orWhere('api_name', 'opportunities')
             ->first();
 
@@ -92,7 +87,7 @@ class ScenarioService
         }
 
         // Get deals in the period
-        $deals = ModuleRecord::where('module_id', $dealsModule->id)
+        $deals = DB::table('module_records')->where('module_id', $dealsModule->id)
             ->whereJsonContainsKey('data->close_date')
             ->get()
             ->filter(function ($deal) use ($scenario) {
@@ -110,7 +105,7 @@ class ScenarioService
             $closeDate = $deal->data['close_date'] ?? null;
             $stageId = $deal->data['stage_id'] ?? null;
 
-            ScenarioDeal::create([
+            DB::table('scenario_deals')->insertGetId([
                 'scenario_id' => $scenario->id,
                 'deal_record_id' => $deal->id,
                 'stage_id' => $stageId,

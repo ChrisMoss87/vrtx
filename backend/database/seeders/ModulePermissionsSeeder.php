@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Module;
-use App\Models\ModulePermission;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds default module permissions for all existing roles and modules.
@@ -33,7 +32,7 @@ class ModulePermissionsSeeder extends Seeder
         $this->command->info("Seeding module permissions for tenant: {$tenantId}");
 
         $roles = Role::all();
-        $modules = Module::all();
+        $modules = DB::table('modules')->get();
 
         if ($roles->isEmpty()) {
             $this->command->warn('No roles found. Please run RolesAndPermissionsSeeder first.');

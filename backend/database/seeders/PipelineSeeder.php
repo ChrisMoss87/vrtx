@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Module;
-use App\Models\Pipeline;
-use App\Models\Stage;
 use App\Services\PipelineFieldSyncService;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds demo pipelines and stages for tenant databases.
@@ -34,7 +32,7 @@ class PipelineSeeder extends Seeder
         $this->command->info("Seeding pipelines for tenant: {$tenantId}");
 
         // Get the deals module (pipelines are typically used with deals)
-        $dealsModule = Module::where('api_name', 'deals')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
 
         if (!$dealsModule) {
             $this->command->warn('Deals module not found. Creating pipelines without module association.');
@@ -48,20 +46,22 @@ class PipelineSeeder extends Seeder
         $this->command->info('✓ Pipeline seeding complete!');
     }
 
-    private function seedSalesPipeline(?Module $dealsModule): void
+    private function seedSalesPipeline($dealsModule): void
     {
         $this->command->info('Creating Sales Pipeline...');
 
-        $pipeline = Pipeline::create([
+        $pipelineId = DB::table('pipelines')->insertGetId([
             'name' => 'Sales Pipeline',
             'module_id' => $dealsModule?->id,
             'stage_field_api_name' => 'stage',
             'is_active' => true,
-            'settings' => [
+            'settings' => json_encode([
                 'value_field' => 'amount',
                 'title_field' => 'deal_name',
                 'subtitle_field' => 'description',
-            ],
+            ]),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $stages = [
@@ -116,12 +116,24 @@ class PipelineSeeder extends Seeder
         ];
 
         foreach ($stages as $stageData) {
-            $pipeline->stages()->create($stageData);
+            DB::table('stages')->insert([
+                'pipeline_id' => $pipelineId,
+                'name' => $stageData['name'],
+                'color' => $stageData['color'],
+                'probability' => $stageData['probability'],
+                'display_order' => $stageData['display_order'],
+                'is_won_stage' => $stageData['is_won_stage'],
+                'is_lost_stage' => $stageData['is_lost_stage'],
+                'settings' => json_encode([]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
 
         // Sync field options with stages
+        $pipeline = DB::table('pipelines')->where('id', $pipelineId)->first();
         $syncService = app(PipelineFieldSyncService::class);
-        $syncService->syncFieldOptionsFromStages($pipeline->fresh());
+        $syncService->syncFieldOptionsFromStages((object) $pipeline);
 
         $this->command->info('  ✓ Created Sales Pipeline with ' . count($stages) . ' stages');
     }

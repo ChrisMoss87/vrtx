@@ -4,12 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\DealRoom;
 
-use App\Models\DealRoom;
-use App\Models\DealRoomActionItem;
-use App\Models\DealRoomActivity;
-use App\Models\DealRoomDocument;
-use App\Models\DealRoomMember;
-use App\Models\DealRoomMessage;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -52,7 +46,7 @@ class DealRoomService
      */
     public function getRoomBySlug(string $slug): ?DealRoom
     {
-        return DealRoom::where('slug', $slug)
+        return DB::table('deal_rooms')->where('slug', $slug)
             ->with([
                 'members.user',
                 'actionItems.assignee',
@@ -68,7 +62,7 @@ class DealRoomService
     public function createRoom(array $data, int $userId): DealRoom
     {
         return DB::transaction(function () use ($data, $userId) {
-            $room = DealRoom::create([
+            $room = DB::table('deal_rooms')->insertGetId([
                 'deal_record_id' => $data['deal_record_id'],
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,

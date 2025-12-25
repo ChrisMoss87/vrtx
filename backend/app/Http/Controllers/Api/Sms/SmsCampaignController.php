@@ -3,31 +3,49 @@
 namespace App\Http\Controllers\Api\Sms;
 
 use App\Application\Services\Sms\SmsApplicationService;
+use App\Domain\Sms\Repositories\SmsMessageRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\SmsCampaign;
 use App\Services\Sms\SmsCampaignService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class SmsCampaignController extends Controller
 {
     public function __construct(
         protected SmsApplicationService $smsApplicationService,
-        protected SmsCampaignService $campaignService
+        protected SmsCampaignService $campaignService,
+        protected SmsMessageRepositoryInterface $messageRepository
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $query = SmsCampaign::with(['connection:id,name', 'template:id,name', 'creator:id,name']);
+        $filters = [];
 
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $filters['status'] = $request->status;
         }
 
-        $campaigns = $query->orderBy('created_at', 'desc')
-            ->paginate($request->input('per_page', 20));
+        if ($request->filled('connection_id')) {
+            $filters['connection_id'] = $request->connection_id;
+        }
 
-        return response()->json($campaigns);
+        if ($request->filled('search')) {
+            $filters['search'] = $request->search;
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        $page = (int) $request->input('page', 1);
+
+        $result = $this->messageRepository->listCampaigns($filters, $perPage, $page);
+
+        return response()->json([
+            'data' => $result->items(),
+            'current_page' => $result->currentPage(),
+            'per_page' => $result->perPage(),
+            'total' => $result->total(),
+            'last_page' => $result->lastPage(),
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -49,18 +67,35 @@ class SmsCampaignController extends Controller
         return response()->json(['data' => $campaign], 201);
     }
 
-    public function show(SmsCampaign $smsCampaign): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $smsCampaign->load(['connection:id,name,phone_number', 'template:id,name', 'creator:id,name']);
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
+        $stats = $this->messageRepository->getCampaignStats($id);
 
         return response()->json([
-            'data' => $smsCampaign,
-            'stats' => $this->campaignService->getStats($smsCampaign),
+            'data' => $campaign,
+            'stats' => $stats,
         ]);
     }
 
-    public function update(Request $request, SmsCampaign $smsCampaign): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
+        // Check if campaign can be edited
+        if (!in_array($campaign['status'], ['draft', 'scheduled'])) {
+            return response()->json(['message' => 'Cannot edit campaign in current status'], 403);
+        }
+
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
@@ -73,104 +108,149 @@ class SmsCampaignController extends Controller
             'scheduled_at' => 'nullable|date|after:now',
         ]);
 
-        $campaign = $this->campaignService->update($smsCampaign, $validated);
+        $updated = $this->messageRepository->updateCampaign($id, $validated);
 
-        return response()->json(['data' => $campaign]);
+        return response()->json(['data' => $updated]);
     }
 
-    public function destroy(SmsCampaign $smsCampaign): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        if (!$smsCampaign->canEdit()) {
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
+        // Check if campaign can be edited (deleted)
+        if (!in_array($campaign['status'], ['draft', 'scheduled'])) {
             return response()->json(['message' => 'Cannot delete campaign in current status'], 403);
         }
 
-        $smsCampaign->delete();
+        DB::table('sms_campaigns')->where('id', $id)->delete();
 
         return response()->json(null, 204);
     }
 
-    public function schedule(Request $request, SmsCampaign $smsCampaign): JsonResponse
+    public function schedule(Request $request, int $id): JsonResponse
     {
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
         $validated = $request->validate([
             'scheduled_at' => 'required|date|after:now',
         ]);
 
         try {
-            $campaign = $this->campaignService->schedule(
-                $smsCampaign,
+            $updated = $this->campaignService->schedule(
+                (object) $campaign,
                 new \DateTime($validated['scheduled_at'])
             );
 
-            return response()->json(['data' => $campaign]);
+            return response()->json(['data' => $updated]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
-    public function sendNow(SmsCampaign $smsCampaign): JsonResponse
+    public function sendNow(int $id): JsonResponse
     {
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
         try {
-            $campaign = $this->campaignService->sendNow($smsCampaign);
+            $updated = $this->campaignService->sendNow((object) $campaign);
 
-            return response()->json(['data' => $campaign]);
+            return response()->json(['data' => $updated]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
-    public function pause(SmsCampaign $smsCampaign): JsonResponse
+    public function pause(int $id): JsonResponse
     {
-        if (!$smsCampaign->isSending()) {
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
+        if ($campaign['status'] !== 'sending') {
             return response()->json(['message' => 'Campaign is not currently sending'], 400);
         }
 
-        $smsCampaign->pause();
+        $updated = $this->messageRepository->updateCampaign($id, ['status' => 'paused']);
 
-        return response()->json(['data' => $smsCampaign->refresh()]);
+        return response()->json(['data' => $updated]);
     }
 
-    public function cancel(SmsCampaign $smsCampaign): JsonResponse
+    public function cancel(int $id): JsonResponse
     {
-        if (!$smsCampaign->canCancel()) {
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
+        if (!in_array($campaign['status'], ['scheduled', 'sending'])) {
             return response()->json(['message' => 'Campaign cannot be cancelled'], 400);
         }
 
-        $smsCampaign->cancel();
+        $updated = $this->messageRepository->updateCampaign($id, ['status' => 'cancelled']);
 
-        return response()->json(['data' => $smsCampaign->refresh()]);
+        return response()->json(['data' => $updated]);
     }
 
-    public function preview(Request $request, SmsCampaign $smsCampaign): JsonResponse
+    public function preview(Request $request, int $id): JsonResponse
     {
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
         $sampleData = $request->input('sample_data');
 
         return response()->json([
-            'data' => $this->campaignService->preview($smsCampaign, $sampleData),
+            'data' => $this->campaignService->preview((object) $campaign, $sampleData),
         ]);
     }
 
-    public function recipients(SmsCampaign $smsCampaign): JsonResponse
+    public function recipients(int $id): JsonResponse
     {
-        $recipients = $this->campaignService->getRecipients($smsCampaign);
+        $campaign = $this->messageRepository->findCampaignById($id);
+
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found'], 404);
+        }
+
+        $recipients = $this->campaignService->getRecipients((object) $campaign);
 
         return response()->json([
             'data' => [
                 'count' => $recipients->count(),
-                'sample' => $recipients->take(10)->map(function ($record) use ($smsCampaign) {
+                'sample' => $recipients->take(10)->map(function ($record) use ($campaign) {
                     return [
                         'id' => $record->id,
                         'name' => $record->data['name'] ?? $record->data['first_name'] ?? 'Unknown',
-                        'phone' => $record->data[$smsCampaign->phone_field] ?? null,
+                        'phone' => $record->data[$campaign['phone_field']] ?? null,
                     ];
                 }),
             ],
         ]);
     }
 
-    public function stats(SmsCampaign $smsCampaign): JsonResponse
+    public function stats(int $id): JsonResponse
     {
+        $stats = $this->messageRepository->getCampaignStats($id);
+
         return response()->json([
-            'data' => $this->campaignService->getStats($smsCampaign),
+            'data' => $stats,
         ]);
     }
 }

@@ -7,8 +7,6 @@ namespace App\Console\Commands;
 use App\Domain\Workflow\Entities\WorkflowExecution;
 use App\Domain\Workflow\Repositories\WorkflowExecutionRepositoryInterface;
 use App\Jobs\ExecuteWorkflowJob;
-use App\Models\ModuleRecord;
-use App\Models\Workflow;
 use Cron\CronExpression;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +40,7 @@ class ExecuteScheduledWorkflows extends Command
 
         $this->info('Checking for scheduled workflows to execute...');
 
-        $query = Workflow::query()
+        $query = DB::table('workflows')
             ->active()
             ->where('trigger_type', Workflow::TRIGGER_TIME_BASED)
             ->whereNotNull('schedule_cron');
@@ -170,7 +168,7 @@ class ExecuteScheduledWorkflows extends Command
     protected function getRecordsToProcess(Workflow $workflow, array $config)
     {
         // Check if workflow is configured to run on all records or with specific criteria
-        $query = ModuleRecord::query()
+        $query = DB::table('module_records')
             ->where('module_id', $workflow->module_id);
 
         // Apply date field criteria if configured

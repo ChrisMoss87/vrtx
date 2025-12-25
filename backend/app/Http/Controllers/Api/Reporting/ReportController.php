@@ -10,7 +10,6 @@ use App\Domain\Reporting\ValueObjects\ChartType;
 use App\Domain\Reporting\ValueObjects\DateRange;
 use App\Domain\Reporting\ValueObjects\ReportType;
 use App\Http\Controllers\Controller;
-use App\Models\Report;
 use App\Services\Reporting\ReportService;
 use App\Services\Reporting\PdfExportService;
 use App\Services\Reporting\ExcelExportService;
@@ -18,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {

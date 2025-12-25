@@ -4,48 +4,55 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Proposal;
 
-use App\Application\Services\Proposal\ProposalApplicationService;
+use App\Domain\Proposal\Repositories\ProposalRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\Proposal;
-use App\Models\ProposalComment;
-use App\Models\ProposalContentBlock;
-use App\Models\ProposalPricingItem;
-use App\Models\ProposalSection;
-use App\Models\ProposalTemplate;
-use App\Services\Proposal\ProposalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProposalController extends Controller
 {
+    // Section types
+    private const SECTION_TYPES = ['cover', 'text', 'pricing', 'terms', 'signature', 'custom', 'image', 'video', 'table'];
+
+    // Pricing types
+    private const PRICING_TYPES = ['fixed', 'hourly', 'recurring', 'usage_based'];
+
+    // Template categories
+    private const TEMPLATE_CATEGORIES = ['sales', 'services', 'consulting', 'software', 'other'];
+
+    // Content block categories
+    private const CONTENT_BLOCK_CATEGORIES = ['intro', 'about', 'services', 'testimonials', 'team', 'pricing', 'terms', 'other'];
+
+    // Content block types
+    private const CONTENT_BLOCK_TYPES = ['text', 'image', 'video', 'table', 'quote', 'list', 'code'];
+
     public function __construct(
-        protected ProposalApplicationService $proposalApplicationService,
-        protected ProposalService $service
+        protected ProposalRepositoryInterface $repository
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $query = Proposal::with(['template', 'createdBy', 'assignedTo']);
+        $filters = [];
 
         if ($request->has('status')) {
-            $query->status($request->status);
+            $filters['status'] = $request->status;
         }
 
         if ($request->has('deal_id')) {
-            $query->forDeal($request->integer('deal_id'));
+            $filters['deal_id'] = $request->integer('deal_id');
         }
 
         if ($request->has('search')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('name', 'ilike', '%' . $request->search . '%')
-                  ->orWhere('proposal_number', 'ilike', '%' . $request->search . '%');
-            });
+            $filters['search'] = $request->search;
         }
 
-        $proposals = $query->orderByDesc('created_at')
-            ->paginate($request->integer('per_page', 25));
+        $result = $this->repository->listProposals(
+            filters: $filters,
+            perPage: $request->integer('per_page', 25),
+            page: $request->integer('page', 1)
+        );
 
-        return response()->json($proposals);
+        return response()->json($result->toArray());
     }
 
     public function store(Request $request): JsonResponse
@@ -65,26 +72,24 @@ class ProposalController extends Controller
             'pricing_items' => 'nullable|array',
         ]);
 
-        $proposal = $this->service->create($validated);
+        $validated['created_by'] = auth()->id();
+        $proposal = $this->repository->create($validated);
 
         return response()->json($proposal, 201);
     }
 
-    public function show(Proposal $proposal): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $proposal->load([
-            'template',
-            'createdBy',
-            'assignedTo',
-            'sections',
-            'pricingItems',
-            'comments.resolvedBy',
-        ]);
+        $proposal = $this->repository->findByIdAsArray($id);
+
+        if (!$proposal) {
+            return response()->json(['message' => 'Proposal not found'], 404);
+        }
 
         return response()->json($proposal);
     }
 
-    public function update(Request $request, Proposal $proposal): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -97,61 +102,64 @@ class ProposalController extends Controller
             'pricing_items' => 'nullable|array',
         ]);
 
-        $proposal = $this->service->update($proposal, $validated);
+        $proposal = $this->repository->update($id, $validated);
 
         return response()->json($proposal);
     }
 
-    public function destroy(Proposal $proposal): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $this->service->delete($proposal);
+        $this->repository->delete($id);
 
         return response()->json(['message' => 'Proposal deleted']);
     }
 
-    public function duplicate(Proposal $proposal): JsonResponse
+    public function duplicate(int $id): JsonResponse
     {
-        $copy = $this->service->duplicate($proposal);
+        $copy = $this->repository->duplicate($id, auth()->id());
 
         return response()->json($copy, 201);
     }
 
-    public function send(Request $request, Proposal $proposal): JsonResponse
+    public function send(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'email' => 'required|email',
             'message' => 'nullable|string',
         ]);
 
-        $this->service->send($proposal, $validated['email'], $validated['message'] ?? null);
+        $proposal = $this->repository->sendProposal($id, $validated['email']);
 
-        return response()->json(['message' => 'Proposal sent', 'public_url' => $proposal->getPublicUrl()]);
+        return response()->json([
+            'message' => 'Proposal sent',
+            'public_url' => url("/proposals/{$proposal['uuid']}")
+        ]);
     }
 
-    public function analytics(Proposal $proposal): JsonResponse
+    public function analytics(int $id): JsonResponse
     {
-        $analytics = $this->service->getAnalytics($proposal);
+        $analytics = $this->repository->getProposalEngagement($id);
 
         return response()->json($analytics);
     }
 
     // Sections
-    public function addSection(Request $request, Proposal $proposal): JsonResponse
+    public function addSection(Request $request, int $proposalId): JsonResponse
     {
         $validated = $request->validate([
-            'section_type' => 'required|string|in:' . implode(',', ProposalSection::TYPES),
+            'section_type' => 'required|string|in:' . implode(',', self::SECTION_TYPES),
             'title' => 'required|string|max:255',
             'content' => 'nullable|string',
             'settings' => 'nullable|array',
             'display_order' => 'nullable|integer',
         ]);
 
-        $section = $this->service->addSection($proposal, $validated);
+        $section = $this->repository->addSection($proposalId, $validated);
 
         return response()->json($section, 201);
     }
 
-    public function updateSection(Request $request, ProposalSection $proposalSection): JsonResponse
+    public function updateSection(Request $request, int $sectionId): JsonResponse
     {
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -161,32 +169,32 @@ class ProposalController extends Controller
             'is_locked' => 'nullable|boolean',
         ]);
 
-        $section = $this->service->updateSection($proposalSection, $validated);
+        $section = $this->repository->updateSection($sectionId, $validated);
 
         return response()->json($section);
     }
 
-    public function deleteSection(ProposalSection $proposalSection): JsonResponse
+    public function deleteSection(int $sectionId): JsonResponse
     {
-        $this->service->deleteSection($proposalSection);
+        $this->repository->deleteSection($sectionId);
 
         return response()->json(['message' => 'Section deleted']);
     }
 
-    public function reorderSections(Request $request, Proposal $proposal): JsonResponse
+    public function reorderSections(Request $request, int $proposalId): JsonResponse
     {
         $validated = $request->validate([
             'order' => 'required|array',
             'order.*' => 'integer|exists:proposal_sections,id',
         ]);
 
-        $this->service->reorderSections($proposal, $validated['order']);
+        $this->repository->reorderSections($proposalId, $validated['order']);
 
         return response()->json(['message' => 'Sections reordered']);
     }
 
     // Pricing Items
-    public function addPricingItem(Request $request, Proposal $proposal): JsonResponse
+    public function addPricingItem(Request $request, int $proposalId): JsonResponse
     {
         $validated = $request->validate([
             'section_id' => 'nullable|exists:proposal_sections,id',
@@ -197,17 +205,17 @@ class ProposalController extends Controller
             'unit_price' => 'required|numeric|min:0',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
             'is_optional' => 'nullable|boolean',
-            'pricing_type' => 'nullable|string|in:' . implode(',', ProposalPricingItem::PRICING_TYPES),
+            'pricing_type' => 'nullable|string|in:' . implode(',', self::PRICING_TYPES),
             'billing_frequency' => 'nullable|string',
             'product_id' => 'nullable|integer',
         ]);
 
-        $item = $this->service->addPricingItem($proposal, $validated);
+        $item = $this->repository->addPricingItem($proposalId, $validated);
 
         return response()->json($item, 201);
     }
 
-    public function updatePricingItem(Request $request, ProposalPricingItem $proposalPricingItem): JsonResponse
+    public function updatePricingItem(Request $request, int $itemId): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -220,30 +228,27 @@ class ProposalController extends Controller
             'is_selected' => 'nullable|boolean',
         ]);
 
-        $item = $this->service->updatePricingItem($proposalPricingItem, $validated);
+        $item = $this->repository->updatePricingItem($itemId, $validated);
 
         return response()->json($item);
     }
 
-    public function deletePricingItem(ProposalPricingItem $proposalPricingItem): JsonResponse
+    public function deletePricingItem(int $itemId): JsonResponse
     {
-        $this->service->deletePricingItem($proposalPricingItem);
+        $this->repository->deletePricingItem($itemId);
 
         return response()->json(['message' => 'Pricing item deleted']);
     }
 
     // Comments
-    public function comments(Proposal $proposal): JsonResponse
+    public function comments(int $proposalId): JsonResponse
     {
-        $comments = $proposal->comments()
-            ->with(['section', 'replyTo', 'replies', 'resolvedBy'])
-            ->topLevel()
-            ->get();
+        $comments = $this->repository->getComments($proposalId);
 
         return response()->json($comments);
     }
 
-    public function addComment(Request $request, Proposal $proposal): JsonResponse
+    public function addComment(Request $request, int $proposalId): JsonResponse
     {
         $validated = $request->validate([
             'section_id' => 'nullable|exists:proposal_sections,id',
@@ -254,14 +259,14 @@ class ProposalController extends Controller
             'reply_to_id' => 'nullable|exists:proposal_comments,id',
         ]);
 
-        $comment = $this->service->addComment($proposal, $validated);
+        $comment = $this->repository->addComment($proposalId, $validated);
 
         return response()->json($comment, 201);
     }
 
-    public function resolveComment(ProposalComment $proposalComment): JsonResponse
+    public function resolveComment(int $commentId): JsonResponse
     {
-        $this->service->resolveComment($proposalComment, auth()->id());
+        $this->repository->resolveComment($commentId, auth()->id());
 
         return response()->json(['message' => 'Comment resolved']);
     }
@@ -269,13 +274,13 @@ class ProposalController extends Controller
     // Templates
     public function templates(Request $request): JsonResponse
     {
-        $query = ProposalTemplate::active()->with('createdBy');
+        $filters = ['active_only' => true];
 
         if ($request->has('category')) {
-            $query->category($request->category);
+            $filters['category'] = $request->category;
         }
 
-        $templates = $query->orderBy('name')->get();
+        $templates = $this->repository->listTemplates($filters);
 
         return response()->json($templates);
     }
@@ -285,52 +290,71 @@ class ProposalController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'category' => 'nullable|string|in:' . implode(',', ProposalTemplate::CATEGORIES),
+            'category' => 'nullable|string|in:' . implode(',', self::TEMPLATE_CATEGORIES),
             'default_sections' => 'nullable|array',
             'styling' => 'nullable|array',
             'cover_image_url' => 'nullable|url',
         ]);
 
         $validated['created_by'] = auth()->id();
-
-        $template = ProposalTemplate::create($validated);
+        $template = $this->repository->createTemplate($validated);
 
         return response()->json($template, 201);
     }
 
-    public function showTemplate(ProposalTemplate $proposalTemplate): JsonResponse
+    public function showTemplate(int $templateId): JsonResponse
     {
-        return response()->json($proposalTemplate);
+        $template = $this->repository->getTemplate($templateId);
+
+        if (!$template) {
+            return response()->json(['message' => 'Template not found'], 404);
+        }
+
+        return response()->json($template);
     }
 
-    public function updateTemplate(Request $request, ProposalTemplate $proposalTemplate): JsonResponse
+    public function updateTemplate(Request $request, int $templateId): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
-            'category' => 'nullable|string|in:' . implode(',', ProposalTemplate::CATEGORIES),
+            'category' => 'nullable|string|in:' . implode(',', self::TEMPLATE_CATEGORIES),
             'default_sections' => 'nullable|array',
             'styling' => 'nullable|array',
             'cover_image_url' => 'nullable|url',
             'is_active' => 'nullable|boolean',
         ]);
 
-        $proposalTemplate->update($validated);
+        $template = $this->repository->updateTemplate($templateId, $validated);
 
-        return response()->json($proposalTemplate);
+        return response()->json($template);
     }
 
-    public function destroyTemplate(ProposalTemplate $proposalTemplate): JsonResponse
+    public function destroyTemplate(int $templateId): JsonResponse
     {
-        $proposalTemplate->delete();
+        $this->repository->deleteTemplate($templateId);
 
         return response()->json(['message' => 'Template deleted']);
     }
 
-    // Content Blocks
+    // Content Blocks - These need to be added to repository interface
+    // For now, using direct Query Builder until ContentBlock repository is added
     public function contentBlocks(Request $request): JsonResponse
     {
-        $blocks = $this->service->getContentBlocks($request->category);
+        $query = \Illuminate\Support\Facades\DB::table('proposal_content_blocks')
+            ->where('is_active', true);
+
+        if ($request->has('category')) {
+            $query->where('category', $request->category);
+        }
+
+        $blocks = $query->get()->map(function ($block) {
+            $arr = (array) $block;
+            if (isset($arr['settings']) && is_string($arr['settings'])) {
+                $arr['settings'] = json_decode($arr['settings'], true);
+            }
+            return $arr;
+        })->toArray();
 
         return response()->json($blocks);
     }
@@ -339,21 +363,36 @@ class ProposalController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'category' => 'nullable|string|in:' . implode(',', ProposalContentBlock::CATEGORIES),
-            'block_type' => 'required|string|in:' . implode(',', ProposalContentBlock::TYPES),
+            'category' => 'nullable|string|in:' . implode(',', self::CONTENT_BLOCK_CATEGORIES),
+            'block_type' => 'required|string|in:' . implode(',', self::CONTENT_BLOCK_TYPES),
             'content' => 'required|string',
             'settings' => 'nullable|array',
             'thumbnail_url' => 'nullable|url',
         ]);
 
-        $validated['created_by'] = auth()->id();
+        $blockId = \Illuminate\Support\Facades\DB::table('proposal_content_blocks')->insertGetId([
+            'name' => $validated['name'],
+            'category' => $validated['category'] ?? 'other',
+            'block_type' => $validated['block_type'],
+            'content' => $validated['content'],
+            'settings' => json_encode($validated['settings'] ?? []),
+            'thumbnail_url' => $validated['thumbnail_url'] ?? null,
+            'is_active' => true,
+            'created_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-        $block = ProposalContentBlock::create($validated);
+        $block = \Illuminate\Support\Facades\DB::table('proposal_content_blocks')->where('id', $blockId)->first();
+        $arr = (array) $block;
+        if (isset($arr['settings']) && is_string($arr['settings'])) {
+            $arr['settings'] = json_decode($arr['settings'], true);
+        }
 
-        return response()->json($block, 201);
+        return response()->json($arr, 201);
     }
 
-    public function updateContentBlock(Request $request, ProposalContentBlock $proposalContentBlock): JsonResponse
+    public function updateContentBlock(Request $request, int $blockId): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -365,14 +404,29 @@ class ProposalController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
-        $proposalContentBlock->update($validated);
+        $updateData = ['updated_at' => now()];
+        if (isset($validated['name'])) $updateData['name'] = $validated['name'];
+        if (isset($validated['category'])) $updateData['category'] = $validated['category'];
+        if (isset($validated['block_type'])) $updateData['block_type'] = $validated['block_type'];
+        if (isset($validated['content'])) $updateData['content'] = $validated['content'];
+        if (isset($validated['settings'])) $updateData['settings'] = json_encode($validated['settings']);
+        if (isset($validated['thumbnail_url'])) $updateData['thumbnail_url'] = $validated['thumbnail_url'];
+        if (isset($validated['is_active'])) $updateData['is_active'] = $validated['is_active'];
 
-        return response()->json($proposalContentBlock);
+        \Illuminate\Support\Facades\DB::table('proposal_content_blocks')->where('id', $blockId)->update($updateData);
+
+        $block = \Illuminate\Support\Facades\DB::table('proposal_content_blocks')->where('id', $blockId)->first();
+        $arr = (array) $block;
+        if (isset($arr['settings']) && is_string($arr['settings'])) {
+            $arr['settings'] = json_decode($arr['settings'], true);
+        }
+
+        return response()->json($arr);
     }
 
-    public function destroyContentBlock(ProposalContentBlock $proposalContentBlock): JsonResponse
+    public function destroyContentBlock(int $blockId): JsonResponse
     {
-        $proposalContentBlock->delete();
+        \Illuminate\Support\Facades\DB::table('proposal_content_blocks')->where('id', $blockId)->delete();
 
         return response()->json(['message' => 'Content block deleted']);
     }

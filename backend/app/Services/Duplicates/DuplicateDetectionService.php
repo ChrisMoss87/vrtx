@@ -2,10 +2,6 @@
 
 namespace App\Services\Duplicates;
 
-use App\Models\DuplicateCandidate;
-use App\Models\DuplicateRule;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -33,7 +29,7 @@ class DuplicateDetectionService
         $duplicates = [];
 
         // Get existing records to compare against
-        $query = ModuleRecord::where('module_id', $module->id);
+        $query = DB::table('module_records')->where('module_id', $module->id);
         if ($excludeRecordId) {
             $query->where('id', '!=', $excludeRecordId);
         }
@@ -339,7 +335,7 @@ class DuplicateDetectionService
             return 0;
         }
 
-        $records = ModuleRecord::where('module_id', $module->id)
+        $records = DB::table('module_records')->where('module_id', $module->id)
             ->orderBy('id')
             ->get();
 
@@ -363,7 +359,7 @@ class DuplicateDetectionService
                 $processed[$pairKey] = true;
 
                 // Check if candidate already exists
-                $existingCandidate = DuplicateCandidate::where(function ($q) use ($recordA, $recordB) {
+                $existingCandidate = DB::table('duplicate_candidates')->where(function ($q) use ($recordA, $recordB) {
                     $q->where('record_id_a', $recordA->id)->where('record_id_b', $recordB->id);
                 })->orWhere(function ($q) use ($recordA, $recordB) {
                     $q->where('record_id_a', $recordB->id)->where('record_id_b', $recordA->id);
@@ -380,7 +376,7 @@ class DuplicateDetectionService
                     $idA = min($recordA->id, $recordB->id);
                     $idB = max($recordA->id, $recordB->id);
 
-                    DuplicateCandidate::create([
+                    DB::table('duplicate_candidates')->insertGetId([
                         'module_id' => $module->id,
                         'record_id_a' => $idA,
                         'record_id_b' => $idB,

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\Notification;
 use App\Services\Notification\NotificationService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class SendNotificationAction implements ActionInterface
 {
@@ -95,13 +95,13 @@ class SendNotificationAction implements ActionInterface
             case 'role':
                 // Get users by role
                 if (isset($config['role_name'])) {
-                    $users = \App\Models\User::role($config['role_name'])->pluck('id')->toArray();
+                    $users = DB::table('users')->whereIn('id', DB::table('model_has_roles')->where('role_id', DB::table('roles')->where('name', $config['role_name'])->value('id'))->pluck('model_id'))->pluck('id')->toArray();
                     $userIds = $users;
                 }
                 break;
 
             case 'all_admins':
-                $users = \App\Models\User::role('admin')->pluck('id')->toArray();
+                $users = DB::table('users')->whereIn('id', DB::table('model_has_roles')->where('role_id', DB::table('roles')->where('name', 'admin')->value('id'))->pluck('model_id'))->pluck('id')->toArray();
                 $userIds = $users;
                 break;
 

@@ -4,13 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Campaign;
 
-use App\Models\Campaign;
-use App\Models\CampaignAudience;
-use App\Models\CampaignAsset;
-use App\Models\CampaignSend;
-use App\Models\CampaignMetric;
-use App\Models\CampaignUnsubscribe;
-use App\Models\ModuleRecord;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +47,7 @@ class CampaignService
     public function createCampaign(array $data, int $userId): Campaign
     {
         return DB::transaction(function () use ($data, $userId) {
-            $campaign = Campaign::create([
+            $campaign = DB::table('campaigns')->insertGetId([
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,
                 'type' => $data['type'],
@@ -130,7 +123,7 @@ class CampaignService
      */
     public function addAudience(Campaign $campaign, array $data): CampaignAudience
     {
-        $audience = CampaignAudience::create([
+        $audience = DB::table('campaign_audiences')->insertGetId([
             'campaign_id' => $campaign->id,
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
@@ -174,7 +167,7 @@ class CampaignService
      */
     public function addAsset(Campaign $campaign, array $data): CampaignAsset
     {
-        return CampaignAsset::create([
+        return DB::table('campaign_assets')->insertGetId([
             'campaign_id' => $campaign->id,
             'type' => $data['type'],
             'name' => $data['name'],
@@ -299,7 +292,7 @@ class CampaignService
                 }
 
                 // Check if already queued
-                $existingSend = CampaignSend::where('campaign_id', $campaign->id)
+                $existingSend = DB::table('campaign_sends')->where('campaign_id', $campaign->id)
                     ->where('record_id', $record->id)
                     ->first();
 
@@ -307,7 +300,7 @@ class CampaignService
                     continue;
                 }
 
-                CampaignSend::create([
+                DB::table('campaign_sends')->insertGetId([
                     'campaign_id' => $campaign->id,
                     'campaign_asset_id' => $emailAsset->id,
                     'record_id' => $record->id,
@@ -359,7 +352,7 @@ class CampaignService
      */
     public function getCampaignMetricsOverTime(Campaign $campaign, string $startDate = null, string $endDate = null): Collection
     {
-        $query = CampaignMetric::where('campaign_id', $campaign->id)
+        $query = DB::table('campaign_metrics')->where('campaign_id', $campaign->id)
             ->orderBy('date');
 
         if ($startDate) {
@@ -384,7 +377,7 @@ class CampaignService
         $metric->incrementMetric('opens');
 
         // Check if unique open
-        $previousOpens = CampaignSend::where('campaign_id', $send->campaign_id)
+        $previousOpens = DB::table('campaign_sends')->where('campaign_id', $send->campaign_id)
             ->where('record_id', $send->record_id)
             ->whereNotNull('opened_at')
             ->where('id', '!=', $send->id)
@@ -412,7 +405,7 @@ class CampaignService
         $metric->incrementMetric('clicks');
 
         // Check if unique click
-        $previousClicks = CampaignSend::where('campaign_id', $send->campaign_id)
+        $previousClicks = DB::table('campaign_sends')->where('campaign_id', $send->campaign_id)
             ->where('record_id', $send->record_id)
             ->whereNotNull('clicked_at')
             ->where('id', '!=', $send->id)

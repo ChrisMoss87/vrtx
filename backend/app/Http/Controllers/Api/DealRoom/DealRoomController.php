@@ -6,13 +6,10 @@ namespace App\Http\Controllers\Api\DealRoom;
 
 use App\Application\Services\DealRoom\DealRoomApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\DealRoom;
-use App\Models\DealRoomActionItem;
-use App\Models\DealRoomDocument;
-use App\Models\DealRoomMember;
 use App\Services\DealRoom\DealRoomService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DealRoomController extends Controller
 {
@@ -83,7 +80,7 @@ class DealRoomController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',
@@ -107,7 +104,7 @@ class DealRoomController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
         $room->delete();
 
         return response()->json([
@@ -134,7 +131,7 @@ class DealRoomController extends Controller
      */
     public function addMember(Request $request, int $id): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
 
         $validated = $request->validate([
             'user_id' => 'nullable|integer|exists:users,id',
@@ -157,7 +154,7 @@ class DealRoomController extends Controller
      */
     public function removeMember(int $id, int $memberId): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
 
         if (!$this->service->removeMember($room, $memberId)) {
             return response()->json(['message' => 'Member not found'], 404);
@@ -188,7 +185,7 @@ class DealRoomController extends Controller
      */
     public function createAction(Request $request, int $id): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -212,7 +209,7 @@ class DealRoomController extends Controller
      */
     public function updateAction(Request $request, int $id, int $actionId): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
         $item = $room->actionItems()->findOrFail($actionId);
 
         $validated = $request->validate([
@@ -239,7 +236,7 @@ class DealRoomController extends Controller
      */
     public function deleteAction(int $id, int $actionId): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
         $item = $room->actionItems()->findOrFail($actionId);
         $item->delete();
 
@@ -267,7 +264,7 @@ class DealRoomController extends Controller
      */
     public function uploadDocument(Request $request, int $id): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
 
         $validated = $request->validate([
             'file' => 'required|file|max:51200', // 50MB max
@@ -300,7 +297,7 @@ class DealRoomController extends Controller
      */
     public function deleteDocument(int $id, int $docId): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
         $doc = $room->documents()->findOrFail($docId);
         $doc->delete();
 
@@ -315,7 +312,7 @@ class DealRoomController extends Controller
      */
     public function messages(Request $request, int $id): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
 
         $query = $room->messages()->with('member');
 
@@ -343,7 +340,7 @@ class DealRoomController extends Controller
      */
     public function sendMessage(Request $request, int $id): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
 
         $validated = $request->validate([
             'message' => 'required|string|max:5000',
@@ -398,7 +395,7 @@ class DealRoomController extends Controller
      */
     public function activities(int $id): JsonResponse
     {
-        $room = DealRoom::findOrFail($id);
+        $room = DB::table('deal_rooms')->where('id', $id)->first();
 
         $activities = $room->activities()
             ->with('member')

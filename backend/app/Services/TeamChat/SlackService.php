@@ -2,9 +2,9 @@
 
 namespace App\Services\TeamChat;
 
-use App\Models\TeamChatConnection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class SlackService
 {

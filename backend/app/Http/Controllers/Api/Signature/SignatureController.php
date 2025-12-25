@@ -6,14 +6,10 @@ namespace App\Http\Controllers\Api\Signature;
 
 use App\Application\Services\Document\DocumentApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\GeneratedDocument;
-use App\Models\SignatureField;
-use App\Models\SignatureRequest;
-use App\Models\SignatureSigner;
-use App\Models\SignatureTemplate;
 use App\Services\Signature\SignatureService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SignatureController extends Controller
 {
@@ -191,7 +187,7 @@ class SignatureController extends Controller
 
         $validated['created_by'] = auth()->id();
 
-        $template = SignatureTemplate::create($validated);
+        $template = DB::table('signature_templates')->insertGetId($validated);
 
         return response()->json($template, 201);
     }

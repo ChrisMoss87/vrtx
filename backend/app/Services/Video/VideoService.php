@@ -2,13 +2,10 @@
 
 namespace App\Services\Video;
 
-use App\Models\VideoProvider;
-use App\Models\VideoMeeting;
-use App\Models\VideoMeetingParticipant;
-use App\Models\VideoMeetingRecording;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class VideoService
 {
@@ -33,7 +30,7 @@ class VideoService
         ]));
 
         // Create local meeting record
-        $meeting = VideoMeeting::create([
+        $meeting = DB::table('video_meetings')->insertGetId([
             'provider_id' => $provider->id,
             'external_meeting_id' => $providerResponse['external_meeting_id'],
             'host_id' => $host->id,
@@ -288,7 +285,7 @@ class VideoService
 
     public function getUpcomingMeetings(User $user, int $limit = 10): \Illuminate\Database\Eloquent\Collection
     {
-        return VideoMeeting::where(function ($query) use ($user) {
+        return DB::table('video_meetings')->where(function ($query) use ($user) {
             $query->where('host_id', $user->id)
                 ->orWhereHas('participants', function ($q) use ($user) {
                     $q->where('user_id', $user->id)
@@ -305,7 +302,7 @@ class VideoService
 
     public function getMeetingsForDeal(int $dealId, string $module): \Illuminate\Database\Eloquent\Collection
     {
-        return VideoMeeting::where('deal_id', $dealId)
+        return DB::table('video_meetings')->where('deal_id', $dealId)
             ->where('deal_module', $module)
             ->orderBy('scheduled_at', 'desc')
             ->with(['provider', 'host', 'participants', 'recordings'])
@@ -314,7 +311,7 @@ class VideoService
 
     public function getMeetingStats(User $user, ?string $startDate = null, ?string $endDate = null): array
     {
-        $query = VideoMeeting::where('host_id', $user->id);
+        $query = DB::table('video_meetings')->where('host_id', $user->id);
 
         if ($startDate) {
             $query->where('scheduled_at', '>=', $startDate);

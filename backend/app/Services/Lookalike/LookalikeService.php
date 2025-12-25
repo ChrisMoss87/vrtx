@@ -2,12 +2,9 @@
 
 namespace App\Services\Lookalike;
 
-use App\Models\LookalikeAudience;
-use App\Models\LookalikeBuildJob;
-use App\Models\LookalikeMatch;
-use App\Models\ModuleRecord;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class LookalikeService
 {
@@ -33,7 +30,7 @@ class LookalikeService
 
     public function createAudience(array $data, int $userId): LookalikeAudience
     {
-        return LookalikeAudience::create([
+        return DB::table('lookalike_audiences')->insertGetId([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'source_type' => $data['source_type'],
@@ -124,7 +121,7 @@ class LookalikeService
     {
         // In production, this would query based on source_type and source_id/criteria
         // For now, simulate with contacts module
-        $query = ModuleRecord::where('module_api_name', 'contacts');
+        $query = DB::table('module_records')->where('module_api_name', 'contacts');
 
         // Apply source criteria if manual
         if ($audience->source_type === LookalikeAudience::SOURCE_MANUAL) {
@@ -214,7 +211,7 @@ class LookalikeService
         $totalWeight = array_sum($weights);
 
         // Get potential candidates (not in source)
-        $candidates = ModuleRecord::where('module_api_name', 'contacts')
+        $candidates = DB::table('module_records')->where('module_api_name', 'contacts')
             ->whereNotIn('id', $excludeIds)
             ->limit(10000)
             ->get();

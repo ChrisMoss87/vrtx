@@ -4,12 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\EmailAccount;
-use App\Models\EmailMessage;
-use App\Models\EmailTemplate;
-use App\Models\Permission;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -17,6 +11,7 @@ use Tests\TestCase;
 class EmailApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Role $role;
@@ -26,10 +21,10 @@ class EmailApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
+        $this->user = /* User factory - use DB::table('users') */->create();
 
         // Create role with email permissions
-        $this->role = Role::create(['name' => 'admin', 'guard_name' => 'web']);
+        $this->role = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web']);
         $permissions = [
             'email.view',
             'email.create',
@@ -37,12 +32,12 @@ class EmailApiTest extends TestCase
             'email.delete',
         ];
         foreach ($permissions as $permName) {
-            $perm = Permission::create(['name' => $permName, 'guard_name' => 'web']);
+            $perm = DB::table('permissions')->insertGetId(['name' => $permName, 'guard_name' => 'web']);
             $this->role->givePermissionTo($perm);
         }
         $this->user->assignRole($this->role);
 
-        $this->emailAccount = EmailAccount::factory()->create([
+        $this->emailAccount = /* EmailAccount factory - use DB::table('email_accounts') */->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -55,7 +50,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_list_email_accounts(): void
     {
-        EmailAccount::factory()->count(3)->create([
+        /* EmailAccount factory - use DB::table('email_accounts') */->count(3)->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -106,7 +101,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_list_email_messages(): void
     {
-        EmailMessage::factory()->count(5)->create([
+        /* EmailMessage factory - use DB::table('email_messages') */->count(5)->create([
             'email_account_id' => $this->emailAccount->id,
         ]);
 
@@ -125,11 +120,11 @@ class EmailApiTest extends TestCase
 
     public function test_can_filter_messages_by_folder(): void
     {
-        EmailMessage::factory()->count(2)->create([
+        /* EmailMessage factory - use DB::table('email_messages') */->count(2)->create([
             'email_account_id' => $this->emailAccount->id,
             'folder' => 'inbox',
         ]);
-        EmailMessage::factory()->create([
+        /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'folder' => 'sent',
         ]);
@@ -145,11 +140,11 @@ class EmailApiTest extends TestCase
 
     public function test_can_filter_messages_by_read_status(): void
     {
-        EmailMessage::factory()->count(2)->create([
+        /* EmailMessage factory - use DB::table('email_messages') */->count(2)->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => true,
         ]);
-        EmailMessage::factory()->create([
+        /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => false,
         ]);
@@ -165,7 +160,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_show_email_message(): void
     {
-        $message = EmailMessage::factory()->create([
+        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
         ]);
 
@@ -203,7 +198,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_send_email(): void
     {
-        $message = EmailMessage::factory()->create([
+        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'status' => 'draft',
         ]);
@@ -216,7 +211,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_mark_email_as_read(): void
     {
-        $message = EmailMessage::factory()->create([
+        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => false,
         ]);
@@ -229,7 +224,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_mark_email_as_unread(): void
     {
-        $message = EmailMessage::factory()->create([
+        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => true,
         ]);
@@ -242,7 +237,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_delete_email_message(): void
     {
-        $message = EmailMessage::factory()->create([
+        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
         ]);
 
@@ -254,7 +249,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_move_email_to_folder(): void
     {
-        $message = EmailMessage::factory()->create([
+        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'folder' => 'inbox',
         ]);
@@ -269,7 +264,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_star_email(): void
     {
-        $message = EmailMessage::factory()->create([
+        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'is_starred' => false,
         ]);
@@ -287,7 +282,7 @@ class EmailApiTest extends TestCase
     public function test_can_get_email_thread(): void
     {
         $threadId = 'thread_123';
-        EmailMessage::factory()->count(3)->create([
+        /* EmailMessage factory - use DB::table('email_messages') */->count(3)->create([
             'email_account_id' => $this->emailAccount->id,
             'thread_id' => $threadId,
         ]);
@@ -307,7 +302,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_list_email_templates(): void
     {
-        EmailTemplate::factory()->count(3)->create([
+        /* EmailTemplate factory - use DB::table('email_templates') */->count(3)->create([
             'created_by' => $this->user->id,
         ]);
 
@@ -340,7 +335,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_update_email_template(): void
     {
-        $template = EmailTemplate::factory()->create([
+        $template = /* EmailTemplate factory - use DB::table('email_templates') */->create([
             'name' => 'Original',
             'created_by' => $this->user->id,
         ]);
@@ -355,7 +350,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_delete_email_template(): void
     {
-        $template = EmailTemplate::factory()->create([
+        $template = /* EmailTemplate factory - use DB::table('email_templates') */->create([
             'created_by' => $this->user->id,
         ]);
 
@@ -371,11 +366,11 @@ class EmailApiTest extends TestCase
 
     public function test_can_search_emails(): void
     {
-        EmailMessage::factory()->create([
+        /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'subject' => 'Important meeting reminder',
         ]);
-        EmailMessage::factory()->create([
+        /* EmailMessage factory - use DB::table('email_messages') */->create([
             'email_account_id' => $this->emailAccount->id,
             'subject' => 'Random subject',
         ]);
@@ -391,7 +386,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_bulk_mark_as_read(): void
     {
-        $messages = EmailMessage::factory()->count(3)->create([
+        $messages = /* EmailMessage factory - use DB::table('email_messages') */->count(3)->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => false,
         ]);
@@ -410,7 +405,7 @@ class EmailApiTest extends TestCase
 
     public function test_can_bulk_delete(): void
     {
-        $messages = EmailMessage::factory()->count(3)->create([
+        $messages = /* EmailMessage factory - use DB::table('email_messages') */->count(3)->create([
             'email_account_id' => $this->emailAccount->id,
         ]);
 

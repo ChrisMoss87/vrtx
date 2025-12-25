@@ -2,11 +2,8 @@
 
 namespace App\Services\AI;
 
-use App\Models\AiEmailDraft;
-use App\Models\AiPrompt;
-use App\Models\EmailMessage;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class EmailCompositionService
 {
@@ -46,7 +43,7 @@ class EmailCompositionService
 
         $parsed = $this->parseEmailResponse($response['content']);
 
-        return AiEmailDraft::create([
+        return DB::table('ai_email_drafts')->insertGetId([
             'user_id' => Auth::id(),
             'record_module' => $recordModule,
             'record_id' => $recordId,
@@ -68,7 +65,7 @@ class EmailCompositionService
         string $intent,
         ?string $additionalContext = null
     ): AiEmailDraft {
-        $email = EmailMessage::findOrFail($emailId);
+        $email = DB::table('email_messages')->where('id', $emailId)->first();
 
         $messages = $this->buildReplyPrompt($email, $intent, $additionalContext);
 
@@ -84,7 +81,7 @@ class EmailCompositionService
 
         $parsed = $this->parseEmailResponse($response['content']);
 
-        return AiEmailDraft::create([
+        return DB::table('ai_email_drafts')->insertGetId([
             'user_id' => Auth::id(),
             'record_module' => $email->entity_type,
             'record_id' => $email->entity_id,
@@ -135,7 +132,7 @@ class EmailCompositionService
 
         $parsed = $this->parseEmailResponse($response['content']);
 
-        return AiEmailDraft::create([
+        return DB::table('ai_email_drafts')->insertGetId([
             'user_id' => Auth::id(),
             'record_module' => $recordModule,
             'record_id' => $recordId,

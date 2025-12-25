@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Api\Billing;
 
 use App\Http\Controllers\Controller;
-use App\Models\Plugin;
-use App\Models\PluginBundle;
-use App\Models\PluginLicense;
 use App\Services\PluginLicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class BundleController extends Controller
 {
@@ -33,7 +31,7 @@ class BundleController extends Controller
      */
     public function show(string $slug): JsonResponse
     {
-        $bundle = PluginBundle::where('slug', $slug)->first();
+        $bundle = DB::table('plugin_bundles')->where('slug', $slug)->first();
 
         if (!$bundle) {
             return response()->json(['error' => 'Bundle not found'], 404);
@@ -55,7 +53,7 @@ class BundleController extends Controller
      */
     public function activate(Request $request, string $slug): JsonResponse
     {
-        $bundle = PluginBundle::where('slug', $slug)->first();
+        $bundle = DB::table('plugin_bundles')->where('slug', $slug)->first();
 
         if (!$bundle) {
             return response()->json(['error' => 'Bundle not found'], 404);
@@ -72,12 +70,12 @@ class BundleController extends Controller
                 continue;
             }
 
-            $plugin = Plugin::where('slug', $pluginSlug)->first();
+            $plugin = DB::table('plugins')->where('slug', $pluginSlug)->first();
             if (!$plugin) {
                 continue;
             }
 
-            PluginLicense::create([
+            DB::table('plugin_licenses')->insertGetId([
                 'plugin_slug' => $pluginSlug,
                 'bundle_slug' => $slug,
                 'status' => PluginLicense::STATUS_ACTIVE,
@@ -104,7 +102,7 @@ class BundleController extends Controller
      */
     public function deactivate(string $slug): JsonResponse
     {
-        $licenses = PluginLicense::where('bundle_slug', $slug)
+        $licenses = DB::table('plugin_licenses')->where('bundle_slug', $slug)
             ->where('status', PluginLicense::STATUS_ACTIVE)
             ->get();
 

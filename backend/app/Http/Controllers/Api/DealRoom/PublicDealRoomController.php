@@ -6,10 +6,10 @@ namespace App\Http\Controllers\Api\DealRoom;
 
 use App\Application\Services\DealRoom\DealRoomApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\DealRoomActionItem;
 use App\Services\DealRoom\DealRoomService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PublicDealRoomController extends Controller
 {

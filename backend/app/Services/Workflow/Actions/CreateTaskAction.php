@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Action to create a task linked to the triggering record.
@@ -28,7 +27,7 @@ class CreateTaskAction implements ActionInterface
     public function execute(array $config, array $context): array
     {
         // Find tasks module
-        $taskModule = Module::where('api_name', 'tasks')
+        $taskModule = DB::table('modules')->where('api_name', 'tasks')
             ->orWhere('api_name', 'task')
             ->first();
 
@@ -64,7 +63,7 @@ class CreateTaskAction implements ActionInterface
 
         $userId = $context['triggered_by'] ?? $assignedTo;
 
-        $task = ModuleRecord::create([
+        $task = DB::table('module_records')->insertGetId([
             'module_id' => $taskModule->id,
             'data' => $taskData,
             'created_by' => $userId,

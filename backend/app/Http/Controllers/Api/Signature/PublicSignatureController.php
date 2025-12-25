@@ -6,11 +6,10 @@ namespace App\Http\Controllers\Api\Signature;
 
 use App\Application\Services\Document\DocumentApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\SignatureField;
-use App\Models\SignatureRequest;
 use App\Services\Signature\SignatureService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PublicSignatureController extends Controller
 {
@@ -21,7 +20,7 @@ class PublicSignatureController extends Controller
 
     public function show(string $uuid, Request $request): JsonResponse
     {
-        $signatureRequest = SignatureRequest::where('uuid', $uuid)
+        $signatureRequest = DB::table('signature_requests')->where('uuid', $uuid)
             ->with(['signers', 'fields'])
             ->firstOrFail();
 
@@ -50,7 +49,7 @@ class PublicSignatureController extends Controller
 
     public function sign(string $uuid, Request $request): JsonResponse
     {
-        $signatureRequest = SignatureRequest::where('uuid', $uuid)->firstOrFail();
+        $signatureRequest = DB::table('signature_requests')->where('uuid', $uuid)->firstOrFail();
 
         $validated = $request->validate([
             'token' => 'required|string',
@@ -77,7 +76,7 @@ class PublicSignatureController extends Controller
 
     public function decline(string $uuid, Request $request): JsonResponse
     {
-        $signatureRequest = SignatureRequest::where('uuid', $uuid)->firstOrFail();
+        $signatureRequest = DB::table('signature_requests')->where('uuid', $uuid)->firstOrFail();
 
         $validated = $request->validate([
             'token' => 'required|string',
@@ -97,7 +96,7 @@ class PublicSignatureController extends Controller
 
     public function downloadDocument(string $uuid, Request $request): JsonResponse
     {
-        $signatureRequest = SignatureRequest::where('uuid', $uuid)->firstOrFail();
+        $signatureRequest = DB::table('signature_requests')->where('uuid', $uuid)->firstOrFail();
 
         $token = $request->query('token');
         $signer = $this->service->getSignerByToken($token);

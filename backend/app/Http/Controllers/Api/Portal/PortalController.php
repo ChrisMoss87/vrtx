@@ -4,14 +4,10 @@ namespace App\Http\Controllers\Api\Portal;
 
 use App\Application\Services\Portal\PortalApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\PortalUser;
-use App\Models\PortalNotification;
-use App\Models\PortalDocumentShare;
-use App\Models\Invoice;
-use App\Models\Quote;
 use App\Services\Portal\PortalService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class PortalController extends Controller
 {

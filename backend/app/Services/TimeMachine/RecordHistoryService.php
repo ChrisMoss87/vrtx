@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\TimeMachine;
 
-use App\Models\FieldChangeLog;
-use App\Models\ModuleRecord;
-use App\Models\RecordSnapshot;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class RecordHistoryService
 {
@@ -26,7 +24,7 @@ class RecordHistoryService
         }
 
         // No snapshot found, need to get current state and work backwards
-        $record = ModuleRecord::where('module_id', $moduleId)
+        $record = DB::table('module_records')->where('module_id', $moduleId)
             ->where('id', $recordId)
             ->first();
 

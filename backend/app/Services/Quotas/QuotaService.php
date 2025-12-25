@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Quotas;
 
-use App\Models\Quota;
-use App\Models\QuotaPeriod;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +16,7 @@ class QuotaService
      */
     public function createPeriod(array $data): QuotaPeriod
     {
-        return QuotaPeriod::create([
+        return DB::table('quota_periods')->insertGetId([
             'name' => $data['name'],
             'period_type' => $data['period_type'],
             'start_date' => $data['start_date'],
@@ -53,7 +51,7 @@ class QuotaService
      */
     public function createQuota(array $data, ?int $createdBy = null): Quota
     {
-        return Quota::create([
+        return DB::table('quotas')->insertGetId([
             'period_id' => $data['period_id'],
             'user_id' => $data['user_id'],
             'team_id' => $data['team_id'] ?? null,
@@ -91,7 +89,7 @@ class QuotaService
         DB::transaction(function () use ($periodId, $metricType, $targetValue, $userIds, $createdBy, &$quotas) {
             foreach ($userIds as $userId) {
                 // Check if quota already exists
-                $existing = Quota::where('period_id', $periodId)
+                $existing = DB::table('quotas')->where('period_id', $periodId)
                     ->where('user_id', $userId)
                     ->where('metric_type', $metricType)
                     ->first();
@@ -179,7 +177,7 @@ class QuotaService
     public function getTeamProgress(?int $periodId = null): array
     {
         $period = $periodId
-            ? QuotaPeriod::find($periodId)
+            ? DB::table('quota_periods')->where('id', $periodId)->first()
             : QuotaPeriod::getCurrentPeriod();
 
         if (!$period) {

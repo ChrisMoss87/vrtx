@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Blueprint;
 
-use App\Models\BlueprintTransition;
-use App\Models\BlueprintTransitionRequirement;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Validates during-phase requirements for blueprint transitions.

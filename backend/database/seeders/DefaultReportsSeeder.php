@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Module;
-use App\Models\Report;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds the default reports for a new tenant.
@@ -37,7 +36,7 @@ class DefaultReportsSeeder extends Seeder
 
     private function createSalesReports(): void
     {
-        $dealsModule = Module::where('api_name', 'deals')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
         if (!$dealsModule) {
             $this->command->warn('  - Deals module not found, skipping sales reports');
             return;
@@ -181,8 +180,8 @@ class DefaultReportsSeeder extends Seeder
 
     private function createCustomerReports(): void
     {
-        $contactsModule = Module::where('api_name', 'contacts')->first();
-        $orgsModule = Module::where('api_name', 'organizations')->first();
+        $contactsModule = DB::table('modules')->where('api_name', 'contacts')->first();
+        $orgsModule = DB::table('modules')->where('api_name', 'organizations')->first();
 
         if ($contactsModule) {
             // Contacts by Status
@@ -266,7 +265,7 @@ class DefaultReportsSeeder extends Seeder
 
     private function createSupportReports(): void
     {
-        $casesModule = Module::where('api_name', 'cases')->first();
+        $casesModule = DB::table('modules')->where('api_name', 'cases')->first();
         if (!$casesModule) {
             $this->command->warn('  - Cases module not found, skipping support reports');
             return;
@@ -374,7 +373,7 @@ class DefaultReportsSeeder extends Seeder
 
     private function createActivityReports(): void
     {
-        $activitiesModule = Module::where('api_name', 'activities')->first();
+        $activitiesModule = DB::table('modules')->where('api_name', 'activities')->first();
         if (!$activitiesModule) {
             $this->command->warn('  - Activities module not found, skipping activity reports');
             return;
@@ -464,8 +463,8 @@ class DefaultReportsSeeder extends Seeder
 
     private function createFinancialReports(): void
     {
-        $invoicesModule = Module::where('api_name', 'invoices')->first();
-        $quotesModule = Module::where('api_name', 'quotes')->first();
+        $invoicesModule = DB::table('modules')->where('api_name', 'invoices')->first();
+        $quotesModule = DB::table('modules')->where('api_name', 'quotes')->first();
 
         if ($invoicesModule) {
             // Invoice Aging Report
@@ -599,7 +598,7 @@ class DefaultReportsSeeder extends Seeder
 
     private function createTaskReports(): void
     {
-        $tasksModule = Module::where('api_name', 'tasks')->first();
+        $tasksModule = DB::table('modules')->where('api_name', 'tasks')->first();
         if (!$tasksModule) {
             $this->command->warn('  - Tasks module not found, skipping task reports');
             return;

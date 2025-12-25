@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
-use App\Models\SchedulingPage;
-use App\Models\User;
+use App\Domain\Scheduling\Entities\SchedulingPage;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 
 class SchedulingPagePolicy
 {
@@ -20,7 +22,7 @@ class SchedulingPagePolicy
      */
     public function view(User $user, SchedulingPage $schedulingPage): bool
     {
-        return $user->id === $schedulingPage->user_id;
+        return $user->id === $schedulingPage->userId()->value();
     }
 
     /**
@@ -36,7 +38,7 @@ class SchedulingPagePolicy
      */
     public function update(User $user, SchedulingPage $schedulingPage): bool
     {
-        return $user->id === $schedulingPage->user_id;
+        return $user->id === $schedulingPage->userId()->value();
     }
 
     /**
@@ -44,6 +46,6 @@ class SchedulingPagePolicy
      */
     public function delete(User $user, SchedulingPage $schedulingPage): bool
     {
-        return $user->id === $schedulingPage->user_id;
+        return $user->id === $schedulingPage->userId()->value();
     }
 }

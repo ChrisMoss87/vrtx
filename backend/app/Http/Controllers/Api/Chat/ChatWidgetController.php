@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api\Chat;
 
 use App\Application\Services\Chat\ChatApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\ChatWidget;
 use App\Services\Chat\ChatService;
 use App\Services\Chat\ChatAnalyticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ChatWidgetController extends Controller
 {
@@ -60,7 +60,7 @@ class ChatWidgetController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $widget = ChatWidget::findOrFail($id);
+        $widget = DB::table('chat_widgets')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -82,7 +82,7 @@ class ChatWidgetController extends Controller
 
     public function destroy(int $id): JsonResponse
     {
-        $widget = ChatWidget::findOrFail($id);
+        $widget = DB::table('chat_widgets')->where('id', $id)->first();
         $widget->delete();
 
         return response()->json(['message' => 'Widget deleted']);
@@ -90,7 +90,7 @@ class ChatWidgetController extends Controller
 
     public function embedCode(int $id): JsonResponse
     {
-        $widget = ChatWidget::findOrFail($id);
+        $widget = DB::table('chat_widgets')->where('id', $id)->first();
 
         return response()->json([
             'data' => [
@@ -102,7 +102,7 @@ class ChatWidgetController extends Controller
 
     public function analytics(Request $request, int $id): JsonResponse
     {
-        $widget = ChatWidget::findOrFail($id);
+        $widget = DB::table('chat_widgets')->where('id', $id)->first();
         $period = $request->query('period', 'month');
 
         return response()->json([

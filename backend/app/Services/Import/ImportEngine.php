@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Import;
 
-use App\Models\Field;
-use App\Models\Import;
-use App\Models\ImportRow;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -311,7 +306,7 @@ class ImportEngine
 
         // Check for duplicates
         if ($duplicateField && isset($mappedData[$duplicateField])) {
-            $existingRecord = ModuleRecord::where('module_id', $module->id)
+            $existingRecord = DB::table('module_records')->where('module_id', $module->id)
                 ->whereJsonContains('data->' . $duplicateField, $mappedData[$duplicateField])
                 ->first();
 
@@ -338,7 +333,7 @@ class ImportEngine
 
         // Create new record
         DB::transaction(function () use ($row, $module, $mappedData, $userId) {
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => $mappedData,
                 'created_by' => $userId,

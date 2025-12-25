@@ -4,16 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Cadence;
 
-use App\Models\Cadence;
-use App\Models\CadenceEnrollment;
-use App\Models\CadenceMetric;
-use App\Models\CadenceStep;
-use App\Models\CadenceStepExecution;
-use App\Models\EmailAccount;
-use App\Models\EmailMessage;
-use App\Models\ModuleRecord;
-use App\Models\SmsConnection;
-use App\Models\Task;
 use App\Services\Email\EmailService;
 use App\Services\Sms\SmsService;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +34,7 @@ class CadenceExecutionService
         ];
 
         // Find all active enrollments that are due for their next step
-        $dueEnrollments = CadenceEnrollment::query()
+        $dueEnrollments = DB::table('cadence_enrollments')
             ->with(['cadence', 'currentStep', 'cadence.steps'])
             ->where('status', CadenceEnrollment::STATUS_ACTIVE)
             ->where('next_step_at', '<=', now())
@@ -104,7 +94,7 @@ class CadenceExecutionService
         }
 
         // Create step execution record
-        $execution = CadenceStepExecution::create([
+        $execution = DB::table('cadence_step_executions')->insertGetId([
             'enrollment_id' => $enrollment->id,
             'step_id' => $step->id,
             'scheduled_at' => $enrollment->next_step_at,
@@ -209,7 +199,7 @@ class CadenceExecutionService
             }
 
             // Create the email message
-            $emailMessage = EmailMessage::create([
+            $emailMessage = DB::table('email_messages')->insertGetId([
                 'account_id' => $emailAccount->id,
                 'user_id' => $enrollment->cadence->owner_id ?? $enrollment->enrolled_by,
                 'direction' => EmailMessage::DIRECTION_OUTBOUND,
@@ -274,7 +264,7 @@ class CadenceExecutionService
     {
         // First, try to get the cadence owner's default email account
         if ($cadence->owner_id) {
-            $ownerAccount = EmailAccount::where('user_id', $cadence->owner_id)
+            $ownerAccount = DB::table('email_accounts')->where('user_id', $cadence->owner_id)
                 ->where('is_default', true)
                 ->where('is_active', true)
                 ->first();
@@ -284,7 +274,7 @@ class CadenceExecutionService
             }
 
             // Fallback to any active account for the owner
-            $ownerAccount = EmailAccount::where('user_id', $cadence->owner_id)
+            $ownerAccount = DB::table('email_accounts')->where('user_id', $cadence->owner_id)
                 ->where('is_active', true)
                 ->first();
 
@@ -294,7 +284,7 @@ class CadenceExecutionService
         }
 
         // Fallback to any system-wide active account (for system cadences)
-        return EmailAccount::where('is_active', true)
+        return DB::table('email_accounts')->where('is_active', true)
             ->orderBy('is_default', 'desc')
             ->first();
     }
@@ -319,7 +309,7 @@ class CadenceExecutionService
         try {
             // Create task if Task model exists
             if (class_exists(Task::class)) {
-                Task::create([
+                DB::table('tasks')->insertGetId([
                     'title' => "Call: " . ($recordData['name'] ?? $recordData['first_name'] ?? 'Contact'),
                     'description' => $step->content ?? "Make a call to this contact as part of cadence: {$enrollment->cadence->name}",
                     'type' => 'call',
@@ -389,7 +379,7 @@ class CadenceExecutionService
                 connection: $smsConnection,
                 to: $phone,
                 content: $message,
-                template: $step->sms_template_id ? \App\Models\SmsTemplate::find($step->sms_template_id) : null,
+                template: $step->sms_template_id ? DB::table('sms_templates')->where('id', $step->sms_template_id)->first() : null,
                 mergeData: $recordData,
                 recordId: $enrollment->record_id,
                 moduleApiName: $record->module?->api_name
@@ -453,7 +443,7 @@ class CadenceExecutionService
     {
         // First, check if the cadence has a specific SMS connection configured
         if ($cadence->sms_connection_id) {
-            $connection = SmsConnection::where('id', $cadence->sms_connection_id)
+            $connection = DB::table('sms_connections')->where('id', $cadence->sms_connection_id)
                 ->where('is_active', true)
                 ->first();
 
@@ -463,10 +453,10 @@ class CadenceExecutionService
         }
 
         // Fallback to the default active SMS connection
-        return SmsConnection::where('is_active', true)
+        return DB::table('sms_connections')->where('is_active', true)
             ->where('is_default', true)
             ->first()
-            ?? SmsConnection::where('is_active', true)->first();
+            ?? DB::table('sms_connections')->where('is_active', true)->first();
     }
 
     /**
@@ -493,7 +483,7 @@ class CadenceExecutionService
 
         try {
             if (class_exists(Task::class)) {
-                Task::create([
+                DB::table('tasks')->insertGetId([
                     'title' => "LinkedIn: {$actionDescription}",
                     'description' => ($step->content ?? $actionDescription) . ($linkedinUrl ? "\n\nProfile: {$linkedinUrl}" : ''),
                     'type' => 'linkedin',
@@ -539,7 +529,7 @@ class CadenceExecutionService
 
         try {
             if (class_exists(Task::class)) {
-                Task::create([
+                DB::table('tasks')->insertGetId([
                     'title' => $title,
                     'description' => $description,
                     'type' => $step->task_type ?? 'follow_up',
@@ -643,7 +633,7 @@ class CadenceExecutionService
     {
         $currentStepOrder = $enrollment->currentStep?->step_order ?? 0;
 
-        return CadenceStep::where('cadence_id', $enrollment->cadence_id)
+        return DB::table('cadence_steps')->where('cadence_id', $enrollment->cadence_id)
             ->where('step_order', '>', $currentStepOrder)
             ->where('is_active', true)
             ->whereNull('ab_variant_of') // Don't return A/B variants as main steps

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\Module;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Field>
@@ -26,7 +24,7 @@ class FieldFactory extends Factory
         $label = $this->faker->words(2, true);
 
         return [
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'block_id' => null,
             'label' => ucwords($label),
             'api_name' => strtolower(str_replace(' ', '_', $label)) . '_' . $this->faker->unique()->numberBetween(1, 9999),

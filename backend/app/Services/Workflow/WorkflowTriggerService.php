@@ -8,9 +8,8 @@ use App\Domain\Workflow\Entities\WorkflowExecution;
 use App\Domain\Workflow\Repositories\WorkflowExecutionRepositoryInterface;
 use App\Domain\Workflow\ValueObjects\ExecutionStatus;
 use App\Jobs\ExecuteWorkflowJob;
-use App\Models\ModuleRecord;
-use App\Models\Workflow;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Service for triggering workflows based on record events.
@@ -94,7 +93,7 @@ class WorkflowTriggerService
         bool $isCreate,
     ): array {
         // Get all active workflows for this module
-        $workflows = Workflow::query()
+        $workflows = DB::table('workflows')
             ->active()
             ->forModule($moduleId)
             ->orderBy('priority', 'desc')

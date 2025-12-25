@@ -2,12 +2,6 @@
 
 namespace App\Providers;
 
-use App\Models\BlueprintApprovalRequest;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Observers\BlueprintApprovalRequestObserver;
-use App\Observers\ModuleObserver;
-use App\Observers\ModuleRecordObserver;
 use App\Observers\RoleObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -30,15 +24,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Register observers for RBAC
-        Module::observe(ModuleObserver::class);
+        // Register observer for Role events (Spatie package)
+        // Note: Module, ModuleRecord, and BlueprintApprovalRequest events
+        // are now dispatched directly from their repositories (pure DDD)/compact
         Role::observe(RoleObserver::class);
-
-        // Register observer for Time Machine (record history tracking)
-        ModuleRecord::observe(ModuleRecordObserver::class);
-
-        // Register observer for Blueprint approval workflow
-        BlueprintApprovalRequest::observe(BlueprintApprovalRequestObserver::class);
 
         // Configure rate limiters
         $this->configureRateLimiting();

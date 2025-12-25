@@ -2,13 +2,9 @@
 
 namespace App\Services\LandingPage;
 
-use App\Models\LandingPage;
-use App\Models\LandingPageTemplate;
-use App\Models\LandingPageVariant;
-use App\Models\LandingPageAnalytics;
-use App\Models\LandingPageVisit;
 use Illuminate\Support\Str;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class LandingPageService
 {
@@ -56,7 +52,7 @@ class LandingPageService
             }
         }
 
-        return LandingPage::create([
+        return DB::table('landing_pages')->insertGetId([
             'name' => $data['name'],
             'slug' => $slug,
             'description' => $data['description'] ?? null,
@@ -111,7 +107,7 @@ class LandingPageService
         $counter = 1;
 
         while (true) {
-            $query = LandingPage::where('slug', $slug);
+            $query = DB::table('landing_pages')->where('slug', $slug);
 
             if ($excludeId) {
                 $query->where('id', '!=', $excludeId);
@@ -131,7 +127,7 @@ class LandingPageService
     {
         $newSlug = $this->ensureUniqueSlug($page->slug . '-copy');
 
-        $newPage = LandingPage::create([
+        $newPage = DB::table('landing_pages')->insertGetId([
             'name' => $page->name . ' (Copy)',
             'slug' => $newSlug,
             'description' => $page->description,
@@ -265,7 +261,7 @@ class LandingPageService
             $variant = $page->selectVariant($data['visitor_id'] ?? null);
         }
 
-        $visit = LandingPageVisit::create([
+        $visit = DB::table('landing_page_visits')->insertGetId([
             'page_id' => $page->id,
             'variant_id' => $variant?->id,
             'visitor_id' => $data['visitor_id'] ?? Str::uuid()->toString(),

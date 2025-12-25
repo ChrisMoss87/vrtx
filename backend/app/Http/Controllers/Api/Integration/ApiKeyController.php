@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Integration;
 
 use App\Http\Controllers\Controller;
-use App\Models\ApiKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class ApiKeyController extends Controller
 {
@@ -18,7 +18,7 @@ class ApiKeyController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = ApiKey::where('user_id', Auth::id())
+        $query = DB::table('api_keys')->where('user_id', Auth::id())
             ->orderBy('created_at', 'desc');
 
         if ($request->boolean('include_inactive') === false) {
@@ -51,7 +51,7 @@ class ApiKeyController extends Controller
 
         $keyData = ApiKey::generateKey();
 
-        $apiKey = ApiKey::create([
+        $apiKey = DB::table('api_keys')->insertGetId([
             'user_id' => Auth::id(),
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
@@ -77,7 +77,7 @@ class ApiKeyController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $apiKey = ApiKey::where('user_id', Auth::id())
+        $apiKey = DB::table('api_keys')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         // Get recent usage stats
@@ -102,7 +102,7 @@ class ApiKeyController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $apiKey = ApiKey::where('user_id', Auth::id())
+        $apiKey = DB::table('api_keys')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $validated = $request->validate([
@@ -129,7 +129,7 @@ class ApiKeyController extends Controller
      */
     public function revoke(int $id): JsonResponse
     {
-        $apiKey = ApiKey::where('user_id', Auth::id())
+        $apiKey = DB::table('api_keys')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $apiKey->revoke();
@@ -144,7 +144,7 @@ class ApiKeyController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $apiKey = ApiKey::where('user_id', Auth::id())
+        $apiKey = DB::table('api_keys')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $apiKey->delete();
@@ -159,7 +159,7 @@ class ApiKeyController extends Controller
      */
     public function regenerate(int $id): JsonResponse
     {
-        $apiKey = ApiKey::where('user_id', Auth::id())
+        $apiKey = DB::table('api_keys')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $keyData = ApiKey::generateKey();
@@ -185,7 +185,7 @@ class ApiKeyController extends Controller
      */
     public function logs(Request $request, int $id): JsonResponse
     {
-        $apiKey = ApiKey::where('user_id', Auth::id())
+        $apiKey = DB::table('api_keys')->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $query = $apiKey->requestLogs()

@@ -6,13 +6,10 @@ namespace App\Http\Controllers\Api\Approval;
 
 use App\Application\Services\Approval\ApprovalApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\ApprovalDelegation;
-use App\Models\ApprovalQuickAction;
-use App\Models\ApprovalRequest;
-use App\Models\ApprovalRule;
 use App\Services\Approval\ApprovalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ApprovalController extends Controller
 {
@@ -235,7 +232,7 @@ class ApprovalController extends Controller
 
         $validated['created_by'] = auth()->id();
 
-        $rule = ApprovalRule::create($validated);
+        $rule = DB::table('approval_rules')->insertGetId($validated);
 
         return response()->json($rule, 201);
     }

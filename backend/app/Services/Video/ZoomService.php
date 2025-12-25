@@ -2,13 +2,10 @@
 
 namespace App\Services\Video;
 
-use App\Models\VideoProvider;
-use App\Models\VideoMeeting;
-use App\Models\VideoMeetingParticipant;
-use App\Models\VideoMeetingRecording;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Firebase\JWT\JWT;
+use Illuminate\Support\Facades\DB;
 
 class ZoomService
 {
@@ -302,7 +299,7 @@ class ZoomService
 
     protected function handleMeetingStarted(array $data): array
     {
-        $meeting = VideoMeeting::where('external_meeting_id', (string) $data['id'])->first();
+        $meeting = DB::table('video_meetings')->where('external_meeting_id', (string) $data['id'])->first();
 
         if ($meeting) {
             $meeting->update([
@@ -316,7 +313,7 @@ class ZoomService
 
     protected function handleMeetingEnded(array $data): array
     {
-        $meeting = VideoMeeting::where('external_meeting_id', (string) $data['id'])->first();
+        $meeting = DB::table('video_meetings')->where('external_meeting_id', (string) $data['id'])->first();
 
         if ($meeting) {
             $duration = isset($data['duration']) ? $data['duration'] * 60 : null;
@@ -333,7 +330,7 @@ class ZoomService
 
     protected function handleParticipantJoined(array $data): array
     {
-        $meeting = VideoMeeting::where('external_meeting_id', (string) $data['id'])->first();
+        $meeting = DB::table('video_meetings')->where('external_meeting_id', (string) $data['id'])->first();
 
         if ($meeting) {
             $participantData = $data['participant'] ?? [];
@@ -363,7 +360,7 @@ class ZoomService
 
     protected function handleParticipantLeft(array $data): array
     {
-        $meeting = VideoMeeting::where('external_meeting_id', (string) $data['id'])->first();
+        $meeting = DB::table('video_meetings')->where('external_meeting_id', (string) $data['id'])->first();
 
         if ($meeting) {
             $participantData = $data['participant'] ?? [];
@@ -389,7 +386,7 @@ class ZoomService
 
     protected function handleRecordingCompleted(array $data): array
     {
-        $meeting = VideoMeeting::where('external_meeting_id', (string) $data['id'])->first();
+        $meeting = DB::table('video_meetings')->where('external_meeting_id', (string) $data['id'])->first();
 
         if ($meeting) {
             $recordingFiles = $data['recording_files'] ?? [];
@@ -419,7 +416,7 @@ class ZoomService
 
     protected function handleTranscriptCompleted(array $data): array
     {
-        $meeting = VideoMeeting::where('external_meeting_id', (string) $data['id'])->first();
+        $meeting = DB::table('video_meetings')->where('external_meeting_id', (string) $data['id'])->first();
 
         if ($meeting) {
             $recordingFiles = $data['recording_files'] ?? [];

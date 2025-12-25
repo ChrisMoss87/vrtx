@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Document;
 
-use App\Models\DocumentTemplate;
-use App\Models\DocumentTemplateVariable;
-use App\Models\GeneratedDocument;
-use App\Models\ModuleRecord;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class DocumentTemplateService
 {
@@ -26,7 +23,7 @@ class DocumentTemplateService
         $data['created_by'] = Auth::id();
         $data['merge_fields'] = $this->extractMergeFields($data['content'] ?? '');
 
-        return DocumentTemplate::create($data);
+        return DB::table('document_templates')->insertGetId($data);
     }
 
     public function update(DocumentTemplate $template, array $data): DocumentTemplate
@@ -65,7 +62,7 @@ class DocumentTemplateService
         $mergedContent = $this->applyConditionalBlocks($mergedContent, $template->conditional_blocks ?? [], $data);
 
         // Create the generated document
-        $document = GeneratedDocument::create([
+        $document = DB::table('generated_documents')->insertGetId([
             'template_id' => $template->id,
             'record_type' => $recordType,
             'record_id' => $recordId,

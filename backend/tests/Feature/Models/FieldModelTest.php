@@ -10,16 +10,13 @@ use App\Domain\Modules\ValueObjects\FieldDependency;
 use App\Domain\Modules\ValueObjects\FormulaDefinition;
 use App\Domain\Modules\ValueObjects\LookupConfiguration;
 use App\Domain\Modules\ValueObjects\ValidationRule;
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\FieldOption;
-use App\Models\Module;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class FieldModelTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -33,9 +30,9 @@ class FieldModelTest extends TestCase
 
     public function test_can_create_field(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'First Name',
             'api_name' => 'first_name',
@@ -52,8 +49,8 @@ class FieldModelTest extends TestCase
 
     public function test_field_belongs_to_module(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Email',
             'api_name' => 'email',
@@ -66,14 +63,14 @@ class FieldModelTest extends TestCase
 
     public function test_field_belongs_to_block(): void
     {
-        $module = Module::factory()->create();
-        $block = Block::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Basic Info',
             'type' => 'section',
         ]);
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'block_id' => $block->id,
             'label' => 'Name',
@@ -87,21 +84,21 @@ class FieldModelTest extends TestCase
 
     public function test_field_has_options_relationship(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
             'api_name' => 'status',
             'type' => 'select',
         ]);
 
-        FieldOption::create([
+        DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Active',
             'value' => 'active',
         ]);
 
-        FieldOption::create([
+        DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Inactive',
             'value' => 'inactive',
@@ -112,8 +109,8 @@ class FieldModelTest extends TestCase
 
     public function test_conditional_visibility_object_accessor(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Conditional Field',
             'api_name' => 'conditional_field',
@@ -140,8 +137,8 @@ class FieldModelTest extends TestCase
 
     public function test_validation_rule_object_accessor(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Email',
             'api_name' => 'email',
@@ -158,8 +155,8 @@ class FieldModelTest extends TestCase
 
     public function test_lookup_configuration_object_accessor(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Related Contact',
             'api_name' => 'contact_id',
@@ -183,10 +180,10 @@ class FieldModelTest extends TestCase
 
     public function test_has_conditional_visibility(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
         // Field with conditions - should have visibility enabled
-        $fieldWithVisibility = Field::create([
+        $fieldWithVisibility = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Field 1',
             'api_name' => 'field_1',
@@ -200,7 +197,7 @@ class FieldModelTest extends TestCase
             ],
         ]);
 
-        $fieldWithoutVisibility = Field::create([
+        $fieldWithoutVisibility = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Field 2',
             'api_name' => 'field_2',
@@ -213,9 +210,9 @@ class FieldModelTest extends TestCase
 
     public function test_is_formula_field(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $formulaField = Field::create([
+        $formulaField = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Total',
             'api_name' => 'total',
@@ -228,7 +225,7 @@ class FieldModelTest extends TestCase
             ],
         ]);
 
-        $regularField = Field::create([
+        $regularField = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Name',
             'api_name' => 'name',
@@ -241,9 +238,9 @@ class FieldModelTest extends TestCase
 
     public function test_is_lookup_field(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $lookupField = Field::create([
+        $lookupField = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Contact',
             'api_name' => 'contact_id',
@@ -254,7 +251,7 @@ class FieldModelTest extends TestCase
             ],
         ]);
 
-        $regularField = Field::create([
+        $regularField = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Name',
             'api_name' => 'name',
@@ -267,9 +264,9 @@ class FieldModelTest extends TestCase
 
     public function test_get_dependencies(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Conditional Field',
             'api_name' => 'conditional_field',
@@ -293,9 +290,9 @@ class FieldModelTest extends TestCase
 
     public function test_is_visible(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Conditional Field',
             'api_name' => 'conditional_field',
@@ -315,9 +312,9 @@ class FieldModelTest extends TestCase
 
     public function test_get_validation_rules(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Email',
             'api_name' => 'email',
@@ -340,8 +337,8 @@ class FieldModelTest extends TestCase
 
     public function test_field_cascade_deletes_with_module(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Test Field',
             'api_name' => 'test_field',
@@ -357,14 +354,14 @@ class FieldModelTest extends TestCase
 
     public function test_field_cascade_deletes_with_block(): void
     {
-        $module = Module::factory()->create();
-        $block = Block::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
             'type' => 'section',
         ]);
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'block_id' => $block->id,
             'label' => 'Test Field',
@@ -379,15 +376,15 @@ class FieldModelTest extends TestCase
 
     public function test_field_cascade_deletes_options(): void
     {
-        $module = Module::factory()->create();
-        $field = Field::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
             'api_name' => 'status',
             'type' => 'select',
         ]);
 
-        $option = FieldOption::create([
+        $option = DB::table('field_options')->insertGetId([
             'field_id' => $field->id,
             'label' => 'Active',
             'value' => 'active',
@@ -400,9 +397,9 @@ class FieldModelTest extends TestCase
 
     public function test_unique_api_name_per_module(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        Field::create([
+        DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Name 1',
             'api_name' => 'name',
@@ -411,7 +408,7 @@ class FieldModelTest extends TestCase
 
         $this->expectException(\Exception::class);
 
-        Field::create([
+        DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Name 2',
             'api_name' => 'name',
@@ -421,7 +418,7 @@ class FieldModelTest extends TestCase
 
     public function test_all_field_types_supported(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
         $types = [
             'text', 'email', 'phone', 'url', 'textarea', 'rich_text',
@@ -431,7 +428,7 @@ class FieldModelTest extends TestCase
         ];
 
         foreach ($types as $index => $type) {
-            $field = Field::create([
+            $field = DB::table('fields')->insertGetId([
                 'module_id' => $module->id,
                 'label' => ucfirst($type),
                 'api_name' => $type . '_' . $index,
@@ -441,6 +438,6 @@ class FieldModelTest extends TestCase
             $this->assertEquals($type, $field->type);
         }
 
-        $this->assertCount(count($types), Field::all());
+        $this->assertCount(count($types), DB::table('fields')->get());
     }
 }

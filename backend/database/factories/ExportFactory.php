@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Export;
-use App\Models\Module;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Export>
@@ -24,7 +23,7 @@ class ExportFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'user_id' => User::factory(),
             'name' => $this->faker->words(3, true) . ' Export',
             'format' => $this->faker->randomElement(['csv', 'xlsx']),

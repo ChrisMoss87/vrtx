@@ -4,11 +4,10 @@ namespace App\Http\Controllers\Api\Inbox;
 
 use App\Application\Services\Inbox\InboxApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\SharedInbox;
-use App\Models\SharedInboxMember;
 use App\Services\Inbox\InboxService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class SharedInboxController extends Controller
 {
@@ -19,7 +18,7 @@ class SharedInboxController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = SharedInbox::query();
+        $query = DB::table('shared_inboxs');
 
         if ($request->boolean('active_only', false)) {
             $query->active();
@@ -63,10 +62,10 @@ class SharedInboxController extends Controller
             'assignment_method' => 'in:round_robin,load_balanced,manual',
         ]);
 
-        $inbox = SharedInbox::create($validated);
+        $inbox = DB::table('shared_inboxs')->insertGetId($validated);
 
         // Add creator as admin member
-        SharedInboxMember::create([
+        DB::table('shared_inbox_members')->insertGetId([
             'inbox_id' => $inbox->id,
             'user_id' => auth()->id(),
             'role' => 'admin',

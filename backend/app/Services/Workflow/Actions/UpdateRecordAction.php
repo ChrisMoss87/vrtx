@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\ModuleRecord;
 
 class UpdateRecordAction implements ActionInterface
 {
@@ -16,7 +15,7 @@ class UpdateRecordAction implements ActionInterface
             throw new \InvalidArgumentException('Record ID is required');
         }
 
-        $record = ModuleRecord::find($recordId);
+        $record = DB::table('module_records')->where('id', $recordId)->first();
         if (!$record) {
             throw new \InvalidArgumentException("Record not found: {$recordId}");
         }

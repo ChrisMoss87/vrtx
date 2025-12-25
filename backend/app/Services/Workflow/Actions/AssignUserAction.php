@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\ModuleRecord;
-use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -31,7 +29,7 @@ class AssignUserAction implements ActionInterface
             throw new \InvalidArgumentException('Record ID is required');
         }
 
-        $record = ModuleRecord::find($recordId);
+        $record = DB::table('module_records')->where('id', $recordId)->first();
         if (!$record) {
             throw new \InvalidArgumentException("Record not found: {$recordId}");
         }
@@ -42,11 +40,16 @@ class AssignUserAction implements ActionInterface
             throw new \RuntimeException('Could not determine user to assign');
         }
 
-        $data = $record->data;
+        $data = json_decode($record->data, true);
         $previousOwner = $data[$field] ?? null;
         $data[$field] = $userId;
-        $record->data = $data;
-        $record->save();
+
+        DB::table('module_records')
+            ->where('id', $recordId)
+            ->update([
+                'data' => json_encode($data),
+                'updated_at' => now(),
+            ]);
 
         return [
             'assigned' => true,
@@ -60,7 +63,7 @@ class AssignUserAction implements ActionInterface
     /**
      * Resolve the user ID based on assignment mode.
      */
-    protected function resolveUserId(array $config, array $context, ModuleRecord $record): ?int
+    protected function resolveUserId(array $config, array $context, object $record): ?int
     {
         $mode = $config['mode'] ?? self::MODE_SPECIFIC_USER;
 
@@ -92,9 +95,12 @@ class AssignUserAction implements ActionInterface
 
         // If role is specified, get users from that role
         if ($roleId) {
-            $userIds = User::whereHas('roles', function ($q) use ($roleId) {
-                $q->where('roles.id', $roleId);
-            })->where('is_active', true)->pluck('id')->toArray();
+            $userIds = DB::table('users')
+                ->join('role_user', 'users.id', '=', 'role_user.user_id')
+                ->where('role_user.role_id', $roleId)
+                ->where('users.is_active', true)
+                ->pluck('users.id')
+                ->toArray();
         }
 
         if (empty($userIds)) {
@@ -125,9 +131,12 @@ class AssignUserAction implements ActionInterface
             return null;
         }
 
-        $users = User::whereHas('roles', function ($q) use ($roleId) {
-            $q->where('roles.id', $roleId);
-        })->where('is_active', true)->get();
+        $users = DB::table('users')
+            ->join('role_user', 'users.id', '=', 'role_user.user_id')
+            ->where('role_user.role_id', $roleId)
+            ->where('users.is_active', true)
+            ->select('users.id')
+            ->get();
 
         if ($users->isEmpty()) {
             return null;

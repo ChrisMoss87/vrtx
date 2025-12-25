@@ -6,11 +6,11 @@ namespace App\Http\Controllers\Api\Email;
 
 use App\Application\Services\Email\EmailApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\EmailAccount;
 use App\Services\Email\EmailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class EmailAccountController extends Controller
 {
@@ -24,7 +24,7 @@ class EmailAccountController extends Controller
      */
     public function index(): JsonResponse
     {
-        $accounts = EmailAccount::where('user_id', Auth::id())
+        $accounts = DB::table('email_accounts')->where('user_id', Auth::id())
             ->orderBy('is_default', 'desc')
             ->orderBy('name')
             ->get();
@@ -58,11 +58,11 @@ class EmailAccountController extends Controller
 
         // If this is set as default, unset other defaults
         if ($validated['is_default'] ?? false) {
-            EmailAccount::where('user_id', Auth::id())
+            DB::table('email_accounts')->where('user_id', Auth::id())
                 ->update(['is_default' => false]);
         }
 
-        $account = EmailAccount::create([
+        $account = DB::table('email_accounts')->insertGetId([
             'user_id' => Auth::id(),
             ...$validated,
         ]);
@@ -113,7 +113,7 @@ class EmailAccountController extends Controller
 
         // If this is set as default, unset other defaults
         if ($validated['is_default'] ?? false) {
-            EmailAccount::where('user_id', Auth::id())
+            DB::table('email_accounts')->where('user_id', Auth::id())
                 ->where('id', '!=', $emailAccount->id)
                 ->update(['is_default' => false]);
         }

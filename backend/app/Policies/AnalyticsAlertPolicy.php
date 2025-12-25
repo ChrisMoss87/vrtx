@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use App\Models\AnalyticsAlert;
-use App\Models\User;
+use App\Domain\Analytics\Entities\AnalyticsAlert;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class AnalyticsAlertPolicy
@@ -26,12 +26,13 @@ class AnalyticsAlertPolicy
     public function view(User $user, AnalyticsAlert $alert): bool
     {
         // Owner can always view
-        if ($alert->user_id === $user->id) {
+        if ($alert->getUserId() === $user->id) {
             return true;
         }
 
         // Users in recipients list can view
-        $recipients = $alert->notification_config['recipients'] ?? [];
+        $notificationConfig = $alert->getNotificationConfig();
+        $recipients = $notificationConfig['recipients'] ?? [];
         return in_array($user->id, $recipients);
     }
 
@@ -48,7 +49,7 @@ class AnalyticsAlertPolicy
      */
     public function update(User $user, AnalyticsAlert $alert): bool
     {
-        return $alert->user_id === $user->id;
+        return $alert->getUserId() === $user->id;
     }
 
     /**
@@ -56,6 +57,6 @@ class AnalyticsAlertPolicy
      */
     public function delete(User $user, AnalyticsAlert $alert): bool
     {
-        return $alert->user_id === $user->id;
+        return $alert->getUserId() === $user->id;
     }
 }

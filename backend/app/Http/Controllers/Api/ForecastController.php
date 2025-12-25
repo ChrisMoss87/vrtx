@@ -11,13 +11,11 @@ use App\Domain\Forecasting\ValueObjects\ForecastCategory;
 use App\Domain\Forecasting\ValueObjects\ForecastPeriod;
 use App\Domain\Forecasting\ValueObjects\QuotaType;
 use App\Http\Controllers\Controller;
-use App\Models\ForecastAdjustment;
-use App\Models\ModuleRecord;
-use App\Models\SalesQuota;
 use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ForecastController extends Controller
 {
@@ -266,7 +264,7 @@ class ForecastController extends Controller
      */
     public function updateQuota(Request $request, int $quotaId): JsonResponse
     {
-        $quota = SalesQuota::findOrFail($quotaId);
+        $quota = DB::table('sales_quotas')->where('id', $quotaId)->first();
 
         $validated = $request->validate([
             'quota_amount' => 'sometimes|numeric|min:0',
@@ -288,7 +286,7 @@ class ForecastController extends Controller
      */
     public function destroyQuota(int $quotaId): JsonResponse
     {
-        $quota = SalesQuota::findOrFail($quotaId);
+        $quota = DB::table('sales_quotas')->where('id', $quotaId)->first();
         $quota->delete();
 
         return response()->json([

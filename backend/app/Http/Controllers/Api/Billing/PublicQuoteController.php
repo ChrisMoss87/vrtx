@@ -6,11 +6,11 @@ namespace App\Http\Controllers\Api\Billing;
 
 use App\Application\Services\Billing\BillingApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Quote;
 use App\Services\Billing\PdfGeneratorService;
 use App\Services\Billing\QuoteService; // @deprecated - use BillingApplicationService
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PublicQuoteController extends Controller
 {
@@ -25,7 +25,7 @@ class PublicQuoteController extends Controller
      */
     public function show(string $token): JsonResponse
     {
-        $quote = Quote::where('view_token', $token)
+        $quote = DB::table('quotes')->where('view_token', $token)
             ->with(['lineItems.product', 'createdBy:id,name,email', 'assignedTo:id,name,email'])
             ->first();
 
@@ -82,7 +82,7 @@ class PublicQuoteController extends Controller
      */
     public function accept(Request $request, string $token): JsonResponse
     {
-        $quote = Quote::where('view_token', $token)->first();
+        $quote = DB::table('quotes')->where('view_token', $token)->first();
 
         if (!$quote) {
             return response()->json([
@@ -125,7 +125,7 @@ class PublicQuoteController extends Controller
      */
     public function reject(Request $request, string $token): JsonResponse
     {
-        $quote = Quote::where('view_token', $token)->first();
+        $quote = DB::table('quotes')->where('view_token', $token)->first();
 
         if (!$quote) {
             return response()->json([
@@ -164,7 +164,7 @@ class PublicQuoteController extends Controller
      */
     public function pdf(string $token): JsonResponse
     {
-        $quote = Quote::where('view_token', $token)->first();
+        $quote = DB::table('quotes')->where('view_token', $token)->first();
 
         if (!$quote) {
             return response()->json([

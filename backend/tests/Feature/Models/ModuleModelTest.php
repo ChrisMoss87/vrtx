@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Models;
 
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ModuleModelTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -27,7 +24,7 @@ class ModuleModelTest extends TestCase
 
     public function test_can_create_module(): void
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Contacts',
             'singular_name' => 'Contact',
             'api_name' => 'contacts',
@@ -48,9 +45,9 @@ class ModuleModelTest extends TestCase
 
     public function test_module_has_blocks_relationship(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $block = Block::create([
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Basic Information',
             'type' => 'section',
@@ -63,9 +60,9 @@ class ModuleModelTest extends TestCase
 
     public function test_module_has_fields_relationship(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'First Name',
             'api_name' => 'first_name',
@@ -79,9 +76,9 @@ class ModuleModelTest extends TestCase
 
     public function test_module_has_records_relationship(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
-        $record = ModuleRecord::create([
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['first_name' => 'John', 'last_name' => 'Doe'],
         ]);
@@ -92,8 +89,8 @@ class ModuleModelTest extends TestCase
 
     public function test_module_active_scope(): void
     {
-        Module::factory()->create(['is_active' => true, 'api_name' => 'active']);
-        Module::factory()->create(['is_active' => false, 'api_name' => 'inactive']);
+        /* Module factory - use DB::table('modules') */->create(['is_active' => true, 'api_name' => 'active']);
+        /* Module factory - use DB::table('modules') */->create(['is_active' => false, 'api_name' => 'inactive']);
 
         $activeModules = Module::active()->get();
 
@@ -103,9 +100,9 @@ class ModuleModelTest extends TestCase
 
     public function test_module_ordered_scope(): void
     {
-        Module::factory()->create(['api_name' => 'third', 'display_order' => 2]);
-        Module::factory()->create(['api_name' => 'first', 'display_order' => 0]);
-        Module::factory()->create(['api_name' => 'second', 'display_order' => 1]);
+        /* Module factory - use DB::table('modules') */->create(['api_name' => 'third', 'display_order' => 2]);
+        /* Module factory - use DB::table('modules') */->create(['api_name' => 'first', 'display_order' => 0]);
+        /* Module factory - use DB::table('modules') */->create(['api_name' => 'second', 'display_order' => 1]);
 
         $modules = Module::ordered()->get();
 
@@ -116,7 +113,7 @@ class ModuleModelTest extends TestCase
 
     public function test_find_by_api_name(): void
     {
-        $module = Module::factory()->create(['api_name' => 'contacts']);
+        $module = /* Module factory - use DB::table('modules') */->create(['api_name' => 'contacts']);
 
         $found = Module::findByApiName('contacts');
 
@@ -133,7 +130,7 @@ class ModuleModelTest extends TestCase
 
     public function test_module_soft_deletes(): void
     {
-        $module = Module::factory()->create(['api_name' => 'test']);
+        $module = /* Module factory - use DB::table('modules') */->create(['api_name' => 'test']);
 
         $module->delete();
 
@@ -144,8 +141,8 @@ class ModuleModelTest extends TestCase
 
     public function test_module_cascade_deletes_blocks(): void
     {
-        $module = Module::factory()->create();
-        $block = Block::create([
+        $module = /* Module factory - use DB::table('modules') */->create();
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
             'type' => 'section',
@@ -160,7 +157,7 @@ class ModuleModelTest extends TestCase
 
     public function test_module_settings_are_cast_to_array(): void
     {
-        $module = Module::factory()->create([
+        $module = /* Module factory - use DB::table('modules') */->create([
             'settings' => ['color' => 'blue', 'icon_size' => 'large'],
         ]);
 

@@ -4,11 +4,10 @@ namespace App\Http\Controllers\Api\Whatsapp;
 
 use App\Application\Services\WhatsApp\WhatsAppApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\WhatsappConnection;
-use App\Models\WhatsappTemplate;
 use App\Services\Whatsapp\WhatsappApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WhatsappTemplateController extends Controller
 {
@@ -51,7 +50,7 @@ class WhatsappTemplateController extends Controller
         $validated['created_by'] = auth()->id();
         $validated['status'] = 'PENDING';
 
-        $template = WhatsappTemplate::create($validated);
+        $template = DB::table('whatsapp_templates')->insertGetId($validated);
 
         // Submit to Meta if requested
         if ($request->boolean('submit_to_meta')) {

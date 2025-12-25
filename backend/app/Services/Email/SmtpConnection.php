@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Email;
 
-use App\Models\EmailAccount;
 use Illuminate\Support\Facades\Log;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use Illuminate\Support\Facades\DB;
 
 class SmtpConnection
 {

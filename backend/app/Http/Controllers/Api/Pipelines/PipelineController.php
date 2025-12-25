@@ -6,11 +6,6 @@ namespace App\Http\Controllers\Api\Pipelines;
 
 use App\Application\Services\Pipeline\PipelineApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
-use App\Models\Stage;
-use App\Models\StageHistory;
 use App\Services\PipelineFieldSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -63,7 +58,7 @@ class PipelineController extends Controller
     public function forModule(string $moduleApiName): JsonResponse
     {
         try {
-            $module = Module::where('api_name', $moduleApiName)->first();
+            $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
 
             if (!$module) {
                 return response()->json([
@@ -112,7 +107,7 @@ class PipelineController extends Controller
             ]);
 
             $pipeline = DB::transaction(function () use ($validated, $request) {
-                $pipeline = Pipeline::create([
+                $pipeline = DB::table('pipelines')->insertGetId([
                     'name' => $validated['name'],
                     'module_id' => $validated['module_id'],
                     'stage_field_api_name' => $validated['stage_field_api_name'] ?? null,
@@ -125,7 +120,7 @@ class PipelineController extends Controller
                 // Create stages if provided
                 if (!empty($validated['stages'])) {
                     foreach ($validated['stages'] as $index => $stageData) {
-                        Stage::create([
+                        DB::table('stages')->insertGetId([
                             'pipeline_id' => $pipeline->id,
                             'name' => $stageData['name'],
                             'color' => $stageData['color'] ?? '#6b7280',
@@ -198,7 +193,7 @@ class PipelineController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         try {
-            $pipeline = Pipeline::find($id);
+            $pipeline = DB::table('pipelines')->where('id', $id)->first();
 
             if (!$pipeline) {
                 return response()->json([
@@ -268,7 +263,7 @@ class PipelineController extends Controller
     public function destroy(int $id): JsonResponse
     {
         try {
-            $pipeline = Pipeline::find($id);
+            $pipeline = DB::table('pipelines')->where('id', $id)->first();
 
             if (!$pipeline) {
                 return response()->json([
@@ -311,7 +306,7 @@ class PipelineController extends Controller
             $valueFieldName = $request->input('value_field', 'value');
 
             // Build query for records
-            $recordsQuery = ModuleRecord::where('module_id', $pipeline->module_id);
+            $recordsQuery = DB::table('module_records')->where('module_id', $pipeline->module_id);
 
             // Apply filters if provided
             if ($request->has('filters')) {
@@ -387,7 +382,7 @@ class PipelineController extends Controller
     public function moveRecord(Request $request, int $id): JsonResponse
     {
         try {
-            $pipeline = Pipeline::find($id);
+            $pipeline = DB::table('pipelines')->where('id', $id)->first();
 
             if (!$pipeline) {
                 return response()->json([
@@ -469,7 +464,7 @@ class PipelineController extends Controller
     public function recordHistory(int $id, int $recordId): JsonResponse
     {
         try {
-            $pipeline = Pipeline::find($id);
+            $pipeline = DB::table('pipelines')->where('id', $id)->first();
 
             if (!$pipeline) {
                 return response()->json([
@@ -499,7 +494,7 @@ class PipelineController extends Controller
     public function reorderStages(Request $request, int $id): JsonResponse
     {
         try {
-            $pipeline = Pipeline::find($id);
+            $pipeline = DB::table('pipelines')->where('id', $id)->first();
 
             if (!$pipeline) {
                 return response()->json([
@@ -515,7 +510,7 @@ class PipelineController extends Controller
 
             DB::transaction(function () use ($validated, $pipeline) {
                 foreach ($validated['stages'] as $order => $stageId) {
-                    Stage::where('id', $stageId)
+                    DB::table('stages')->where('id', $stageId)
                         ->where('pipeline_id', $pipeline->id)
                         ->update(['display_order' => $order]);
                 }
@@ -630,7 +625,7 @@ class PipelineController extends Controller
                 }
             } else {
                 // Create new stage
-                $stage = Stage::create($stagePayload);
+                $stage = DB::table('stages')->insertGetId($stagePayload);
                 $incomingStageIds[] = $stage->id;
             }
         }

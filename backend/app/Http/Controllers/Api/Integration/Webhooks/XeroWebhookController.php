@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Integration\Webhooks;
 
+use App\Domain\Integration\Repositories\IntegrationConnectionRepositoryInterface;
 use App\Http\Controllers\Controller;
 use App\Infrastructure\Services\Integration\Xero\XeroSyncService;
-use App\Models\IntegrationConnection;
-use App\Models\IntegrationWebhookLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class XeroWebhookController extends Controller
@@ -19,6 +19,7 @@ class XeroWebhookController extends Controller
 
     public function __construct(
         private readonly XeroSyncService $syncService,
+        private readonly IntegrationConnectionRepositoryInterface $connectionRepository,
     ) {}
 
     /**
@@ -93,51 +94,63 @@ class XeroWebhookController extends Controller
         }
 
         // Find the connection for this tenant
-        $connection = IntegrationConnection::where('provider', self::PROVIDER)
+        // Using DB::table directly for JSON queries as repository doesn't support this specific query
+        $connectionData = DB::table('integration_connections')
+            ->where('integration_slug', self::PROVIDER)
             ->where('status', 'active')
-            ->whereRaw("JSON_EXTRACT(settings, '$.tenant_id') = ?", [$tenantId])
-            ->orWhereRaw("JSON_EXTRACT(credentials, '$.tenant_id') = ?", [$tenantId])
+            ->where(function ($query) use ($tenantId) {
+                $query->whereRaw("JSON_EXTRACT(settings, '$.tenant_id') = ?", [$tenantId])
+                    ->orWhereRaw("JSON_EXTRACT(credentials, '$.tenant_id') = ?", [$tenantId]);
+            })
             ->first();
 
-        if (!$connection) {
+        if (!$connectionData) {
             Log::warning('Xero webhook: No connection found for tenant', ['tenant_id' => $tenantId]);
             return;
         }
 
-        // Log the webhook event
-        $webhookLog = IntegrationWebhookLog::create([
-            'integration_connection_id' => $connection->id,
+        // Log the webhook event using DB::table
+        $webhookLogId = DB::table('integration_webhook_logs')->insertGetId([
+            'integration_connection_id' => $connectionData->id,
             'event_type' => $eventType,
-            'payload' => $event,
+            'payload' => json_encode($event),
             'status' => 'processing',
             'received_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         try {
-            $this->processEventByType($connection, $event);
+            $this->processEventByType($connectionData->id, $event);
 
-            $webhookLog->update([
-                'status' => 'processed',
-                'processed_at' => now(),
-            ]);
+            DB::table('integration_webhook_logs')
+                ->where('id', $webhookLogId)
+                ->update([
+                    'status' => 'processed',
+                    'processed_at' => now(),
+                    'updated_at' => now(),
+                ]);
         } catch (\Throwable $e) {
             Log::error('Xero webhook processing failed', [
                 'error' => $e->getMessage(),
                 'event' => $event,
             ]);
 
-            $webhookLog->update([
-                'status' => 'failed',
-                'error_message' => $e->getMessage(),
-                'processed_at' => now(),
-            ]);
+            DB::table('integration_webhook_logs')
+                ->where('id', $webhookLogId)
+                ->update([
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                    'processed_at' => now(),
+                    'updated_at' => now(),
+                ]);
         }
     }
 
     /**
      * Process event based on its type
      */
-    private function processEventByType(IntegrationConnection $connection, array $event): void
+    private function processEventByType(int $connectionId, array $event): void
     {
         $eventCategory = $event['eventCategory'] ?? null;
         $eventType = $event['eventType'] ?? null;
@@ -147,6 +160,14 @@ class XeroWebhookController extends Controller
             'type' => $eventType,
             'resource_id' => $event['resourceId'] ?? null,
         ]);
+
+        // Get connection data from repository
+        $connection = $this->connectionRepository->findById($connectionId);
+
+        if (!$connection) {
+            Log::error('Connection not found', ['connection_id' => $connectionId]);
+            return;
+        }
 
         // Map Xero event categories to our sync actions
         match ($eventCategory) {

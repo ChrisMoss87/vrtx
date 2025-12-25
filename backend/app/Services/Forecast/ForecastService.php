@@ -4,12 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Forecast;
 
-use App\Models\ForecastAdjustment;
-use App\Models\ForecastSnapshot;
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
-use App\Models\SalesQuota;
-use App\Models\Stage;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +40,7 @@ class ForecastService
         $lostStageIds = $stages->where('is_lost_stage', true)->pluck('id')->toArray();
 
         // Base query for deals
-        $baseQuery = ModuleRecord::where('module_id', $pipeline->module_id)
+        $baseQuery = DB::table('module_records')->where('module_id', $pipeline->module_id)
             ->where(function ($q) use ($period) {
                 $q->whereNull('expected_close_date')
                     ->orWhereBetween('expected_close_date', [$period['start'], $period['end']]);
@@ -238,7 +232,7 @@ class ForecastService
         DB::transaction(function () use ($deal, $userId, $category, $override, $expectedCloseDate, $reason) {
             // Track category change
             if ($category !== null && $category !== $deal->forecast_category) {
-                ForecastAdjustment::create([
+                DB::table('forecast_adjustments')->insertGetId([
                     'user_id' => $userId,
                     'module_record_id' => $deal->id,
                     'adjustment_type' => ForecastAdjustment::TYPE_CATEGORY_CHANGE,
@@ -251,7 +245,7 @@ class ForecastService
 
             // Track amount override change
             if ($override !== null && $override != $deal->forecast_override) {
-                ForecastAdjustment::create([
+                DB::table('forecast_adjustments')->insertGetId([
                     'user_id' => $userId,
                     'module_record_id' => $deal->id,
                     'adjustment_type' => ForecastAdjustment::TYPE_AMOUNT_OVERRIDE,
@@ -264,7 +258,7 @@ class ForecastService
 
             // Track close date change
             if ($expectedCloseDate !== null && $expectedCloseDate->toDateString() !== $deal->expected_close_date?->toDateString()) {
-                ForecastAdjustment::create([
+                DB::table('forecast_adjustments')->insertGetId([
                     'user_id' => $userId,
                     'module_record_id' => $deal->id,
                     'adjustment_type' => ForecastAdjustment::TYPE_CLOSE_DATE_CHANGE,
@@ -325,7 +319,7 @@ class ForecastService
         string $periodType = 'month',
         int $limit = 12
     ): Collection {
-        $query = ForecastSnapshot::where('pipeline_id', $pipelineId)
+        $query = DB::table('forecast_snapshots')->where('pipeline_id', $pipelineId)
             ->where('period_type', $periodType)
             ->orderBy('snapshot_date', 'desc')
             ->limit($limit);
@@ -368,7 +362,7 @@ class ForecastService
             };
 
             // Get the last snapshot before period end
-            $query = ForecastSnapshot::where('pipeline_id', $pipelineId)
+            $query = DB::table('forecast_snapshots')->where('pipeline_id', $pipelineId)
                 ->where('period_type', $periodType)
                 ->where('period_start', $periodStart)
                 ->orderBy('snapshot_date', 'desc')
@@ -406,7 +400,7 @@ class ForecastService
         $stageFieldName = $pipeline->stage_field_api_name;
         $stages = $pipeline->stages->keyBy('id');
 
-        $query = ModuleRecord::where('module_id', $pipeline->module_id)
+        $query = DB::table('module_records')->where('module_id', $pipeline->module_id)
             ->where(function ($q) use ($period) {
                 $q->whereNull('expected_close_date')
                     ->orWhereBetween('expected_close_date', [$period['start'], $period['end']]);

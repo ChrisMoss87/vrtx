@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Listeners\Modules;
 
 use App\Domain\Modules\Events\ModuleRecordUpdated;
-use App\Models\ModuleRecord;
+use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
 use App\Services\Workflow\WorkflowTriggerService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -17,11 +17,12 @@ class TriggerWorkflowOnUpdatedListener
 {
     public function __construct(
         private readonly WorkflowTriggerService $workflowTriggerService,
+        private readonly ModuleRecordRepositoryInterface $moduleRecordRepository,
     ) {}
 
     public function handle(ModuleRecordUpdated $event): void
     {
-        $record = ModuleRecord::find($event->recordId());
+        $record = $this->moduleRecordRepository->findById($event->moduleId(), $event->recordId());
 
         if (!$record) {
             return;

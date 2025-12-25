@@ -4,12 +4,11 @@ namespace App\Http\Controllers\Api\AI;
 
 use App\Application\Services\AI\AIApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\AiPrompt;
-use App\Models\AiSetting;
 use App\Services\AI\AiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class AiSettingsController extends Controller
 {
@@ -73,7 +72,7 @@ class AiSettingsController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $settings = AiSetting::first() ?? new AiSetting();
+        $settings = DB::table('ai_settings')->first() ?? new AiSetting();
 
         $data = $request->only([
             'is_enabled',
@@ -220,7 +219,7 @@ class AiSettingsController extends Controller
      */
     public function deletePrompt(int $id): JsonResponse
     {
-        $prompt = AiPrompt::findOrFail($id);
+        $prompt = DB::table('ai_prompts')->where('id', $id)->first();
         $prompt->delete();
 
         return response()->json([

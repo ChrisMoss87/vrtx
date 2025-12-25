@@ -13,8 +13,7 @@ use App\Domain\Communication\ValueObjects\MessageParticipant;
 use App\Domain\Communication\ValueObjects\RecordContext;
 use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\Chat\Repositories\ChatConversationRepositoryInterface;
-use App\Models\ChatConversation;
-use App\Models\ChatMessage;
+use Illuminate\Support\Facades\DB;
 
 class ChatChannelAdapter extends AbstractChannelAdapter
 {
@@ -30,59 +29,68 @@ class ChatChannelAdapter extends AbstractChannelAdapter
     public function isAvailable(): bool
     {
         // Check if chat widgets are configured
-        return \App\Models\ChatWidget::where('is_active', true)->exists();
+        return DB::table('chat_widgets')->where('is_active', true)->exists();
     }
 
     public function getConversations(array $filters = [], int $perPage = 20, int $page = 1): PaginatedResult
     {
-        return $this->chatRepository->list($filters, $perPage, $page);
+        return $this->chatRepository->listConversations($filters, $perPage, $page);
     }
 
     public function getConversation(string $sourceId): ?UnifiedConversation
     {
-        $conversation = ChatConversation::find($sourceId);
+        $conversation = $this->chatRepository->findByIdAsArray((int) $sourceId);
 
         if (!$conversation) {
             return null;
         }
 
-        return $this->toUnifiedConversation($conversation);
+        return $this->toUnifiedConversation((object) $conversation);
     }
 
     public function getConversationsForRecord(RecordContext $context): array
     {
-        $conversations = ChatConversation::where('contact_module', $context->moduleApiName)
-            ->where('contact_id', $context->recordId)
-            ->get();
+        $filters = [
+            'contact_module' => $context->moduleApiName,
+            'contact_id' => $context->recordId,
+        ];
 
-        return $conversations->map(fn($c) => $this->toUnifiedConversation($c))->all();
+        $result = $this->chatRepository->listConversations($filters, perPage: 1000, page: 1);
+
+        return array_map(fn($c) => $this->toUnifiedConversation((object) $c), $result->items);
     }
 
     public function getMessages(string $sourceConversationId, int $limit = 50): array
     {
-        $messages = ChatMessage::where('conversation_id', $sourceConversationId)
+        $messages = DB::table('chat_messages')
+            ->where('conversation_id', $sourceConversationId)
             ->orderBy('created_at', 'desc')
             ->limit($limit)
             ->get();
 
-        return $messages->map(fn($m) => $this->toUnifiedMessage($m))->all();
+        return array_map(fn($m) => $this->toUnifiedMessage($m), $messages->all());
     }
 
     public function sendMessage(SendMessageDTO $message): UnifiedMessage
     {
-        $chatMessage = ChatMessage::create([
+        $messageId = DB::table('chat_messages')->insertGetId([
             'conversation_id' => $message->conversationId,
             'sender_type' => 'agent',
             'sender_id' => $message->sender->userId,
             'content' => $message->content,
-            'attachments' => $message->attachments,
+            'attachments' => json_encode($message->attachments),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         // Update conversation
-        ChatConversation::where('id', $message->conversationId)->update([
+        DB::table('chat_conversations')->where('id', $message->conversationId)->update([
             'last_message_at' => now(),
-            'message_count' => \DB::raw('message_count + 1'),
+            'message_count' => DB::raw('message_count + 1'),
+            'updated_at' => now(),
         ]);
+
+        $chatMessage = DB::table('chat_messages')->where('id', $messageId)->first();
 
         return $this->toUnifiedMessage($chatMessage);
     }
@@ -91,19 +99,22 @@ class ChatChannelAdapter extends AbstractChannelAdapter
     {
         $conversation = $sourceConversation;
 
-        // Get visitor info
-        $visitor = $conversation->visitor;
+        // Get visitor info - load from database if visitor_id exists
+        $visitor = null;
+        if (isset($conversation->visitor_id)) {
+            $visitor = DB::table('chat_visitors')->where('id', $conversation->visitor_id)->first();
+        }
 
         $contact = MessageParticipant::fromContact(
-            name: $visitor?->name ?? $conversation->visitor_name ?? 'Visitor',
-            email: $visitor?->email ?? $conversation->visitor_email,
-            phone: $visitor?->phone,
-            recordContext: $conversation->contact_id
+            name: $visitor?->name ?? ($conversation->visitor_name ?? 'Visitor'),
+            email: $visitor?->email ?? ($conversation->visitor_email ?? null),
+            phone: $visitor?->phone ?? null,
+            recordContext: isset($conversation->contact_id) && $conversation->contact_id
                 ? new RecordContext($conversation->contact_module ?? 'contacts', $conversation->contact_id)
                 : null,
         );
 
-        $linkedRecord = $conversation->contact_id
+        $linkedRecord = isset($conversation->contact_id) && $conversation->contact_id
             ? new RecordContext($conversation->contact_module ?? 'contacts', $conversation->contact_id)
             : null;
 
@@ -146,38 +157,46 @@ class ChatChannelAdapter extends AbstractChannelAdapter
 
         $isAgent = $message->sender_type === 'agent';
 
-        $sender = $isAgent
-            ? MessageParticipant::fromUser(
+        if ($isAgent) {
+            // Load user info if sender_id exists
+            $user = isset($message->sender_id) ? DB::table('users')->where('id', $message->sender_id)->first() : null;
+            $sender = MessageParticipant::fromUser(
                 userId: $message->sender_id ?? 0,
-                name: $message->sender?->name ?? 'Agent',
-                email: $message->sender?->email,
-            )
-            : MessageParticipant::fromContact(
+                name: $user?->name ?? 'Agent',
+                email: $user?->email ?? null,
+            );
+        } else {
+            $sender = MessageParticipant::fromContact(
                 name: $message->visitor_name ?? 'Visitor',
-                email: $message->visitor_email,
+                email: $message->visitor_email ?? null,
                 phone: null,
             );
+        }
 
         $direction = $isAgent ? MessageDirection::OUTBOUND : MessageDirection::INBOUND;
+
+        $attachments = isset($message->attachments)
+            ? (is_string($message->attachments) ? json_decode($message->attachments, true) : $message->attachments)
+            : [];
 
         return UnifiedMessage::reconstitute(
             id: $message->id,
             conversationId: $message->conversation_id,
             channel: ChannelType::CHAT,
             direction: $direction,
-            content: $message->content,
+            content: $message->content ?? '',
             htmlContent: null,
             sender: $sender,
             recipients: [],
-            attachments: $message->attachments ?? [],
+            attachments: $attachments ?? [],
             sourceMessageId: (string) $message->id,
             externalMessageId: null,
             status: UnifiedMessage::STATUS_DELIVERED, // Chat messages are instant
             sentAt: new \DateTimeImmutable($message->created_at),
             deliveredAt: new \DateTimeImmutable($message->created_at),
-            readAt: $message->read_at ? new \DateTimeImmutable($message->read_at) : null,
+            readAt: isset($message->read_at) && $message->read_at ? new \DateTimeImmutable($message->read_at) : null,
             metadata: [
-                'sender_type' => $message->sender_type,
+                'sender_type' => $message->sender_type ?? null,
                 'is_system' => $message->is_system ?? false,
             ],
             createdAt: new \DateTimeImmutable($message->created_at),

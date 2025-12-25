@@ -2,11 +2,7 @@
 
 namespace App\Services\Inbox;
 
-use App\Models\SharedInbox;
-use App\Models\InboxConversation;
-use App\Models\InboxMessage;
-use App\Models\InboxRule;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Facades\DB;
 
 class InboxService
@@ -36,7 +32,7 @@ class InboxService
 
     public function addNote(InboxConversation $conversation, string $body, ?int $userId = null): InboxMessage
     {
-        return InboxMessage::create([
+        return DB::table('inbox_messages')->insertGetId([
             'conversation_id' => $conversation->id,
             'direction' => 'outbound',
             'type' => 'note',
@@ -59,7 +55,7 @@ class InboxService
         $count = 0;
 
         foreach ($conversationIds as $id) {
-            $conversation = InboxConversation::find($id);
+            $conversation = DB::table('inbox_conversations')->where('id', $id)->first();
             if ($conversation) {
                 $conversation->assignTo($userId);
                 $count++;
@@ -121,13 +117,13 @@ class InboxService
     {
         DB::transaction(function () use ($primary, $secondaryIds) {
             foreach ($secondaryIds as $id) {
-                $secondary = InboxConversation::find($id);
+                $secondary = DB::table('inbox_conversations')->where('id', $id)->first();
                 if (!$secondary || $secondary->id === $primary->id) {
                     continue;
                 }
 
                 // Move messages to primary conversation
-                InboxMessage::where('conversation_id', $secondary->id)
+                DB::table('inbox_messages')->where('conversation_id', $secondary->id)
                     ->update(['conversation_id' => $primary->id]);
 
                 // Merge tags
@@ -177,7 +173,7 @@ class InboxService
 
     public function getInboxStats(SharedInbox $inbox): array
     {
-        $baseQuery = InboxConversation::where('inbox_id', $inbox->id);
+        $baseQuery = DB::table('inbox_conversations')->where('inbox_id', $inbox->id);
 
         return [
             'total' => (clone $baseQuery)->count(),
@@ -195,7 +191,7 @@ class InboxService
 
     public function getUserStats(SharedInbox $inbox, int $userId): array
     {
-        $baseQuery = InboxConversation::where('inbox_id', $inbox->id)
+        $baseQuery = DB::table('inbox_conversations')->where('inbox_id', $inbox->id)
             ->where('assigned_to', $userId);
 
         return [

@@ -6,12 +6,11 @@ namespace App\Http\Controllers\Api\Email;
 
 use App\Application\Services\Email\EmailApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\EmailAccount;
-use App\Models\EmailMessage;
 use App\Services\Email\EmailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class EmailMessageController extends Controller
 {
@@ -38,7 +37,7 @@ class EmailMessageController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = EmailMessage::query()
+        $query = DB::table('email_messages')
             ->whereHas('account', fn($q) => $q->where('user_id', Auth::id()))
             ->with(['account:id,name,email_address', 'template:id,name'])
             ->orderBy('received_at', 'desc')
@@ -141,7 +140,7 @@ class EmailMessageController extends Controller
             'template_id' => 'nullable|integer|exists:email_templates,id',
         ]);
 
-        $account = EmailAccount::where('id', $validated['account_id'])
+        $account = DB::table('email_accounts')->where('id', $validated['account_id'])
             ->where('user_id', Auth::id())
             ->firstOrFail();
 
@@ -396,7 +395,7 @@ class EmailMessageController extends Controller
             ]);
         }
 
-        $thread = EmailMessage::where('thread_id', $emailMessage->thread_id)
+        $thread = DB::table('email_messages')->where('thread_id', $emailMessage->thread_id)
             ->with(['account:id,name,email_address'])
             ->orderBy('received_at')
             ->orderBy('sent_at')

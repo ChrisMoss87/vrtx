@@ -5,14 +5,12 @@ namespace App\Http\Controllers\Api\Scheduling;
 use App\Application\Services\Scheduling\SchedulingApplicationService;
 use App\Domain\Scheduling\DTOs\CreateMeetingDTO;
 use App\Http\Controllers\Controller;
-use App\Models\MeetingType;
-use App\Models\ScheduledMeeting;
-use App\Models\SchedulingPage;
 use App\Services\Scheduling\AvailabilityService;
 use Carbon\Carbon;
 use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PublicBookingController extends Controller
 {
@@ -26,7 +24,7 @@ class PublicBookingController extends Controller
      */
     public function getPage(string $slug): JsonResponse
     {
-        $page = SchedulingPage::where('slug', $slug)
+        $page = DB::table('scheduling_pages')->where('slug', $slug)
             ->where('is_active', true)
             ->with(['user:id,name,email', 'activeMeetingTypes'])
             ->first();
@@ -65,7 +63,7 @@ class PublicBookingController extends Controller
      */
     public function getMeetingType(string $pageSlug, string $typeSlug): JsonResponse
     {
-        $page = SchedulingPage::where('slug', $pageSlug)
+        $page = DB::table('scheduling_pages')->where('slug', $pageSlug)
             ->where('is_active', true)
             ->first();
 
@@ -73,7 +71,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'Page not found'], 404);
         }
 
-        $meetingType = MeetingType::where('scheduling_page_id', $page->id)
+        $meetingType = DB::table('meeting_types')->where('scheduling_page_id', $page->id)
             ->where('slug', $typeSlug)
             ->where('is_active', true)
             ->first();
@@ -118,7 +116,7 @@ class PublicBookingController extends Controller
             'timezone' => 'required|timezone',
         ]);
 
-        $page = SchedulingPage::where('slug', $pageSlug)
+        $page = DB::table('scheduling_pages')->where('slug', $pageSlug)
             ->where('is_active', true)
             ->first();
 
@@ -126,7 +124,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'Page not found'], 404);
         }
 
-        $meetingType = MeetingType::where('scheduling_page_id', $page->id)
+        $meetingType = DB::table('meeting_types')->where('scheduling_page_id', $page->id)
             ->where('slug', $typeSlug)
             ->where('is_active', true)
             ->first();
@@ -176,7 +174,7 @@ class PublicBookingController extends Controller
             'timezone' => 'required|timezone',
         ]);
 
-        $page = SchedulingPage::where('slug', $pageSlug)
+        $page = DB::table('scheduling_pages')->where('slug', $pageSlug)
             ->where('is_active', true)
             ->first();
 
@@ -184,7 +182,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'Page not found'], 404);
         }
 
-        $meetingType = MeetingType::where('scheduling_page_id', $page->id)
+        $meetingType = DB::table('meeting_types')->where('scheduling_page_id', $page->id)
             ->where('slug', $typeSlug)
             ->where('is_active', true)
             ->first();
@@ -223,7 +221,7 @@ class PublicBookingController extends Controller
             'answers' => 'nullable|array',
         ]);
 
-        $page = SchedulingPage::where('slug', $pageSlug)
+        $page = DB::table('scheduling_pages')->where('slug', $pageSlug)
             ->where('is_active', true)
             ->first();
 
@@ -231,7 +229,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'Page not found'], 404);
         }
 
-        $meetingType = MeetingType::where('scheduling_page_id', $page->id)
+        $meetingType = DB::table('meeting_types')->where('scheduling_page_id', $page->id)
             ->where('slug', $typeSlug)
             ->where('is_active', true)
             ->first();
@@ -291,7 +289,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'Meeting not found'], 404);
         }
 
-        // Load the Eloquent model to get related data
+        // Load the Database model to get related data
         $meeting = ScheduledMeeting::with(['host', 'meetingType.schedulingPage'])
             ->find($meetingResponse->id);
 
@@ -333,7 +331,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'Meeting not found'], 404);
         }
 
-        // Check if can cancel via Eloquent model
+        // Check if can cancel via Database model
         $meeting = ScheduledMeeting::find($meetingResponse->id);
         if ($meeting && !$meeting->can_cancel) {
             return response()->json(['message' => 'This meeting cannot be cancelled'], 422);
@@ -364,7 +362,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'Meeting not found'], 404);
         }
 
-        // Check if can reschedule via Eloquent model
+        // Check if can reschedule via Database model
         $meeting = ScheduledMeeting::find($meetingResponse->id);
         if ($meeting && !$meeting->can_reschedule) {
             return response()->json(['message' => 'This meeting cannot be rescheduled'], 422);

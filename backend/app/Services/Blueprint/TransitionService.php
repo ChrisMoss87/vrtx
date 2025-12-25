@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\Blueprint;
 
-use App\Models\BlueprintRecordState;
-use App\Models\BlueprintTransitionExecution;
+use App\Domain\Blueprint\Entities\BlueprintRecordState;
+use App\Domain\Blueprint\Entities\TransitionExecution as BlueprintTransitionExecution;
+use App\Domain\Blueprint\Repositories\BlueprintRecordStateRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -13,31 +16,49 @@ use Illuminate\Support\Facades\DB;
  */
 class TransitionService
 {
+    public function __construct(
+        protected BlueprintRecordStateRepositoryInterface $recordStateRepository,
+        protected ModuleRepositoryInterface $moduleRepository,
+        protected ModuleRecordRepositoryInterface $recordRepository,
+    ) {}
+
     /**
      * Execute a transition (update record state and field value).
      */
     public function execute(BlueprintTransitionExecution $execution): void
     {
-        $transition = $execution->transition;
-        $blueprint = $transition->blueprint;
-        $field = $blueprint->field;
-        $toState = $execution->toState;
+        $transition = $execution->getTransition();
+        $blueprint = $transition->getBlueprint();
+        $field = $blueprint->getField();
+        $toState = $execution->getToState();
 
         DB::transaction(function () use ($execution, $blueprint, $field, $toState) {
             // Update the blueprint record state
-            $recordState = BlueprintRecordState::updateOrCreate(
-                [
-                    'blueprint_id' => $blueprint->id,
-                    'record_id' => $execution->record_id,
-                ],
-                [
-                    'current_state_id' => $toState->id,
-                    'state_entered_at' => now(),
-                ]
+            $recordState = $this->recordStateRepository->findByBlueprintAndRecord(
+                $blueprint->getId(),
+                $execution->getRecordId()
             );
 
+            if ($recordState) {
+                $recordState->updateCurrentState($toState->getId(), now());
+            } else {
+                $recordState = new BlueprintRecordState(
+                    blueprintId: $blueprint->getId(),
+                    recordId: $execution->getRecordId(),
+                    currentStateId: $toState->getId(),
+                    stateEnteredAt: now()
+                );
+            }
+
+            $this->recordStateRepository->save($recordState);
+
             // Update the actual field value on the record
-            $this->updateRecordField($blueprint->module_id, $execution->record_id, $field->api_name, $toState->field_option_value);
+            $this->updateRecordField(
+                $blueprint->getModuleId(),
+                $execution->getRecordId(),
+                $field->getApiName(),
+                $toState->getFieldOptionValue()
+            );
         });
     }
 
@@ -47,36 +68,19 @@ class TransitionService
     protected function updateRecordField(int $moduleId, int $recordId, string $fieldName, ?string $value): void
     {
         // Get the module to determine the table name
-        $module = \App\Models\Module::find($moduleId);
+        $module = $this->moduleRepository->findById($moduleId);
         if (!$module) {
             return;
         }
 
-        // Get the table name (could be the module's API name or a custom table)
-        $tableName = $module->api_name;
-
-        // Check if table exists
-        if (!\Illuminate\Support\Facades\Schema::hasTable($tableName)) {
-            // Try with a 'records' table approach (generic records table)
-            if (\Illuminate\Support\Facades\Schema::hasTable('records')) {
-                DB::table('records')
-                    ->where('id', $recordId)
-                    ->where('module_id', $moduleId)
-                    ->update([
-                        'data->' . $fieldName => $value,
-                        'updated_at' => now(),
-                    ]);
-            }
+        // Update using the record repository
+        $record = $this->recordRepository->findById($recordId, $moduleId);
+        if (!$record) {
             return;
         }
 
-        // Update the record in the module-specific table
-        DB::table($tableName)
-            ->where('id', $recordId)
-            ->update([
-                $fieldName => $value,
-                'updated_at' => now(),
-            ]);
+        $record->setFieldValue($fieldName, $value);
+        $this->recordRepository->save($record);
     }
 
     /**

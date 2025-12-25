@@ -4,13 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Dashboard;
-use App\Models\DashboardWidget;
-use App\Models\Module;
-use App\Models\Permission;
-use App\Models\Report;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -18,6 +11,7 @@ use Tests\TestCase;
 class ReportApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -27,15 +21,15 @@ class ReportApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
-        $this->module = Module::factory()->create([
+        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
         ]);
 
         // Create role with report permissions
-        $this->role = Role::create(['name' => 'admin', 'guard_name' => 'web']);
+        $this->role = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web']);
         $permissions = [
             'reports.view',
             'reports.create',
@@ -43,7 +37,7 @@ class ReportApiTest extends TestCase
             'reports.delete',
         ];
         foreach ($permissions as $permName) {
-            $perm = Permission::create(['name' => $permName, 'guard_name' => 'web']);
+            $perm = DB::table('permissions')->insertGetId(['name' => $permName, 'guard_name' => 'web']);
             $this->role->givePermissionTo($perm);
         }
         $this->user->assignRole($this->role);
@@ -57,7 +51,7 @@ class ReportApiTest extends TestCase
 
     public function test_can_list_reports(): void
     {
-        Report::factory()->count(3)->create([
+        /* Report factory - use DB::table('reports') */->count(3)->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
         ]);
@@ -75,13 +69,13 @@ class ReportApiTest extends TestCase
 
     public function test_can_filter_reports_by_module(): void
     {
-        $otherModule = Module::factory()->create();
+        $otherModule = /* Module factory - use DB::table('modules') */->create();
 
-        Report::factory()->count(2)->create([
+        /* Report factory - use DB::table('reports') */->count(2)->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
         ]);
-        Report::factory()->create([
+        /* Report factory - use DB::table('reports') */->create([
             'module_id' => $otherModule->id,
             'user_id' => $this->user->id,
         ]);
@@ -97,12 +91,12 @@ class ReportApiTest extends TestCase
 
     public function test_can_filter_reports_by_type(): void
     {
-        Report::factory()->count(2)->create([
+        /* Report factory - use DB::table('reports') */->count(2)->create([
             'module_id' => $this->module->id,
             'type' => 'tabular',
             'user_id' => $this->user->id,
         ]);
-        Report::factory()->create([
+        /* Report factory - use DB::table('reports') */->create([
             'module_id' => $this->module->id,
             'type' => 'summary',
             'user_id' => $this->user->id,
@@ -176,7 +170,7 @@ class ReportApiTest extends TestCase
 
     public function test_can_show_report(): void
     {
-        $report = Report::factory()->create([
+        $report = /* Report factory - use DB::table('reports') */->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
         ]);
@@ -206,7 +200,7 @@ class ReportApiTest extends TestCase
 
     public function test_can_update_report(): void
     {
-        $report = Report::factory()->create([
+        $report = /* Report factory - use DB::table('reports') */->create([
             'name' => 'Original Name',
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
@@ -234,7 +228,7 @@ class ReportApiTest extends TestCase
 
     public function test_can_delete_report(): void
     {
-        $report = Report::factory()->create([
+        $report = /* Report factory - use DB::table('reports') */->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
         ]);
@@ -255,7 +249,7 @@ class ReportApiTest extends TestCase
 
     public function test_can_execute_report(): void
     {
-        $report = Report::factory()->create([
+        $report = /* Report factory - use DB::table('reports') */->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'type' => 'tabular',
@@ -279,7 +273,7 @@ class ReportApiTest extends TestCase
 
     public function test_can_toggle_report_public(): void
     {
-        $report = Report::factory()->create([
+        $report = /* Report factory - use DB::table('reports') */->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'is_public' => false,
@@ -293,14 +287,14 @@ class ReportApiTest extends TestCase
 
     public function test_can_see_public_reports_from_other_users(): void
     {
-        $otherUser = User::factory()->create();
+        $otherUser = /* User factory - use DB::table('users') */->create();
 
-        Report::factory()->create([
+        /* Report factory - use DB::table('reports') */->create([
             'module_id' => $this->module->id,
             'user_id' => $otherUser->id,
             'is_public' => true,
         ]);
-        Report::factory()->create([
+        /* Report factory - use DB::table('reports') */->create([
             'module_id' => $this->module->id,
             'user_id' => $otherUser->id,
             'is_public' => false,
@@ -321,7 +315,7 @@ class ReportApiTest extends TestCase
 
     public function test_can_clone_report(): void
     {
-        $report = Report::factory()->create([
+        $report = /* Report factory - use DB::table('reports') */->create([
             'name' => 'Original Report',
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,

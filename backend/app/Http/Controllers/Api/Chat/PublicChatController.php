@@ -4,12 +4,10 @@ namespace App\Http\Controllers\Api\Chat;
 
 use App\Application\Services\Chat\ChatApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\ChatWidget;
-use App\Models\ChatConversation;
-use App\Models\ChatMessage;
 use App\Services\Chat\ChatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PublicChatController extends Controller
 {
@@ -23,7 +21,7 @@ class PublicChatController extends Controller
      */
     public function getConfig(string $widgetKey): JsonResponse
     {
-        $widget = ChatWidget::where('widget_key', $widgetKey)->first();
+        $widget = DB::table('chat_widgets')->where('widget_key', $widgetKey)->first();
 
         if (!$widget) {
             return response()->json(['error' => 'Widget not found'], 404);
@@ -39,7 +37,7 @@ class PublicChatController extends Controller
      */
     public function initSession(Request $request, string $widgetKey): JsonResponse
     {
-        $widget = ChatWidget::where('widget_key', $widgetKey)->first();
+        $widget = DB::table('chat_widgets')->where('widget_key', $widgetKey)->first();
 
         if (!$widget || !$widget->is_active) {
             return response()->json(['error' => 'Widget not available'], 404);
@@ -66,7 +64,7 @@ class PublicChatController extends Controller
         ]);
 
         // Check for existing open conversation
-        $conversation = ChatConversation::where('visitor_id', $visitor->id)
+        $conversation = DB::table('chat_conversations')->where('visitor_id', $visitor->id)
             ->where('status', ChatConversation::STATUS_OPEN)
             ->with(['messages' => fn($q) => $q->visible()->orderBy('created_at')])
             ->first();
@@ -85,7 +83,7 @@ class PublicChatController extends Controller
      */
     public function identify(Request $request, string $widgetKey): JsonResponse
     {
-        $widget = ChatWidget::where('widget_key', $widgetKey)->first();
+        $widget = DB::table('chat_widgets')->where('widget_key', $widgetKey)->first();
 
         if (!$widget) {
             return response()->json(['error' => 'Widget not found'], 404);
@@ -114,7 +112,7 @@ class PublicChatController extends Controller
      */
     public function startConversation(Request $request, string $widgetKey): JsonResponse
     {
-        $widget = ChatWidget::where('widget_key', $widgetKey)->first();
+        $widget = DB::table('chat_widgets')->where('widget_key', $widgetKey)->first();
 
         if (!$widget || !$widget->is_active) {
             return response()->json(['error' => 'Widget not available'], 404);
@@ -152,7 +150,7 @@ class PublicChatController extends Controller
      */
     public function sendMessage(Request $request, string $widgetKey, int $conversationId): JsonResponse
     {
-        $widget = ChatWidget::where('widget_key', $widgetKey)->first();
+        $widget = DB::table('chat_widgets')->where('widget_key', $widgetKey)->first();
 
         if (!$widget) {
             return response()->json(['error' => 'Widget not found'], 404);
@@ -164,7 +162,7 @@ class PublicChatController extends Controller
             'attachments' => 'nullable|array',
         ]);
 
-        $conversation = ChatConversation::where('widget_id', $widget->id)
+        $conversation = DB::table('chat_conversations')->where('widget_id', $widget->id)
             ->where('id', $conversationId)
             ->where('visitor_id', $validated['visitor_id'])
             ->firstOrFail();
@@ -192,7 +190,7 @@ class PublicChatController extends Controller
      */
     public function getMessages(Request $request, string $widgetKey, int $conversationId): JsonResponse
     {
-        $widget = ChatWidget::where('widget_key', $widgetKey)->first();
+        $widget = DB::table('chat_widgets')->where('widget_key', $widgetKey)->first();
 
         if (!$widget) {
             return response()->json(['error' => 'Widget not found'], 404);
@@ -200,7 +198,7 @@ class PublicChatController extends Controller
 
         $visitorId = $request->query('visitor_id');
 
-        $conversation = ChatConversation::where('widget_id', $widget->id)
+        $conversation = DB::table('chat_conversations')->where('widget_id', $widget->id)
             ->where('id', $conversationId)
             ->where('visitor_id', $visitorId)
             ->firstOrFail();
@@ -225,7 +223,7 @@ class PublicChatController extends Controller
      */
     public function rateConversation(Request $request, string $widgetKey, int $conversationId): JsonResponse
     {
-        $widget = ChatWidget::where('widget_key', $widgetKey)->first();
+        $widget = DB::table('chat_widgets')->where('widget_key', $widgetKey)->first();
 
         if (!$widget) {
             return response()->json(['error' => 'Widget not found'], 404);
@@ -237,7 +235,7 @@ class PublicChatController extends Controller
             'comment' => 'nullable|string|max:1000',
         ]);
 
-        $conversation = ChatConversation::where('widget_id', $widget->id)
+        $conversation = DB::table('chat_conversations')->where('widget_id', $widget->id)
             ->where('id', $conversationId)
             ->where('visitor_id', $validated['visitor_id'])
             ->firstOrFail();
@@ -257,7 +255,7 @@ class PublicChatController extends Controller
      */
     public function trackPageView(Request $request, string $widgetKey): JsonResponse
     {
-        $widget = ChatWidget::where('widget_key', $widgetKey)->first();
+        $widget = DB::table('chat_widgets')->where('widget_key', $widgetKey)->first();
 
         if (!$widget) {
             return response()->json(['error' => 'Widget not found'], 404);

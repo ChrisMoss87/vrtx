@@ -2,9 +2,9 @@
 
 namespace App\Services\Sms;
 
-use App\Models\SmsConnection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class TwilioService
 {

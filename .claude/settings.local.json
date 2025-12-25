@@ -184,7 +184,22 @@
       "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Domain/Call/Repositories/CallRepositoryInterface.php\" )",
       "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Infrastructure/Persistence/Eloquent/Repositories/Call/EloquentCallRepository.php\" )",
       "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Domain/Campaign/Repositories/CampaignRepositoryInterface.php\" )",
-      "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Infrastructure/Persistence/Eloquent/Repositories/Campaign/EloquentCampaignRepository.php\")"
+      "Bash(\"/home/chris/PersonalProjects/vrtx/backend/app/Infrastructure/Persistence/Eloquent/Repositories/Campaign/EloquentCampaignRepository.php\")",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Proposal/EloquentProposalRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/WebForm/EloquentWebFormRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Sms/EloquentSmsMessageRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Integration/EloquentIntegrationConnectionRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Communication/EloquentUnifiedConversationRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/CMS/EloquentCmsPageRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/LeadScoring/EloquentScoringModelRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/LandingPage/EloquentLandingPageRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Inbox/EloquentInboxConversationRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/KnowledgeBase/EloquentKbArticleRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Webhook/EloquentWebhookRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Workflow/EloquentWorkflowRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Workflow/EloquentWorkflowExecutionRepository.php )",
+      "Bash(app/Infrastructure/Persistence/Eloquent/Repositories/Workflow/EloquentWorkflowStepRepository.php)",
+      "Bash(git -C /home/chris/PersonalProjects/vrtx log --oneline -5 backend/app/Models/)"
     ],
     "deny": [],
     "ask": []

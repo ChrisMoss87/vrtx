@@ -2,10 +2,6 @@
 
 namespace App\Services\Whatsapp;
 
-use App\Models\WhatsappConnection;
-use App\Models\WhatsappConversation;
-use App\Models\WhatsappMessage;
-use App\Models\WhatsappTemplate;
 use Illuminate\Support\Facades\DB;
 
 class WhatsappService
@@ -23,7 +19,7 @@ class WhatsappService
         $conversation = $conversation ?? $this->getOrCreateConversation($connection, $to);
 
         // Create pending message record
-        $message = WhatsappMessage::create([
+        $message = DB::table('whatsapp_messages')->insertGetId([
             'conversation_id' => $conversation->id,
             'connection_id' => $connection->id,
             'direction' => 'outbound',
@@ -64,7 +60,7 @@ class WhatsappService
         $conversation = $conversation ?? $this->getOrCreateConversation($connection, $to);
 
         // Create pending message record
-        $message = WhatsappMessage::create([
+        $message = DB::table('whatsapp_messages')->insertGetId([
             'conversation_id' => $conversation->id,
             'connection_id' => $connection->id,
             'direction' => 'outbound',
@@ -115,7 +111,7 @@ class WhatsappService
         $conversation = $conversation ?? $this->getOrCreateConversation($connection, $to);
 
         // Create pending message record
-        $message = WhatsappMessage::create([
+        $message = DB::table('whatsapp_messages')->insertGetId([
             'conversation_id' => $conversation->id,
             'connection_id' => $connection->id,
             'direction' => 'outbound',
@@ -160,7 +156,7 @@ class WhatsappService
         }
 
         // Check for duplicate
-        if (WhatsappMessage::where('wa_message_id', $messageId)->exists()) {
+        if (DB::table('whatsapp_messages')->where('wa_message_id', $messageId)->exists()) {
             return null;
         }
 
@@ -207,7 +203,7 @@ class WhatsappService
         }
 
         // Create message
-        $message = WhatsappMessage::create([
+        $message = DB::table('whatsapp_messages')->insertGetId([
             'conversation_id' => $conversation->id,
             'connection_id' => $connection->id,
             'wa_message_id' => $messageId,
@@ -236,7 +232,7 @@ class WhatsappService
      */
     public function processStatusUpdate(string $messageId, string $status, ?int $timestamp = null): void
     {
-        $message = WhatsappMessage::where('wa_message_id', $messageId)->first();
+        $message = DB::table('whatsapp_messages')->where('wa_message_id', $messageId)->first();
 
         if (!$message) {
             return;
@@ -303,7 +299,7 @@ class WhatsappService
     {
         $normalizedPhone = $this->normalizePhoneNumber($phone);
 
-        return WhatsappConversation::where('contact_wa_id', $normalizedPhone)
+        return DB::table('whatsapp_conversations')->where('contact_wa_id', $normalizedPhone)
             ->orWhere('contact_phone', 'LIKE', '%' . $normalizedPhone)
             ->with(['connection', 'messages' => fn($q) => $q->latest()->limit(1)])
             ->get();
@@ -314,7 +310,7 @@ class WhatsappService
      */
     public function getRecordConversations(string $moduleApiName, int $recordId): \Illuminate\Support\Collection
     {
-        return WhatsappConversation::where('module_api_name', $moduleApiName)
+        return DB::table('whatsapp_conversations')->where('module_api_name', $moduleApiName)
             ->where('module_record_id', $recordId)
             ->with(['connection', 'messages' => fn($q) => $q->latest()->limit(5)])
             ->orderByDesc('last_message_at')

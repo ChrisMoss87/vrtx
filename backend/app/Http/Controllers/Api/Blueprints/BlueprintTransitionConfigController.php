@@ -5,13 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Blueprints;
 
 use App\Http\Controllers\Controller;
-use App\Models\BlueprintApproval;
-use App\Models\BlueprintTransition;
-use App\Models\BlueprintTransitionAction;
-use App\Models\BlueprintTransitionCondition;
-use App\Models\BlueprintTransitionRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class BlueprintTransitionConfigController extends Controller
 {
@@ -22,7 +18,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function getConditions(int $transitionId): JsonResponse
     {
-        $transition = BlueprintTransition::findOrFail($transitionId);
+        $transition = DB::table('blueprint_transitions')->where('id', $transitionId)->first();
 
         $conditions = $transition->conditions()
             ->with('field:id,api_name,label,type')
@@ -37,7 +33,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function storeCondition(Request $request, int $transitionId): JsonResponse
     {
-        $transition = BlueprintTransition::findOrFail($transitionId);
+        $transition = DB::table('blueprint_transitions')->where('id', $transitionId)->first();
 
         $validated = $request->validate([
             'field_id' => 'required|integer|exists:fields,id',
@@ -65,7 +61,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function updateCondition(Request $request, int $transitionId, int $conditionId): JsonResponse
     {
-        $condition = BlueprintTransitionCondition::where('transition_id', $transitionId)
+        $condition = DB::table('blueprint_transition_conditions')->where('transition_id', $transitionId)
             ->findOrFail($conditionId);
 
         $validated = $request->validate([
@@ -87,7 +83,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function destroyCondition(int $transitionId, int $conditionId): JsonResponse
     {
-        $condition = BlueprintTransitionCondition::where('transition_id', $transitionId)
+        $condition = DB::table('blueprint_transition_conditions')->where('transition_id', $transitionId)
             ->findOrFail($conditionId);
 
         $condition->delete();
@@ -102,7 +98,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function getRequirements(int $transitionId): JsonResponse
     {
-        $transition = BlueprintTransition::findOrFail($transitionId);
+        $transition = DB::table('blueprint_transitions')->where('id', $transitionId)->first();
 
         $requirements = $transition->requirements()
             ->with('field:id,api_name,label,type')
@@ -117,7 +113,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function storeRequirement(Request $request, int $transitionId): JsonResponse
     {
-        $transition = BlueprintTransition::findOrFail($transitionId);
+        $transition = DB::table('blueprint_transitions')->where('id', $transitionId)->first();
 
         $validated = $request->validate([
             'type' => 'required|string|in:mandatory_field,attachment,note,checklist',
@@ -149,7 +145,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function updateRequirement(Request $request, int $transitionId, int $requirementId): JsonResponse
     {
-        $requirement = BlueprintTransitionRequirement::where('transition_id', $transitionId)
+        $requirement = DB::table('blueprint_transition_requirements')->where('transition_id', $transitionId)
             ->findOrFail($requirementId);
 
         $validated = $request->validate([
@@ -173,7 +169,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function destroyRequirement(int $transitionId, int $requirementId): JsonResponse
     {
-        $requirement = BlueprintTransitionRequirement::where('transition_id', $transitionId)
+        $requirement = DB::table('blueprint_transition_requirements')->where('transition_id', $transitionId)
             ->findOrFail($requirementId);
 
         $requirement->delete();
@@ -188,7 +184,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function getActions(int $transitionId): JsonResponse
     {
-        $transition = BlueprintTransition::findOrFail($transitionId);
+        $transition = DB::table('blueprint_transitions')->where('id', $transitionId)->first();
 
         $actions = $transition->actions()
             ->orderBy('display_order')
@@ -202,7 +198,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function storeAction(Request $request, int $transitionId): JsonResponse
     {
-        $transition = BlueprintTransition::findOrFail($transitionId);
+        $transition = DB::table('blueprint_transitions')->where('id', $transitionId)->first();
 
         $validated = $request->validate([
             'type' => 'required|string|max:50',
@@ -226,7 +222,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function updateAction(Request $request, int $transitionId, int $actionId): JsonResponse
     {
-        $action = BlueprintTransitionAction::where('transition_id', $transitionId)
+        $action = DB::table('blueprint_transition_actions')->where('transition_id', $transitionId)
             ->findOrFail($actionId);
 
         $validated = $request->validate([
@@ -246,7 +242,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function destroyAction(int $transitionId, int $actionId): JsonResponse
     {
-        $action = BlueprintTransitionAction::where('transition_id', $transitionId)
+        $action = DB::table('blueprint_transition_actions')->where('transition_id', $transitionId)
             ->findOrFail($actionId);
 
         $action->delete();
@@ -261,7 +257,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function getApproval(int $transitionId): JsonResponse
     {
-        $transition = BlueprintTransition::findOrFail($transitionId);
+        $transition = DB::table('blueprint_transitions')->where('id', $transitionId)->first();
 
         $approval = $transition->approval;
 
@@ -273,7 +269,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function setApproval(Request $request, int $transitionId): JsonResponse
     {
-        $transition = BlueprintTransition::findOrFail($transitionId);
+        $transition = DB::table('blueprint_transitions')->where('id', $transitionId)->first();
 
         $validated = $request->validate([
             'approval_type' => 'required|string|in:specific_users,role_based,manager,field_value',
@@ -304,7 +300,7 @@ class BlueprintTransitionConfigController extends Controller
      */
     public function removeApproval(int $transitionId): JsonResponse
     {
-        BlueprintApproval::where('transition_id', $transitionId)->delete();
+        DB::table('blueprint_approvals')->where('transition_id', $transitionId)->delete();
 
         return response()->json(['message' => 'Approval configuration removed']);
     }

@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api\Whatsapp;
 
 use App\Application\Services\WhatsApp\WhatsAppApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\WhatsappConnection;
 use App\Services\Whatsapp\WhatsappService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class WhatsappWebhookController extends Controller
 {
@@ -23,7 +23,7 @@ class WhatsappWebhookController extends Controller
      */
     public function verify(Request $request, int $connectionId): Response
     {
-        $connection = WhatsappConnection::find($connectionId);
+        $connection = DB::table('whatsapp_connections')->where('id', $connectionId)->first();
 
         if (!$connection) {
             return response('Connection not found', 404);
@@ -51,7 +51,7 @@ class WhatsappWebhookController extends Controller
      */
     public function handle(Request $request, int $connectionId): JsonResponse
     {
-        $connection = WhatsappConnection::find($connectionId);
+        $connection = DB::table('whatsapp_connections')->where('id', $connectionId)->first();
 
         if (!$connection) {
             return response()->json(['error' => 'Connection not found'], 404);
@@ -132,7 +132,7 @@ class WhatsappWebhookController extends Controller
 
     private function processMessageError(string $messageId, array $errors): void
     {
-        $message = \App\Models\WhatsappMessage::where('wa_message_id', $messageId)->first();
+        $message = DB::table('whatsapp_messages')->where('wa_message_id', $messageId)->first();
 
         if ($message && !empty($errors)) {
             $error = $errors[0];

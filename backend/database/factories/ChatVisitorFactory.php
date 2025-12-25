@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\ChatVisitor;
-use App\Models\ChatWidget;
+use App\Infrastructure\Persistence\Eloquent\Models\ChatVisitor;
+use App\Infrastructure\Persistence\Eloquent\Models\ChatWidget;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 

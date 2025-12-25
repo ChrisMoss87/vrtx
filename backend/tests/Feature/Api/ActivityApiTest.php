@@ -4,12 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Activity;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Permission;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -17,6 +11,7 @@ use Tests\TestCase;
 class ActivityApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -27,19 +22,19 @@ class ActivityApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
-        $this->module = Module::factory()->create([
+        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Contacts',
             'singular_name' => 'Contact',
             'api_name' => 'contacts',
         ]);
-        $this->record = ModuleRecord::factory()->create([
+        $this->record = /* ModuleRecord factory - use DB::table('module_records') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
 
         // Create role with activity permissions
-        $this->role = Role::create(['name' => 'admin', 'guard_name' => 'web']);
+        $this->role = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web']);
         $permissions = [
             'activity.view',
             'activity.create',
@@ -47,7 +42,7 @@ class ActivityApiTest extends TestCase
             'activity.delete',
         ];
         foreach ($permissions as $permName) {
-            $perm = Permission::create(['name' => $permName, 'guard_name' => 'web']);
+            $perm = DB::table('permissions')->insertGetId(['name' => $permName, 'guard_name' => 'web']);
             $this->role->givePermissionTo($perm);
         }
         $this->user->assignRole($this->role);
@@ -87,7 +82,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_list_activities(): void
     {
-        Activity::factory()->count(5)->create([
+        /* Activity factory - use DB::table('activities') */->count(5)->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
@@ -108,13 +103,13 @@ class ActivityApiTest extends TestCase
 
     public function test_can_filter_activities_by_type(): void
     {
-        Activity::factory()->count(2)->create([
+        /* Activity factory - use DB::table('activities') */->count(2)->create([
             'user_id' => $this->user->id,
             'type' => 'call',
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
         ]);
-        Activity::factory()->create([
+        /* Activity factory - use DB::table('activities') */->create([
             'user_id' => $this->user->id,
             'type' => 'meeting',
             'subject_type' => ModuleRecord::class,
@@ -132,7 +127,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_get_timeline(): void
     {
-        Activity::factory()->count(5)->create([
+        /* Activity factory - use DB::table('activities') */->count(5)->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
@@ -149,7 +144,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_get_upcoming_activities(): void
     {
-        Activity::factory()->count(3)->create([
+        /* Activity factory - use DB::table('activities') */->count(3)->create([
             'user_id' => $this->user->id,
             'scheduled_at' => now()->addDays(2),
             'completed_at' => null,
@@ -168,7 +163,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_get_overdue_activities(): void
     {
-        Activity::factory()->count(2)->create([
+        /* Activity factory - use DB::table('activities') */->count(2)->create([
             'user_id' => $this->user->id,
             'scheduled_at' => now()->subDays(2),
             'completed_at' => null,
@@ -242,7 +237,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_show_activity(): void
     {
-        $activity = Activity::factory()->create([
+        $activity = /* Activity factory - use DB::table('activities') */->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
@@ -272,7 +267,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_update_activity(): void
     {
-        $activity = Activity::factory()->create([
+        $activity = /* Activity factory - use DB::table('activities') */->create([
             'title' => 'Original Title',
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
@@ -301,7 +296,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_delete_activity(): void
     {
-        $activity = Activity::factory()->create([
+        $activity = /* Activity factory - use DB::table('activities') */->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
@@ -323,7 +318,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_complete_activity(): void
     {
-        $activity = Activity::factory()->create([
+        $activity = /* Activity factory - use DB::table('activities') */->create([
             'user_id' => $this->user->id,
             'completed_at' => null,
             'subject_type' => ModuleRecord::class,
@@ -345,7 +340,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_complete_activity_with_outcome(): void
     {
-        $activity = Activity::factory()->create([
+        $activity = /* Activity factory - use DB::table('activities') */->create([
             'type' => 'call',
             'user_id' => $this->user->id,
             'completed_at' => null,
@@ -367,7 +362,7 @@ class ActivityApiTest extends TestCase
 
     public function test_can_toggle_activity_pin(): void
     {
-        $activity = Activity::factory()->create([
+        $activity = /* Activity factory - use DB::table('activities') */->create([
             'user_id' => $this->user->id,
             'is_pinned' => false,
             'subject_type' => ModuleRecord::class,
@@ -394,17 +389,17 @@ class ActivityApiTest extends TestCase
 
     public function test_can_filter_activities_by_related_record(): void
     {
-        $otherRecord = ModuleRecord::factory()->create([
+        $otherRecord = /* ModuleRecord factory - use DB::table('module_records') */->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
 
-        Activity::factory()->count(2)->create([
+        /* Activity factory - use DB::table('activities') */->count(2)->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
         ]);
-        Activity::factory()->create([
+        /* Activity factory - use DB::table('activities') */->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $otherRecord->id,
@@ -425,13 +420,13 @@ class ActivityApiTest extends TestCase
 
     public function test_can_filter_activities_by_date_range(): void
     {
-        Activity::factory()->create([
+        /* Activity factory - use DB::table('activities') */->create([
             'user_id' => $this->user->id,
             'scheduled_at' => now()->subDays(5),
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
         ]);
-        Activity::factory()->create([
+        /* Activity factory - use DB::table('activities') */->create([
             'user_id' => $this->user->id,
             'scheduled_at' => now()->addDays(5),
             'subject_type' => ModuleRecord::class,

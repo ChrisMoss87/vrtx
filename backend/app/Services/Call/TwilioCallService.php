@@ -2,11 +2,10 @@
 
 namespace App\Services\Call;
 
-use App\Models\Call;
-use App\Models\CallProvider;
 use Twilio\Rest\Client;
 use Twilio\TwiML\VoiceResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class TwilioCallService
 {

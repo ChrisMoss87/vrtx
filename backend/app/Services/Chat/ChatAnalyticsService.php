@@ -2,10 +2,6 @@
 
 namespace App\Services\Chat;
 
-use App\Models\ChatWidget;
-use App\Models\ChatConversation;
-use App\Models\ChatMessage;
-use App\Models\ChatAgentStatus;
 use Illuminate\Support\Facades\DB;
 
 class ChatAnalyticsService
@@ -14,7 +10,7 @@ class ChatAnalyticsService
     {
         $dateRange = $this->getDateRange($period);
 
-        $query = ChatConversation::query();
+        $query = DB::table('chat_conversations');
         if ($widgetId) {
             $query->where('widget_id', $widgetId);
         }
@@ -58,7 +54,7 @@ class ChatAnalyticsService
         $performance = [];
 
         foreach ($agents as $agent) {
-            $conversations = ChatConversation::where('assigned_to', $agent->user_id)
+            $conversations = DB::table('chat_conversations')->where('assigned_to', $agent->user_id)
                 ->whereBetween('created_at', [$dateRange['current']['start'], $dateRange['current']['end']])
                 ->get();
 

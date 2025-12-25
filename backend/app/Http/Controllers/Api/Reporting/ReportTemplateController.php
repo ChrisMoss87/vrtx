@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Reporting;
 
 use App\Http\Controllers\Controller;
-use App\Models\Report;
-use App\Models\ReportTemplate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ReportTemplateController extends Controller
 {
@@ -71,7 +70,7 @@ class ReportTemplateController extends Controller
             'date_range' => 'nullable|array',
         ]);
 
-        $template = ReportTemplate::create([
+        $template = DB::table('report_templates')->insertGetId([
             ...$validated,
             'user_id' => Auth::id(),
         ]);
@@ -165,7 +164,7 @@ class ReportTemplateController extends Controller
 
         $reportData = $reportTemplate->toReportData();
 
-        $report = Report::create([
+        $report = DB::table('reports')->insertGetId([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? $reportTemplate->description,
             'user_id' => Auth::id(),
@@ -196,7 +195,7 @@ class ReportTemplateController extends Controller
             'is_public' => 'boolean',
         ]);
 
-        $template = ReportTemplate::create([
+        $template = DB::table('report_templates')->insertGetId([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? $report->description,
             'user_id' => Auth::id(),

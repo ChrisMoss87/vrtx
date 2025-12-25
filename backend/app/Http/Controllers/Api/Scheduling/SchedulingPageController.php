@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api\Scheduling;
 
 use App\Http\Controllers\Controller;
-use App\Models\SchedulingPage;
 use App\Services\Scheduling\AvailabilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class SchedulingPageController extends Controller
 {
@@ -21,7 +21,7 @@ class SchedulingPageController extends Controller
      */
     public function index(): JsonResponse
     {
-        $pages = SchedulingPage::where('user_id', Auth::id())
+        $pages = DB::table('scheduling_pages')->where('user_id', Auth::id())
             ->with('meetingTypes')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -54,7 +54,7 @@ class SchedulingPageController extends Controller
             'branding.welcome_message' => 'nullable|string',
         ]);
 
-        $page = SchedulingPage::create([
+        $page = DB::table('scheduling_pages')->insertGetId([
             'user_id' => Auth::id(),
             'name' => $validated['name'],
             'slug' => $validated['slug'] ?? null,
@@ -143,7 +143,7 @@ class SchedulingPageController extends Controller
             'exclude_id' => 'nullable|integer',
         ]);
 
-        $query = SchedulingPage::where('slug', $request->slug);
+        $query = DB::table('scheduling_pages')->where('slug', $request->slug);
 
         if ($request->exclude_id) {
             $query->where('id', '!=', $request->exclude_id);

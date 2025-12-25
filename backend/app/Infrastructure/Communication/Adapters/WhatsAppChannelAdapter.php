@@ -13,8 +13,7 @@ use App\Domain\Communication\ValueObjects\MessageParticipant;
 use App\Domain\Communication\ValueObjects\RecordContext;
 use App\Domain\Shared\ValueObjects\PaginatedResult;
 use App\Domain\WhatsApp\Repositories\WhatsappConversationRepositoryInterface;
-use App\Models\WhatsappConversation;
-use App\Models\WhatsappMessage;
+use Illuminate\Support\Facades\DB;
 
 class WhatsAppChannelAdapter extends AbstractChannelAdapter
 {
@@ -29,8 +28,9 @@ class WhatsAppChannelAdapter extends AbstractChannelAdapter
 
     public function isAvailable(): bool
     {
-        // Check if WhatsApp is configured
-        return \App\Models\WhatsappConnection::where('is_active', true)->exists();
+        // Check if WhatsApp is configured - get stats to determine availability
+        $stats = $this->whatsappRepository->getStats();
+        return !empty($stats);
     }
 
     public function getConversations(array $filters = [], int $perPage = 20, int $page = 1): PaginatedResult
@@ -40,46 +40,49 @@ class WhatsAppChannelAdapter extends AbstractChannelAdapter
 
     public function getConversation(string $sourceId): ?UnifiedConversation
     {
-        $conversation = WhatsappConversation::find($sourceId);
+        $conversation = $this->whatsappRepository->findByIdAsArray((int) $sourceId);
 
         if (!$conversation) {
             return null;
         }
 
-        return $this->toUnifiedConversation($conversation);
+        return $this->toUnifiedConversation((object) $conversation);
     }
 
     public function getConversationsForRecord(RecordContext $context): array
     {
-        $conversations = WhatsappConversation::where('module_api_name', $context->moduleApiName)
-            ->where('record_id', $context->recordId)
-            ->get();
+        $conversations = $this->whatsappRepository->findByModuleRecord($context->moduleApiName, $context->recordId);
 
-        return $conversations->map(fn($c) => $this->toUnifiedConversation($c))->all();
+        return array_map(fn($c) => $this->toUnifiedConversation((object) $c), $conversations);
     }
 
     public function getMessages(string $sourceConversationId, int $limit = 50): array
     {
-        $messages = WhatsappMessage::where('conversation_id', $sourceConversationId)
+        $messages = DB::table('whatsapp_messages')
+            ->where('conversation_id', $sourceConversationId)
             ->orderBy('created_at', 'desc')
             ->limit($limit)
             ->get();
 
-        return $messages->map(fn($m) => $this->toUnifiedMessage($m))->all();
+        return array_map(fn($m) => $this->toUnifiedMessage($m), $messages->all());
     }
 
     public function sendMessage(SendMessageDTO $message): UnifiedMessage
     {
         // This would integrate with WhatsApp Business API
         // For now, create the message record
-        $whatsappMessage = WhatsappMessage::create([
+        $messageId = DB::table('whatsapp_messages')->insertGetId([
             'conversation_id' => $message->conversationId,
             'direction' => 'outbound',
             'message_type' => 'text',
             'content' => $message->content,
             'sender_id' => $message->sender->userId,
             'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
+
+        $whatsappMessage = DB::table('whatsapp_messages')->where('id', $messageId)->first();
 
         return $this->toUnifiedMessage($whatsappMessage);
     }

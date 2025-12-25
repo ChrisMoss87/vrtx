@@ -6,13 +6,11 @@ namespace App\Http\Controllers\Api\DataManagement;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessExportJob;
-use App\Models\Export;
-use App\Models\ExportTemplate;
-use App\Models\Module;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\DB;
 
 class ExportController extends Controller
 {
@@ -27,7 +25,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $query = Export::where('module_id', $module->id)
+        $query = DB::table('exports')->where('module_id', $module->id)
             ->with('user:id,name,email')
             ->orderBy('created_at', 'desc');
 
@@ -51,7 +49,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $export = Export::where('module_id', $module->id)
+        $export = DB::table('exports')->where('module_id', $module->id)
             ->with('user:id,name,email')
             ->findOrFail($exportId);
 
@@ -102,7 +100,7 @@ class ExportController extends Controller
             ->when($request->filters, fn ($q) => $this->applyFilters($q, $request->filters))
             ->count();
 
-        $export = Export::create([
+        $export = DB::table('exports')->insertGetId([
             'module_id' => $module->id,
             'user_id' => $request->user()->id,
             'name' => $request->name ?? $module->name . ' Export - ' . now()->format('Y-m-d H:i'),
@@ -137,7 +135,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $export = Export::where('module_id', $module->id)->findOrFail($exportId);
+        $export = DB::table('exports')->where('module_id', $module->id)->findOrFail($exportId);
 
         if (!$export->isDownloadable()) {
             return response()->json(['message' => 'Export is not available for download'], 404);
@@ -169,7 +167,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $export = Export::where('module_id', $module->id)->findOrFail($exportId);
+        $export = DB::table('exports')->where('module_id', $module->id)->findOrFail($exportId);
 
         // Delete file if exists
         if ($export->file_path && Storage::disk('exports')->exists($export->file_path)) {
@@ -192,7 +190,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $templates = ExportTemplate::where('module_id', $module->id)
+        $templates = DB::table('export_templates')->where('module_id', $module->id)
             ->accessibleBy($request->user()->id)
             ->with('user:id,name')
             ->orderBy('name')
@@ -223,7 +221,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $template = ExportTemplate::create([
+        $template = DB::table('export_templates')->insertGetId([
             'module_id' => $module->id,
             'user_id' => $request->user()->id,
             'name' => $request->name,
@@ -261,7 +259,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $template = ExportTemplate::where('module_id', $module->id)
+        $template = DB::table('export_templates')->where('module_id', $module->id)
             ->where('user_id', $request->user()->id)
             ->findOrFail($templateId);
 
@@ -290,7 +288,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $template = ExportTemplate::where('module_id', $module->id)
+        $template = DB::table('export_templates')->where('module_id', $module->id)
             ->where('user_id', $request->user()->id)
             ->findOrFail($templateId);
 
@@ -315,7 +313,7 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $template = ExportTemplate::where('module_id', $module->id)
+        $template = DB::table('export_templates')->where('module_id', $module->id)
             ->accessibleBy($request->user()->id)
             ->findOrFail($templateId);
 

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\Sms;
 
 use App\Application\Services\Sms\SmsApplicationService;
+use App\Domain\Sms\Repositories\SmsMessageRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\SmsConnection;
 use App\Services\Sms\SmsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -14,7 +14,8 @@ class SmsWebhookController extends Controller
 {
     public function __construct(
         protected SmsApplicationService $smsApplicationService,
-        protected SmsService $smsService
+        protected SmsService $smsService,
+        protected SmsMessageRepositoryInterface $messageRepository
     ) {}
 
     /**
@@ -26,11 +27,9 @@ class SmsWebhookController extends Controller
 
         // Find connection by phone number
         $toNumber = $request->input('To');
-        $connection = SmsConnection::where('phone_number', $toNumber)
-            ->where('provider', 'twilio')
-            ->first();
+        $connection = $this->messageRepository->findConnectionByPhoneNumber($toNumber);
 
-        if (!$connection) {
+        if (!$connection || $connection['provider'] !== 'twilio') {
             Log::warning('No connection found for Twilio webhook', ['to' => $toNumber]);
             return response('', 200);
         }
@@ -38,7 +37,7 @@ class SmsWebhookController extends Controller
         // Handle incoming message
         if ($request->filled('Body')) {
             $this->smsService->processIncoming(
-                connection: $connection,
+                connection: (object) $connection,
                 from: $request->input('From'),
                 to: $toNumber,
                 content: $request->input('Body'),
@@ -69,18 +68,16 @@ class SmsWebhookController extends Controller
 
         // Find connection
         $toNumber = $request->input('to');
-        $connection = SmsConnection::where('phone_number', $toNumber)
-            ->where('provider', 'vonage')
-            ->first();
+        $connection = $this->messageRepository->findConnectionByPhoneNumber($toNumber);
 
-        if (!$connection) {
+        if (!$connection || $connection['provider'] !== 'vonage') {
             return response('', 200);
         }
 
         // Handle incoming message
         if ($request->filled('text')) {
             $this->smsService->processIncoming(
-                connection: $connection,
+                connection: (object) $connection,
                 from: $request->input('msisdn'),
                 to: $toNumber,
                 content: $request->input('text'),
@@ -136,13 +133,11 @@ class SmsWebhookController extends Controller
             $recipient = $payload['recipients']['items'][0] ?? null;
 
             if ($recipient) {
-                $connection = SmsConnection::where('phone_number', $payload['originator'])
-                    ->where('provider', 'messagebird')
-                    ->first();
+                $connection = $this->messageRepository->findConnectionByPhoneNumber($payload['originator']);
 
-                if ($connection) {
+                if ($connection && $connection['provider'] === 'messagebird') {
                     $this->smsService->processIncoming(
-                        connection: $connection,
+                        connection: (object) $connection,
                         from: $recipient,
                         to: $payload['originator'],
                         content: $payload['body'],
@@ -174,18 +169,16 @@ class SmsWebhookController extends Controller
     {
         Log::info('Plivo webhook received', $request->all());
 
-        $connection = SmsConnection::where('phone_number', $request->input('To'))
-            ->where('provider', 'plivo')
-            ->first();
+        $connection = $this->messageRepository->findConnectionByPhoneNumber($request->input('To'));
 
-        if (!$connection) {
+        if (!$connection || $connection['provider'] !== 'plivo') {
             return response('', 200);
         }
 
         // Handle incoming message
         if ($request->filled('Text')) {
             $this->smsService->processIncoming(
-                connection: $connection,
+                connection: (object) $connection,
                 from: $request->input('From'),
                 to: $request->input('To'),
                 content: $request->input('Text'),

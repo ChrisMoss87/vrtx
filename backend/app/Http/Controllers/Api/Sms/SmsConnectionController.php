@@ -3,22 +3,38 @@
 namespace App\Http\Controllers\Api\Sms;
 
 use App\Application\Services\Sms\SmsApplicationService;
+use App\Domain\Sms\Repositories\SmsMessageRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Models\SmsConnection;
 use App\Services\Sms\TwilioService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class SmsConnectionController extends Controller
 {
     public function __construct(
-        protected SmsApplicationService $smsApplicationService
+        protected SmsApplicationService $smsApplicationService,
+        protected SmsMessageRepositoryInterface $messageRepository
     ) {}
+
     public function index(): JsonResponse
     {
-        $connections = SmsConnection::withCount(['messages', 'campaigns'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $connections = $this->messageRepository->listConnections();
+
+        // Get message and campaign counts for each connection
+        foreach ($connections as &$connection) {
+            $connection['messages_count'] = DB::table('sms_messages')
+                ->where('connection_id', $connection['id'])
+                ->count();
+            $connection['campaigns_count'] = DB::table('sms_campaigns')
+                ->where('connection_id', $connection['id'])
+                ->count();
+        }
+
+        // Sort by created_at desc
+        usort($connections, function ($a, $b) {
+            return strtotime($b['created_at']) <=> strtotime($a['created_at']);
+        });
 
         return response()->json(['data' => $connections]);
     }
@@ -38,19 +54,31 @@ class SmsConnectionController extends Controller
             'monthly_limit' => 'nullable|integer|min:1',
         ]);
 
-        $connection = SmsConnection::create($validated);
+        $connection = $this->messageRepository->createConnection($validated);
 
         return response()->json(['data' => $connection], 201);
     }
 
-    public function show(SmsConnection $smsConnection): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $smsConnection->loadCount(['messages', 'campaigns']);
+        $connection = $this->messageRepository->findConnectionById($id);
 
-        return response()->json(['data' => $smsConnection]);
+        if (!$connection) {
+            return response()->json(['message' => 'Connection not found'], 404);
+        }
+
+        // Get message and campaign counts
+        $connection['messages_count'] = DB::table('sms_messages')
+            ->where('connection_id', $id)
+            ->count();
+        $connection['campaigns_count'] = DB::table('sms_campaigns')
+            ->where('connection_id', $id)
+            ->count();
+
+        return response()->json(['data' => $connection]);
     }
 
-    public function update(Request $request, SmsConnection $smsConnection): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -66,51 +94,58 @@ class SmsConnectionController extends Controller
             'monthly_limit' => 'nullable|integer|min:1',
         ]);
 
-        $smsConnection->update($validated);
+        $connection = $this->messageRepository->updateConnection($id, $validated);
 
-        return response()->json(['data' => $smsConnection]);
+        if (!$connection) {
+            return response()->json(['message' => 'Connection not found'], 404);
+        }
+
+        return response()->json(['data' => $connection]);
     }
 
-    public function destroy(SmsConnection $smsConnection): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $smsConnection->delete();
+        $result = $this->messageRepository->deleteConnection($id);
+
+        if (!$result) {
+            return response()->json(['message' => 'Connection not found'], 404);
+        }
 
         return response()->json(null, 204);
     }
 
-    public function verify(SmsConnection $smsConnection): JsonResponse
+    public function verify(int $id): JsonResponse
     {
-        if ($smsConnection->provider !== 'twilio') {
+        $connection = $this->messageRepository->findConnectionById($id);
+
+        if (!$connection) {
+            return response()->json(['message' => 'Connection not found'], 404);
+        }
+
+        if ($connection['provider'] !== 'twilio') {
             return response()->json([
                 'success' => false,
                 'message' => 'Verification only supported for Twilio connections',
             ], 400);
         }
 
-        $service = new TwilioService($smsConnection);
+        $service = new TwilioService((object) $connection);
         $result = $service->verifyCredentials();
 
         if ($result['success']) {
-            $smsConnection->update(['is_verified' => true]);
+            $connection = $this->messageRepository->updateConnection($id, ['is_verified' => true]);
         }
 
         return response()->json([
-            'data' => $smsConnection->refresh(),
+            'data' => $connection,
             'verification' => $result,
         ]);
     }
 
-    public function stats(SmsConnection $smsConnection): JsonResponse
+    public function stats(int $id): JsonResponse
     {
-        $stats = [
-            'today_count' => $smsConnection->getTodayMessageCount(),
-            'month_count' => $smsConnection->getMonthMessageCount(),
-            'daily_limit' => $smsConnection->daily_limit,
-            'monthly_limit' => $smsConnection->monthly_limit,
-            'daily_remaining' => max(0, $smsConnection->daily_limit - $smsConnection->getTodayMessageCount()),
-            'monthly_remaining' => max(0, $smsConnection->monthly_limit - $smsConnection->getMonthMessageCount()),
-        ];
+        $usage = $this->messageRepository->getConnectionUsage($id);
 
-        return response()->json(['data' => $stats]);
+        return response()->json(['data' => $usage]);
     }
 }

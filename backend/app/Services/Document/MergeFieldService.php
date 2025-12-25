@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Document;
 
-use App\Models\ModuleRecord;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Facades\Auth;
 
 class MergeFieldService
@@ -15,6 +14,7 @@ class MergeFieldService
         // Replace merge fields with actual values
         return preg_replace_callback('/\{\{([^}]+)\}\}/', function ($matches) use ($data) {
             $field = trim($matches[1]);
+use Illuminate\Support\Facades\DB;
 
             // Handle formatting functions
             if (str_contains($field, '|')) {
@@ -43,7 +43,7 @@ class MergeFieldService
 
         // Get contact data if linked
         if ($contactId = $data['record']['contact_id'] ?? null) {
-            $contact = ModuleRecord::find($contactId);
+            $contact = DB::table('module_records')->where('id', $contactId)->first();
             if ($contact) {
                 $data['contact'] = $contact->data ?? [];
                 $data['contact']['id'] = $contact->id;
@@ -53,7 +53,7 @@ class MergeFieldService
 
         // Get company data if linked
         if ($companyId = $data['record']['company_id'] ?? null) {
-            $company = ModuleRecord::find($companyId);
+            $company = DB::table('module_records')->where('id', $companyId)->first();
             if ($company) {
                 $data['company'] = $company->data ?? [];
                 $data['company']['id'] = $company->id;
@@ -62,7 +62,7 @@ class MergeFieldService
 
         // Get deal data if applicable
         if ($dealId = $data['record']['deal_id'] ?? null) {
-            $deal = ModuleRecord::find($dealId);
+            $deal = DB::table('module_records')->where('id', $dealId)->first();
             if ($deal) {
                 $data['deal'] = $deal->data ?? [];
                 $data['deal']['id'] = $deal->id;

@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Graph;
 
 use App\Http\Controllers\Controller;
-use App\Models\EntityRelationship;
-use App\Models\GraphMetric;
 use App\Services\Graph\GraphService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class GraphController extends Controller
 {

@@ -4,30 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Activity;
-use App\Models\ApprovalRule;
-use App\Models\Blueprint;
-use App\Models\BlueprintState;
-use App\Models\BlueprintTransition;
-use App\Models\Cadence;
-use App\Models\CadenceStep;
-use App\Models\Dashboard;
-use App\Models\DashboardWidget;
-use App\Models\EmailTemplate;
-use App\Models\Field;
-use App\Models\Notification;
-use App\Models\ForecastScenario;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Playbook;
-use App\Models\PlaybookPhase;
-use App\Models\PlaybookTask;
-use App\Models\Quota;
-use App\Models\QuotaPeriod;
-use App\Models\Report;
-use App\Models\User;
-use App\Models\Workflow;
-use App\Models\WorkflowStep;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -50,7 +27,7 @@ class ModuleRecordsSeeder extends Seeder
         $this->userId = User::first()?->id ?? 1;
 
         // Clear existing records first
-        ModuleRecord::query()->forceDelete();
+        DB::table('module_records')->forceDelete();
 
         // Seed in order (organizations first for lookups)
         $this->seedOrganizations();
@@ -74,12 +51,12 @@ class ModuleRecordsSeeder extends Seeder
         $this->seedEmailTemplates();
         $this->seedNotifications();
 
-        $this->command->info('  Total records created: ' . ModuleRecord::count());
+        $this->command->info('  Total records created: ' . DB::table('module_records')->count());
     }
 
     private function seedOrganizations(): void
     {
-        $module = Module::where('api_name', 'organizations')->first();
+        $module = DB::table('modules')->where('api_name', 'organizations')->first();
         if (!$module) {
             $this->command->warn('  Organizations module not found');
             return;
@@ -101,7 +78,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($organizations as $org) {
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => array_merge($org, ['assigned_to' => $this->userId]),
                 'created_by' => $this->userId,
@@ -115,7 +92,7 @@ class ModuleRecordsSeeder extends Seeder
 
     private function seedContacts(): void
     {
-        $module = Module::where('api_name', 'contacts')->first();
+        $module = DB::table('modules')->where('api_name', 'contacts')->first();
         if (!$module) {
             $this->command->warn('  Contacts module not found');
             return;
@@ -152,7 +129,7 @@ class ModuleRecordsSeeder extends Seeder
                 unset($contact['organization_id']);
             }
 
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => array_merge($contact, [
                     'assigned_to' => $this->userId,
@@ -169,7 +146,7 @@ class ModuleRecordsSeeder extends Seeder
 
     private function seedDeals(): void
     {
-        $module = Module::where('api_name', 'deals')->first();
+        $module = DB::table('modules')->where('api_name', 'deals')->first();
         if (!$module) {
             $this->command->warn('  Deals module not found');
             return;
@@ -209,7 +186,7 @@ class ModuleRecordsSeeder extends Seeder
             // Calculate expected revenue
             $deal['expected_revenue'] = (int) ($deal['amount'] * $deal['probability'] / 100);
 
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => array_merge($deal, ['assigned_to' => $this->userId]),
                 'created_by' => $this->userId,
@@ -223,7 +200,7 @@ class ModuleRecordsSeeder extends Seeder
 
     private function seedLeads(): void
     {
-        $module = Module::where('api_name', 'leads')->first();
+        $module = DB::table('modules')->where('api_name', 'leads')->first();
         if (!$module) {
             $this->command->warn('  Leads module not found');
             return;
@@ -245,7 +222,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($leads as $lead) {
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => array_merge($lead, [
                     'assigned_to' => $this->userId,
@@ -261,7 +238,7 @@ class ModuleRecordsSeeder extends Seeder
 
     private function seedTasks(): void
     {
-        $module = Module::where('api_name', 'tasks')->first();
+        $module = DB::table('modules')->where('api_name', 'tasks')->first();
         if (!$module) {
             $this->command->warn('  Tasks module not found');
             return;
@@ -281,7 +258,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($tasks as $task) {
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => array_merge($task, [
                     'assigned_to' => $this->userId,
@@ -297,7 +274,7 @@ class ModuleRecordsSeeder extends Seeder
 
     private function seedActivities(): void
     {
-        $module = Module::where('api_name', 'activities')->first();
+        $module = DB::table('modules')->where('api_name', 'activities')->first();
         if (!$module) {
             $this->command->warn('  Activities module not found');
             return;
@@ -317,7 +294,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($activities as $activity) {
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => array_merge($activity, ['assigned_to' => $this->userId]),
                 'created_by' => $this->userId,
@@ -330,7 +307,7 @@ class ModuleRecordsSeeder extends Seeder
 
     private function seedNotes(): void
     {
-        $module = Module::where('api_name', 'notes')->first();
+        $module = DB::table('modules')->where('api_name', 'notes')->first();
         if (!$module) {
             $this->command->warn('  Notes module not found');
             return;
@@ -345,7 +322,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($notes as $note) {
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => $note,
                 'created_by' => $this->userId,
@@ -364,11 +341,11 @@ class ModuleRecordsSeeder extends Seeder
         }
 
         // Clear existing
-        Workflow::query()->forceDelete();
+        DB::table('workflows')->forceDelete();
 
-        $dealsModule = Module::where('api_name', 'deals')->first();
-        $leadsModule = Module::where('api_name', 'leads')->first();
-        $contactsModule = Module::where('api_name', 'contacts')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
+        $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
+        $contactsModule = DB::table('modules')->where('api_name', 'contacts')->first();
 
         $workflows = [];
 
@@ -472,11 +449,11 @@ class ModuleRecordsSeeder extends Seeder
             $steps = $workflowData['steps'] ?? [];
             unset($workflowData['steps']);
 
-            $workflow = Workflow::create($workflowData);
+            $workflow = DB::table('workflows')->insertGetId($workflowData);
 
             if (Schema::hasTable('workflow_steps')) {
                 foreach ($steps as $order => $step) {
-                    WorkflowStep::create([
+                    DB::table('workflow_steps')->insertGetId([
                         'workflow_id' => $workflow->id,
                         'name' => $step['name'],
                         'action_type' => $step['type'],
@@ -497,18 +474,18 @@ class ModuleRecordsSeeder extends Seeder
         }
 
         // Clear existing
-        Blueprint::query()->forceDelete();
+        DB::table('blueprints')->forceDelete();
 
-        $dealsModule = Module::where('api_name', 'deals')->first();
-        $leadsModule = Module::where('api_name', 'leads')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
+        $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
 
         if ($dealsModule) {
-            $stageField = Field::where('module_id', $dealsModule->id)
+            $stageField = DB::table('fields')->where('module_id', $dealsModule->id)
                 ->where('api_name', 'stage')
                 ->first();
 
             if ($stageField) {
-                $blueprint = Blueprint::create([
+                $blueprint = DB::table('blueprints')->insertGetId([
                     'name' => 'Deal Pipeline',
                     'module_id' => $dealsModule->id,
                     'field_id' => $stageField->id,
@@ -529,7 +506,7 @@ class ModuleRecordsSeeder extends Seeder
                 ];
 
                 foreach ($stageData as $index => $stage) {
-                    $states[$stage['name']] = BlueprintState::create([
+                    $states[$stage['name']] = DB::table('blueprint_states')->insertGetId([
                         'blueprint_id' => $blueprint->id,
                         'name' => $stage['name'],
                         'field_option_value' => $stage['name'],
@@ -552,7 +529,7 @@ class ModuleRecordsSeeder extends Seeder
                 ];
 
                 foreach ($transitions as $order => $trans) {
-                    BlueprintTransition::create([
+                    DB::table('blueprint_transitions')->insertGetId([
                         'blueprint_id' => $blueprint->id,
                         'from_state_id' => $states[$trans['from']]->id,
                         'to_state_id' => $states[$trans['to']]->id,
@@ -566,12 +543,12 @@ class ModuleRecordsSeeder extends Seeder
         }
 
         if ($leadsModule) {
-            $statusField = Field::where('module_id', $leadsModule->id)
+            $statusField = DB::table('fields')->where('module_id', $leadsModule->id)
                 ->where('api_name', 'status')
                 ->first();
 
             if ($statusField) {
-                $blueprint = Blueprint::create([
+                $blueprint = DB::table('blueprints')->insertGetId([
                     'name' => 'Lead Qualification',
                     'module_id' => $leadsModule->id,
                     'field_id' => $statusField->id,
@@ -589,7 +566,7 @@ class ModuleRecordsSeeder extends Seeder
                 ];
 
                 foreach ($statusData as $index => $status) {
-                    $states[$status['name']] = BlueprintState::create([
+                    $states[$status['name']] = DB::table('blueprint_states')->insertGetId([
                         'blueprint_id' => $blueprint->id,
                         'name' => $status['name'],
                         'field_option_value' => $status['name'],
@@ -610,7 +587,7 @@ class ModuleRecordsSeeder extends Seeder
                 ];
 
                 foreach ($transitions as $order => $trans) {
-                    BlueprintTransition::create([
+                    DB::table('blueprint_transitions')->insertGetId([
                         'blueprint_id' => $blueprint->id,
                         'from_state_id' => $states[$trans['from']]->id,
                         'to_state_id' => $states[$trans['to']]->id,
@@ -622,7 +599,7 @@ class ModuleRecordsSeeder extends Seeder
             }
         }
 
-        $this->command->info('  Created ' . Blueprint::count() . ' blueprints');
+        $this->command->info('  Created ' . DB::table('blueprints')->count() . ' blueprints');
     }
 
     private function seedApprovalRules(): void
@@ -631,9 +608,9 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        ApprovalRule::query()->forceDelete();
+        DB::table('approval_rules')->forceDelete();
 
-        $dealsModule = Module::where('api_name', 'deals')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
         $users = User::take(3)->get();
 
         $rules = [
@@ -691,7 +668,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($rules as $rule) {
-            ApprovalRule::create($rule);
+            DB::table('approval_rules')->insertGetId($rule);
         }
 
         $this->command->info('  Created ' . count($rules) . ' approval rules');
@@ -703,10 +680,10 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        Cadence::query()->forceDelete();
+        DB::table('cadences')->forceDelete();
 
-        $leadsModule = Module::where('api_name', 'leads')->first();
-        $contactsModule = Module::where('api_name', 'contacts')->first();
+        $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
+        $contactsModule = DB::table('modules')->where('api_name', 'contacts')->first();
 
         $cadences = [
             [
@@ -764,7 +741,7 @@ class ModuleRecordsSeeder extends Seeder
             $steps = $cadenceData['steps'] ?? [];
             unset($cadenceData['steps']);
 
-            $cadence = Cadence::create($cadenceData);
+            $cadence = DB::table('cadences')->insertGetId($cadenceData);
 
             foreach ($steps as $order => $step) {
                 DB::table('cadence_steps')->insert([
@@ -793,7 +770,7 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        Playbook::query()->forceDelete();
+        DB::table('playbooks')->forceDelete();
 
         $playbooks = [
             [
@@ -897,20 +874,20 @@ class ModuleRecordsSeeder extends Seeder
             $phases = $playbookData['phases'] ?? [];
             unset($playbookData['phases']);
 
-            $playbook = Playbook::create($playbookData);
+            $playbook = DB::table('playbooks')->insertGetId($playbookData);
 
             foreach ($phases as $phaseData) {
                 $tasks = $phaseData['tasks'] ?? [];
                 unset($phaseData['tasks']);
 
-                $phase = PlaybookPhase::create([
+                $phase = DB::table('playbook_phases')->insertGetId([
                     'playbook_id' => $playbook->id,
                     'name' => $phaseData['name'],
                     'display_order' => $phaseData['order'],
                 ]);
 
                 foreach ($tasks as $order => $taskName) {
-                    PlaybookTask::create([
+                    DB::table('playbook_tasks')->insertGetId([
                         'playbook_id' => $playbook->id,
                         'phase_id' => $phase->id,
                         'title' => $taskName,
@@ -930,11 +907,11 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        Report::query()->forceDelete();
+        DB::table('reports')->forceDelete();
 
-        $dealsModule = Module::where('api_name', 'deals')->first();
-        $leadsModule = Module::where('api_name', 'leads')->first();
-        $contactsModule = Module::where('api_name', 'contacts')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
+        $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
+        $contactsModule = DB::table('modules')->where('api_name', 'contacts')->first();
 
         $reports = [
             [
@@ -1010,7 +987,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($reports as $report) {
-            Report::create($report);
+            DB::table('reports')->insertGetId($report);
         }
 
         $this->command->info('  Created ' . count($reports) . ' reports');
@@ -1022,10 +999,10 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        Dashboard::query()->forceDelete();
-        DashboardWidget::query()->forceDelete();
+        DB::table('dashboards')->forceDelete();
+        DB::table('dashboard_widgets')->forceDelete();
 
-        $reports = Report::all()->keyBy('name');
+        $reports = DB::table('reports')->get()->keyBy('name');
 
         $dashboards = [
             [
@@ -1070,7 +1047,7 @@ class ModuleRecordsSeeder extends Seeder
             $widgets = $dashboardData['widgets'] ?? [];
             unset($dashboardData['widgets']);
 
-            $dashboard = Dashboard::create($dashboardData);
+            $dashboard = DB::table('dashboards')->insertGetId($dashboardData);
 
             foreach ($widgets as $widgetData) {
                 $reportId = null;
@@ -1079,7 +1056,7 @@ class ModuleRecordsSeeder extends Seeder
                 }
                 unset($widgetData['report']);
 
-                DashboardWidget::create([
+                DB::table('dashboard_widgets')->insertGetId([
                     'dashboard_id' => $dashboard->id,
                     'report_id' => $reportId,
                     'title' => $widgetData['title'],
@@ -1099,9 +1076,9 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        ForecastScenario::query()->forceDelete();
+        DB::table('forecast_scenarios')->forceDelete();
 
-        $dealsModule = Module::where('api_name', 'deals')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
         $now = now();
 
         $forecasts = [
@@ -1168,7 +1145,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($forecasts as $forecast) {
-            ForecastScenario::create($forecast);
+            DB::table('forecast_scenarios')->insertGetId($forecast);
         }
 
         $this->command->info('  Created ' . count($forecasts) . ' forecasts');
@@ -1180,8 +1157,8 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        QuotaPeriod::query()->forceDelete();
-        Quota::query()->forceDelete();
+        DB::table('quota_periods')->forceDelete();
+        DB::table('quotas')->forceDelete();
 
         $now = now();
         $users = User::take(5)->get();
@@ -1213,13 +1190,13 @@ class ModuleRecordsSeeder extends Seeder
 
         $createdPeriods = [];
         foreach ($periods as $period) {
-            $createdPeriods[] = QuotaPeriod::create($period);
+            $createdPeriods[] = DB::table('quota_periods')->insertGetId($period);
         }
 
         // Create quotas for each user
         foreach ($users as $index => $user) {
             // Quarterly revenue quota
-            Quota::create([
+            DB::table('quotas')->insertGetId([
                 'period_id' => $createdPeriods[0]->id,
                 'user_id' => $user->id,
                 'metric_type' => 'revenue',
@@ -1233,7 +1210,7 @@ class ModuleRecordsSeeder extends Seeder
             ]);
 
             // Monthly deal count quota
-            Quota::create([
+            DB::table('quotas')->insertGetId([
                 'period_id' => $createdPeriods[1]->id,
                 'user_id' => $user->id,
                 'metric_type' => 'count',
@@ -1246,7 +1223,7 @@ class ModuleRecordsSeeder extends Seeder
             ]);
         }
 
-        $this->command->info('  Created ' . count($periods) . ' quota periods and ' . Quota::count() . ' quotas');
+        $this->command->info('  Created ' . count($periods) . ' quota periods and ' . DB::table('quotas')->count() . ' quotas');
     }
 
     private function seedEmailTemplates(): void
@@ -1255,11 +1232,11 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        EmailTemplate::query()->forceDelete();
+        DB::table('email_templates')->forceDelete();
 
-        $leadsModule = Module::where('api_name', 'leads')->first();
-        $dealsModule = Module::where('api_name', 'deals')->first();
-        $contactsModule = Module::where('api_name', 'contacts')->first();
+        $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
+        $contactsModule = DB::table('modules')->where('api_name', 'contacts')->first();
 
         $templates = [
             [
@@ -1350,7 +1327,7 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($templates as $template) {
-            EmailTemplate::create($template);
+            DB::table('email_templates')->insertGetId($template);
         }
 
         $this->command->info('  Created ' . count($templates) . ' email templates');
@@ -1362,7 +1339,7 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        Notification::query()->delete();
+        DB::table('notifications')->delete();
 
         $users = User::take(3)->get();
         if ($users->isEmpty()) {
@@ -1525,7 +1502,7 @@ class ModuleRecordsSeeder extends Seeder
             foreach ($notifications as $index => $notification) {
                 // Distribute notifications across users, give first user more
                 if ($userIndex === 0 || $index % 3 === $userIndex) {
-                    Notification::create(array_merge($notification, [
+                    DB::table('notifications')->insertGetId(array_merge($notification, [
                         'user_id' => $user->id,
                         'created_at' => now()->subMinutes(rand(5, 2880)), // Random time in last 2 days
                         'updated_at' => now(),
@@ -1534,6 +1511,6 @@ class ModuleRecordsSeeder extends Seeder
             }
         }
 
-        $this->command->info('  Created ' . Notification::count() . ' notifications');
+        $this->command->info('  Created ' . DB::table('notifications')->count() . ' notifications');
     }
 }

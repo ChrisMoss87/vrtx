@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\AI;
 
-use App\Models\Module;
-use App\Models\Report;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * AI-powered report generation from natural language queries.
@@ -109,7 +108,7 @@ class ReportGeneratorService
             return $this->getPlaceholderFilter($condition);
         }
 
-        $module = Module::where('api_name', $moduleApiName)->first();
+        $module = DB::table('modules')->where('api_name', $moduleApiName)->first();
         if (!$module) {
             throw new \Exception("Module not found: {$moduleApiName}");
         }
@@ -296,7 +295,7 @@ PROMPT;
         }
 
         // Validate module exists
-        $module = Module::where('api_name', $config['module_api_name'])->first();
+        $module = DB::table('modules')->where('api_name', $config['module_api_name'])->first();
         if (!$module) {
             throw new \Exception("Invalid module: {$config['module_api_name']}");
         }
@@ -458,9 +457,9 @@ PROMPT;
      */
     public function createReportFromConfig(array $config, int $userId): Report
     {
-        $module = Module::where('api_name', $config['module_api_name'])->firstOrFail();
+        $module = DB::table('modules')->where('api_name', $config['module_api_name'])->firstOrFail();
 
-        return Report::create([
+        return DB::table('reports')->insertGetId([
             'name' => $config['name'],
             'description' => $config['description'] ?? null,
             'module_id' => $module->id,

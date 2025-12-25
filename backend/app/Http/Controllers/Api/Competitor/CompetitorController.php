@@ -4,14 +4,12 @@ namespace App\Http\Controllers\Api\Competitor;
 
 use App\Application\Services\Competitor\CompetitorApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Competitor;
-use App\Models\CompetitorObjection;
-use App\Models\DealCompetitor;
 use App\Services\Competitor\CompetitorService;
 use App\Services\Competitor\CompetitorAnalyticsService;
 use App\Services\Competitor\ObjectionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CompetitorController extends Controller
 {
@@ -68,7 +66,7 @@ class CompetitorController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -90,7 +88,7 @@ class CompetitorController extends Controller
 
     public function destroy(int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
         $this->competitorService->deleteCompetitor($competitor);
 
         return response()->json(['message' => 'Competitor deleted']);
@@ -98,7 +96,7 @@ class CompetitorController extends Controller
 
     public function battlecard(int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
         $battlecard = $this->competitorService->getBattlecard($competitor);
 
         return response()->json(['data' => $battlecard]);
@@ -106,7 +104,7 @@ class CompetitorController extends Controller
 
     public function updateSection(Request $request, int $id, int $sectionId): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
 
         $validated = $request->validate([
             'content' => 'required|string',
@@ -131,7 +129,7 @@ class CompetitorController extends Controller
 
     public function storeSection(Request $request, int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
 
         $validated = $request->validate([
             'type' => 'required|string|max:50',
@@ -157,7 +155,7 @@ class CompetitorController extends Controller
 
     public function objections(int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
         $objections = $this->objectionService->getObjections($competitor);
 
         return response()->json([
@@ -167,7 +165,7 @@ class CompetitorController extends Controller
 
     public function storeObjection(Request $request, int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
 
         $validated = $request->validate([
             'objection' => 'required|string',
@@ -189,7 +187,7 @@ class CompetitorController extends Controller
 
     public function updateObjection(Request $request, int $id, int $objectionId): JsonResponse
     {
-        $objection = CompetitorObjection::where('competitor_id', $id)->findOrFail($objectionId);
+        $objection = DB::table('competitor_objections')->where('competitor_id', $id)->findOrFail($objectionId);
 
         $validated = $request->validate([
             'objection' => 'sometimes|string',
@@ -206,7 +204,7 @@ class CompetitorController extends Controller
 
     public function objectionFeedback(Request $request, int $id, int $objectionId): JsonResponse
     {
-        $objection = CompetitorObjection::where('competitor_id', $id)->findOrFail($objectionId);
+        $objection = DB::table('competitor_objections')->where('competitor_id', $id)->findOrFail($objectionId);
 
         $validated = $request->validate([
             'was_successful' => 'required|boolean',
@@ -233,7 +231,7 @@ class CompetitorController extends Controller
 
     public function notes(int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
 
         return response()->json([
             'data' => $competitor->notes()->with(['createdBy', 'verifiedBy'])->latest()->get()->map(fn ($n) => [
@@ -250,7 +248,7 @@ class CompetitorController extends Controller
 
     public function storeNote(Request $request, int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
 
         $validated = $request->validate([
             'content' => 'required|string',
@@ -279,7 +277,7 @@ class CompetitorController extends Controller
 
     public function analytics(int $id): JsonResponse
     {
-        $competitor = Competitor::findOrFail($id);
+        $competitor = DB::table('competitors')->where('id', $id)->first();
         $analytics = $this->analyticsService->getCompetitorAnalytics($competitor);
 
         return response()->json(['data' => $analytics]);
@@ -328,7 +326,7 @@ class CompetitorController extends Controller
 
     public function removeFromDeal(int $dealId, int $competitorId): JsonResponse
     {
-        DealCompetitor::where('deal_id', $dealId)
+        DealDB::table('competitors')->where('deal_id', $dealId)
             ->where('competitor_id', $competitorId)
             ->delete();
 
@@ -341,7 +339,7 @@ class CompetitorController extends Controller
             'outcome' => 'required|string|in:won,lost,unknown',
         ]);
 
-        $dealCompetitor = DealCompetitor::where('deal_id', $dealId)
+        $dealCompetitor = DealDB::table('competitors')->where('deal_id', $dealId)
             ->where('competitor_id', $competitorId)
             ->firstOrFail();
 

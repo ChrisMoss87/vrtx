@@ -4,15 +4,11 @@ namespace App\Http\Controllers\Api\Playbook;
 
 use App\Application\Services\Playbook\PlaybookApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\Playbook;
-use App\Models\PlaybookInstance;
-use App\Models\PlaybookPhase;
-use App\Models\PlaybookTask;
-use App\Models\PlaybookTaskInstance;
 use App\Services\Playbook\PlaybookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class PlaybookController extends Controller
 {
@@ -93,7 +89,7 @@ class PlaybookController extends Controller
 
         $validated['created_by'] = auth()->id();
 
-        $playbook = Playbook::create($validated);
+        $playbook = DB::table('playbooks')->insertGetId($validated);
 
         return response()->json([
             'playbook' => $playbook->load(['defaultOwner', 'creator']),
@@ -106,7 +102,7 @@ class PlaybookController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $playbook = Playbook::findOrFail($id);
+        $playbook = DB::table('playbooks')->where('id', $id)->first();
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -127,7 +123,7 @@ class PlaybookController extends Controller
             $validated['slug'] = Str::slug($validated['name']);
             $baseSlug = $validated['slug'];
             $counter = 1;
-            while (Playbook::where('slug', $validated['slug'])->where('id', '!=', $id)->exists()) {
+            while (DB::table('playbooks')->where('slug', $validated['slug'])->where('id', '!=', $id)->exists()) {
                 $validated['slug'] = $baseSlug . '-' . $counter++;
             }
         }
@@ -144,7 +140,7 @@ class PlaybookController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $playbook = Playbook::findOrFail($id);
+        $playbook = DB::table('playbooks')->where('id', $id)->first();
 
         // Check for active instances
         $activeInstances = $playbook->instances()->where('status', 'active')->count();
@@ -164,7 +160,7 @@ class PlaybookController extends Controller
      */
     public function addPhase(Request $request, int $playbookId): JsonResponse
     {
-        $playbook = Playbook::findOrFail($playbookId);
+        $playbook = DB::table('playbooks')->where('id', $playbookId)->first();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -188,7 +184,7 @@ class PlaybookController extends Controller
      */
     public function updatePhase(Request $request, int $playbookId, int $phaseId): JsonResponse
     {
-        $phase = PlaybookPhase::where('playbook_id', $playbookId)
+        $phase = DB::table('playbook_phases')->where('playbook_id', $playbookId)
             ->findOrFail($phaseId);
 
         $validated = $request->validate([
@@ -208,11 +204,11 @@ class PlaybookController extends Controller
      */
     public function deletePhase(int $playbookId, int $phaseId): JsonResponse
     {
-        $phase = PlaybookPhase::where('playbook_id', $playbookId)
+        $phase = DB::table('playbook_phases')->where('playbook_id', $playbookId)
             ->findOrFail($phaseId);
 
         // Move tasks to no phase
-        PlaybookTask::where('phase_id', $phaseId)
+        DB::table('playbook_tasks')->where('phase_id', $phaseId)
             ->update(['phase_id' => null]);
 
         $phase->delete();
@@ -225,7 +221,7 @@ class PlaybookController extends Controller
      */
     public function addTask(Request $request, int $playbookId): JsonResponse
     {
-        $playbook = Playbook::findOrFail($playbookId);
+        $playbook = DB::table('playbooks')->where('id', $playbookId)->first();
 
         $validated = $request->validate([
             'phase_id' => 'nullable|exists:playbook_phases,id',
@@ -264,7 +260,7 @@ class PlaybookController extends Controller
      */
     public function updateTask(Request $request, int $playbookId, int $taskId): JsonResponse
     {
-        $task = PlaybookTask::where('playbook_id', $playbookId)
+        $task = DB::table('playbook_tasks')->where('playbook_id', $playbookId)
             ->findOrFail($taskId);
 
         $validated = $request->validate([
@@ -296,11 +292,11 @@ class PlaybookController extends Controller
      */
     public function deleteTask(int $playbookId, int $taskId): JsonResponse
     {
-        $task = PlaybookTask::where('playbook_id', $playbookId)
+        $task = DB::table('playbook_tasks')->where('playbook_id', $playbookId)
             ->findOrFail($taskId);
 
         // Remove from other tasks' dependencies
-        PlaybookTask::where('playbook_id', $playbookId)
+        DB::table('playbook_tasks')->where('playbook_id', $playbookId)
             ->whereJsonContains('dependencies', $taskId)
             ->each(function ($t) use ($taskId) {
                 $deps = $t->dependencies ?? [];
@@ -327,7 +323,7 @@ class PlaybookController extends Controller
         ]);
 
         foreach ($validated['tasks'] as $taskData) {
-            PlaybookTask::where('id', $taskData['id'])
+            DB::table('playbook_tasks')->where('id', $taskData['id'])
                 ->where('playbook_id', $playbookId)
                 ->update([
                     'phase_id' => $taskData['phase_id'],

@@ -4,15 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Proposal;
 
-use App\Models\Proposal;
-use App\Models\ProposalComment;
-use App\Models\ProposalContentBlock;
-use App\Models\ProposalPricingItem;
-use App\Models\ProposalSection;
-use App\Models\ProposalTemplate;
-use App\Models\ProposalView;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class ProposalService
 {
@@ -25,7 +19,7 @@ class ProposalService
             $data['proposal_number'] = $this->generateProposalNumber();
         }
 
-        $proposal = Proposal::create($data);
+        $proposal = DB::table('proposals')->insertGetId($data);
 
         // Create sections from template if provided
         if (!empty($data['template_id'])) {
@@ -156,7 +150,7 @@ class ProposalService
     {
         $data['proposal_id'] = $proposal->id;
 
-        return ProposalComment::create($data);
+        return DB::table('proposal_comments')->insertGetId($data);
     }
 
     public function resolveComment(ProposalComment $comment, int $userId): void

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Proposal;
-use App\Models\ProposalPricingItem;
-use App\Models\ProposalSection;
+use App\Infrastructure\Persistence\Eloquent\Models\Proposal;
+use App\Infrastructure\Persistence\Eloquent\Models\ProposalPricingItem;
+use App\Infrastructure\Persistence\Eloquent\Models\ProposalSection;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\ProposalPricingItem>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\ProposalPricingItem>
  */
 class ProposalPricingItemFactory extends Factory
 {

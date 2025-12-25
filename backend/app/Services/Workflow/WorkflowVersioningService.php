@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow;
 
-use App\Models\Workflow;
-use App\Models\WorkflowVersion;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -123,7 +121,7 @@ class WorkflowVersioningService
      */
     public function rollbackToVersion(int $versionId, ?int $userId = null): Workflow
     {
-        $version = WorkflowVersion::findOrFail($versionId);
+        $version = DB::table('workflow_versions')->where('id', $versionId)->first();
 
         return DB::transaction(function () use ($version, $userId) {
             Log::info('Rolling back workflow to version', [
@@ -141,8 +139,8 @@ class WorkflowVersioningService
      */
     public function compareVersions(int $versionId1, int $versionId2): array
     {
-        $version1 = WorkflowVersion::findOrFail($versionId1);
-        $version2 = WorkflowVersion::findOrFail($versionId2);
+        $version1 = DB::table('workflow_versions')->where('id', $versionId1)->first();
+        $version2 = DB::table('workflow_versions')->where('id', $versionId2)->first();
 
         // Ensure they're from the same workflow
         if ($version1->workflow_id !== $version2->workflow_id) {

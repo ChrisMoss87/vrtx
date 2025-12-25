@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use App\Models\Dashboard;
-use App\Models\User;
+use App\Domain\Reporting\Entities\Dashboard;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class DashboardPolicy
@@ -26,7 +26,8 @@ class DashboardPolicy
     public function view(User $user, Dashboard $dashboard): bool
     {
         // Users can view their own dashboards or public dashboards
-        return $dashboard->user_id === $user->id || $dashboard->is_public;
+        $dashboardUserId = $dashboard->userId()?->value();
+        return $dashboardUserId === $user->id || $dashboard->isPublic();
     }
 
     /**
@@ -43,7 +44,7 @@ class DashboardPolicy
     public function update(User $user, Dashboard $dashboard): bool
     {
         // Only the owner can update a dashboard
-        return $dashboard->user_id === $user->id;
+        return $dashboard->userId()?->value() === $user->id;
     }
 
     /**
@@ -52,7 +53,7 @@ class DashboardPolicy
     public function delete(User $user, Dashboard $dashboard): bool
     {
         // Only the owner can delete a dashboard
-        return $dashboard->user_id === $user->id;
+        return $dashboard->userId()?->value() === $user->id;
     }
 
     /**

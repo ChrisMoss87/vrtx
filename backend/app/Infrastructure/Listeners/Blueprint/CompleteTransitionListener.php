@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Infrastructure\Listeners\Blueprint;
 
 use App\Domain\Blueprint\Events\AllApprovalsCompleted;
-use App\Models\BlueprintRecordState;
-use App\Models\BlueprintTransitionExecution;
-use App\Models\ModuleRecord;
+use App\Domain\Blueprint\Repositories\BlueprintRecordStateRepositoryInterface;
+use App\Domain\Blueprint\Repositories\TransitionExecutionRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
 use App\Services\Blueprint\ActionService;
 use App\Services\Blueprint\SLAService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -19,18 +20,21 @@ use Throwable;
  */
 class CompleteTransitionListener
 {
+    private const STATUS_APPROVED = 'approved';
+    private const STATUS_COMPLETED = 'completed';
+    private const STATUS_FAILED = 'failed';
+
     public function __construct(
         private readonly ActionService $actionService,
         private readonly SLAService $slaService,
+        private readonly TransitionExecutionRepositoryInterface $transitionExecutionRepository,
+        private readonly BlueprintRecordStateRepositoryInterface $blueprintRecordStateRepository,
+        private readonly ModuleRecordRepositoryInterface $moduleRecordRepository,
     ) {}
 
     public function handle(AllApprovalsCompleted $event): void
     {
-        $execution = BlueprintTransitionExecution::with([
-            'transition.blueprint',
-            'transition.toState',
-            'transition.actions',
-        ])->find($event->executionId());
+        $execution = $this->transitionExecutionRepository->findById($event->executionId());
 
         if (!$execution) {
             Log::warning('Execution not found for transition completion', [
@@ -41,61 +45,87 @@ class CompleteTransitionListener
 
         try {
             // Mark execution as approved
-            $execution->update([
-                'status' => BlueprintTransitionExecution::STATUS_APPROVED,
-            ]);
+            DB::table('blueprint_transition_executions')
+                ->where('id', $event->executionId())
+                ->update(['status' => self::STATUS_APPROVED]);
 
             // Execute after-transition actions
-            $actionResults = $this->executeAfterActions($execution);
+            $actionResults = $this->executeAfterActions($event->executionId());
 
             // Update the record's state
-            $this->updateRecordState($execution);
+            $this->updateRecordState($event);
 
-            // Complete SLA for the old state and start new one
-            $transition = $execution->transition;
-            $blueprint = $transition->blueprint;
+            // Get transition and blueprint details for SLA
+            $transition = DB::table('blueprint_transitions')
+                ->where('id', $event->transitionId())
+                ->first();
 
-            $this->slaService->completeSLA($execution->record_id, $blueprint->id);
+            if ($transition) {
+                $this->slaService->completeSLA($event->recordId(), (int) $transition->blueprint_id);
 
-            // Start SLA for new state if applicable
-            $toState = $transition->toState;
-            if ($toState && $toState->sla && $toState->sla->is_active) {
-                $this->slaService->startSLA($execution->record_id, $toState);
+                // Start SLA for new state if applicable
+                $toState = DB::table('blueprint_states')
+                    ->where('id', $event->toStateId())
+                    ->first();
+
+                if ($toState) {
+                    $sla = DB::table('blueprint_slas')
+                        ->where('state_id', $toState->id)
+                        ->where('is_active', true)
+                        ->first();
+
+                    if ($sla) {
+                        $this->slaService->startSLA($event->recordId(), $toState);
+                    }
+                }
             }
 
             // Mark execution as completed
-            $execution->update([
-                'status' => BlueprintTransitionExecution::STATUS_COMPLETED,
-                'completed_at' => now(),
-                'action_results' => $actionResults,
-            ]);
+            DB::table('blueprint_transition_executions')
+                ->where('id', $event->executionId())
+                ->update([
+                    'status' => self::STATUS_COMPLETED,
+                    'completed_at' => now(),
+                    'action_results' => json_encode($actionResults),
+                ]);
 
             Log::info('Blueprint transition completed after approval', [
-                'execution_id' => $execution->id,
-                'record_id' => $execution->record_id,
-                'from_state_id' => $execution->from_state_id,
+                'execution_id' => $event->executionId(),
+                'record_id' => $event->recordId(),
+                'from_state_id' => $event->fromStateId(),
                 'to_state_id' => $event->toStateId(),
             ]);
 
         } catch (Throwable $e) {
             Log::error('Failed to complete transition after approval', [
-                'execution_id' => $execution->id,
+                'execution_id' => $event->executionId(),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            $execution->update([
-                'status' => BlueprintTransitionExecution::STATUS_FAILED,
-                'completed_at' => now(),
-                'error_message' => $e->getMessage(),
-            ]);
+            DB::table('blueprint_transition_executions')
+                ->where('id', $event->executionId())
+                ->update([
+                    'status' => self::STATUS_FAILED,
+                    'completed_at' => now(),
+                    'error_message' => $e->getMessage(),
+                ]);
         }
     }
 
-    private function executeAfterActions(BlueprintTransitionExecution $execution): array
+    private function executeAfterActions(int $executionId): array
     {
         $results = [];
-        $actions = $execution->transition->actions()
+
+        // Get the execution to find transition
+        $execution = $this->transitionExecutionRepository->findById($executionId);
+        if (!$execution) {
+            return $results;
+        }
+
+        // Get actions for this transition
+        $actions = DB::table('blueprint_transition_actions')
+            ->where('transition_id', $execution->getTransitionId())
             ->where('is_active', true)
             ->orderBy('display_order')
             ->get();
@@ -115,7 +145,7 @@ class CompleteTransitionListener
 
                 Log::warning('Blueprint transition action failed', [
                     'action_id' => $action->id,
-                    'execution_id' => $execution->id,
+                    'execution_id' => $executionId,
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -124,48 +154,95 @@ class CompleteTransitionListener
         return $results;
     }
 
-    private function updateRecordState(BlueprintTransitionExecution $execution): void
+    private function updateRecordState(AllApprovalsCompleted $event): void
     {
-        $blueprint = $execution->transition->blueprint;
-        $toState = $execution->transition->toState;
+        // Get transition details
+        $transition = DB::table('blueprint_transitions')
+            ->where('id', $event->transitionId())
+            ->first();
 
-        // Update or create the record state
-        BlueprintRecordState::updateOrCreate(
-            [
-                'blueprint_id' => $blueprint->id,
-                'record_id' => $execution->record_id,
-            ],
-            [
-                'current_state_id' => $toState->id,
-                'entered_at' => now(),
-                'last_transition_id' => $execution->transition_id,
-                'last_transition_at' => now(),
-            ]
-        );
+        if (!$transition) {
+            return;
+        }
+
+        // Update or create the record state using direct DB query
+        $existingState = DB::table('blueprint_record_states')
+            ->where('blueprint_id', $event->blueprintId())
+            ->where('record_id', $event->recordId())
+            ->first();
+
+        $stateData = [
+            'current_state_id' => $event->toStateId(),
+            'entered_at' => now(),
+            'last_transition_id' => $event->transitionId(),
+            'last_transition_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        if ($existingState) {
+            DB::table('blueprint_record_states')
+                ->where('id', $existingState->id)
+                ->update($stateData);
+        } else {
+            DB::table('blueprint_record_states')->insert(array_merge($stateData, [
+                'blueprint_id' => $event->blueprintId(),
+                'record_id' => $event->recordId(),
+                'created_at' => now(),
+            ]));
+        }
 
         // Update the actual record field if blueprint is bound to a field
-        if ($blueprint->field_id) {
-            $this->updateRecordField($execution->record_id, $blueprint, $toState);
+        $blueprint = DB::table('blueprints')
+            ->where('id', $event->blueprintId())
+            ->first();
+
+        if ($blueprint && $blueprint->field_id) {
+            $this->updateRecordField($event->recordId(), $blueprint, $event->toStateId());
         }
     }
 
-    private function updateRecordField(int $recordId, $blueprint, $toState): void
+    private function updateRecordField(int $recordId, $blueprint, int $toStateId): void
     {
         try {
-            $record = ModuleRecord::find($recordId);
-            if (!$record) {
+            // Get the module record from database
+            $recordData = DB::table('module_records')
+                ->where('id', $recordId)
+                ->first();
+
+            if (!$recordData) {
                 return;
             }
 
-            $field = $blueprint->field;
+            // Get the field details
+            $field = DB::table('fields')
+                ->where('id', $blueprint->field_id)
+                ->first();
+
             if (!$field) {
                 return;
             }
 
+            // Get the state name
+            $toState = DB::table('blueprint_states')
+                ->where('id', $toStateId)
+                ->first();
+
+            if (!$toState) {
+                return;
+            }
+
             // Update the record data
-            $data = $record->data ?? [];
+            $data = is_string($recordData->data)
+                ? json_decode($recordData->data, true)
+                : (array) $recordData->data;
             $data[$field->api_name] = $toState->name;
-            $record->update(['data' => $data]);
+
+            DB::table('module_records')
+                ->where('id', $recordId)
+                ->update([
+                    'data' => json_encode($data),
+                    'updated_at' => now(),
+                ]);
 
         } catch (Throwable $e) {
             Log::warning('Failed to update record field after approval', [

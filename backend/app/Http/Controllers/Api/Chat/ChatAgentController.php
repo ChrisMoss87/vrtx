@@ -4,11 +4,10 @@ namespace App\Http\Controllers\Api\Chat;
 
 use App\Application\Services\Chat\ChatApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\ChatAgentStatus;
-use App\Models\ChatCannedResponse;
 use App\Services\Chat\ChatAnalyticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ChatAgentController extends Controller
 {
@@ -113,7 +112,7 @@ class ChatAgentController extends Controller
             'is_global' => 'sometimes|boolean',
         ]);
 
-        $response = ChatCannedResponse::create([
+        $response = DB::table('chat_canned_responses')->insertGetId([
             ...$validated,
             'created_by' => $request->user()->id,
             'is_global' => $validated['is_global'] ?? false,
@@ -127,7 +126,7 @@ class ChatAgentController extends Controller
 
     public function updateCannedResponse(Request $request, int $id): JsonResponse
     {
-        $response = ChatCannedResponse::findOrFail($id);
+        $response = DB::table('chat_canned_responses')->where('id', $id)->first();
 
         // Only creator or admin can update
         if ($response->created_by !== $request->user()->id) {
@@ -152,7 +151,7 @@ class ChatAgentController extends Controller
 
     public function destroyCannedResponse(Request $request, int $id): JsonResponse
     {
-        $response = ChatCannedResponse::findOrFail($id);
+        $response = DB::table('chat_canned_responses')->where('id', $id)->first();
 
         if ($response->created_by !== $request->user()->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -165,7 +164,7 @@ class ChatAgentController extends Controller
 
     public function useCannedResponse(Request $request, int $id): JsonResponse
     {
-        $response = ChatCannedResponse::findOrFail($id);
+        $response = DB::table('chat_canned_responses')->where('id', $id)->first();
         $response->incrementUsage();
 
         $variables = $request->input('variables', []);

@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Dashboard;
-use App\Models\DashboardWidget;
-use App\Models\Module;
-use App\Models\Report;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds the default dashboards for a new tenant.
@@ -86,8 +83,8 @@ class DefaultDashboardsSeeder extends Seeder
     private function createSalesDashboard(): void
     {
         $this->resetGrid();
-        $dealsModule = Module::where('api_name', 'deals')->first();
-        $tasksModule = Module::where('api_name', 'tasks')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
+        $tasksModule = DB::table('modules')->where('api_name', 'tasks')->first();
 
         $dashboard = $this->createDashboard([
             'name' => 'Sales Dashboard',
@@ -174,7 +171,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Charts Row 2
-        $pipelineReport = Report::where('name', 'Sales Pipeline')->first();
+        $pipelineReport = DB::table('reports')->where('name', 'Sales Pipeline')->first();
         if ($pipelineReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $pipelineReport->id,
@@ -185,7 +182,7 @@ class DefaultDashboardsSeeder extends Seeder
             ]);
         }
 
-        $revenueReport = Report::where('name', 'Monthly Revenue')->first();
+        $revenueReport = DB::table('reports')->where('name', 'Monthly Revenue')->first();
         if ($revenueReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $revenueReport->id,
@@ -197,7 +194,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Row 3: Top Deals and Tasks
-        $topDealsReport = Report::where('name', 'Top Deals')->first();
+        $topDealsReport = DB::table('reports')->where('name', 'Top Deals')->first();
         if ($topDealsReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $topDealsReport->id,
@@ -239,7 +236,7 @@ class DefaultDashboardsSeeder extends Seeder
     private function createSupportDashboard(): void
     {
         $this->resetGrid();
-        $casesModule = Module::where('api_name', 'cases')->first();
+        $casesModule = DB::table('modules')->where('api_name', 'cases')->first();
 
         $dashboard = $this->createDashboard([
             'name' => 'Support Dashboard',
@@ -323,7 +320,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Charts Row 2
-        $priorityReport = Report::where('name', 'Open Cases by Priority')->first();
+        $priorityReport = DB::table('reports')->where('name', 'Open Cases by Priority')->first();
         if ($priorityReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $priorityReport->id,
@@ -334,7 +331,7 @@ class DefaultDashboardsSeeder extends Seeder
             ]);
         }
 
-        $statusReport = Report::where('name', 'Cases by Status')->first();
+        $statusReport = DB::table('reports')->where('name', 'Cases by Status')->first();
         if ($statusReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $statusReport->id,
@@ -346,7 +343,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Row 3: Tables
-        $overdueReport = Report::where('name', 'Overdue Cases')->first();
+        $overdueReport = DB::table('reports')->where('name', 'Overdue Cases')->first();
         if ($overdueReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $overdueReport->id,
@@ -376,7 +373,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Row 4: Trend
-        $trendReport = Report::where('name', 'Case Volume Trend')->first();
+        $trendReport = DB::table('reports')->where('name', 'Case Volume Trend')->first();
         if ($trendReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $trendReport->id,
@@ -393,8 +390,8 @@ class DefaultDashboardsSeeder extends Seeder
     private function createExecutiveDashboard(): void
     {
         $this->resetGrid();
-        $dealsModule = Module::where('api_name', 'deals')->first();
-        $orgsModule = Module::where('api_name', 'organizations')->first();
+        $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
+        $orgsModule = DB::table('modules')->where('api_name', 'organizations')->first();
 
         $dashboard = $this->createDashboard([
             'name' => 'Executive Dashboard',
@@ -481,7 +478,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Charts Row 2
-        $revenueReport = Report::where('name', 'Monthly Revenue')->first();
+        $revenueReport = DB::table('reports')->where('name', 'Monthly Revenue')->first();
         if ($revenueReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $revenueReport->id,
@@ -492,7 +489,7 @@ class DefaultDashboardsSeeder extends Seeder
             ]);
         }
 
-        $repReport = Report::where('name', 'Sales by Rep')->first();
+        $repReport = DB::table('reports')->where('name', 'Sales by Rep')->first();
         if ($repReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $repReport->id,
@@ -504,7 +501,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Row 3
-        $sourceReport = Report::where('name', 'Deal Source Analysis')->first();
+        $sourceReport = DB::table('reports')->where('name', 'Deal Source Analysis')->first();
         if ($sourceReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $sourceReport->id,
@@ -515,7 +512,7 @@ class DefaultDashboardsSeeder extends Seeder
             ]);
         }
 
-        $winLossReport = Report::where('name', 'Win/Loss Analysis')->first();
+        $winLossReport = DB::table('reports')->where('name', 'Win/Loss Analysis')->first();
         if ($winLossReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $winLossReport->id,
@@ -532,9 +529,9 @@ class DefaultDashboardsSeeder extends Seeder
     private function createActivityDashboard(): void
     {
         $this->resetGrid();
-        $activitiesModule = Module::where('api_name', 'activities')->first();
-        $tasksModule = Module::where('api_name', 'tasks')->first();
-        $eventsModule = Module::where('api_name', 'events')->first();
+        $activitiesModule = DB::table('modules')->where('api_name', 'activities')->first();
+        $tasksModule = DB::table('modules')->where('api_name', 'tasks')->first();
+        $eventsModule = DB::table('modules')->where('api_name', 'events')->first();
 
         $dashboard = $this->createDashboard([
             'name' => 'Activity Dashboard',
@@ -618,7 +615,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Charts Row 2
-        $summaryReport = Report::where('name', 'Activity Summary')->first();
+        $summaryReport = DB::table('reports')->where('name', 'Activity Summary')->first();
         if ($summaryReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $summaryReport->id,
@@ -629,7 +626,7 @@ class DefaultDashboardsSeeder extends Seeder
             ]);
         }
 
-        $callsReport = Report::where('name', 'Call Outcomes')->first();
+        $callsReport = DB::table('reports')->where('name', 'Call Outcomes')->first();
         if ($callsReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $callsReport->id,
@@ -676,7 +673,7 @@ class DefaultDashboardsSeeder extends Seeder
     private function createFinancialDashboard(): void
     {
         $this->resetGrid();
-        $invoicesModule = Module::where('api_name', 'invoices')->first();
+        $invoicesModule = DB::table('modules')->where('api_name', 'invoices')->first();
 
         $dashboard = $this->createDashboard([
             'name' => 'Financial Dashboard',
@@ -758,7 +755,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Charts Row 2
-        $agingReport = Report::where('name', 'Invoice Aging')->first();
+        $agingReport = DB::table('reports')->where('name', 'Invoice Aging')->first();
         if ($agingReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $agingReport->id,
@@ -769,7 +766,7 @@ class DefaultDashboardsSeeder extends Seeder
             ]);
         }
 
-        $revenueReport = Report::where('name', 'Collected Revenue')->first();
+        $revenueReport = DB::table('reports')->where('name', 'Collected Revenue')->first();
         if ($revenueReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $revenueReport->id,
@@ -781,7 +778,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Row 3: Tables
-        $unpaidReport = Report::where('name', 'Unpaid Invoices')->first();
+        $unpaidReport = DB::table('reports')->where('name', 'Unpaid Invoices')->first();
         if ($unpaidReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $unpaidReport->id,
@@ -813,7 +810,7 @@ class DefaultDashboardsSeeder extends Seeder
         }
 
         // Row 4: Status breakdown
-        $statusReport = Report::where('name', 'Invoices by Status')->first();
+        $statusReport = DB::table('reports')->where('name', 'Invoices by Status')->first();
         if ($statusReport) {
             $this->createWidget($dashboard, [
                 'report_id' => $statusReport->id,

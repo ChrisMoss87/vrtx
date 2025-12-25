@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Blueprint;
 
-use App\Models\BlueprintApproval;
-use App\Models\BlueprintApprovalRequest;
-use App\Models\BlueprintTransitionExecution;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -36,7 +33,7 @@ class ApprovalService
             throw new \RuntimeException('No approval configuration found for this transition');
         }
 
-        $request = BlueprintApprovalRequest::create([
+        $request = DB::table('blueprint_approval_requests')->insertGetId([
             'approval_id' => $approval->id,
             'record_id' => $execution->record_id,
             'execution_id' => $execution->id,
@@ -127,7 +124,7 @@ class ApprovalService
      */
     public function approve(int $requestId, int $userId, ?string $comments = null): BlueprintApprovalRequest
     {
-        $request = BlueprintApprovalRequest::findOrFail($requestId);
+        $request = DB::table('blueprint_approval_requests')->where('id', $requestId)->first();
 
         if (!$request->isPending()) {
             throw new \RuntimeException('Request is not pending');
@@ -174,7 +171,7 @@ class ApprovalService
      */
     public function reject(int $requestId, int $userId, ?string $comments = null): BlueprintApprovalRequest
     {
-        $request = BlueprintApprovalRequest::findOrFail($requestId);
+        $request = DB::table('blueprint_approval_requests')->where('id', $requestId)->first();
 
         if (!$request->isPending()) {
             throw new \RuntimeException('Request is not pending');
@@ -211,7 +208,7 @@ class ApprovalService
     {
         $expiredCount = 0;
 
-        $pendingRequests = BlueprintApprovalRequest::where('status', BlueprintApprovalRequest::STATUS_PENDING)
+        $pendingRequests = DB::table('blueprint_approval_requests')->where('status', BlueprintApprovalRequest::STATUS_PENDING)
             ->with('approval')
             ->get();
 
@@ -244,7 +241,7 @@ class ApprovalService
     public function getPendingApprovalsForUser(int $userId): Collection
     {
         // Get all pending requests where user can approve
-        $pendingRequests = BlueprintApprovalRequest::where('status', BlueprintApprovalRequest::STATUS_PENDING)
+        $pendingRequests = DB::table('blueprint_approval_requests')->where('status', BlueprintApprovalRequest::STATUS_PENDING)
             ->with(['approval', 'execution.transition.blueprint.module', 'requestedBy'])
             ->get();
 

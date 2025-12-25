@@ -23,13 +23,13 @@ use App\Domain\Forecasting\Repositories\SalesQuotaRepositoryInterface;
 use App\Domain\Forecasting\Services\ForecastCalculatorService;
 use App\Domain\Forecasting\Services\SnapshotService;
 use App\Domain\Forecasting\ValueObjects\AdjustmentType;
+use Illuminate\Support\Facades\DB;
 use App\Domain\Forecasting\ValueObjects\ForecastPeriod;
 use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
 use App\Domain\Pipeline\Repositories\PipelineRepositoryInterface;
 use App\Domain\Shared\Contracts\AuthContextInterface;
 use App\Domain\Shared\ValueObjects\UserId;
 use DateTimeImmutable;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
 /**

@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\TimeMachine;
 
-use App\Models\FieldChangeLog;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\RecordSnapshot;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SnapshotService
 {
@@ -17,7 +14,7 @@ class SnapshotService
      */
     public function createInitialSnapshot(ModuleRecord $record): RecordSnapshot
     {
-        return RecordSnapshot::create([
+        return DB::table('record_snapshots')->insertGetId([
             'module_id' => $record->module_id,
             'record_id' => $record->id,
             'snapshot_data' => $record->data,
@@ -43,7 +40,7 @@ class SnapshotService
 
         // Log individual field changes
         foreach ($changes as $fieldApiName => $change) {
-            FieldChangeLog::create([
+            DB::table('field_change_logs')->insertGetId([
                 'module_id' => $record->module_id,
                 'record_id' => $record->id,
                 'field_api_name' => $fieldApiName,
@@ -60,7 +57,7 @@ class SnapshotService
             $snapshotType = RecordSnapshot::TYPE_STAGE_CHANGE;
         }
 
-        return RecordSnapshot::create([
+        return DB::table('record_snapshots')->insertGetId([
             'module_id' => $record->module_id,
             'record_id' => $record->id,
             'snapshot_data' => $newData,
@@ -78,7 +75,7 @@ class SnapshotService
      */
     public function createManualSnapshot(ModuleRecord $record, ?string $note = null): RecordSnapshot
     {
-        return RecordSnapshot::create([
+        return DB::table('record_snapshots')->insertGetId([
             'module_id' => $record->module_id,
             'record_id' => $record->id,
             'snapshot_data' => $record->data,
@@ -100,7 +97,7 @@ class SnapshotService
         $count = 0;
 
         // Get records that had activity in the last 30 days
-        $records = ModuleRecord::where('module_id', $module->id)
+        $records = DB::table('module_records')->where('module_id', $module->id)
             ->where('updated_at', '>=', now()->subDays(30))
             ->cursor();
 
@@ -112,7 +109,7 @@ class SnapshotService
                 ->exists();
 
             if (!$existingToday) {
-                RecordSnapshot::create([
+                DB::table('record_snapshots')->insertGetId([
                     'module_id' => $module->id,
                     'record_id' => $record->id,
                     'snapshot_data' => $record->data,
@@ -193,7 +190,7 @@ class SnapshotService
         $cutoffDate = now()->subDays($retentionDays);
 
         // Delete old daily snapshots (keep field/stage changes longer)
-        return RecordSnapshot::where('created_at', '<', $cutoffDate)
+        return DB::table('record_snapshots')->where('created_at', '<', $cutoffDate)
             ->where('snapshot_type', RecordSnapshot::TYPE_DAILY)
             ->delete();
     }

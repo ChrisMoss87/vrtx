@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Jobs\SendWebhookJob;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Webhook;
-use App\Models\WebhookDelivery;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class WebhookService
@@ -16,19 +13,23 @@ class WebhookService
     /**
      * Trigger webhooks for a record event.
      */
-    public function triggerForRecord(string $event, ModuleRecord $record, ?array $previousData = null): void
+    public function triggerForRecord(string $event, object $record, ?array $previousData = null): void
     {
-        $module = $record->module;
+        $moduleId = $record->module_id ?? null;
         $fullEvent = "record.{$event}";
 
         // Find all active webhooks that listen to this event
-        $webhooks = Webhook::active()
-            ->where(function ($query) use ($module) {
+        $webhooks = DB::table('webhooks')
+            ->where('is_active', true)
+            ->where(function ($query) use ($moduleId) {
                 $query->whereNull('module_id')
-                    ->orWhere('module_id', $module->id);
+                    ->orWhere('module_id', $moduleId);
             })
             ->get()
-            ->filter(fn ($webhook) => $webhook->hasEvent($fullEvent));
+            ->filter(function ($webhook) use ($fullEvent) {
+                $events = json_decode($webhook->events ?? '[]', true);
+                return in_array($fullEvent, $events);
+            });
 
         if ($webhooks->isEmpty()) {
             return;
@@ -44,13 +45,17 @@ class WebhookService
     /**
      * Trigger webhooks for a module event.
      */
-    public function triggerForModule(string $event, Module $module): void
+    public function triggerForModule(string $event, object $module): void
     {
         $fullEvent = "module.{$event}";
 
-        $webhooks = Webhook::active()
+        $webhooks = DB::table('webhooks')
+            ->where('is_active', true)
             ->get()
-            ->filter(fn ($webhook) => $webhook->hasEvent($fullEvent));
+            ->filter(function ($webhook) use ($fullEvent) {
+                $events = json_decode($webhook->events ?? '[]', true);
+                return in_array($fullEvent, $events);
+            });
 
         if ($webhooks->isEmpty()) {
             return;
@@ -68,9 +73,13 @@ class WebhookService
      */
     public function trigger(string $event, array $data): void
     {
-        $webhooks = Webhook::active()
+        $webhooks = DB::table('webhooks')
+            ->where('is_active', true)
             ->get()
-            ->filter(fn ($webhook) => $webhook->hasEvent($event));
+            ->filter(function ($webhook) use ($event) {
+                $events = json_decode($webhook->events ?? '[]', true);
+                return in_array($event, $events);
+            });
 
         if ($webhooks->isEmpty()) {
             return;
@@ -90,31 +99,36 @@ class WebhookService
     /**
      * Build payload for record events.
      */
-    protected function buildRecordPayload(string $event, ModuleRecord $record, ?array $previousData = null): array
+    protected function buildRecordPayload(string $event, object $record, ?array $previousData = null): array
     {
+        $module = DB::table('modules')->where('id', $record->module_id)->first();
+        $recordData = is_string($record->data ?? null)
+            ? json_decode($record->data, true)
+            : ($record->data ?? []);
+
         $payload = [
             'event' => $event,
             'timestamp' => now()->toIso8601String(),
             'data' => [
                 'record' => [
                     'id' => $record->id,
-                    'data' => $record->data,
-                    'created_by' => $record->created_by,
-                    'updated_by' => $record->updated_by,
-                    'created_at' => $record->created_at?->toIso8601String(),
-                    'updated_at' => $record->updated_at?->toIso8601String(),
+                    'data' => $recordData,
+                    'created_by' => $record->created_by ?? null,
+                    'updated_by' => $record->updated_by ?? null,
+                    'created_at' => $record->created_at ?? null,
+                    'updated_at' => $record->updated_at ?? null,
                 ],
                 'module' => [
-                    'id' => $record->module->id,
-                    'name' => $record->module->name,
-                    'api_name' => $record->module->api_name,
+                    'id' => $module->id ?? null,
+                    'name' => $module->name ?? null,
+                    'api_name' => $module->api_name ?? null,
                 ],
             ],
         ];
 
         if ($previousData !== null) {
             $payload['data']['previous_data'] = $previousData;
-            $payload['data']['changes'] = $this->calculateChanges($previousData, $record->data);
+            $payload['data']['changes'] = $this->calculateChanges($previousData, $recordData);
         }
 
         return $payload;
@@ -123,7 +137,7 @@ class WebhookService
     /**
      * Build payload for module events.
      */
-    protected function buildModulePayload(string $event, Module $module): array
+    protected function buildModulePayload(string $event, object $module): array
     {
         return [
             'event' => $event,
@@ -133,9 +147,9 @@ class WebhookService
                     'id' => $module->id,
                     'name' => $module->name,
                     'api_name' => $module->api_name,
-                    'description' => $module->description,
-                    'icon' => $module->icon,
-                    'is_active' => $module->is_active,
+                    'description' => $module->description ?? null,
+                    'icon' => $module->icon ?? null,
+                    'is_active' => $module->is_active ?? true,
                 ],
             ],
         ];
@@ -180,22 +194,24 @@ class WebhookService
     /**
      * Dispatch a webhook delivery.
      */
-    protected function dispatchWebhook(Webhook $webhook, string $event, array $payload): void
+    protected function dispatchWebhook(object $webhook, string $event, array $payload): void
     {
         try {
-            $delivery = WebhookDelivery::create([
+            $deliveryId = DB::table('webhook_deliveries')->insertGetId([
                 'webhook_id' => $webhook->id,
                 'event' => $event,
-                'payload' => $payload,
-                'status' => WebhookDelivery::STATUS_PENDING,
+                'payload' => json_encode($payload),
+                'status' => 'pending',
                 'attempts' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
-            SendWebhookJob::dispatch($delivery);
+            SendWebhookJob::dispatch($deliveryId);
 
             Log::debug('Webhook dispatched', [
                 'webhook_id' => $webhook->id,
-                'delivery_id' => $delivery->id,
+                'delivery_id' => $deliveryId,
                 'event' => $event,
             ]);
         } catch (\Exception $e) {

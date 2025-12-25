@@ -4,13 +4,12 @@ namespace App\Http\Controllers\Api\Portal;
 
 use App\Application\Services\Portal\PortalApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\PortalUser;
-use App\Models\PortalInvitation;
 use App\Services\Portal\PortalService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\DB;
 
 class PortalAuthController extends Controller
 {
@@ -92,7 +91,7 @@ class PortalAuthController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()],
         ]);
 
-        $invitation = PortalInvitation::where('token', $validated['token'])->first();
+        $invitation = DB::table('portal_invitations')->where('token', $validated['token'])->first();
 
         if (!$invitation) {
             return response()->json([
@@ -138,7 +137,7 @@ class PortalAuthController extends Controller
             'token' => 'required|string',
         ]);
 
-        $invitation = PortalInvitation::where('token', $validated['token'])->first();
+        $invitation = DB::table('portal_invitations')->where('token', $validated['token'])->first();
 
         if (!$invitation) {
             return response()->json([

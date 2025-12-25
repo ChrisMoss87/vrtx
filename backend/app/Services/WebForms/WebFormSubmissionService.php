@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\WebForms;
 
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\WebForm;
-use App\Models\WebFormAnalytics;
-use App\Models\WebFormSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -30,7 +25,7 @@ class WebFormSubmissionService
         $submissionData = array_filter($data, fn($key) => !str_starts_with($key, 'utm_'), ARRAY_FILTER_USE_KEY);
 
         // Create initial submission record
-        $submission = WebFormSubmission::create([
+        $submission = DB::table('web_form_submissions')->insertGetId([
             'web_form_id' => $form->id,
             'submission_data' => $submissionData,
             'ip_address' => $request->ip(),
@@ -198,7 +193,7 @@ class WebFormSubmissionService
         $recordData['_form_name'] = $form->name;
 
         // Create the record
-        $record = ModuleRecord::create([
+        $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => $recordData,
             'owner_id' => $form->assign_to_user_id,

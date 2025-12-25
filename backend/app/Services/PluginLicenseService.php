@@ -2,14 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\FeatureFlag;
-use App\Models\Plugin;
-use App\Models\PluginBundle;
-use App\Models\PluginLicense;
-use App\Models\PluginUsage;
-use App\Models\TenantSubscription;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class PluginLicenseService
 {
@@ -104,7 +99,7 @@ class PluginLicenseService
     public function getSubscription(): ?TenantSubscription
     {
         return Cache::remember('tenant_subscription', self::CACHE_TTL, function () {
-            return TenantSubscription::first();
+            return DB::table('tenant_subscriptions')->first();
         });
     }
 
@@ -130,7 +125,7 @@ class PluginLicenseService
             }
 
             // Check for active license
-            return PluginLicense::where('plugin_slug', $pluginSlug)
+            return DB::table('plugin_licenses')->where('plugin_slug', $pluginSlug)
                 ->where('status', PluginLicense::STATUS_ACTIVE)
                 ->where(function ($q) {
                     $q->whereNull('expires_at')
@@ -148,7 +143,7 @@ class PluginLicenseService
         $cacheKey = "feature_flag:{$featureKey}";
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($featureKey) {
-            $flag = FeatureFlag::where('feature_key', $featureKey)->first();
+            $flag = DB::table('feature_flags')->where('feature_key', $featureKey)->first();
 
             if (!$flag) {
                 return false;
@@ -199,7 +194,7 @@ class PluginLicenseService
             $includedPlugins = $this->getPluginsForPlan($plan);
 
             // Get additional licensed plugins
-            $licensedPlugins = PluginLicense::where('status', PluginLicense::STATUS_ACTIVE)
+            $licensedPlugins = DB::table('plugin_licenses')->where('status', PluginLicense::STATUS_ACTIVE)
                 ->where(function ($q) {
                     $q->whereNull('expires_at')
                         ->orWhere('expires_at', '>', now());
@@ -222,7 +217,7 @@ class PluginLicenseService
             $licensedPlugins = $this->getLicensedPlugins();
             $currentPlan = $this->getCurrentPlan();
 
-            return FeatureFlag::where(function ($query) use ($licensedPlugins, $currentPlan) {
+            return DB::table('feature_flags')->where(function ($query) use ($licensedPlugins, $currentPlan) {
                 $query->where('is_enabled', true)
                     ->orWhereIn('plugin_slug', $licensedPlugins)
                     ->orWhere(function ($q) use ($currentPlan) {
@@ -243,7 +238,7 @@ class PluginLicenseService
         $plan = $this->getCurrentPlan();
         $limit = self::PLAN_LIMITS[$plan][$metric] ?? null;
 
-        $usage = PluginUsage::where('metric', $metric)
+        $usage = DB::table('plugin_usages')->where('metric', $metric)
             ->where('period_start', '<=', now())
             ->where('period_end', '>=', now())
             ->first();

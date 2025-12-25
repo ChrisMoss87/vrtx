@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Blueprint;
-use App\Models\Field;
-use App\Models\Module;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Blueprint>
@@ -25,7 +23,7 @@ class BlueprintFactory extends Factory
     {
         return [
             'name' => $this->faker->words(2, true) . ' Blueprint',
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'field_id' => Field::factory(),
             'description' => $this->faker->sentence(),
             'is_active' => true,
@@ -51,17 +49,6 @@ class BlueprintFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'is_active' => false,
         ]);
-    }
-
-    /**
-     * Create blueprint with states.
-     */
-    public function withStates(int $count = 4): static
-    {
-        return $this->has(
-            \App\Models\BlueprintState::factory()->count($count),
-            'states'
-        );
     }
 
     /**

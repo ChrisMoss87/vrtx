@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api\Scheduling;
 
 use App\Application\Services\Scheduling\SchedulingApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\ScheduledMeeting;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ScheduledMeetingController extends Controller
 {
@@ -28,7 +28,7 @@ class ScheduledMeetingController extends Controller
             'upcoming_only' => 'nullable|boolean',
         ]);
 
-        $query = ScheduledMeeting::where('host_user_id', Auth::id())
+        $query = DB::table('scheduled_meetings')->where('host_user_id', Auth::id())
             ->with(['meetingType.schedulingPage', 'contact']);
 
         if ($request->status) {
@@ -162,7 +162,7 @@ class ScheduledMeetingController extends Controller
         $startDate = $request->start_date ? Carbon::parse($request->start_date) : now()->startOfMonth();
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : now()->endOfMonth();
 
-        $query = ScheduledMeeting::where('host_user_id', Auth::id())
+        $query = DB::table('scheduled_meetings')->where('host_user_id', Auth::id())
             ->whereBetween('start_time', [$startDate, $endDate]);
 
         $stats = [
@@ -171,11 +171,11 @@ class ScheduledMeetingController extends Controller
             'completed' => (clone $query)->where('status', 'completed')->count(),
             'cancelled' => (clone $query)->where('status', 'cancelled')->count(),
             'no_show' => (clone $query)->where('status', 'no_show')->count(),
-            'upcoming' => ScheduledMeeting::where('host_user_id', Auth::id())
+            'upcoming' => DB::table('scheduled_meetings')->where('host_user_id', Auth::id())
                 ->where('status', 'scheduled')
                 ->where('start_time', '>', now())
                 ->count(),
-            'upcoming_week' => ScheduledMeeting::where('host_user_id', Auth::id())
+            'upcoming_week' => DB::table('scheduled_meetings')->where('host_user_id', Auth::id())
                 ->where('status', 'scheduled')
                 ->whereBetween('start_time', [now(), now()->addWeek()])
                 ->count(),

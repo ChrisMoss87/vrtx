@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Models\Module;
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -15,6 +11,7 @@ use Tests\TestCase;
 class ModuleApiTest extends TestCase
 {
     use RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
     protected User $user;
 
@@ -23,7 +20,7 @@ class ModuleApiTest extends TestCase
         parent::setUp();
 
         // Create a test user and authenticate
-        $this->user = User::factory()->create();
+        $this->user = /* User factory - use DB::table('users') */->create();
     }
 
     /**
@@ -42,31 +39,31 @@ class ModuleApiTest extends TestCase
     public function test_module_index_returns_paginated_results(): void
     {
         // Create test modules
-        Module::factory()->count(5)->create();
+        /* Module factory - use DB::table('modules') */->count(5)->create();
 
         // This would normally require tenant context
         // For now, we test the model directly
-        $modules = Module::all();
+        $modules = DB::table('modules')->get();
 
         $this->assertCount(5, $modules);
     }
 
     public function test_module_can_be_created_with_blocks_and_fields(): void
     {
-        $module = Module::factory()->create([
+        $module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Test Module',
             'singular_name' => 'Test',
             'api_name' => 'test_module',
         ]);
 
-        $block = Block::create([
+        $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Basic Information',
             'type' => 'section',
             'display_order' => 0,
         ]);
 
-        $field = Field::create([
+        $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'block_id' => $block->id,
             'label' => 'Name',
@@ -88,7 +85,7 @@ class ModuleApiTest extends TestCase
 
     public function test_module_can_be_updated(): void
     {
-        $module = Module::factory()->create([
+        $module = /* Module factory - use DB::table('modules') */->create([
             'name' => 'Original Name',
             'is_active' => true,
         ]);
@@ -104,20 +101,20 @@ class ModuleApiTest extends TestCase
 
     public function test_module_can_be_soft_deleted(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
         $moduleId = $module->id;
 
         $module->delete();
 
         $this->assertSoftDeleted('modules', ['id' => $moduleId]);
-        $this->assertNull(Module::find($moduleId));
+        $this->assertNull(DB::table('modules')->where('id', $moduleId)->first());
         $this->assertNotNull(Module::withTrashed()->find($moduleId));
     }
 
     public function test_active_scope_returns_only_active_modules(): void
     {
-        Module::factory()->count(3)->create(['is_active' => true]);
-        Module::factory()->count(2)->create(['is_active' => false]);
+        /* Module factory - use DB::table('modules') */->count(3)->create(['is_active' => true]);
+        /* Module factory - use DB::table('modules') */->count(2)->create(['is_active' => false]);
 
         $activeModules = Module::active()->get();
 
@@ -129,9 +126,9 @@ class ModuleApiTest extends TestCase
 
     public function test_ordered_scope_orders_by_display_order(): void
     {
-        Module::factory()->create(['display_order' => 3]);
-        Module::factory()->create(['display_order' => 1]);
-        Module::factory()->create(['display_order' => 2]);
+        /* Module factory - use DB::table('modules') */->create(['display_order' => 3]);
+        /* Module factory - use DB::table('modules') */->create(['display_order' => 1]);
+        /* Module factory - use DB::table('modules') */->create(['display_order' => 2]);
 
         $orderedModules = Module::ordered()->get();
 
@@ -142,7 +139,7 @@ class ModuleApiTest extends TestCase
 
     public function test_find_by_api_name(): void
     {
-        $module = Module::factory()->create(['api_name' => 'leads']);
+        $module = /* Module factory - use DB::table('modules') */->create(['api_name' => 'leads']);
 
         $found = Module::findByApiName('leads');
 
@@ -159,14 +156,14 @@ class ModuleApiTest extends TestCase
 
     public function test_module_settings_default_to_empty_array(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
         $this->assertIsArray($module->settings);
     }
 
     public function test_module_default_filters_default_to_null(): void
     {
-        $module = Module::factory()->create();
+        $module = /* Module factory - use DB::table('modules') */->create();
 
         // default_filters can be null or empty array
         $this->assertTrue($module->default_filters === null || is_array($module->default_filters));

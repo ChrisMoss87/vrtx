@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api\AI;
 
 use App\Application\Services\AI\AIApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\SentimentAlert;
 use App\Services\AI\SentimentAnalysisService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class SentimentAnalysisController extends Controller
 {
@@ -67,7 +67,7 @@ class SentimentAnalysisController extends Controller
     public function analyzeEmail(int $emailId): JsonResponse
     {
         try {
-            $email = \App\Models\EmailMessage::findOrFail($emailId);
+            $email = DB::table('email_messages')->where('id', $emailId)->first();
             $score = $this->sentimentService->analyzeEmail($email);
 
             if (!$score) {
@@ -126,7 +126,7 @@ class SentimentAnalysisController extends Controller
      */
     public function markAlertRead(int $id): JsonResponse
     {
-        $alert = SentimentAlert::findOrFail($id);
+        $alert = DB::table('sentiment_alerts')->where('id', $id)->first();
         $alert->markAsRead();
 
         return response()->json([
@@ -139,7 +139,7 @@ class SentimentAnalysisController extends Controller
      */
     public function dismissAlert(int $id): JsonResponse
     {
-        $alert = SentimentAlert::findOrFail($id);
+        $alert = DB::table('sentiment_alerts')->where('id', $id)->first();
         $alert->dismiss(Auth::id());
 
         return response()->json([

@@ -6,9 +6,9 @@ namespace App\Infrastructure\Listeners\Blueprint;
 
 use App\Domain\Blueprint\Events\AllApprovalsCompleted;
 use App\Domain\Blueprint\Events\ApprovalRequestApproved;
+use App\Domain\Blueprint\Repositories\TransitionExecutionRepositoryInterface;
 use App\Domain\Shared\Contracts\EventDispatcherInterface;
-use App\Models\BlueprintApprovalRequest;
-use App\Models\BlueprintTransitionExecution;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Checks if all required approvals are complete when a single approval is approved.
@@ -16,8 +16,11 @@ use App\Models\BlueprintTransitionExecution;
  */
 class CheckAllApprovalsListener
 {
+    private const STATUS_PENDING = 'pending';
+
     public function __construct(
         private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly TransitionExecutionRepositoryInterface $transitionExecutionRepository,
     ) {}
 
     public function handle(ApprovalRequestApproved $event): void
@@ -29,13 +32,14 @@ class CheckAllApprovalsListener
         }
 
         // Check if all approval requests for this execution are now approved
-        $execution = BlueprintTransitionExecution::find($event->executionId());
+        $execution = $this->transitionExecutionRepository->findById($event->executionId());
         if (!$execution) {
             return;
         }
 
-        $pendingCount = BlueprintApprovalRequest::where('execution_id', $event->executionId())
-            ->where('status', BlueprintApprovalRequest::STATUS_PENDING)
+        $pendingCount = DB::table('blueprint_approval_requests')
+            ->where('execution_id', $event->executionId())
+            ->where('status', self::STATUS_PENDING)
             ->count();
 
         if ($pendingCount === 0) {
@@ -45,8 +49,17 @@ class CheckAllApprovalsListener
 
     private function dispatchAllApprovalsCompleted(ApprovalRequestApproved $event): void
     {
-        $execution = BlueprintTransitionExecution::with('transition')->find($event->executionId());
+        $execution = $this->transitionExecutionRepository->findById($event->executionId());
         if (!$execution) {
+            return;
+        }
+
+        // Get transition to find toStateId
+        $transition = DB::table('blueprint_transitions')
+            ->where('id', $execution->getTransitionId())
+            ->first();
+
+        if (!$transition) {
             return;
         }
 
@@ -55,8 +68,8 @@ class CheckAllApprovalsListener
             blueprintId: $event->blueprintId(),
             transitionId: $event->transitionId(),
             recordId: $event->recordId(),
-            fromStateId: $execution->from_state_id,
-            toStateId: $execution->transition->to_state_id,
+            fromStateId: $execution->getFromStateId(),
+            toStateId: (int) $transition->to_state_id,
         ));
     }
 }

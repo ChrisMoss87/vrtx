@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Listeners\Blueprint;
 
 use App\Domain\Blueprint\Events\ApprovalRequestRejected;
-use App\Models\BlueprintApprovalRequest;
-use App\Models\BlueprintTransitionExecution;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Cancels all other pending approvals when one approval is rejected.
@@ -14,21 +13,27 @@ use App\Models\BlueprintTransitionExecution;
  */
 class CancelPendingApprovalsListener
 {
+    private const STATUS_PENDING = 'pending';
+    private const STATUS_EXPIRED = 'expired';
+    private const STATUS_REJECTED = 'rejected';
+
     public function handle(ApprovalRequestRejected $event): void
     {
         // Expire all other pending approval requests for this execution
-        BlueprintApprovalRequest::where('execution_id', $event->executionId())
+        DB::table('blueprint_approval_requests')
+            ->where('execution_id', $event->executionId())
             ->where('id', '!=', $event->approvalRequestId())
-            ->where('status', BlueprintApprovalRequest::STATUS_PENDING)
+            ->where('status', self::STATUS_PENDING)
             ->update([
-                'status' => BlueprintApprovalRequest::STATUS_EXPIRED,
+                'status' => self::STATUS_EXPIRED,
                 'updated_at' => now(),
             ]);
 
         // Update the execution status to rejected
-        BlueprintTransitionExecution::where('id', $event->executionId())
+        DB::table('blueprint_transition_executions')
+            ->where('id', $event->executionId())
             ->update([
-                'status' => BlueprintTransitionExecution::STATUS_REJECTED,
+                'status' => self::STATUS_REJECTED,
                 'completed_at' => now(),
             ]);
     }

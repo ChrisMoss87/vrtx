@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Quotas;
 
-use App\Models\Goal;
-use App\Models\GoalMilestone;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +16,7 @@ class GoalService
     public function create(array $data, ?int $createdBy = null): Goal
     {
         return DB::transaction(function () use ($data, $createdBy) {
-            $goal = Goal::create([
+            $goal = DB::table('goals')->insertGetId([
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,
                 'goal_type' => $data['goal_type'],
@@ -215,7 +213,7 @@ class GoalService
     {
         $count = 0;
 
-        Goal::where('status', Goal::STATUS_IN_PROGRESS)
+        DB::table('goals')->where('status', Goal::STATUS_IN_PROGRESS)
             ->where('end_date', '<', Carbon::today())
             ->whereColumn('current_value', '<', 'target_value')
             ->chunk(100, function ($goals) use (&$count) {
@@ -233,7 +231,7 @@ class GoalService
      */
     public function getStats(?int $userId = null): array
     {
-        $query = Goal::query();
+        $query = DB::table('goals');
 
         if ($userId) {
             $query->forUser($userId);

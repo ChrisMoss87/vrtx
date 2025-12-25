@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Api\TeamChat;
 
 use App\Http\Controllers\Controller;
-use App\Models\TeamChatMessage;
-use App\Models\TeamChatConnection;
-use App\Models\TeamChatChannel;
 use App\Services\TeamChat\TeamChatService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class TeamChatMessageController extends Controller
 {

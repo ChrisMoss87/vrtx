@@ -2,12 +2,8 @@
 
 namespace App\Services\TeamChat;
 
-use App\Models\TeamChatConnection;
-use App\Models\TeamChatChannel;
-use App\Models\TeamChatNotification;
-use App\Models\TeamChatMessage;
-use App\Models\TeamChatUserMapping;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class TeamChatService
 {
@@ -24,9 +20,9 @@ class TeamChatService
         ?int $notificationId = null
     ): TeamChatMessage {
         // Create message record
-        $message = TeamChatMessage::create([
+        $message = DB::table('team_chat_messages')->insertGetId([
             'connection_id' => $connection->id,
-            'channel_id' => TeamChatChannel::where('connection_id', $connection->id)
+            'channel_id' => DB::table('team_chat_channels')->where('connection_id', $connection->id)
                 ->where('channel_id', $channelId)
                 ->first()?->id,
             'notification_id' => $notificationId,
@@ -243,7 +239,7 @@ class TeamChatService
         if ($result['success']) {
             foreach ($result['users'] as $user) {
                 // Try to match with CRM user by email
-                $crmUser = \App\Models\User::where('email', $user['profile']['email'] ?? '')->first();
+                $crmUser = DB::table('users')->where('email', $user['profile']['email'] ?? '')->first();
 
                 if ($crmUser) {
                     $users[] = TeamChatUserMapping::updateOrCreate(

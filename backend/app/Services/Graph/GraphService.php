@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Graph;
 
-use App\Models\EntityRelationship;
-use App\Models\GraphMetric;
-use App\Models\Module;
-use App\Models\ModuleRecord;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -49,10 +45,10 @@ class GraphService
 
         switch ($entityType) {
             case 'contact':
-                $module = Module::where('api_name', 'contacts')->first();
+                $module = DB::table('modules')->where('api_name', 'contacts')->first();
                 if (!$module) break;
 
-                $query = ModuleRecord::where('module_id', $module->id)
+                $query = DB::table('module_records')->where('module_id', $module->id)
                     ->select(['id', 'data'])
                     ->limit($limit);
 
@@ -77,12 +73,12 @@ class GraphService
                 break;
 
             case 'company':
-                $module = Module::where('api_name', 'accounts')
+                $module = DB::table('modules')->where('api_name', 'accounts')
                     ->orWhere('api_name', 'companies')
                     ->first();
                 if (!$module) break;
 
-                $query = ModuleRecord::where('module_id', $module->id)
+                $query = DB::table('module_records')->where('module_id', $module->id)
                     ->select(['id', 'data'])
                     ->limit($limit);
 
@@ -111,12 +107,12 @@ class GraphService
                 break;
 
             case 'deal':
-                $module = Module::where('api_name', 'deals')
+                $module = DB::table('modules')->where('api_name', 'deals')
                     ->orWhere('api_name', 'opportunities')
                     ->first();
                 if (!$module) break;
 
-                $query = ModuleRecord::where('module_id', $module->id)
+                $query = DB::table('module_records')->where('module_id', $module->id)
                     ->select(['id', 'data'])
                     ->limit($limit);
 
@@ -145,7 +141,7 @@ class GraphService
                 break;
 
             case 'user':
-                $users = \App\Models\User::select(['id', 'name', 'email'])->limit($limit);
+                $users = DB::table('users')->select(['id', 'name', 'email'])->limit($limit);
 
                 if ($nodeIds) {
                     $users->whereIn('id', $nodeIds);
@@ -177,7 +173,7 @@ class GraphService
         $relationshipTypes = $options['relationship_types'] ?? null;
         $nodeIds = $options['node_ids'] ?? null;
 
-        $query = EntityRelationship::query();
+        $query = DB::table('entity_relationships');
 
         if ($relationshipTypes) {
             $query->whereIn('relationship_type', $relationshipTypes);
@@ -358,7 +354,7 @@ class GraphService
      */
     public function createRelationship(array $data): EntityRelationship
     {
-        return EntityRelationship::create([
+        return DB::table('entity_relationships')->insertGetId([
             'from_entity_type' => $data['from_entity_type'],
             'from_entity_id' => $data['from_entity_id'],
             'to_entity_type' => $data['to_entity_type'],

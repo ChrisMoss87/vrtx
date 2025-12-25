@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Block;
-use App\Models\Module;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Block>
@@ -23,7 +22,7 @@ class BlockFactory extends Factory
     public function definition(): array
     {
         return [
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'name' => $this->faker->words(3, true),
             'type' => $this->faker->randomElement(['section', 'tab', 'accordion', 'card']),
             'display_order' => $this->faker->numberBetween(0, 10),

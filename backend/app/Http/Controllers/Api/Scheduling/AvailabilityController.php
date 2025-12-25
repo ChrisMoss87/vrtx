@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api\Scheduling;
 
 use App\Http\Controllers\Controller;
-use App\Models\AvailabilityRule;
-use App\Models\SchedulingOverride;
 use App\Services\Scheduling\AvailabilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AvailabilityController extends Controller
 {
@@ -23,7 +22,7 @@ class AvailabilityController extends Controller
     {
         $user = Auth::user();
 
-        $rules = AvailabilityRule::where('user_id', $user->id)
+        $rules = DB::table('availability_rules')->where('user_id', $user->id)
             ->orderBy('day_of_week')
             ->orderBy('start_time')
             ->get();
@@ -31,7 +30,7 @@ class AvailabilityController extends Controller
         // If no rules exist, initialize defaults
         if ($rules->isEmpty()) {
             $this->availabilityService->initializeDefaultAvailability($user);
-            $rules = AvailabilityRule::where('user_id', $user->id)
+            $rules = DB::table('availability_rules')->where('user_id', $user->id)
                 ->orderBy('day_of_week')
                 ->orderBy('start_time')
                 ->get();
@@ -77,13 +76,13 @@ class AvailabilityController extends Controller
         $user = Auth::user();
 
         // Delete existing rules
-        AvailabilityRule::where('user_id', $user->id)->delete();
+        DB::table('availability_rules')->where('user_id', $user->id)->delete();
 
         // Create new rules
         foreach ($validated['rules'] as $dayRule) {
             if (!$dayRule['is_available']) {
                 // Create a disabled rule for the day
-                AvailabilityRule::create([
+                DB::table('availability_rules')->insertGetId([
                     'user_id' => $user->id,
                     'day_of_week' => $dayRule['day_of_week'],
                     'start_time' => '00:00',
@@ -92,7 +91,7 @@ class AvailabilityController extends Controller
                 ]);
             } else {
                 foreach ($dayRule['windows'] ?? [] as $window) {
-                    AvailabilityRule::create([
+                    DB::table('availability_rules')->insertGetId([
                         'user_id' => $user->id,
                         'day_of_week' => $dayRule['day_of_week'],
                         'start_time' => $window['start_time'],
@@ -118,7 +117,7 @@ class AvailabilityController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
-        $overrides = SchedulingOverride::where('user_id', Auth::id())
+        $overrides = DB::table('scheduling_overrides')->where('user_id', Auth::id())
             ->whereBetween('date', [$request->start_date, $request->end_date])
             ->orderBy('date')
             ->get();

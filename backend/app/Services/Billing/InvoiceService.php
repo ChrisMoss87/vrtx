@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
-use App\Models\BillingSetting;
-use App\Models\Invoice;
-use App\Models\InvoiceLineItem;
-use App\Models\InvoicePayment;
-use App\Models\Quote;
 use Illuminate\Support\Facades\DB;
 
 class InvoiceService
@@ -18,7 +13,7 @@ class InvoiceService
         return DB::transaction(function () use ($data, $userId) {
             $settings = BillingSetting::getSettings();
 
-            $invoice = Invoice::create([
+            $invoice = DB::table('invoices')->insertGetId([
                 'invoice_number' => $settings->generateInvoiceNumber(),
                 'quote_id' => $data['quote_id'] ?? null,
                 'deal_id' => $data['deal_id'] ?? null,
@@ -57,7 +52,7 @@ class InvoiceService
         return DB::transaction(function () use ($quote, $userId) {
             $settings = BillingSetting::getSettings();
 
-            $invoice = Invoice::create([
+            $invoice = DB::table('invoices')->insertGetId([
                 'invoice_number' => $settings->generateInvoiceNumber(),
                 'quote_id' => $quote->id,
                 'deal_id' => $quote->deal_id,
@@ -76,7 +71,7 @@ class InvoiceService
 
             // Copy line items from quote
             foreach ($quote->lineItems as $quoteItem) {
-                InvoiceLineItem::create([
+                DB::table('invoice_line_items')->insertGetId([
                     'invoice_id' => $invoice->id,
                     'product_id' => $quoteItem->product_id,
                     'description' => $quoteItem->description,
@@ -127,7 +122,7 @@ class InvoiceService
 
         // Create new items
         foreach ($items as $index => $item) {
-            InvoiceLineItem::create([
+            DB::table('invoice_line_items')->insertGetId([
                 'invoice_id' => $invoice->id,
                 'product_id' => $item['product_id'] ?? null,
                 'description' => $item['description'],
@@ -160,7 +155,7 @@ class InvoiceService
             throw new \Exception('Cannot record payment for this invoice.');
         }
 
-        $payment = InvoicePayment::create([
+        $payment = DB::table('invoice_payments')->insertGetId([
             'invoice_id' => $invoice->id,
             'amount' => $data['amount'],
             'payment_date' => $data['payment_date'] ?? now(),
@@ -210,7 +205,7 @@ class InvoiceService
     public function getStats(): array
     {
         return [
-            'total_invoices' => Invoice::count(),
+            'total_invoices' => DB::table('invoices')->count(),
             'draft' => Invoice::status(Invoice::STATUS_DRAFT)->count(),
             'sent' => Invoice::status(Invoice::STATUS_SENT)->count(),
             'paid' => Invoice::status(Invoice::STATUS_PAID)->count(),

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\TenantSubscription;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Orchestrates seeding of all default data for a new tenant.
@@ -105,7 +105,7 @@ class TenantDefaultDataSeeder extends Seeder
         }
 
         // Create a default free subscription
-        TenantSubscription::create([
+        DB::table('tenant_subscriptions')->insertGetId([
             'plan' => TenantSubscription::PLAN_FREE,
             'status' => TenantSubscription::STATUS_ACTIVE,
             'billing_cycle' => TenantSubscription::CYCLE_MONTHLY,

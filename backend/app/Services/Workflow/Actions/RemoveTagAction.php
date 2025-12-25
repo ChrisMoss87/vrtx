@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Models\ModuleRecord;
-use App\Models\Tag;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Action to remove tags from a record.
@@ -26,7 +25,7 @@ class RemoveTagAction implements ActionInterface
             throw new \InvalidArgumentException('Record ID is required');
         }
 
-        $record = ModuleRecord::find($recordId);
+        $record = DB::table('module_records')->where('id', $recordId)->first();
         if (!$record) {
             throw new \InvalidArgumentException("Record not found: {$recordId}");
         }

@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Module;
-use App\Models\User;
-use App\Models\Webhook;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Webhook>
@@ -26,7 +25,7 @@ class WebhookFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'module_id' => fn () => Module::where('api_name', 'deals')->first()?->id ?? Module::first()?->id,
+            'module_id' => fn () => DB::table('modules')->where('api_name', 'deals')->first()?->id ?? DB::table('modules')->first()?->id,
             'name' => $this->faker->words(2, true) . ' Webhook',
             'url' => $this->faker->url(),
             'secret' => Str::random(32),

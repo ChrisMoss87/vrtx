@@ -5,15 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
-use App\Models\RottingAlert;
-use App\Models\RottingAlertSetting;
-use App\Models\Stage;
 use App\Services\Rotting\DealRottingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class RottingAlertController extends Controller
 {
@@ -91,7 +87,7 @@ class RottingAlertController extends Controller
         $record = ModuleRecord::with('module')->findOrFail($recordId);
 
         // Find pipeline and stage for this record
-        $pipeline = Pipeline::where('module_id', $record->module_id)->first();
+        $pipeline = DB::table('pipelines')->where('module_id', $record->module_id)->first();
 
         if (!$pipeline) {
             return response()->json([
@@ -122,7 +118,7 @@ class RottingAlertController extends Controller
             ]);
         }
 
-        $stage = Stage::find($stageId);
+        $stage = DB::table('stages')->where('id', $stageId)->first();
 
         if (!$stage || !$stage->rotting_days) {
             return response()->json([
@@ -151,7 +147,7 @@ class RottingAlertController extends Controller
      */
     public function summary(int $pipelineId): JsonResponse
     {
-        $pipeline = Pipeline::findOrFail($pipelineId);
+        $pipeline = DB::table('pipelines')->where('id', $pipelineId)->first();
 
         // Get user's settings
         $settings = RottingAlertSetting::getEffectiveForUser(Auth::id(), $pipelineId);
@@ -314,7 +310,7 @@ class RottingAlertController extends Controller
             'rotting_days' => 'required|integer|min:1|max:365',
         ]);
 
-        $stage = Stage::where('pipeline_id', $pipelineId)
+        $stage = DB::table('stages')->where('pipeline_id', $pipelineId)
             ->where('id', $stageId)
             ->firstOrFail();
 
@@ -333,7 +329,7 @@ class RottingAlertController extends Controller
      */
     public function removeStageConfig(int $pipelineId, int $stageId): JsonResponse
     {
-        $stage = Stage::where('pipeline_id', $pipelineId)
+        $stage = DB::table('stages')->where('pipeline_id', $pipelineId)
             ->where('id', $stageId)
             ->firstOrFail();
 
@@ -352,7 +348,7 @@ class RottingAlertController extends Controller
      */
     public function recordActivity(int $recordId): JsonResponse
     {
-        $record = ModuleRecord::findOrFail($recordId);
+        $record = DB::table('module_records')->where('id', $recordId)->first();
         $this->rottingService->recordActivity($record);
 
         return response()->json([

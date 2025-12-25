@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\Report;
 use App\Services\Reporting\ReportService;
 use App\Services\Reporting\PdfExportService;
 use App\Services\Reporting\ExcelExportService;
@@ -16,6 +15,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class SendScheduledReportJob implements ShouldQueue
 {

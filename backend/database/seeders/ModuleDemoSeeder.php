@@ -4,15 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Block;
-use App\Models\Field;
-use App\Models\FieldOption;
-use App\Models\Module;
-use App\Models\ModuleRecord;
-use App\Models\Pipeline;
-use App\Models\Stage;
 use Illuminate\Database\Seeder;
 use Faker\Factory as Faker;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds demo modules with sample data for CRM functionality.
@@ -32,8 +26,8 @@ class ModuleDemoSeeder extends Seeder
         $this->command->info('Cleaning up existing demo modules...');
 
         // Clean up existing pipelines first (due to foreign key constraints)
-        Pipeline::query()->delete();
-        Stage::query()->delete();
+        DB::table('pipelines')->delete();
+        DB::table('stages')->delete();
 
         // Clean up existing modules (delete in order due to foreign key constraints)
         // Include soft-deleted records with withTrashed()
@@ -42,14 +36,14 @@ class ModuleDemoSeeder extends Seeder
             $module = Module::withTrashed()->where('api_name', $apiName)->first();
             if ($module) {
                 // Delete records first
-                ModuleRecord::where('module_id', $module->id)->delete();
+                DB::table('module_records')->where('module_id', $module->id)->delete();
                 // Delete field options
-                $fieldIds = Field::where('module_id', $module->id)->pluck('id');
+                $fieldIds = DB::table('fields')->where('module_id', $module->id)->pluck('id');
                 FieldOption::whereIn('field_id', $fieldIds)->delete();
                 // Delete fields
-                Field::where('module_id', $module->id)->delete();
+                DB::table('fields')->where('module_id', $module->id)->delete();
                 // Delete blocks
-                Block::where('module_id', $module->id)->delete();
+                DB::table('blocks')->where('module_id', $module->id)->delete();
                 // Force delete module (required for SoftDeletes)
                 $module->forceDelete();
             }
@@ -92,7 +86,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createOrganizationsModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Organizations',
             'singular_name' => 'Organization',
             'api_name' => 'organizations',
@@ -114,7 +108,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Basic Information Block
-        $basicBlock = Block::create([
+        $basicBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Basic Information',
             'type' => 'section',
@@ -134,7 +128,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($basicBlock, 'annual_revenue', 'Annual Revenue', 'currency', 5, false, true, false, true);
 
         // Contact Information Block
-        $contactBlock = Block::create([
+        $contactBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Contact Information',
             'type' => 'section',
@@ -149,7 +143,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($contactBlock, 'country', 'Country', 'text', 5, false, true, true, true);
 
         // Additional Details Block
-        $detailsBlock = Block::create([
+        $detailsBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Additional Details',
             'type' => 'section',
@@ -166,7 +160,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createContactsModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Contacts',
             'singular_name' => 'Contact',
             'api_name' => 'contacts',
@@ -188,7 +182,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Personal Information Block
-        $personalBlock = Block::create([
+        $personalBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Personal Information',
             'type' => 'section',
@@ -203,7 +197,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($personalBlock, 'mobile', 'Mobile', 'phone', 5, false, true, false, true);
 
         // Work Information Block
-        $workBlock = Block::create([
+        $workBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Work Information',
             'type' => 'section',
@@ -216,7 +210,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($workBlock, 'organization_name', 'Organization', 'text', 3, false, true, true, true);
 
         // Additional Details Block
-        $detailsBlock = Block::create([
+        $detailsBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Additional Details',
             'type' => 'section',
@@ -236,7 +230,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createDealsModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
@@ -258,7 +252,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Deal Information Block
-        $dealBlock = Block::create([
+        $dealBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Deal Information',
             'type' => 'section',
@@ -273,7 +267,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($dealBlock, 'probability', 'Probability (%)', 'percent', 5, false, true, false, true);
 
         // Stage & Timeline Block
-        $stageBlock = Block::create([
+        $stageBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Stage & Timeline',
             'type' => 'section',
@@ -289,7 +283,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($stageBlock, 'actual_close_date', 'Actual Close Date', 'date', 4, false, true, false, true);
 
         // Additional Information Block
-        $additionalBlock = Block::create([
+        $additionalBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Additional Information',
             'type' => 'section',
@@ -307,7 +301,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createInvoicesModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Invoices',
             'singular_name' => 'Invoice',
             'api_name' => 'invoices',
@@ -329,7 +323,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Invoice Details Block
-        $detailsBlock = Block::create([
+        $detailsBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Invoice Details',
             'type' => 'section',
@@ -344,7 +338,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createFieldOptions($statusField, ['Draft', 'Sent', 'Paid', 'Partially Paid', 'Overdue', 'Cancelled']);
 
         // Financial Details Block
-        $financialBlock = Block::create([
+        $financialBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Financial Details',
             'type' => 'section',
@@ -359,7 +353,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($financialBlock, 'total', 'Total Amount', 'currency', 5, true, true, false, true);
 
         // Dates Block
-        $datesBlock = Block::create([
+        $datesBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Dates',
             'type' => 'section',
@@ -372,7 +366,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($datesBlock, 'paid_date', 'Paid Date', 'date', 3, false, true, false, true);
 
         // Notes Block
-        $notesBlock = Block::create([
+        $notesBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Notes',
             'type' => 'section',
@@ -388,7 +382,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createTasksModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Tasks',
             'singular_name' => 'Task',
             'api_name' => 'tasks',
@@ -410,7 +404,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Task Details Block
-        $detailsBlock = Block::create([
+        $detailsBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Task Details',
             'type' => 'section',
@@ -426,7 +420,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($detailsBlock, 'description', 'Description', 'textarea', 4, false, false, false, false);
 
         // Dates & Assignment Block
-        $datesBlock = Block::create([
+        $datesBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Dates & Assignment',
             'type' => 'section',
@@ -441,7 +435,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($datesBlock, 'assigned_to', 'Assigned To', 'text', 5, false, true, true, true);
 
         // Related To Block
-        $relatedBlock = Block::create([
+        $relatedBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Related To',
             'type' => 'section',
@@ -458,7 +452,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createActivitiesModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Activities',
             'singular_name' => 'Activity',
             'api_name' => 'activities',
@@ -480,7 +474,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Activity Details Block
-        $detailsBlock = Block::create([
+        $detailsBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Activity Details',
             'type' => 'section',
@@ -496,7 +490,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($detailsBlock, 'description', 'Description', 'textarea', 4, false, false, false, false);
 
         // Timing Block
-        $timingBlock = Block::create([
+        $timingBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Timing',
             'type' => 'section',
@@ -510,7 +504,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($timingBlock, 'location', 'Location', 'text', 4, false, true, true, true);
 
         // Related Records Block
-        $relatedBlock = Block::create([
+        $relatedBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Related Records',
             'type' => 'section',
@@ -529,7 +523,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createQuotesModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Quotes',
             'singular_name' => 'Quote',
             'api_name' => 'quotes',
@@ -551,7 +545,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Quote Details Block
-        $detailsBlock = Block::create([
+        $detailsBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Quote Details',
             'type' => 'section',
@@ -567,7 +561,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createFieldOptions($statusField, ['Draft', 'Pending Approval', 'Sent', 'Accepted', 'Rejected', 'Expired']);
 
         // Financial Details Block
-        $financialBlock = Block::create([
+        $financialBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Financial Details',
             'type' => 'section',
@@ -583,7 +577,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($financialBlock, 'total', 'Total Amount', 'currency', 6, true, true, false, true);
 
         // Dates Block
-        $datesBlock = Block::create([
+        $datesBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Dates',
             'type' => 'section',
@@ -596,7 +590,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($datesBlock, 'accepted_date', 'Accepted Date', 'date', 3, false, true, false, true);
 
         // Notes Block
-        $notesBlock = Block::create([
+        $notesBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Notes',
             'type' => 'section',
@@ -612,7 +606,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createCasesModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Cases',
             'singular_name' => 'Case',
             'api_name' => 'cases',
@@ -634,7 +628,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Case Details Block
-        $detailsBlock = Block::create([
+        $detailsBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Case Details',
             'type' => 'section',
@@ -652,7 +646,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createFieldOptions($typeField, ['Question', 'Problem', 'Feature Request', 'Bug Report', 'Feedback', 'Other']);
 
         // Description Block
-        $descBlock = Block::create([
+        $descBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Description',
             'type' => 'section',
@@ -664,7 +658,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($descBlock, 'resolution', 'Resolution', 'textarea', 2, false, false, false, false);
 
         // Customer Information Block
-        $customerBlock = Block::create([
+        $customerBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Customer Information',
             'type' => 'section',
@@ -680,7 +674,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createFieldOptions($sourceField, ['Email', 'Phone', 'Web Form', 'Chat', 'Social Media', 'Other']);
 
         // Dates & Assignment Block
-        $datesBlock = Block::create([
+        $datesBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Dates & Assignment',
             'type' => 'section',
@@ -698,7 +692,7 @@ class ModuleDemoSeeder extends Seeder
 
     private function createProductsModule(): Module
     {
-        $module = Module::create([
+        $module = DB::table('modules')->insertGetId([
             'name' => 'Products',
             'singular_name' => 'Product',
             'api_name' => 'products',
@@ -720,7 +714,7 @@ class ModuleDemoSeeder extends Seeder
         ]);
 
         // Product Details Block
-        $detailsBlock = Block::create([
+        $detailsBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Product Details',
             'type' => 'section',
@@ -737,7 +731,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($detailsBlock, 'description', 'Description', 'textarea', 5, false, false, false, false);
 
         // Pricing Block
-        $pricingBlock = Block::create([
+        $pricingBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Pricing',
             'type' => 'section',
@@ -751,7 +745,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($pricingBlock, 'tax_rate', 'Tax Rate (%)', 'percent', 4, false, true, false, true);
 
         // Inventory Block
-        $inventoryBlock = Block::create([
+        $inventoryBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Inventory',
             'type' => 'section',
@@ -765,7 +759,7 @@ class ModuleDemoSeeder extends Seeder
         $this->createField($inventoryBlock, 'is_tracked', 'Track Inventory', 'checkbox', 4, false, true, false, true);
 
         // Additional Info Block
-        $infoBlock = Block::create([
+        $infoBlock = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Additional Information',
             'type' => 'section',
@@ -792,7 +786,7 @@ class ModuleDemoSeeder extends Seeder
         bool $searchable = true,
         bool $sortable = true
     ): Field {
-        return Field::create([
+        return DB::table('fields')->insertGetId([
             'module_id' => $block->module_id,
             'block_id' => $block->id,
             'label' => $label,
@@ -820,7 +814,7 @@ class ModuleDemoSeeder extends Seeder
     private function createFieldOptions(Field $field, array $options): void
     {
         foreach ($options as $index => $option) {
-            FieldOption::create([
+            DB::table('field_options')->insertGetId([
                 'field_id' => $field->id,
                 'label' => $option,
                 'value' => strtolower(str_replace([' ', '&'], ['_', ''], $option)),
@@ -838,7 +832,7 @@ class ModuleDemoSeeder extends Seeder
         $statuses = ['active', 'inactive', 'prospect', 'partner'];
 
         for ($i = 0; $i < $count; $i++) {
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'name' => $this->faker->company,
@@ -879,7 +873,7 @@ class ModuleDemoSeeder extends Seeder
             $orgData = $organizations[$orgId] ?? [];
             $orgName = $orgData['name'] ?? '';
 
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'first_name' => $this->faker->firstName,
@@ -937,7 +931,7 @@ class ModuleDemoSeeder extends Seeder
                 ? $this->faker->dateTimeBetween('-2 months', 'now')
                 : null;
 
-            $record = ModuleRecord::create([
+            $record = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'deal_name' => $orgData['name'] . ' - ' . $this->faker->words(3, true),
@@ -987,7 +981,7 @@ class ModuleDemoSeeder extends Seeder
             $dueDate = (clone $invoiceDate)->modify('+30 days');
             $paidDate = $status === 'paid' ? $this->faker->dateTimeBetween($invoiceDate, 'now') : null;
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'invoice_number' => 'INV-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
@@ -1039,7 +1033,7 @@ class ModuleDemoSeeder extends Seeder
             $startDate = $this->faker->dateTimeBetween('-2 weeks', 'now');
             $completedDate = $status === 'completed' ? $this->faker->dateTimeBetween($startDate, 'now') : null;
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'subject' => $this->faker->randomElement($taskSubjects),
@@ -1090,7 +1084,7 @@ class ModuleDemoSeeder extends Seeder
             $duration = $this->faker->randomElement([15, 30, 45, 60, 90, 120]);
             $endTime = (clone $startTime)->modify("+{$duration} minutes");
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'activity_type' => $type,
@@ -1139,7 +1133,7 @@ class ModuleDemoSeeder extends Seeder
             $validUntil = (clone $quoteDate)->modify('+30 days');
             $acceptedDate = $status === 'accepted' ? $this->faker->dateTimeBetween($quoteDate, 'now') : null;
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'quote_number' => 'QT-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
@@ -1200,7 +1194,7 @@ class ModuleDemoSeeder extends Seeder
             $closedDate = $stage->is_won_stage ? $this->faker->dateTimeBetween($openedDate, 'now') : null;
             $firstResponseDate = $this->faker->dateTimeBetween($openedDate, $closedDate ?? 'now');
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'case_number' => 'CS-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
@@ -1244,7 +1238,7 @@ class ModuleDemoSeeder extends Seeder
             $cost = round($unitPrice * $this->faker->randomFloat(2, 0.3, 0.6), 2);
             $marginPercent = round((($unitPrice - $cost) / $unitPrice) * 100, 2);
 
-            ModuleRecord::create([
+            DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
                 'data' => [
                     'product_name' => $this->faker->randomElement($productNames) . ' ' . $this->faker->word,
@@ -1277,7 +1271,7 @@ class ModuleDemoSeeder extends Seeder
      */
     private function createDealsPipeline(Module $deals): Pipeline
     {
-        $pipeline = Pipeline::create([
+        $pipeline = DB::table('pipelines')->insertGetId([
             'name' => 'Sales Pipeline',
             'module_id' => $deals->id,
             'stage_field_api_name' => 'stage',
@@ -1301,7 +1295,7 @@ class ModuleDemoSeeder extends Seeder
         ];
 
         foreach ($stages as $index => $stageData) {
-            Stage::create([
+            DB::table('stages')->insertGetId([
                 'pipeline_id' => $pipeline->id,
                 'name' => $stageData['name'],
                 'color' => $stageData['color'],
@@ -1323,7 +1317,7 @@ class ModuleDemoSeeder extends Seeder
      */
     private function createCasesPipeline(Module $cases): Pipeline
     {
-        $pipeline = Pipeline::create([
+        $pipeline = DB::table('pipelines')->insertGetId([
             'name' => 'Support Pipeline',
             'module_id' => $cases->id,
             'stage_field_api_name' => 'status',
@@ -1347,7 +1341,7 @@ class ModuleDemoSeeder extends Seeder
         ];
 
         foreach ($stages as $index => $stageData) {
-            Stage::create([
+            DB::table('stages')->insertGetId([
                 'pipeline_id' => $pipeline->id,
                 'name' => $stageData['name'],
                 'color' => $stageData['color'],

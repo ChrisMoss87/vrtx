@@ -2,11 +2,9 @@
 
 namespace App\Services\Competitor;
 
-use App\Models\Competitor;
-use App\Models\BattlecardSection;
-use App\Models\CompetitorNote;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class CompetitorService
 {
@@ -38,7 +36,7 @@ class CompetitorService
 
     public function createCompetitor(array $data, User $user): Competitor
     {
-        $competitor = Competitor::create([
+        $competitor = DB::table('competitors')->insertGetId([
             'name' => $data['name'],
             'website' => $data['website'] ?? null,
             'logo_url' => $data['logo_url'] ?? null,
@@ -58,7 +56,7 @@ class CompetitorService
         ];
 
         foreach ($defaultSections as $order => $type) {
-            BattlecardSection::create([
+            DB::table('battlecard_sections')->insertGetId([
                 'competitor_id' => $competitor->id,
                 'section_type' => $type,
                 'content' => '',
@@ -117,7 +115,7 @@ class CompetitorService
     ): BattlecardSection {
         $maxOrder = $competitor->sections()->max('display_order') ?? 0;
 
-        $section = BattlecardSection::create([
+        $section = DB::table('battlecard_sections')->insertGetId([
             'competitor_id' => $competitor->id,
             'section_type' => $type,
             'content' => $content,
@@ -139,7 +137,7 @@ class CompetitorService
     public function reorderSections(Competitor $competitor, array $sectionIds, User $user): void
     {
         foreach ($sectionIds as $order => $sectionId) {
-            BattlecardSection::where('id', $sectionId)
+            DB::table('battlecard_sections')->where('id', $sectionId)
                 ->where('competitor_id', $competitor->id)
                 ->update(['display_order' => $order]);
         }
@@ -153,7 +151,7 @@ class CompetitorService
         User $user,
         ?string $source = null
     ): CompetitorNote {
-        $note = CompetitorNote::create([
+        $note = DB::table('competitor_notes')->insertGetId([
             'competitor_id' => $competitor->id,
             'content' => $content,
             'source' => $source,

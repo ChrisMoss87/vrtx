@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api\Recording;
 
 use App\Http\Controllers\Controller;
-use App\Models\Recording;
-use App\Models\RecordingStep;
 use App\Services\Recording\ActionCaptureService;
 use App\Services\Recording\RecordingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class RecordingController extends Controller
 {
@@ -63,7 +62,7 @@ class RecordingController extends Controller
 
     public function stop(Request $request, int $id): JsonResponse
     {
-        $recording = Recording::findOrFail($id);
+        $recording = DB::table('recordings')->where('id', $id)->first();
 
         $this->authorize('update', $recording);
 
@@ -82,7 +81,7 @@ class RecordingController extends Controller
 
     public function pause(Request $request, int $id): JsonResponse
     {
-        $recording = Recording::findOrFail($id);
+        $recording = DB::table('recordings')->where('id', $id)->first();
 
         $this->authorize('update', $recording);
 
@@ -97,7 +96,7 @@ class RecordingController extends Controller
 
     public function resume(Request $request, int $id): JsonResponse
     {
-        $recording = Recording::findOrFail($id);
+        $recording = DB::table('recordings')->where('id', $id)->first();
 
         $this->authorize('update', $recording);
 
@@ -112,7 +111,7 @@ class RecordingController extends Controller
 
     public function destroy(int $id): JsonResponse
     {
-        $recording = Recording::findOrFail($id);
+        $recording = DB::table('recordings')->where('id', $id)->first();
 
         $this->authorize('delete', $recording);
 
@@ -144,7 +143,7 @@ class RecordingController extends Controller
 
     public function removeStep(int $id, int $stepId): JsonResponse
     {
-        $step = RecordingStep::where('recording_id', $id)->findOrFail($stepId);
+        $step = DB::table('recording_steps')->where('recording_id', $id)->findOrFail($stepId);
 
         $this->authorize('update', $step->recording);
 
@@ -157,7 +156,7 @@ class RecordingController extends Controller
 
     public function reorderSteps(Request $request, int $id): JsonResponse
     {
-        $recording = Recording::findOrFail($id);
+        $recording = DB::table('recordings')->where('id', $id)->first();
 
         $this->authorize('update', $recording);
 
@@ -175,7 +174,7 @@ class RecordingController extends Controller
 
     public function parameterizeStep(Request $request, int $id, int $stepId): JsonResponse
     {
-        $step = RecordingStep::where('recording_id', $id)->findOrFail($stepId);
+        $step = DB::table('recording_steps')->where('recording_id', $id)->findOrFail($stepId);
 
         $this->authorize('update', $step->recording);
 
@@ -200,7 +199,7 @@ class RecordingController extends Controller
 
     public function resetStepParameterization(int $id, int $stepId): JsonResponse
     {
-        $step = RecordingStep::where('recording_id', $id)->findOrFail($stepId);
+        $step = DB::table('recording_steps')->where('recording_id', $id)->findOrFail($stepId);
 
         $this->authorize('update', $step->recording);
 
@@ -256,7 +255,7 @@ class RecordingController extends Controller
 
     public function duplicate(int $id): JsonResponse
     {
-        $recording = Recording::findOrFail($id);
+        $recording = DB::table('recordings')->where('id', $id)->first();
 
         $this->authorize('view', $recording);
 

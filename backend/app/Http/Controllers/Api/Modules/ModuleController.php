@@ -9,11 +9,11 @@ use App\Domain\Modules\DTOs\CreateFieldDTO;
 use App\Domain\Modules\DTOs\CreateModuleDTO;
 use App\Domain\Modules\DTOs\UpdateModuleDTO;
 use App\Http\Controllers\Controller;
-use App\Models\Module;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class ModuleController extends Controller
 {
@@ -122,8 +122,8 @@ class ModuleController extends Controller
 
             $dto = CreateModuleDTO::fromArray($moduleData);
 
-            // Create module using Eloquent directly since we need to handle blocks/fields
-            $module = Module::create([
+            // Create module using Database directly since we need to handle blocks/fields
+            $module = DB::table('modules')->insertGetId([
                 'name' => $dto->name,
                 'singular_name' => $dto->singularName,
                 'api_name' => Str::snake($dto->name),
@@ -224,7 +224,7 @@ class ModuleController extends Controller
     public function showByApiName(string $apiName): JsonResponse
     {
         try {
-            $module = Module::where('api_name', $apiName)->first();
+            $module = DB::table('modules')->where('api_name', $apiName)->first();
 
             if (!$module) {
                 return response()->json([
@@ -301,7 +301,7 @@ class ModuleController extends Controller
                 'blocks.*.fields.*.options.*.display_order' => 'nullable|integer',
             ]);
 
-            $module = Module::findOrFail($id);
+            $module = DB::table('modules')->where('id', $id)->first();
 
             // Use database transaction for atomic updates
             \DB::transaction(function () use ($module, $validated) {
@@ -388,7 +388,7 @@ class ModuleController extends Controller
 
             if (!empty($blockData['id'])) {
                 // Update existing block
-                $block = \App\Models\Block::find($blockData['id']);
+                $block = DB::table('blocks')->where('id', $blockData['id'])->first();
                 if ($block && $block->module_id === $module->id) {
                     $block->update([
                         'name' => $blockData['name'],
@@ -405,7 +405,7 @@ class ModuleController extends Controller
                 }
             } else {
                 // Create new block
-                $block = \App\Models\Block::create([
+                $block = DB::table('blocks')->insertGetId([
                     'module_id' => $module->id,
                     'name' => $blockData['name'],
                     'type' => $blockData['type'],
@@ -425,16 +425,16 @@ class ModuleController extends Controller
         $blocksToDelete = array_diff($existingBlockIds, $incomingBlockIds);
         if (!empty($blocksToDelete)) {
             // Delete fields in these blocks first
-            \App\Models\Field::whereIn('block_id', $blocksToDelete)->delete();
+            DB::table('fields')->whereIn('block_id', $blocksToDelete)->delete();
             // Delete the blocks
-            \App\Models\Block::whereIn('id', $blocksToDelete)->delete();
+            DB::table('blocks')->whereIn('id', $blocksToDelete)->delete();
         }
     }
 
     /**
      * Sync fields for a block (create, update, delete).
      */
-    private function syncFields(Module $module, \App\Models\Block $block, array $fieldsData): void
+    private function syncFields(Module $module, object $block, array $fieldsData): void
     {
         $existingFieldIds = $block->fields->pluck('id')->toArray();
         $incomingFieldIds = [];
@@ -474,7 +474,7 @@ class ModuleController extends Controller
 
             if (!empty($fieldData['id'])) {
                 // Update existing field
-                $field = \App\Models\Field::find($fieldData['id']);
+                $field = DB::table('fields')->where('id', $fieldData['id'])->first();
                 if ($field && $field->module_id === $module->id) {
                     $field->update($fieldPayload);
                     $incomingFieldIds[] = $field->id;
@@ -486,7 +486,7 @@ class ModuleController extends Controller
                 }
             } else {
                 // Create new field
-                $field = \App\Models\Field::create($fieldPayload);
+                $field = DB::table('fields')->insertGetId($fieldPayload);
                 $incomingFieldIds[] = $field->id;
 
                 // Create options for this field
@@ -500,16 +500,16 @@ class ModuleController extends Controller
         $fieldsToDelete = array_diff($existingFieldIds, $incomingFieldIds);
         if (!empty($fieldsToDelete)) {
             // Delete options first
-            \App\Models\FieldOption::whereIn('field_id', $fieldsToDelete)->delete();
+            DB::table('field_options')->whereIn('field_id', $fieldsToDelete)->delete();
             // Delete the fields
-            \App\Models\Field::whereIn('id', $fieldsToDelete)->delete();
+            DB::table('fields')->whereIn('id', $fieldsToDelete)->delete();
         }
     }
 
     /**
      * Sync options for a field (create, update, delete).
      */
-    private function syncFieldOptions(\App\Models\Field $field, array $optionsData): void
+    private function syncFieldOptions(object $field, array $optionsData): void
     {
         $existingOptionIds = $field->options->pluck('id')->toArray();
         $incomingOptionIds = [];
@@ -526,14 +526,14 @@ class ModuleController extends Controller
 
             if (!empty($optionData['id'])) {
                 // Update existing option
-                $option = \App\Models\FieldOption::find($optionData['id']);
+                $option = DB::table('field_options')->where('id', $optionData['id'])->first();
                 if ($option && $option->field_id === $field->id) {
                     $option->update($optionPayload);
                     $incomingOptionIds[] = $option->id;
                 }
             } else {
                 // Create new option
-                $option = \App\Models\FieldOption::create($optionPayload);
+                $option = DB::table('field_options')->insertGetId($optionPayload);
                 $incomingOptionIds[] = $option->id;
             }
         }
@@ -541,7 +541,7 @@ class ModuleController extends Controller
         // Delete options that were removed
         $optionsToDelete = array_diff($existingOptionIds, $incomingOptionIds);
         if (!empty($optionsToDelete)) {
-            \App\Models\FieldOption::whereIn('id', $optionsToDelete)->delete();
+            DB::table('field_options')->whereIn('id', $optionsToDelete)->delete();
         }
     }
 
@@ -551,7 +551,7 @@ class ModuleController extends Controller
     public function destroy(int $id): JsonResponse
     {
         try {
-            $module = Module::find($id);
+            $module = DB::table('modules')->where('id', $id)->first();
 
             if (!$module) {
                 return response()->json([
@@ -589,7 +589,7 @@ class ModuleController extends Controller
 
             \DB::transaction(function () use ($validated) {
                 foreach ($validated['modules'] as $moduleData) {
-                    Module::where('id', $moduleData['id'])
+                    DB::table('modules')->where('id', $moduleData['id'])
                         ->update(['display_order' => $moduleData['display_order']]);
                 }
             });
@@ -619,7 +619,7 @@ class ModuleController extends Controller
     public function toggleStatus(int $id): JsonResponse
     {
         try {
-            $module = Module::find($id);
+            $module = DB::table('modules')->where('id', $id)->first();
 
             if (!$module) {
                 return response()->json([

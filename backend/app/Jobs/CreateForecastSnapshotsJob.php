@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\Pipeline;
-use App\Models\User;
+use App\Domain\Pipeline\Repositories\PipelineRepositoryInterface;
+use App\Domain\User\Repositories\UserRepositoryInterface;
 use App\Services\Forecast\ForecastService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -38,22 +38,25 @@ class CreateForecastSnapshotsJob implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(ForecastService $forecastService): void
-    {
+    public function handle(
+        ForecastService $forecastService,
+        PipelineRepositoryInterface $pipelineRepository,
+        UserRepositoryInterface $userRepository
+    ): void {
         Log::info("CreateForecastSnapshotsJob: Starting {$this->periodType} snapshot creation");
 
-        $pipelines = Pipeline::where('is_active', true)->get();
-        $users = User::all();
+        $pipelines = $pipelineRepository->findActivePipelines();
+        $users = $userRepository->all();
         $snapshotsCreated = 0;
 
         foreach ($pipelines as $pipeline) {
             // Create pipeline-wide snapshot (no user filter)
             try {
-                $forecastService->createSnapshot($pipeline->id, null, $this->periodType);
+                $forecastService->createSnapshot($pipeline->id(), null, $this->periodType);
                 $snapshotsCreated++;
             } catch (\Exception $e) {
                 Log::warning("CreateForecastSnapshotsJob: Failed to create pipeline snapshot", [
-                    'pipeline_id' => $pipeline->id,
+                    'pipeline_id' => $pipeline->id(),
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -61,12 +64,12 @@ class CreateForecastSnapshotsJob implements ShouldQueue
             // Create per-user snapshots
             foreach ($users as $user) {
                 try {
-                    $forecastService->createSnapshot($pipeline->id, $user->id, $this->periodType);
+                    $forecastService->createSnapshot($pipeline->id(), $user->id(), $this->periodType);
                     $snapshotsCreated++;
                 } catch (\Exception $e) {
                     Log::warning("CreateForecastSnapshotsJob: Failed to create user snapshot", [
-                        'pipeline_id' => $pipeline->id,
-                        'user_id' => $user->id,
+                        'pipeline_id' => $pipeline->id(),
+                        'user_id' => $user->id(),
                         'error' => $e->getMessage(),
                     ]);
                 }

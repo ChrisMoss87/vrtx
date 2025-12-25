@@ -4,17 +4,27 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\CMS;
 
+use App\Domain\CMS\Entities\CmsMedia;
+use App\Domain\CMS\Repositories\CmsMediaRepositoryInterface;
+use App\Domain\CMS\ValueObjects\MediaType;
 use App\Http\Controllers\Controller;
-use App\Models\CmsMedia;
-use App\Models\CmsMediaFolder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class CmsMediaController extends Controller
 {
+    private const TABLE_MEDIA = 'cms_media';
+    private const TABLE_FOLDERS = 'cms_media_folders';
+    private const TABLE_USERS = 'users';
+
+    public function __construct(
+        private readonly CmsMediaRepositoryInterface $mediaRepository
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -26,34 +36,31 @@ class CmsMediaController extends Controller
             'sort_order' => 'nullable|string|in:asc,desc',
         ]);
 
-        $query = CmsMedia::query()->with('folder:id,name');
-
+        $filters = [];
         if (array_key_exists('folder_id', $validated)) {
-            $query->inFolder($validated['folder_id']);
+            $filters['folder_id'] = $validated['folder_id'];
         }
-
         if (isset($validated['type'])) {
-            $query->where('type', $validated['type']);
+            $filters['type'] = $validated['type'];
         }
-
         if (isset($validated['search'])) {
-            $query->search($validated['search']);
+            $filters['search'] = $validated['search'];
         }
-
-        $sortBy = $validated['sort_by'] ?? 'created_at';
-        $sortOrder = $validated['sort_order'] ?? 'desc';
-        $query->orderBy($sortBy, $sortOrder);
+        $filters['sort_by'] = $validated['sort_by'] ?? 'created_at';
+        $filters['sort_dir'] = $validated['sort_order'] ?? 'desc';
 
         $perPage = $validated['per_page'] ?? 50;
-        $media = $query->paginate($perPage);
+        $page = $request->integer('page', 1);
+
+        $result = $this->mediaRepository->paginate($filters, $perPage, $page);
 
         return response()->json([
-            'data' => $media->items(),
+            'data' => $result->items,
             'meta' => [
-                'current_page' => $media->currentPage(),
-                'last_page' => $media->lastPage(),
-                'per_page' => $media->perPage(),
-                'total' => $media->total(),
+                'current_page' => $result->currentPage,
+                'last_page' => $result->lastPage,
+                'per_page' => $result->perPage,
+                'total' => $result->total,
             ],
         ]);
     }
@@ -71,7 +78,7 @@ class CmsMediaController extends Controller
 
         $file = $request->file('file');
         $mimeType = $file->getMimeType();
-        $type = CmsMedia::determineType($mimeType);
+        $type = MediaType::fromMimeType($mimeType);
         $originalName = $file->getClientOriginalName();
         $name = pathinfo($originalName, PATHINFO_FILENAME);
         $extension = $file->getClientOriginalExtension();
@@ -80,51 +87,87 @@ class CmsMediaController extends Controller
         // Store in tenant-specific directory
         $path = $file->storeAs('cms/media/' . date('Y/m'), $filename, 'public');
 
-        $media = CmsMedia::create([
+        $media = CmsMedia::create(
+            name: $name,
+            filename: $originalName,
+            path: $path,
+            mimeType: $mimeType,
+            size: $file->getSize(),
+            type: $type,
+            uploadedBy: Auth::id(),
+        );
+
+        // Save with additional fields using DB for flexibility
+        $mediaData = [
             'name' => $name,
             'filename' => $originalName,
             'path' => $path,
             'disk' => 'public',
             'mime_type' => $mimeType,
             'size' => $file->getSize(),
-            'type' => $type,
+            'type' => $type->value,
             'alt_text' => $validated['alt_text'] ?? null,
             'caption' => $validated['caption'] ?? null,
             'description' => $validated['description'] ?? null,
             'folder_id' => $validated['folder_id'] ?? null,
-            'tags' => $validated['tags'] ?? null,
+            'tags' => isset($validated['tags']) ? json_encode($validated['tags']) : null,
             'uploaded_by' => Auth::id(),
-        ]);
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        $mediaId = DB::table(self::TABLE_MEDIA)->insertGetId($mediaData);
 
         // Get image dimensions if it's an image
-        if ($type === CmsMedia::TYPE_IMAGE) {
+        if ($type === MediaType::IMAGE) {
             $fullPath = Storage::disk('public')->path($path);
             $imageInfo = @getimagesize($fullPath);
             if ($imageInfo) {
-                $media->update([
+                DB::table(self::TABLE_MEDIA)->where('id', $mediaId)->update([
                     'width' => $imageInfo[0],
                     'height' => $imageInfo[1],
                 ]);
             }
         }
 
+        $mediaArray = $this->mediaRepository->findByIdAsArray($mediaId);
+
         return response()->json([
-            'data' => $media->fresh(),
+            'data' => $mediaArray,
             'message' => 'Media uploaded successfully',
         ], 201);
     }
 
-    public function show(CmsMedia $cmsMedia): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $cmsMedia->load(['folder', 'uploader:id,name']);
+        $mediaArray = $this->mediaRepository->findByIdAsArray($id);
+
+        if (!$mediaArray) {
+            return response()->json(['message' => 'Media not found'], 404);
+        }
+
+        // Load uploader
+        if ($mediaArray['uploaded_by']) {
+            $uploader = DB::table(self::TABLE_USERS)
+                ->where('id', $mediaArray['uploaded_by'])
+                ->select(['id', 'name'])
+                ->first();
+            $mediaArray['uploader'] = $uploader ? (array) $uploader : null;
+        }
 
         return response()->json([
-            'data' => $cmsMedia,
+            'data' => $mediaArray,
         ]);
     }
 
-    public function update(Request $request, CmsMedia $cmsMedia): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
+        $media = $this->mediaRepository->findById($id);
+
+        if (!$media) {
+            return response()->json(['message' => 'Media not found'], 404);
+        }
+
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'alt_text' => 'nullable|string|max:255',
@@ -134,20 +177,38 @@ class CmsMediaController extends Controller
             'tags' => 'nullable|array',
         ]);
 
-        $cmsMedia->update($validated);
+        $updateData = [];
+        foreach ($validated as $key => $value) {
+            if ($key === 'tags') {
+                $updateData[$key] = is_array($value) ? json_encode($value) : $value;
+            } else {
+                $updateData[$key] = $value;
+            }
+        }
+        $updateData['updated_at'] = now();
+
+        DB::table(self::TABLE_MEDIA)->where('id', $id)->update($updateData);
+
+        $mediaArray = $this->mediaRepository->findByIdAsArray($id);
 
         return response()->json([
-            'data' => $cmsMedia->fresh(),
+            'data' => $mediaArray,
             'message' => 'Media updated successfully',
         ]);
     }
 
-    public function destroy(CmsMedia $cmsMedia): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        // Delete the actual file
-        Storage::disk($cmsMedia->disk)->delete($cmsMedia->path);
+        $media = $this->mediaRepository->findById($id);
 
-        $cmsMedia->forceDelete();
+        if (!$media) {
+            return response()->json(['message' => 'Media not found'], 404);
+        }
+
+        // Delete the actual file
+        Storage::disk($media->getDisk())->delete($media->getPath());
+
+        $this->mediaRepository->delete($id);
 
         return response()->json([
             'message' => 'Media deleted successfully',
@@ -161,11 +222,11 @@ class CmsMediaController extends Controller
             'ids.*' => 'integer|exists:cms_media,id',
         ]);
 
-        $media = CmsMedia::whereIn('id', $validated['ids'])->get();
+        $mediaItems = $this->mediaRepository->findByIds($validated['ids']);
 
-        foreach ($media as $item) {
-            Storage::disk($item->disk)->delete($item->path);
-            $item->forceDelete();
+        foreach ($mediaItems as $media) {
+            Storage::disk($media->getDisk())->delete($media->getPath());
+            $this->mediaRepository->delete($media->getId());
         }
 
         return response()->json([
@@ -173,16 +234,27 @@ class CmsMediaController extends Controller
         ]);
     }
 
-    public function move(Request $request, CmsMedia $cmsMedia): JsonResponse
+    public function move(Request $request, int $id): JsonResponse
     {
+        $media = $this->mediaRepository->findById($id);
+
+        if (!$media) {
+            return response()->json(['message' => 'Media not found'], 404);
+        }
+
         $validated = $request->validate([
             'folder_id' => 'nullable|integer|exists:cms_media_folders,id',
         ]);
 
-        $cmsMedia->update(['folder_id' => $validated['folder_id']]);
+        DB::table(self::TABLE_MEDIA)->where('id', $id)->update([
+            'folder_id' => $validated['folder_id'],
+            'updated_at' => now(),
+        ]);
+
+        $mediaArray = $this->mediaRepository->findByIdAsArray($id);
 
         return response()->json([
-            'data' => $cmsMedia->fresh(),
+            'data' => $mediaArray,
             'message' => 'Media moved successfully',
         ]);
     }
@@ -195,7 +267,10 @@ class CmsMediaController extends Controller
             'folder_id' => 'nullable|integer|exists:cms_media_folders,id',
         ]);
 
-        CmsMedia::whereIn('id', $validated['ids'])->update(['folder_id' => $validated['folder_id']]);
+        DB::table(self::TABLE_MEDIA)->whereIn('id', $validated['ids'])->update([
+            'folder_id' => $validated['folder_id'],
+            'updated_at' => now(),
+        ]);
 
         return response()->json([
             'message' => count($validated['ids']) . ' items moved successfully',
@@ -204,18 +279,15 @@ class CmsMediaController extends Controller
 
     public function stats(): JsonResponse
     {
-        $totalSize = CmsMedia::sum('size');
-        $counts = CmsMedia::selectRaw('type, COUNT(*) as count')
-            ->groupBy('type')
-            ->pluck('count', 'type')
-            ->toArray();
+        $totalSize = $this->mediaRepository->getTotalSize();
+        $countsArray = $this->mediaRepository->getCountByType();
 
         return response()->json([
             'data' => [
                 'total_size' => $totalSize,
                 'total_size_formatted' => $this->formatBytes($totalSize),
-                'counts' => $counts,
-                'total_count' => array_sum($counts),
+                'counts' => $countsArray,
+                'total_count' => array_sum($countsArray),
             ],
         ]);
     }

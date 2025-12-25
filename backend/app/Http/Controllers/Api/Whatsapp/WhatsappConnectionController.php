@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api\Whatsapp;
 
 use App\Application\Services\WhatsApp\WhatsAppApplicationService;
 use App\Http\Controllers\Controller;
-use App\Models\WhatsappConnection;
 use App\Services\Whatsapp\WhatsappApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WhatsappConnectionController extends Controller
 {
@@ -34,7 +34,7 @@ class WhatsappConnectionController extends Controller
             'settings' => 'nullable|array',
         ]);
 
-        $connection = WhatsappConnection::create($validated);
+        $connection = DB::table('whatsapp_connections')->insertGetId($validated);
 
         // Try to fetch phone number info to verify connection
         try {

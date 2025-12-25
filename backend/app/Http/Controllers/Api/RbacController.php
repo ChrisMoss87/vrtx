@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Module;
-use App\Models\ModulePermission;
-use App\Models\User;
+use App\Infrastructure\Persistence\Eloquent\Models\User;
 use App\Services\RbacService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -15,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\DB;
 
 class RbacController extends Controller
 {
@@ -56,7 +55,7 @@ class RbacController extends Controller
 
         // Get all modules (only necessary columns) and existing permissions in single queries
         $modules = Module::select('id', 'name', 'api_name')->get();
-        $existingPermissions = ModulePermission::where('role_id', $id)
+        $existingPermissions = DB::table('module_permissions')->where('role_id', $id)
             ->get()
             ->keyBy('module_id');
 
@@ -197,7 +196,7 @@ class RbacController extends Controller
         $role = Role::findOrFail($roleId);
         // Only select necessary columns for performance
         $modules = Module::select('id', 'name', 'api_name')->get();
-        $existingPermissions = ModulePermission::where('role_id', $roleId)
+        $existingPermissions = DB::table('module_permissions')->where('role_id', $roleId)
             ->get()
             ->keyBy('module_id');
 

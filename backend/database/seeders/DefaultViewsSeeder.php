@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Module;
-use App\Models\ModuleView;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds the default views (saved table filters) for a new tenant.
@@ -33,7 +32,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createContactsViews(): void
     {
-        $module = Module::where('api_name', 'contacts')->first();
+        $module = DB::table('modules')->where('api_name', 'contacts')->first();
         if (!$module) return;
 
         $views = [
@@ -79,7 +78,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createOrganizationsViews(): void
     {
-        $module = Module::where('api_name', 'organizations')->first();
+        $module = DB::table('modules')->where('api_name', 'organizations')->first();
         if (!$module) return;
 
         $views = [
@@ -118,7 +117,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createDealsViews(): void
     {
-        $module = Module::where('api_name', 'deals')->first();
+        $module = DB::table('modules')->where('api_name', 'deals')->first();
         if (!$module) return;
 
         $views = [
@@ -173,7 +172,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createTasksViews(): void
     {
-        $module = Module::where('api_name', 'tasks')->first();
+        $module = DB::table('modules')->where('api_name', 'tasks')->first();
         if (!$module) return;
 
         $views = [
@@ -225,7 +224,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createActivitiesViews(): void
     {
-        $module = Module::where('api_name', 'activities')->first();
+        $module = DB::table('modules')->where('api_name', 'activities')->first();
         if (!$module) return;
 
         $views = [
@@ -274,7 +273,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createCasesViews(): void
     {
-        $module = Module::where('api_name', 'cases')->first();
+        $module = DB::table('modules')->where('api_name', 'cases')->first();
         if (!$module) return;
 
         $views = [
@@ -323,7 +322,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createInvoicesViews(): void
     {
-        $module = Module::where('api_name', 'invoices')->first();
+        $module = DB::table('modules')->where('api_name', 'invoices')->first();
         if (!$module) return;
 
         $views = [
@@ -369,7 +368,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createQuotesViews(): void
     {
-        $module = Module::where('api_name', 'quotes')->first();
+        $module = DB::table('modules')->where('api_name', 'quotes')->first();
         if (!$module) return;
 
         $views = [
@@ -411,7 +410,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createProductsViews(): void
     {
-        $module = Module::where('api_name', 'products')->first();
+        $module = DB::table('modules')->where('api_name', 'products')->first();
         if (!$module) return;
 
         $views = [
@@ -453,7 +452,7 @@ class DefaultViewsSeeder extends Seeder
 
     private function createEventsViews(): void
     {
-        $module = Module::where('api_name', 'events')->first();
+        $module = DB::table('modules')->where('api_name', 'events')->first();
         if (!$module) return;
 
         $views = [
