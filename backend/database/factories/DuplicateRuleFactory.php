@@ -2,12 +2,14 @@
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Duplicate\Entities\DuplicateRule;
+
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\DuplicateRule>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Duplicate\Entities\DuplicateRule>
  */
 class DuplicateRuleFactory extends Factory
 {

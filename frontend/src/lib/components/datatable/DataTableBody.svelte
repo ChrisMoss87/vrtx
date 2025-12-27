@@ -43,6 +43,32 @@
 
 	const table = getContext<TableContext>('table');
 
+	// Get column pin state
+	function getColumnPinState(columnId: string): 'left' | 'right' | false {
+		return table.state.columnPinning[columnId] || false;
+	}
+
+	// Calculate sticky offset for pinned columns
+	function getStickyOffset(column: ColumnDef, position: 'left' | 'right'): number {
+		let offset = 0;
+
+		// Add selection column width if pinning left
+		if (position === 'left' && enableSelection) {
+			offset += 50;
+		}
+
+		// Add widths of columns pinned before this one
+		for (const col of columns) {
+			if (col.id === column.id) break;
+			const pinState = getColumnPinState(col.id);
+			if (pinState === position) {
+				offset += getColumnWidth(col);
+			}
+		}
+
+		return offset;
+	}
+
 	function handleRowClick(row: any) {
 		if (onRowClick) {
 			onRowClick(row);
@@ -191,12 +217,14 @@
 					{@const cellClass = column.cellClass ? column.cellClass(value, row) : ''}
 					{@const editable = enableInlineEdit && isColumnEditable(column)}
 					{@const columnWidth = getColumnWidth(column)}
+					{@const pinState = getColumnPinState(column.id)}
+					{@const stickyOffset = pinState ? getStickyOffset(column, pinState) : 0}
 
 					<Table.Cell
-						class={cellClass}
-						style={enableColumnResize
+						class="{cellClass} {pinState ? 'sticky z-10 bg-background shadow-sm' : ''}"
+						style="{enableColumnResize
 							? `width: ${columnWidth}px; min-width: ${column.minWidth || 50}px; max-width: ${column.maxWidth || 500}px;`
-							: ''}
+							: ''}{pinState === 'left' ? `left: ${stickyOffset}px;` : ''}{pinState === 'right' ? `right: ${stickyOffset}px;` : ''}"
 					>
 						{#if column.cell}
 							<!-- Custom cell component -->

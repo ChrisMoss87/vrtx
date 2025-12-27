@@ -17,6 +17,19 @@
 	} from '$lib/api/workflow-email-templates';
 	import * as Popover from '$lib/components/ui/popover';
 	import { Code2 } from 'lucide-svelte';
+	import DOMPurify from 'isomorphic-dompurify';
+
+	/**
+	 * Sanitize HTML content for preview to prevent XSS attacks.
+	 * Allows more tags for email template editing.
+	 */
+	function sanitizeHtml(html: string): string {
+		return DOMPurify.sanitize(html, {
+			ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'div', 'span', 'table', 'tr', 'td', 'th', 'thead', 'tbody', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code', 'img', 'hr', 'center', 'font'],
+			ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style', 'target', 'width', 'height', 'align', 'valign', 'bgcolor', 'color', 'size', 'face', 'border', 'cellpadding', 'cellspacing'],
+			ALLOW_DATA_ATTR: false,
+		});
+	}
 
 	interface Props {
 		template?: WorkflowEmailTemplate | null;
@@ -295,7 +308,7 @@
 				<div
 					class="min-h-[300px] rounded-md border bg-white p-4 prose prose-sm max-w-none"
 				>
-					{@html bodyHtml}
+					{@html sanitizeHtml(bodyHtml)}
 				</div>
 			</Tabs.Content>
 

@@ -5,18 +5,19 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Application\Services\Activity\ActivityApplicationService;
+use App\Domain\Activity\Repositories\ActivityRepositoryInterface;
 use App\Http\Controllers\Controller;
 use App\Services\ActivityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class ActivityController extends Controller
 {
     public function __construct(
         protected ActivityApplicationService $activityApplicationService,
-        protected ActivityService $activityService
+        protected ActivityService $activityService,
+        protected ActivityRepositoryInterface $activityRepository
     ) {}
 
     /**
@@ -35,44 +36,61 @@ class ActivityController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = DB::table('activities')
-            ->with('user:id,name,email')
-            ->orderBy('created_at', 'desc');
+        $filters = [];
 
         if (isset($validated['subject_type']) && isset($validated['subject_id'])) {
-            $query->forSubject($validated['subject_type'], $validated['subject_id']);
+            $filters['subject_type'] = $validated['subject_type'];
+            $filters['subject_id'] = (int) $validated['subject_id'];
         }
 
         if (isset($validated['type'])) {
-            $query->ofType($validated['type']);
+            $filters['type'] = $validated['type'];
         }
 
         if (isset($validated['user_id'])) {
-            $query->where('user_id', $validated['user_id']);
+            $filters['user_id'] = (int) $validated['user_id'];
         }
 
         if (isset($validated['include_system']) && !$validated['include_system']) {
-            $query->userActivities();
+            $filters['is_system'] = false;
         }
 
+        $perPage = (int) ($validated['per_page'] ?? 25);
+
+        // Handle special filters
         if ($validated['scheduled_only'] ?? false) {
-            $query->upcoming();
+            $activities = $this->activityRepository->findUpcoming(
+                isset($validated['user_id']) ? (int) $validated['user_id'] : null
+            );
+            return response()->json([
+                'data' => $activities,
+                'meta' => [
+                    'total' => count($activities),
+                ],
+            ]);
         }
 
         if ($validated['overdue_only'] ?? false) {
-            $query->overdue();
+            $activities = $this->activityRepository->findOverdue(
+                isset($validated['user_id']) ? (int) $validated['user_id'] : null
+            );
+            return response()->json([
+                'data' => $activities,
+                'meta' => [
+                    'total' => count($activities),
+                ],
+            ]);
         }
 
-        $perPage = $validated['per_page'] ?? 25;
-        $activities = $query->paginate($perPage);
+        $result = $this->activityRepository->findWithFilters($filters, $perPage);
 
         return response()->json([
-            'data' => $activities->items(),
+            'data' => $result->items(),
             'meta' => [
-                'current_page' => $activities->currentPage(),
-                'last_page' => $activities->lastPage(),
-                'per_page' => $activities->perPage(),
-                'total' => $activities->total(),
+                'current_page' => $result->currentPage(),
+                'last_page' => $result->lastPage(),
+                'per_page' => $result->perPage(),
+                'total' => $result->total(),
             ],
         ]);
     }
@@ -80,9 +98,15 @@ class ActivityController extends Controller
     /**
      * Get a single activity.
      */
-    public function show(Activity $activity): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $activity->load(['user:id,name,email', 'related']);
+        $activity = $this->activityRepository->findByIdWithRelations($id);
+
+        if (!$activity) {
+            return response()->json([
+                'message' => 'Activity not found',
+            ], 404);
+        }
 
         return response()->json([
             'data' => $activity,
@@ -109,10 +133,12 @@ class ActivityController extends Controller
             'metadata' => 'nullable|array',
         ]);
 
-        $activity = DB::table('activities')->insertGetId([
+        $data = [
             'user_id' => Auth::id(),
             'type' => $validated['type'],
-            'action' => isset($validated['scheduled_at']) ? Activity::ACTION_SCHEDULED : Activity::ACTION_CREATED,
+            'action' => isset($validated['scheduled_at'])
+                ? ActivityRepositoryInterface::ACTION_SCHEDULED
+                : ActivityRepositoryInterface::ACTION_CREATED,
             'subject_type' => $validated['subject_type'],
             'subject_id' => $validated['subject_id'],
             'title' => $validated['title'],
@@ -123,10 +149,11 @@ class ActivityController extends Controller
             'outcome' => $validated['outcome'] ?? null,
             'is_internal' => $validated['is_internal'] ?? false,
             'is_pinned' => $validated['is_pinned'] ?? false,
-            'metadata' => $validated['metadata'] ?? null,
-        ]);
+            'metadata' => isset($validated['metadata']) ? json_encode($validated['metadata']) : null,
+            'is_system' => false,
+        ];
 
-        $activity->load('user:id,name,email');
+        $activity = $this->activityRepository->create($data);
 
         return response()->json([
             'data' => $activity,
@@ -137,8 +164,16 @@ class ActivityController extends Controller
     /**
      * Update an activity.
      */
-    public function update(Request $request, Activity $activity): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
+        $activity = $this->activityRepository->findByIdAsArray($id);
+
+        if (!$activity) {
+            return response()->json([
+                'message' => 'Activity not found',
+            ], 404);
+        }
+
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
@@ -151,11 +186,14 @@ class ActivityController extends Controller
             'metadata' => 'nullable|array',
         ]);
 
-        $activity->update($validated);
-        $activity->load('user:id,name,email');
+        if (isset($validated['metadata'])) {
+            $validated['metadata'] = json_encode($validated['metadata']);
+        }
+
+        $updated = $this->activityRepository->update($id, $validated);
 
         return response()->json([
-            'data' => $activity,
+            'data' => $updated,
             'message' => 'Activity updated successfully',
         ]);
     }
@@ -163,9 +201,17 @@ class ActivityController extends Controller
     /**
      * Delete an activity.
      */
-    public function destroy(Activity $activity): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $activity->delete();
+        $activity = $this->activityRepository->findByIdAsArray($id);
+
+        if (!$activity) {
+            return response()->json([
+                'message' => 'Activity not found',
+            ], 404);
+        }
+
+        $this->activityRepository->delete($id);
 
         return response()->json([
             'message' => 'Activity deleted successfully',
@@ -175,24 +221,30 @@ class ActivityController extends Controller
     /**
      * Mark activity as completed.
      */
-    public function complete(Request $request, Activity $activity): JsonResponse
+    public function complete(Request $request, int $id): JsonResponse
     {
+        $activity = $this->activityRepository->findByIdAsArray($id);
+
+        if (!$activity) {
+            return response()->json([
+                'message' => 'Activity not found',
+            ], 404);
+        }
+
         $validated = $request->validate([
             'outcome' => 'nullable|string',
             'duration_minutes' => 'nullable|integer|min:1',
         ]);
 
-        $activity->update([
+        $updated = $this->activityRepository->update($id, [
             'completed_at' => now(),
-            'action' => Activity::ACTION_COMPLETED,
-            'outcome' => $validated['outcome'] ?? Activity::OUTCOME_COMPLETED,
-            'duration_minutes' => $validated['duration_minutes'] ?? $activity->duration_minutes,
+            'action' => ActivityRepositoryInterface::ACTION_COMPLETED,
+            'outcome' => $validated['outcome'] ?? ActivityRepositoryInterface::OUTCOME_COMPLETED,
+            'duration_minutes' => $validated['duration_minutes'] ?? $activity['duration_minutes'],
         ]);
 
-        $activity->load('user:id,name,email');
-
         return response()->json([
-            'data' => $activity,
+            'data' => $updated,
             'message' => 'Activity marked as completed',
         ]);
     }
@@ -200,13 +252,23 @@ class ActivityController extends Controller
     /**
      * Toggle pinned status.
      */
-    public function togglePin(Activity $activity): JsonResponse
+    public function togglePin(int $id): JsonResponse
     {
-        $activity->togglePin();
+        $activity = $this->activityRepository->findByIdAsArray($id);
+
+        if (!$activity) {
+            return response()->json([
+                'message' => 'Activity not found',
+            ], 404);
+        }
+
+        $updated = $this->activityRepository->update($id, [
+            'is_pinned' => !$activity['is_pinned'],
+        ]);
 
         return response()->json([
-            'data' => $activity->fresh(),
-            'message' => $activity->is_pinned ? 'Activity pinned' : 'Activity unpinned',
+            'data' => $updated,
+            'message' => $updated['is_pinned'] ? 'Activity pinned' : 'Activity unpinned',
         ]);
     }
 
@@ -223,21 +285,13 @@ class ActivityController extends Controller
             'limit' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = Activity::forSubject($validated['subject_type'], $validated['subject_id'])
-            ->with('user:id,name,email')
-            ->orderBy('is_pinned', 'desc')
-            ->orderBy('created_at', 'desc');
-
-        if (isset($validated['type'])) {
-            $query->ofType($validated['type']);
-        }
-
-        if (isset($validated['include_system']) && !$validated['include_system']) {
-            $query->userActivities();
-        }
-
-        $limit = $validated['limit'] ?? 50;
-        $activities = $query->limit($limit)->get();
+        $activities = $this->activityRepository->findForSubject(
+            $validated['subject_type'],
+            (int) $validated['subject_id'],
+            (int) ($validated['limit'] ?? 50),
+            $validated['type'] ?? null,
+            $validated['include_system'] ?? true
+        );
 
         return response()->json([
             'data' => $activities,
@@ -254,10 +308,10 @@ class ActivityController extends Controller
             'user_id' => 'nullable|integer',
         ]);
 
-        $days = $validated['days'] ?? 7;
-        $userId = $validated['user_id'] ?? Auth::id();
+        $days = (int) ($validated['days'] ?? 7);
+        $userId = isset($validated['user_id']) ? (int) $validated['user_id'] : Auth::id();
 
-        $activities = $this->activityService->getUpcoming($userId, $days);
+        $activities = $this->activityRepository->findUpcoming($userId, $days);
 
         return response()->json([
             'data' => $activities,
@@ -273,8 +327,8 @@ class ActivityController extends Controller
             'user_id' => 'nullable|integer',
         ]);
 
-        $userId = $validated['user_id'] ?? Auth::id();
-        $activities = $this->activityService->getOverdue($userId);
+        $userId = isset($validated['user_id']) ? (int) $validated['user_id'] : Auth::id();
+        $activities = $this->activityRepository->findOverdue($userId);
 
         return response()->json([
             'data' => $activities,
@@ -287,7 +341,14 @@ class ActivityController extends Controller
     public function types(): JsonResponse
     {
         return response()->json([
-            'data' => Activity::getTypes(),
+            'data' => [
+                ['value' => ActivityRepositoryInterface::TYPE_NOTE, 'label' => 'Note', 'icon' => 'file-text', 'color' => 'blue'],
+                ['value' => ActivityRepositoryInterface::TYPE_CALL, 'label' => 'Call', 'icon' => 'phone', 'color' => 'green'],
+                ['value' => ActivityRepositoryInterface::TYPE_MEETING, 'label' => 'Meeting', 'icon' => 'calendar', 'color' => 'purple'],
+                ['value' => ActivityRepositoryInterface::TYPE_TASK, 'label' => 'Task', 'icon' => 'check-square', 'color' => 'orange'],
+                ['value' => ActivityRepositoryInterface::TYPE_COMMENT, 'label' => 'Comment', 'icon' => 'message-square', 'color' => 'gray'],
+                ['value' => ActivityRepositoryInterface::TYPE_EMAIL, 'label' => 'Email', 'icon' => 'mail', 'color' => 'indigo'],
+            ],
         ]);
     }
 
@@ -297,7 +358,14 @@ class ActivityController extends Controller
     public function outcomes(): JsonResponse
     {
         return response()->json([
-            'data' => Activity::getOutcomes(),
+            'data' => [
+                ['value' => ActivityRepositoryInterface::OUTCOME_COMPLETED, 'label' => 'Completed'],
+                ['value' => ActivityRepositoryInterface::OUTCOME_CANCELLED, 'label' => 'Cancelled'],
+                ['value' => ActivityRepositoryInterface::OUTCOME_NO_ANSWER, 'label' => 'No Answer'],
+                ['value' => ActivityRepositoryInterface::OUTCOME_LEFT_VOICEMAIL, 'label' => 'Left Voicemail'],
+                ['value' => ActivityRepositoryInterface::OUTCOME_BUSY, 'label' => 'Busy'],
+                ['value' => ActivityRepositoryInterface::OUTCOME_RESCHEDULED, 'label' => 'Rescheduled'],
+            ],
         ]);
     }
 }

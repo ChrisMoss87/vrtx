@@ -1,9 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Stancl\Tenancy\Database\Models\Domain;
 use Illuminate\Support\Facades\DB;
 
 class TenantSeeder extends Seeder
@@ -40,24 +41,34 @@ class TenantSeeder extends Seeder
      */
     public function run(): void
     {
+        $centralConnection = config('tenancy.database.central_connection', 'central');
+
         foreach (self::TENANTS as $id => $config) {
-            $tenant = DB::table('tenants')->insertGetId([
+            $now = now();
+
+            // Insert tenant
+            DB::connection($centralConnection)->table('tenants')->insert([
                 'id' => $id,
-                'data' => [
+                'data' => json_encode([
                     'name' => $config['name'],
                     'plan' => $config['plan'],
                     'status' => 'active',
                     'users_limit' => $config['users_limit'],
                     'storage_limit_mb' => $config['storage_limit_mb'],
-                ]
+                ]),
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
 
-            Domain::create([
+            // Insert domain
+            DB::connection($centralConnection)->table('domains')->insert([
                 'domain' => $config['domain'],
                 'tenant_id' => $id,
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
 
-            $this->command->info("✓ Created tenant: {$id} ({$config['domain']})");
+            $this->command->info("Created tenant: {$id} ({$config['domain']})");
         }
 
         $this->command->newLine();

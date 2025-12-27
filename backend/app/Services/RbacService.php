@@ -4,13 +4,22 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
+/**
+ * @deprecated Use App\Application\Services\Authorization\AuthorizationApplicationService instead.
+ *             This class is kept for backward compatibility and will be removed in a future version.
+ *             The new AuthorizationApplicationService provides better performance with Redis caching,
+ *             follows DDD patterns, and doesn't rely on Spatie's permission package.
+ *
+ * @see \App\Application\Services\Authorization\AuthorizationApplicationService
+ * @see \App\Infrastructure\Authorization\CachedAuthorizationService
+ */
 class RbacService
 {
     public const ACCESS_ALL = 'all';
@@ -162,6 +171,9 @@ class RbacService
 
     /**
      * Check if record belongs to user's team.
+     *
+     * SECURITY: Until teams are properly implemented, TEAM access falls back to OWN access
+     * to prevent unauthorized access to all records.
      */
     protected function isTeamRecord(User $user, object $record): bool
     {
@@ -171,9 +183,10 @@ class RbacService
             return true;
         }
 
-        // TODO: Implement team logic when teams are added
-        // For now, team access means all records
-        return true;
+        // TODO: Implement proper team membership checking when teams feature is added.
+        // For now, TEAM access falls back to OWN access for security.
+        // When implemented, this should check if $user is in the same team as $ownerId.
+        return false;
     }
 
     /**
@@ -205,9 +218,16 @@ class RbacService
      */
     protected function applyTeamScope(Builder $query, User $user): Builder
     {
-        // TODO: Implement team logic when teams are added
-        // For now, team access means all records
-        return $query;
+        // SECURITY: Until teams are properly implemented, TEAM access falls back to OWN access
+        // to prevent unauthorized access to all records.
+        // TODO: When teams feature is implemented, modify this to include:
+        //   - Records created by the user
+        //   - Records created by users in the same team(s)
+        // Example: $query->where(function($q) use ($user) {
+        //     $q->where('created_by', $user->id)
+        //       ->orWhereIn('created_by', $user->getTeamMemberIds());
+        // });
+        return $query->where('created_by', $user->id);
     }
 
     /**

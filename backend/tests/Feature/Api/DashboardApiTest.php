@@ -6,12 +6,16 @@ namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use App\Domain\User\Entities\User;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Reporting\Entities\Dashboard;
+use App\Domain\Reporting\Entities\DashboardWidget;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DashboardApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -21,8 +25,8 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
@@ -51,7 +55,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_dashboards(): void
     {
-        /* Dashboard factory - use DB::table('dashboards') */->count(3)->create([
+        Dashboard::factory()->count(3)->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -110,7 +114,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_show_dashboard(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -139,7 +143,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_dashboard(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'name' => 'Original Name',
             'user_id' => $this->user->id,
         ]);
@@ -166,7 +170,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_dashboard(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -186,11 +190,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_set_dashboard_as_default(): void
     {
-        $dashboard1 = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard1 = Dashboard::factory()->create([
             'user_id' => $this->user->id,
             'is_default' => true,
         ]);
-        $dashboard2 = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard2 = Dashboard::factory()->create([
             'user_id' => $this->user->id,
             'is_default' => false,
         ]);
@@ -204,11 +208,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_get_default_dashboard(): void
     {
-        /* Dashboard factory - use DB::table('dashboards') */->create([
+        Dashboard::factory()->create([
             'user_id' => $this->user->id,
             'is_default' => false,
         ]);
-        $defaultDashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $defaultDashboard = Dashboard::factory()->create([
             'user_id' => $this->user->id,
             'is_default' => true,
         ]);
@@ -225,7 +229,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_add_widget_to_dashboard(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -253,10 +257,10 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_widget(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'user_id' => $this->user->id,
         ]);
-        $widget = /* DashboardWidget factory - use DB::table('dashboard_widgets') */->create([
+        $widget = DashboardWidget::factory()->create([
             'dashboard_id' => $dashboard->id,
             'title' => 'Original Title',
         ]);
@@ -271,10 +275,10 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_widget(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'user_id' => $this->user->id,
         ]);
-        $widget = /* DashboardWidget factory - use DB::table('dashboard_widgets') */->create([
+        $widget = DashboardWidget::factory()->create([
             'dashboard_id' => $dashboard->id,
         ]);
 
@@ -286,13 +290,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_widget_positions(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'user_id' => $this->user->id,
         ]);
-        $widget1 = /* DashboardWidget factory - use DB::table('dashboard_widgets') */->create([
+        $widget1 = DashboardWidget::factory()->create([
             'dashboard_id' => $dashboard->id,
         ]);
-        $widget2 = /* DashboardWidget factory - use DB::table('dashboard_widgets') */->create([
+        $widget2 = DashboardWidget::factory()->create([
             'dashboard_id' => $dashboard->id,
         ]);
 
@@ -312,7 +316,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_toggle_dashboard_public(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'user_id' => $this->user->id,
             'is_public' => false,
         ]);
@@ -325,13 +329,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_see_public_dashboards_from_other_users(): void
     {
-        $otherUser = /* User factory - use DB::table('users') */->create();
+        $otherUser = User::factory()->create();
 
-        /* Dashboard factory - use DB::table('dashboards') */->create([
+        Dashboard::factory()->create([
             'user_id' => $otherUser->id,
             'is_public' => true,
         ]);
-        /* Dashboard factory - use DB::table('dashboards') */->create([
+        Dashboard::factory()->create([
             'user_id' => $otherUser->id,
             'is_public' => false,
         ]);
@@ -350,11 +354,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_clone_dashboard(): void
     {
-        $dashboard = /* Dashboard factory - use DB::table('dashboards') */->create([
+        $dashboard = Dashboard::factory()->create([
             'name' => 'Original Dashboard',
             'user_id' => $this->user->id,
         ]);
-        /* DashboardWidget factory - use DB::table('dashboard_widgets') */->count(3)->create([
+        DashboardWidget::factory()->count(3)->create([
             'dashboard_id' => $dashboard->id,
         ]);
 

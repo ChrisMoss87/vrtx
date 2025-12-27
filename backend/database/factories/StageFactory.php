@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Pipeline\Entities\Stage;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Stage>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Pipeline\Entities\Stage>
  */
 class StageFactory extends Factory
 {

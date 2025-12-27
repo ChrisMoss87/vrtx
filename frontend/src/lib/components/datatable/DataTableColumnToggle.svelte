@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { Settings2, GripVertical } from 'lucide-svelte';
+	import { Settings2, GripVertical, PinOff, ArrowLeftToLine, ArrowRightToLine } from 'lucide-svelte';
 	import type { TableContext, ColumnDef } from './types';
 	import { flip } from 'svelte/animate';
 	import { dndzone, SHADOW_ITEM_MARKER_PROPERTY_NAME, TRIGGERS } from 'svelte-dnd-action';
@@ -95,6 +95,14 @@
 	function handleToggle(columnId: string) {
 		table.toggleColumnVisibility(columnId);
 	}
+
+	function handlePin(columnId: string, position: 'left' | 'right' | false) {
+		table.pinColumn(columnId, position);
+	}
+
+	function getColumnPinState(columnId: string): 'left' | 'right' | false {
+		return table.state.columnPinning[columnId] || false;
+	}
 </script>
 
 <DropdownMenu.Root>
@@ -127,9 +135,9 @@
 		>
 			{#each items as item (item.id)}
 				{@const isShadow = item[SHADOW_ITEM_MARKER_PROPERTY_NAME]}
-				{@const _ = (isShadow || !item.column) && console.log('[DND Render]', { id: item.id, isShadow, hasColumn: !!item.column, column: item.column })}
+				{@const pinState = getColumnPinState(item.id)}
 				<div
-					class="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-accent group bg-background transition-all duration-150 {isShadow ? 'opacity-40 border-2 border-dashed border-primary bg-primary/5' : ''}"
+					class="flex items-center gap-1 rounded-sm px-2 py-1.5 hover:bg-accent group bg-background transition-all duration-150 {isShadow ? 'opacity-40 border-2 border-dashed border-primary bg-primary/5' : ''} {pinState ? 'bg-primary/5' : ''}"
 					animate:flip={{ duration: flipDurationMs }}
 				>
 					<div class="cursor-grab active:cursor-grabbing touch-none">
@@ -149,6 +157,49 @@
 							{item.column?.header ?? item.id}
 						</span>
 					</button>
+
+					<!-- Pin controls -->
+					<div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+						{#if pinState === 'left'}
+							<button
+								type="button"
+								class="p-1 rounded hover:bg-destructive/10 text-primary"
+								title="Unpin column"
+								onclick={() => handlePin(item.id, false)}
+							>
+								<PinOff class="h-3 w-3" />
+							</button>
+						{:else}
+							<button
+								type="button"
+								class="p-1 rounded hover:bg-accent-foreground/10 text-muted-foreground hover:text-foreground"
+								title="Pin to left"
+								onclick={() => handlePin(item.id, 'left')}
+							>
+								<ArrowLeftToLine class="h-3 w-3" />
+							</button>
+						{/if}
+
+						{#if pinState === 'right'}
+							<button
+								type="button"
+								class="p-1 rounded hover:bg-destructive/10 text-primary"
+								title="Unpin column"
+								onclick={() => handlePin(item.id, false)}
+							>
+								<PinOff class="h-3 w-3" />
+							</button>
+						{:else}
+							<button
+								type="button"
+								class="p-1 rounded hover:bg-accent-foreground/10 text-muted-foreground hover:text-foreground"
+								title="Pin to right"
+								onclick={() => handlePin(item.id, 'right')}
+							>
+								<ArrowRightToLine class="h-3 w-3" />
+							</button>
+						{/if}
+					</div>
 				</div>
 			{/each}
 		</section>

@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\User\Entities\User;
+use App\Domain\Modules\Entities\Module;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ViewsApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -19,8 +21,8 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Leads',
             'singular_name' => 'Lead',
             'api_name' => 'leads',
@@ -195,7 +197,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_shared_views_can_be_accessed_by_any_user(): void
     {
-        $otherUser = /* User factory - use DB::table('users') */->create();
+        $otherUser = User::factory()->create();
 
         $sharedView = DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,
@@ -215,7 +217,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_private_views_are_user_specific(): void
     {
-        $otherUser = /* User factory - use DB::table('users') */->create();
+        $otherUser = User::factory()->create();
 
         DB::table('module_views')->insertGetId([
             'module_id' => $this->module->id,

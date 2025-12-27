@@ -33,23 +33,28 @@ class ReportController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Report::accessibleBy(Auth::id())
-            ->with('module:id,name,api_name')
-            ->with('user:id,name');
+        $userId = Auth::id();
+
+        $query = DB::table('reports')
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('is_public', true);
+            })
+            ->whereNull('deleted_at');
 
         // Filter by module
         if ($request->has('module_id')) {
-            $query->forModule($request->input('module_id'));
+            $query->where('module_id', $request->input('module_id'));
         }
 
         // Filter by type
         if ($request->has('type')) {
-            $query->ofType($request->input('type'));
+            $query->where('type', $request->input('type'));
         }
 
         // Filter favorites only
         if ($request->boolean('favorites')) {
-            $query->favorites();
+            $query->where('is_favorite', true);
         }
 
         // Search by name
@@ -57,17 +62,41 @@ class ReportController extends Controller
             $query->where('name', 'ilike', '%' . $request->input('search') . '%');
         }
 
+        // Get paginated results
+        $perPage = $request->input('per_page', 20);
+        $page = $request->integer('page', 1);
+        $total = $query->count();
+
         $reports = $query->orderBy('is_favorite', 'desc')
             ->orderBy('updated_at', 'desc')
-            ->paginate($request->input('per_page', 20));
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get()
+            ->map(function ($report) {
+                // Add module info
+                if ($report->module_id) {
+                    $report->module = DB::table('modules')
+                        ->where('id', $report->module_id)
+                        ->select(['id', 'name', 'api_name'])
+                        ->first();
+                }
+                // Add user info
+                if ($report->user_id) {
+                    $report->user = DB::table('users')
+                        ->where('id', $report->user_id)
+                        ->select(['id', 'name'])
+                        ->first();
+                }
+                return $report;
+            });
 
         return response()->json([
-            'data' => $reports->items(),
+            'data' => $reports,
             'meta' => [
-                'current_page' => $reports->currentPage(),
-                'last_page' => $reports->lastPage(),
-                'per_page' => $reports->perPage(),
-                'total' => $reports->total(),
+                'current_page' => $page,
+                'last_page' => (int) ceil($total / $perPage),
+                'per_page' => (int) $perPage,
+                'total' => $total,
             ],
         ]);
     }
@@ -77,10 +106,38 @@ class ReportController extends Controller
      */
     public function types(): JsonResponse
     {
+        $reportTypes = [
+            ['id' => 'table', 'name' => 'Table', 'description' => 'Tabular data report'],
+            ['id' => 'chart', 'name' => 'Chart', 'description' => 'Chart visualization'],
+            ['id' => 'summary', 'name' => 'Summary', 'description' => 'Summary statistics'],
+            ['id' => 'matrix', 'name' => 'Matrix', 'description' => 'Cross-tabulation matrix'],
+            ['id' => 'pivot', 'name' => 'Pivot', 'description' => 'Pivot table report'],
+        ];
+
+        $chartTypes = [
+            ['id' => 'bar', 'name' => 'Bar Chart'],
+            ['id' => 'line', 'name' => 'Line Chart'],
+            ['id' => 'pie', 'name' => 'Pie Chart'],
+            ['id' => 'doughnut', 'name' => 'Doughnut Chart'],
+            ['id' => 'area', 'name' => 'Area Chart'],
+            ['id' => 'funnel', 'name' => 'Funnel Chart'],
+            ['id' => 'scatter', 'name' => 'Scatter Plot'],
+            ['id' => 'gauge', 'name' => 'Gauge Chart'],
+            ['id' => 'kpi', 'name' => 'KPI Card'],
+        ];
+
+        $aggregations = [
+            ['id' => 'count', 'name' => 'Count', 'description' => 'Count of records'],
+            ['id' => 'sum', 'name' => 'Sum', 'description' => 'Sum of values'],
+            ['id' => 'avg', 'name' => 'Average', 'description' => 'Average of values'],
+            ['id' => 'min', 'name' => 'Minimum', 'description' => 'Minimum value'],
+            ['id' => 'max', 'name' => 'Maximum', 'description' => 'Maximum value'],
+        ];
+
         return response()->json([
-            'report_types' => Report::getTypes(),
-            'chart_types' => Report::getChartTypes(),
-            'aggregations' => Report::getAggregations(),
+            'report_types' => $reportTypes,
+            'chart_types' => $chartTypes,
+            'aggregations' => $aggregations,
         ]);
     }
 

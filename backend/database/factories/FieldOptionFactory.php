@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Modules\Entities\FieldOption;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\FieldOption>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Modules\Entities\FieldOption>
  */
 class FieldOptionFactory extends Factory
 {

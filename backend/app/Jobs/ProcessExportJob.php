@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Infrastructure\Services\Spreadsheet\CsvService;
+use App\Infrastructure\Services\Spreadsheet\XlsxWriter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -12,10 +14,6 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
-use Illuminate\Support\Facades\DB;
 
 class ProcessExportJob implements ShouldQueue
 {
@@ -24,11 +22,53 @@ class ProcessExportJob implements ShouldQueue
     public int $tries = 3;
     public int $timeout = 3600; // 1 hour
 
+    /**
+     * System fields that are stored directly on the table.
+     */
+    private const SYSTEM_FIELDS = ['id', 'module_id', 'created_at', 'updated_at', 'owner_id', 'created_by'];
+
     public function __construct(
         public Export $export
     ) {}
 
-    public function handle(): void
+    /**
+     * Validate field name to prevent SQL injection.
+     * Only allows alphanumeric characters and underscores.
+     */
+    private function validateFieldName(string $field): string
+    {
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $field)) {
+            throw new \InvalidArgumentException("Invalid field name: {$field}");
+        }
+
+        return $field;
+    }
+
+    /**
+     * Validate sort direction.
+     */
+    private function validateDirection(string $direction): string
+    {
+        $normalizedDirection = strtolower(trim($direction));
+
+        return in_array($normalizedDirection, ['asc', 'desc'], true) ? $normalizedDirection : 'asc';
+    }
+
+    /**
+     * Get safe column expression for JSONB data field.
+     */
+    private function getSafeColumnExpression(string $field): string
+    {
+        $field = $this->validateFieldName($field);
+
+        if (in_array($field, self::SYSTEM_FIELDS, true)) {
+            return $field;
+        }
+
+        return "data->>'{$field}'";
+    }
+
+    public function handle(CsvService $csvService, XlsxWriter $xlsxWriter): void
     {
         Log::info('Starting export', ['export_id' => $this->export->id]);
 
@@ -36,30 +76,35 @@ class ProcessExportJob implements ShouldQueue
 
         try {
             $module = $this->export->module;
+            // Validate selected fields before using in query
+            $validatedFields = [];
+            foreach ($this->export->selected_fields as $fieldName) {
+                try {
+                    $validatedFields[] = $this->validateFieldName($fieldName);
+                } catch (\InvalidArgumentException $e) {
+                    // Skip invalid field names
+                    continue;
+                }
+            }
+
             $fields = $module->fields()
-                ->whereIn('api_name', $this->export->selected_fields)
-                ->orderByRaw('FIELD(api_name, "' . implode('","', $this->export->selected_fields) . '")')
-                ->get();
+                ->whereIn('api_name', $validatedFields)
+                ->get()
+                ->sortBy(function ($field) use ($validatedFields) {
+                    return array_search($field->api_name, $validatedFields);
+                })
+                ->values();
 
             $options = $this->export->export_options ?? [];
             $includeHeaders = $options['include_headers'] ?? true;
             $dateFormat = $options['date_format'] ?? 'Y-m-d';
 
-            // Create spreadsheet
-            $spreadsheet = new Spreadsheet();
-            $sheet = $spreadsheet->getActiveSheet();
-            $sheet->setTitle(Str::limit($module->name, 31));
-
-            $row = 1;
-
-            // Add headers
+            // Build headers
+            $headers = [];
             if ($includeHeaders) {
-                $col = 1;
                 foreach ($fields as $field) {
-                    $sheet->setCellValueByColumnAndRow($col, $row, $field->label);
-                    $col++;
+                    $headers[] = $field->label;
                 }
-                $row++;
             }
 
             // Query records
@@ -70,33 +115,26 @@ class ProcessExportJob implements ShouldQueue
                 $query = $this->applyFilters($query, $this->export->filters);
             }
 
-            // Apply sorting
+            // Apply sorting with validation
             if (!empty($this->export->sorting)) {
                 foreach ($this->export->sorting as $sort) {
-                    $query->orderBy(
-                        "data->{$sort['field']}",
-                        $sort['direction'] ?? 'asc'
-                    );
+                    $field = $sort['field'] ?? null;
+                    $direction = $sort['direction'] ?? 'asc';
+
+                    if ($field) {
+                        try {
+                            $column = $this->getSafeColumnExpression($field);
+                            $safeDirection = $this->validateDirection($direction);
+                            $query->orderByRaw("{$column} {$safeDirection}");
+                        } catch (\InvalidArgumentException $e) {
+                            // Skip invalid field names
+                            continue;
+                        }
+                    }
                 }
             }
 
-            // Process records in chunks
-            $exportedCount = 0;
-            $query->chunk(1000, function ($records) use (&$sheet, &$row, $fields, $dateFormat, &$exportedCount) {
-                foreach ($records as $record) {
-                    $col = 1;
-                    foreach ($fields as $field) {
-                        $value = $record->data[$field->api_name] ?? null;
-                        $value = $this->formatValue($value, $field, $dateFormat);
-                        $sheet->setCellValueByColumnAndRow($col, $row, $value);
-                        $col++;
-                    }
-                    $row++;
-                    $exportedCount++;
-                }
-            });
-
-            // Generate file
+            // Generate file path
             $fileName = Str::slug($this->export->name) . '-' . now()->format('Y-m-d-His') . '.' . $this->export->file_type;
             $filePath = 'exports/' . date('Y/m') . '/' . Str::uuid() . '.' . $this->export->file_type;
 
@@ -105,14 +143,12 @@ class ProcessExportJob implements ShouldQueue
 
             $tempPath = Storage::disk('exports')->path($filePath);
 
-            // Write file
-            $writer = match ($this->export->file_type) {
-                'csv' => new CsvWriter($spreadsheet),
-                'xlsx' => new XlsxWriter($spreadsheet),
+            // Export based on file type
+            $exportedCount = match ($this->export->file_type) {
+                'csv' => $this->exportToCsv($csvService, $tempPath, $query, $fields, $headers, $dateFormat),
+                'xlsx' => $this->exportToXlsx($xlsxWriter, $tempPath, $query, $fields, $headers, $dateFormat, $module->name),
                 default => throw new \InvalidArgumentException("Unsupported file type: {$this->export->file_type}"),
             };
-
-            $writer->save($tempPath);
 
             $fileSize = filesize($tempPath);
 
@@ -132,6 +168,78 @@ class ProcessExportJob implements ShouldQueue
             $this->export->markAsFailed($e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Export to CSV using native service.
+     */
+    protected function exportToCsv(
+        CsvService $csvService,
+        string $filePath,
+        $query,
+        $fields,
+        array $headers,
+        string $dateFormat
+    ): int {
+        $rows = [];
+        $exportedCount = 0;
+
+        $query->chunk(1000, function ($records) use (&$rows, $fields, $dateFormat, &$exportedCount) {
+            foreach ($records as $record) {
+                $row = [];
+                foreach ($fields as $field) {
+                    $value = $record->data[$field->api_name] ?? null;
+                    $row[] = $this->formatValue($value, $field, $dateFormat);
+                }
+                $rows[] = $row;
+                $exportedCount++;
+            }
+        });
+
+        $csvService->write($filePath, $rows, [
+            'headers' => $headers,
+            'include_headers' => !empty($headers),
+        ]);
+
+        return $exportedCount;
+    }
+
+    /**
+     * Export to Excel using native service.
+     */
+    protected function exportToXlsx(
+        XlsxWriter $xlsxWriter,
+        string $filePath,
+        $query,
+        $fields,
+        array $headers,
+        string $dateFormat,
+        string $sheetName
+    ): int {
+        $rows = [];
+        $exportedCount = 0;
+
+        $query->chunk(1000, function ($records) use (&$rows, $fields, $dateFormat, &$exportedCount) {
+            foreach ($records as $record) {
+                $row = [];
+                foreach ($fields as $field) {
+                    $value = $record->data[$field->api_name] ?? null;
+                    $row[] = $this->formatValue($value, $field, $dateFormat);
+                }
+                $rows[] = $row;
+                $exportedCount++;
+            }
+        });
+
+        $xlsxWriter->reset();
+        $xlsxWriter->addSheet(
+            mb_substr($sheetName, 0, 31),
+            $rows,
+            ['headers' => $headers, 'header_style' => true]
+        );
+        $xlsxWriter->save($filePath);
+
+        return $exportedCount;
     }
 
     /**
@@ -169,6 +277,7 @@ class ProcessExportJob implements ShouldQueue
 
     /**
      * Apply filters to query.
+     * Uses validated field names to prevent SQL injection.
      */
     protected function applyFilters($query, array $filters)
     {
@@ -181,21 +290,28 @@ class ProcessExportJob implements ShouldQueue
                 continue;
             }
 
+            try {
+                $column = $this->getSafeColumnExpression($field);
+            } catch (\InvalidArgumentException $e) {
+                // Skip invalid field names
+                continue;
+            }
+
             match ($operator) {
-                '=' => $query->where("data->{$field}", $value),
-                '!=' => $query->where("data->{$field}", '!=', $value),
-                '>' => $query->where("data->{$field}", '>', $value),
-                '>=' => $query->where("data->{$field}", '>=', $value),
-                '<' => $query->where("data->{$field}", '<', $value),
-                '<=' => $query->where("data->{$field}", '<=', $value),
-                'contains' => $query->where("data->{$field}", 'like', "%{$value}%"),
-                'starts_with' => $query->where("data->{$field}", 'like', "{$value}%"),
-                'ends_with' => $query->where("data->{$field}", 'like', "%{$value}"),
-                'is_null' => $query->whereNull("data->{$field}"),
-                'is_not_null' => $query->whereNotNull("data->{$field}"),
-                'in' => $query->whereIn("data->{$field}", (array) $value),
-                'not_in' => $query->whereNotIn("data->{$field}", (array) $value),
-                default => $query->where("data->{$field}", $value),
+                '=' => $query->whereRaw("{$column} = ?", [$value]),
+                '!=' => $query->whereRaw("{$column} != ?", [$value]),
+                '>' => $query->whereRaw("{$column} > ?", [$value]),
+                '>=' => $query->whereRaw("{$column} >= ?", [$value]),
+                '<' => $query->whereRaw("{$column} < ?", [$value]),
+                '<=' => $query->whereRaw("{$column} <= ?", [$value]),
+                'contains' => $query->whereRaw("{$column} ILIKE ?", ["%{$value}%"]),
+                'starts_with' => $query->whereRaw("{$column} ILIKE ?", ["{$value}%"]),
+                'ends_with' => $query->whereRaw("{$column} ILIKE ?", ["%{$value}"]),
+                'is_null' => $query->whereRaw("{$column} IS NULL"),
+                'is_not_null' => $query->whereRaw("{$column} IS NOT NULL"),
+                'in' => $query->whereRaw("{$column} = ANY(?)", [(array) $value]),
+                'not_in' => $query->whereRaw("{$column} != ALL(?)", [(array) $value]),
+                default => $query->whereRaw("{$column} = ?", [$value]),
             };
         }
 

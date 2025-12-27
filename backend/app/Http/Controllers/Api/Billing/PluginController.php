@@ -1,33 +1,27 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api\Billing;
 
+use App\Application\Services\Plugin\PluginApplicationService;
 use App\Http\Controllers\Controller;
-use App\Services\PluginLicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class PluginController extends Controller
 {
     public function __construct(
-        private PluginLicenseService $licenseService
+        private PluginApplicationService $pluginService,
     ) {}
 
     /**
-     * List all available plugins
+     * List all available plugins.
      */
     public function index(): JsonResponse
     {
-        $plugins = $this->licenseService->getAvailablePlugins();
-
-        // Group by category
-        $grouped = $plugins->groupBy('category')->map(function ($items, $category) {
-            return [
-                'category' => $category,
-                'plugins' => $items->values(),
-            ];
-        })->values();
+        $plugins = $this->pluginService->getAvailablePlugins();
+        $grouped = $this->pluginService->getAvailablePluginsGroupedByCategory();
 
         return response()->json([
             'plugins' => $plugins,
@@ -36,33 +30,27 @@ class PluginController extends Controller
     }
 
     /**
-     * Get plugin details
+     * Get plugin details.
      */
     public function show(string $slug): JsonResponse
     {
-        $plugin = DB::table('plugins')->where('slug', $slug)->first();
+        $plugin = $this->pluginService->getPluginBySlug($slug);
 
         if (!$plugin) {
             return response()->json(['error' => 'Plugin not found'], 404);
         }
 
-        $plugin->is_licensed = $this->licenseService->hasPlugin($slug);
+        $plugin['is_licensed'] = $this->pluginService->isPluginLicensed($slug);
 
         return response()->json($plugin);
     }
 
     /**
-     * Get active licenses
+     * Get active licenses.
      */
     public function licenses(): JsonResponse
     {
-        $licenses = PluginLicense::with([])
-            ->where('status', PluginLicense::STATUS_ACTIVE)
-            ->get()
-            ->map(function ($license) {
-                $license->plugin = DB::table('plugins')->where('slug', $license->plugin_slug)->first();
-                return $license;
-            });
+        $licenses = $this->pluginService->getActiveLicensesWithPluginDetails();
 
         return response()->json([
             'licenses' => $licenses,
@@ -70,68 +58,134 @@ class PluginController extends Controller
     }
 
     /**
-     * Activate a plugin (stub for Stripe integration)
+     * Activate a plugin license.
      */
     public function activate(Request $request, string $slug): JsonResponse
     {
-        $plugin = DB::table('plugins')->where('slug', $slug)->first();
-
-        if (!$plugin) {
-            return response()->json(['error' => 'Plugin not found'], 404);
-        }
-
-        if ($this->licenseService->hasPlugin($slug)) {
-            return response()->json(['error' => 'Plugin already licensed'], 400);
-        }
-
-        // In production, this would create a Stripe checkout session
-        // For now, we'll create a license directly (for development/testing)
-        $license = DB::table('plugin_licenses')->insertGetId([
-            'plugin_slug' => $slug,
-            'status' => PluginLicense::STATUS_ACTIVE,
-            'pricing_model' => $plugin->pricing_model,
+        $result = $this->pluginService->activatePlugin($slug, [
             'quantity' => $request->input('quantity', 1),
-            'price_monthly' => $plugin->price_monthly,
-            'activated_at' => now(),
+            'external_subscription_item_id' => $request->input('external_subscription_item_id'),
         ]);
 
-        $this->licenseService->clearCache();
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['errors'][0] ?? 'Failed to activate plugin',
+                'errors' => $result['errors'] ?? [],
+            ], 400);
+        }
 
         return response()->json([
             'message' => 'Plugin activated successfully',
-            'license' => $license,
+            'license' => $result['license'],
+            'plugin' => $result['plugin'] ?? null,
+            'features_unlocked' => $result['features_unlocked'] ?? [],
+            'settings_path' => $result['settings_path'] ?? null,
+            'next_steps' => $result['next_steps'] ?? [],
         ]);
     }
 
     /**
-     * Deactivate a plugin
+     * Deactivate a plugin license.
      */
     public function deactivate(string $slug): JsonResponse
     {
-        $license = DB::table('plugin_licenses')->where('plugin_slug', $slug)
-            ->where('status', PluginLicense::STATUS_ACTIVE)
-            ->first();
+        $result = $this->pluginService->deactivatePlugin($slug);
 
-        if (!$license) {
-            return response()->json(['error' => 'No active license found'], 404);
-        }
+        if (!$result['success']) {
+            $errorMessage = $result['errors'][0] ?? 'Failed to deactivate plugin';
+            $statusCode = str_contains($errorMessage, 'bundled') ? 400 : 404;
 
-        // Check if it's a bundled plugin
-        if ($license->bundle_slug) {
             return response()->json([
-                'error' => 'Cannot deactivate a bundled plugin individually',
-                'bundle' => $license->bundle_slug,
-            ], 400);
+                'error' => $errorMessage,
+                'errors' => $result['errors'] ?? [],
+            ], $statusCode);
         }
-
-        $license->update([
-            'status' => PluginLicense::STATUS_CANCELLED,
-        ]);
-
-        $this->licenseService->clearCache();
 
         return response()->json([
             'message' => 'Plugin deactivated successfully',
+        ]);
+    }
+
+    /**
+     * Get license state.
+     */
+    public function licenseState(): JsonResponse
+    {
+        return response()->json($this->pluginService->getLicenseState());
+    }
+
+    /**
+     * Get plugin bundles.
+     */
+    public function bundles(): JsonResponse
+    {
+        $bundles = $this->pluginService->getActiveBundles();
+
+        return response()->json([
+            'bundles' => $bundles,
+        ]);
+    }
+
+    /**
+     * Get plugin usage stats.
+     */
+    public function usage(): JsonResponse
+    {
+        $usage = $this->pluginService->getUsageStats();
+
+        return response()->json([
+            'usage' => $usage,
+        ]);
+    }
+
+    /**
+     * Get plugin statistics.
+     */
+    public function stats(): JsonResponse
+    {
+        return response()->json([
+            'plugins' => $this->pluginService->getPluginStats(),
+            'licenses' => $this->pluginService->getLicenseStats(),
+        ]);
+    }
+
+    /**
+     * Get plugin recommendations.
+     */
+    public function recommendations(): JsonResponse
+    {
+        $recommendations = $this->pluginService->getPluginRecommendations();
+
+        return response()->json([
+            'recommendations' => $recommendations,
+        ]);
+    }
+
+    /**
+     * Get expiring licenses.
+     */
+    public function expiring(Request $request): JsonResponse
+    {
+        $days = $request->input('days', 30);
+        $expiring = $this->pluginService->getExpiringLicenses((int) $days);
+
+        return response()->json([
+            'expiring_licenses' => $expiring,
+        ]);
+    }
+
+    /**
+     * Check if a specific plugin is licensed.
+     */
+    public function checkLicense(string $slug): JsonResponse
+    {
+        $isLicensed = $this->pluginService->isPluginLicensed($slug);
+        $license = $this->pluginService->getLicenseForPlugin($slug);
+
+        return response()->json([
+            'plugin_slug' => $slug,
+            'is_licensed' => $isLicensed,
+            'license' => $license,
         ]);
     }
 }

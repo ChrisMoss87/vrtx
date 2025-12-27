@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Models;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\User\Entities\User;
+use App\Domain\Wizard\Entities\WizardDraft;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class WizardDraftModelTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
 
@@ -18,7 +20,7 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->user = User::factory()->create();
     }
 
     public function test_can_create_wizard_draft(): void
@@ -47,7 +49,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_draft_belongs_to_user(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create();
+        $draft = WizardDraft::factory()->forUser($this->user)->create();
 
         $this->assertInstanceOf(User::class, $draft->user);
         $this->assertEquals($this->user->id, $draft->user->id);
@@ -55,10 +57,10 @@ use Illuminate\Support\Facades\DB;
 
     public function test_for_user_scope(): void
     {
-        $otherUser = /* User factory - use DB::table('users') */->create();
+        $otherUser = User::factory()->create();
 
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->count(3)->forUser($this->user)->create();
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->count(2)->forUser($otherUser)->create();
+        WizardDraft::factory()->count(3)->forUser($this->user)->create();
+        WizardDraft::factory()->count(2)->forUser($otherUser)->create();
 
         $userDrafts = WizardDraft::forUser($this->user->id)->get();
 
@@ -67,8 +69,8 @@ use Illuminate\Support\Facades\DB;
 
     public function test_of_type_scope(): void
     {
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->type('module_creation')->count(2)->create();
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->type('record_creation')->count(3)->create();
+        WizardDraft::factory()->forUser($this->user)->type('module_creation')->count(2)->create();
+        WizardDraft::factory()->forUser($this->user)->type('record_creation')->count(3)->create();
 
         $moduleDrafts = WizardDraft::forUser($this->user->id)->ofType('module_creation')->get();
         $recordDrafts = WizardDraft::forUser($this->user->id)->ofType('record_creation')->get();
@@ -79,9 +81,9 @@ use Illuminate\Support\Facades\DB;
 
     public function test_for_reference_scope(): void
     {
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create(['reference_id' => '123']);
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create(['reference_id' => '456']);
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create(['reference_id' => null]);
+        WizardDraft::factory()->forUser($this->user)->create(['reference_id' => '123']);
+        WizardDraft::factory()->forUser($this->user)->create(['reference_id' => '456']);
+        WizardDraft::factory()->forUser($this->user)->create(['reference_id' => null]);
 
         $drafts = WizardDraft::forUser($this->user->id)->forReference('123')->get();
 
@@ -91,11 +93,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_not_expired_scope(): void
     {
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->permanent()->create();
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        WizardDraft::factory()->forUser($this->user)->permanent()->create();
+        WizardDraft::factory()->forUser($this->user)->create([
             'expires_at' => now()->addDays(10),
         ]);
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->expired()->create();
+        WizardDraft::factory()->forUser($this->user)->expired()->create();
 
         $notExpired = WizardDraft::forUser($this->user->id)->notExpired()->get();
 
@@ -104,8 +106,8 @@ use Illuminate\Support\Facades\DB;
 
     public function test_expired_scope(): void
     {
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->permanent()->create();
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->expired()->count(2)->create();
+        WizardDraft::factory()->forUser($this->user)->permanent()->create();
+        WizardDraft::factory()->forUser($this->user)->expired()->count(2)->create();
 
         $expired = WizardDraft::forUser($this->user->id)->expired()->get();
 
@@ -114,11 +116,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_is_expired_method(): void
     {
-        $expiredDraft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->expired()->create();
-        $validDraft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $expiredDraft = WizardDraft::factory()->forUser($this->user)->expired()->create();
+        $validDraft = WizardDraft::factory()->forUser($this->user)->create([
             'expires_at' => now()->addDays(10),
         ]);
-        $permanentDraft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->permanent()->create();
+        $permanentDraft = WizardDraft::factory()->forUser($this->user)->permanent()->create();
 
         $this->assertTrue($expiredDraft->isExpired());
         $this->assertFalse($validDraft->isExpired());
@@ -127,10 +129,10 @@ use Illuminate\Support\Facades\DB;
 
     public function test_display_name_attribute(): void
     {
-        $namedDraft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $namedDraft = WizardDraft::factory()->forUser($this->user)->create([
             'name' => 'My Custom Draft',
         ]);
-        $unnamedDraft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $unnamedDraft = WizardDraft::factory()->forUser($this->user)->create([
             'name' => null,
         ]);
 
@@ -140,7 +142,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_completion_percentage_attribute(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $draft = WizardDraft::factory()->forUser($this->user)->create([
             'steps_state' => [
                 ['id' => '1', 'isComplete' => true],
                 ['id' => '2', 'isComplete' => true],
@@ -154,7 +156,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_completion_percentage_with_empty_steps(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $draft = WizardDraft::factory()->forUser($this->user)->create([
             'steps_state' => [],
         ]);
 
@@ -163,7 +165,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_update_draft_method(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $draft = WizardDraft::factory()->forUser($this->user)->create([
             'current_step_index' => 0,
         ]);
 
@@ -182,7 +184,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_expires_in_method(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->permanent()->create();
+        $draft = WizardDraft::factory()->forUser($this->user)->permanent()->create();
 
         $draft->expiresIn(30);
 
@@ -195,7 +197,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_make_permanent_method(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $draft = WizardDraft::factory()->forUser($this->user)->create([
             'expires_at' => now()->addDays(10),
         ]);
 
@@ -206,9 +208,9 @@ use Illuminate\Support\Facades\DB;
 
     public function test_cleanup_expired_static_method(): void
     {
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->permanent()->count(2)->create();
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->expired()->count(3)->create();
-        /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        WizardDraft::factory()->forUser($this->user)->permanent()->count(2)->create();
+        WizardDraft::factory()->forUser($this->user)->expired()->count(3)->create();
+        WizardDraft::factory()->forUser($this->user)->create([
             'expires_at' => now()->addDays(10),
         ]);
 
@@ -220,7 +222,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_form_data_is_cast_to_array(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $draft = WizardDraft::factory()->forUser($this->user)->create([
             'form_data' => ['key' => 'value', 'nested' => ['a' => 1, 'b' => 2]],
         ]);
 
@@ -238,7 +240,7 @@ use Illuminate\Support\Facades\DB;
             ['id' => '2', 'title' => 'Step 2', 'isComplete' => false],
         ];
 
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create([
+        $draft = WizardDraft::factory()->forUser($this->user)->create([
             'steps_state' => $stepsState,
         ]);
 
@@ -251,7 +253,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_cascade_delete_on_user_deletion(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->create();
+        $draft = WizardDraft::factory()->forUser($this->user)->create();
         $draftId = $draft->id;
 
         $this->user->delete();
@@ -261,7 +263,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_factory_module_creation_state(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->moduleCreation()->create();
+        $draft = WizardDraft::factory()->forUser($this->user)->moduleCreation()->create();
 
         $this->assertEquals('module_creation', $draft->wizard_type);
         $this->assertArrayHasKey('moduleName', $draft->form_data);
@@ -269,7 +271,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_factory_record_creation_state(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->recordCreation(123)->create();
+        $draft = WizardDraft::factory()->forUser($this->user)->recordCreation(123)->create();
 
         $this->assertEquals('record_creation', $draft->wizard_type);
         $this->assertEquals('123', $draft->reference_id);
@@ -277,7 +279,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_factory_nearly_complete_state(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->nearlyComplete()->create();
+        $draft = WizardDraft::factory()->forUser($this->user)->nearlyComplete()->create();
 
         $this->assertEquals(3, $draft->current_step_index);
         $this->assertGreaterThan(50, $draft->completion_percentage);
@@ -285,7 +287,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_factory_just_started_state(): void
     {
-        $draft = /* WizardDraft factory - use DB::table('wizard_drafts') */->forUser($this->user)->justStarted()->create();
+        $draft = WizardDraft::factory()->forUser($this->user)->justStarted()->create();
 
         $this->assertEquals(0, $draft->current_step_index);
         $this->assertEquals(0, $draft->completion_percentage);

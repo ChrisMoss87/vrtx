@@ -6,7 +6,7 @@ namespace App\Policies;
 
 use App\Domain\Reporting\Entities\Report;
 use App\Domain\Reporting\Repositories\ReportRepositoryInterface;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class ReportPolicy

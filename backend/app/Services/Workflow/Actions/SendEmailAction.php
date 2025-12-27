@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Workflow\Actions;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use App\Services\Email\EmailService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;

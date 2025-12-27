@@ -2,7 +2,7 @@
 
 namespace App\Services\Inbox;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use Illuminate\Support\Facades\DB;
 
 class InboxService

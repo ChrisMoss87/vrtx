@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Cadence\Entities\CadenceStepExecution;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\CadenceStepExecution>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Cadence\Entities\CadenceStepExecution>
  */
 class CadenceStepExecutionFactory extends Factory
 {

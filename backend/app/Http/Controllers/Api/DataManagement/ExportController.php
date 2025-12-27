@@ -190,13 +190,27 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $templates = DB::table('export_templates')->where('module_id', $module->id)
-            ->accessibleBy($request->user()->id)
-            ->with('user:id,name')
-            ->orderBy('name')
-            ->get();
+        $userId = $request->user()->id;
 
-        return response()->json($templates);
+        $templates = DB::table('export_templates')
+            ->where('module_id', $module->id)
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhere('is_shared', true);
+            })
+            ->orderBy('name')
+            ->get()
+            ->map(function ($template) {
+                if ($template->user_id) {
+                    $template->user = DB::table('users')
+                        ->where('id', $template->user_id)
+                        ->select(['id', 'name'])
+                        ->first();
+                }
+                return $template;
+            });
+
+        return response()->json(['data' => $templates]);
     }
 
     /**
@@ -288,11 +302,17 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $template = DB::table('export_templates')->where('module_id', $module->id)
+        $template = DB::table('export_templates')
+            ->where('module_id', $module->id)
             ->where('user_id', $request->user()->id)
-            ->findOrFail($templateId);
+            ->where('id', $templateId)
+            ->first();
 
-        $template->delete();
+        if (!$template) {
+            return response()->json(['message' => 'Template not found'], 404);
+        }
+
+        DB::table('export_templates')->where('id', $templateId)->delete();
 
         return response()->json(['message' => 'Template deleted']);
     }
@@ -313,24 +333,66 @@ class ExportController extends Controller
             return response()->json(['message' => 'Module not found'], 404);
         }
 
-        $template = DB::table('export_templates')->where('module_id', $module->id)
-            ->accessibleBy($request->user()->id)
-            ->findOrFail($templateId);
+        $userId = $request->user()->id;
 
-        $export = $template->createExport(
-            $request->user()->id,
-            $request->name,
-            $request->file_type
-        );
+        // Find template accessible by user (owned or shared)
+        $template = DB::table('export_templates')
+            ->where('module_id', $module->id)
+            ->where('id', $templateId)
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhere('is_shared', true);
+            })
+            ->first();
 
-        // Count records
-        $export->total_records = $module->records()
-            ->when($export->filters, fn ($q) => $this->applyFilters($q, $export->filters))
+        if (!$template) {
+            return response()->json(['message' => 'Template not found'], 404);
+        }
+
+        // Decode JSON fields if they're strings
+        $selectedFields = is_string($template->selected_fields)
+            ? json_decode($template->selected_fields, true)
+            : ($template->selected_fields ?? []);
+        $filters = is_string($template->filters)
+            ? json_decode($template->filters, true)
+            : ($template->filters ?? null);
+        $sorting = is_string($template->sorting)
+            ? json_decode($template->sorting, true)
+            : ($template->sorting ?? null);
+        $exportOptions = is_string($template->export_options)
+            ? json_decode($template->export_options, true)
+            : ($template->export_options ?? []);
+
+        // Count records that will be exported
+        $recordCount = DB::table('records')
+            ->where('module_id', $module->id)
+            ->when($filters, fn ($q) => $this->applyFilters($q, $filters))
             ->count();
-        $export->save();
+
+        // Create the export record
+        $exportId = DB::table('exports')->insertGetId([
+            'module_id' => $module->id,
+            'user_id' => $userId,
+            'name' => $request->name ?? $module->name . ' Export - ' . now()->format('Y-m-d H:i'),
+            'file_type' => $request->file_type ?? ($template->default_file_type ?? 'csv'),
+            'selected_fields' => json_encode($selectedFields),
+            'filters' => json_encode($filters),
+            'sorting' => json_encode($sorting),
+            'export_options' => json_encode(array_merge([
+                'include_headers' => true,
+                'date_format' => 'Y-m-d',
+            ], $exportOptions)),
+            'total_records' => $recordCount,
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Get the export object
+        $export = DB::table('exports')->where('id', $exportId)->first();
 
         // Dispatch export job
-        ProcessExportJob::dispatch($export);
+        ProcessExportJob::dispatch($exportId);
 
         return response()->json([
             'export' => $export,

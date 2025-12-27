@@ -2,7 +2,7 @@
 
 namespace App\Services\Scheduling;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;

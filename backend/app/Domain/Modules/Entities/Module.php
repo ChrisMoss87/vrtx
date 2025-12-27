@@ -41,9 +41,10 @@ final class Module implements AggregateRoot
         ?string $icon = null,
         ?string $description = null,
         ?ModuleSettings $settings = null,
-        int $displayOrder = 0
+        int $displayOrder = 0,
+        ?string $apiName = null
     ): self {
-        $apiName = self::toSnakeCase(self::pluralize($name));
+        $apiName = $apiName ?? self::toSnakeCase(self::pluralize($name));
 
         return new self(
             id: null,

@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Repositories\UserRepositoryInterface;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -78,6 +81,10 @@ class TenantUserSeeder extends Seeder
         ],
     ];
 
+    public function __construct(
+        private readonly UserRepositoryInterface $userRepository,
+    ) {}
+
     /**
      * Run the database seeds.
      */
@@ -104,30 +111,64 @@ class TenantUserSeeder extends Seeder
         $users = self::USERS[$tenantId];
 
         foreach ($users as $userData) {
-            $user = User::updateOrCreate(
-                ['email' => $userData['email']],
-                [
-                    'name' => $userData['name'],
-                    'password' => Hash::make($userData['password']),
-                    'email_verified_at' => now(),
-                ]
-            );
+            $user = $this->createOrUpdateUser($userData);
 
-            // Assign role if roles exist
-            if (isset($userData['role']) && class_exists(\Spatie\Permission\Models\Role::class)) {
-                try {
-                    $user->syncRoles([$userData['role']]);
-                    $this->command->info("✓ Created user: {$user->name} ({$user->email}) with role: {$userData['role']}");
-                } catch (\Exception $e) {
-                    $this->command->info("✓ Created user: {$user->name} ({$user->email})");
-                }
+            // Assign role using Spatie (third-party package)
+            if (isset($userData['role'])) {
+                $this->assignRoleToUser($user['id'], $userData['role']);
+                $this->command->info("Created user: {$user['name']} ({$user['email']}) with role: {$userData['role']}");
             } else {
-                $this->command->info("✓ Created user: {$user->name} ({$user->email})");
+                $this->command->info("Created user: {$user['name']} ({$user['email']})");
             }
         }
 
         $this->command->newLine();
         $this->command->info("Seeded " . count($users) . " user(s) for tenant: {$tenantId}");
+    }
+
+    /**
+     * Create or update a user using the repository.
+     */
+    private function createOrUpdateUser(array $userData): array
+    {
+        $existingUser = $this->userRepository->findByEmail($userData['email']);
+
+        if ($existingUser !== null) {
+            return $this->userRepository->update($existingUser['id'], [
+                'name' => $userData['name'],
+                'password' => Hash::make($userData['password']),
+                'email_verified_at' => now()->format('Y-m-d H:i:s'),
+            ]);
+        }
+
+        return $this->userRepository->create([
+            'name' => $userData['name'],
+            'email' => $userData['email'],
+            'password' => Hash::make($userData['password']),
+            'email_verified_at' => now()->format('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Assign a role to a user using Spatie permissions.
+     * Note: We use Spatie's models here as it's a third-party package.
+     */
+    private function assignRoleToUser(int $userId, string $roleName): void
+    {
+        $role = Role::where('name', $roleName)->first();
+        if (!$role) {
+            return;
+        }
+
+        // Use model_has_roles table directly to avoid Eloquent model dependency
+        DB::table('model_has_roles')->updateOrInsert(
+            [
+                'role_id' => $role->id,
+                'model_type' => 'App\\Infrastructure\\Persistence\\Eloquent\\Models\\User',
+                'model_id' => $userId,
+            ],
+            []
+        );
     }
 
     /**
@@ -145,7 +186,7 @@ class TenantUserSeeder extends Seeder
             Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         }
 
-        $this->command->info('✓ Created ' . count($permissions) . ' permissions');
+        $this->command->info('Created ' . count($permissions) . ' permissions');
 
         // Create roles with their permissions
         foreach (RolesAndPermissionsSeeder::ROLES as $roleName => $rolePermissions) {
@@ -158,7 +199,7 @@ class TenantUserSeeder extends Seeder
             }
         }
 
-        $this->command->info('✓ Created roles: ' . implode(', ', array_keys(RolesAndPermissionsSeeder::ROLES)));
+        $this->command->info('Created roles: ' . implode(', ', array_keys(RolesAndPermissionsSeeder::ROLES)));
     }
 
     /**
@@ -166,23 +207,14 @@ class TenantUserSeeder extends Seeder
      */
     private function createDefaultAdmin(string $tenantId): void
     {
-        $user = User::updateOrCreate(
-            ['email' => "admin@{$tenantId}.com"],
-            [
-                'name' => 'Admin',
-                'password' => Hash::make('password123'),
-                'email_verified_at' => now(),
-            ]
-        );
+        $user = $this->createOrUpdateUser([
+            'name' => 'Admin',
+            'email' => "admin@{$tenantId}.com",
+            'password' => 'password123',
+        ]);
 
-        if (class_exists(\Spatie\Permission\Models\Role::class)) {
-            try {
-                $user->syncRoles(['admin']);
-            } catch (\Exception $e) {
-                // Role might not exist
-            }
-        }
+        $this->assignRoleToUser($user['id'], 'admin');
 
-        $this->command->info("✓ Created default admin: admin@{$tenantId}.com / password123");
+        $this->command->info("Created default admin: admin@{$tenantId}.com / password123");
     }
 }

@@ -30,6 +30,18 @@
 	import { cn } from '$lib/utils';
 	import { formatDistanceToNow } from 'date-fns';
 	import ActivityForm from './ActivityForm.svelte';
+	import DOMPurify from 'isomorphic-dompurify';
+
+	/**
+	 * Sanitize HTML content to prevent XSS attacks.
+	 */
+	function sanitizeHtml(html: string): string {
+		return DOMPurify.sanitize(html, {
+			ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code'],
+			ALLOWED_ATTR: ['href', 'class', 'style', 'target'],
+			ALLOW_DATA_ATTR: false,
+		});
+	}
 
 	interface Props {
 		subjectType: string;
@@ -410,7 +422,7 @@
 											{/if}
 											{#if activity.content}
 												<div class="prose prose-sm dark:prose-invert max-w-none rounded-md bg-muted/50 p-2">
-													{@html activity.content}
+													{@html sanitizeHtml(activity.content)}
 												</div>
 											{/if}
 											{#if activity.metadata?.changes}

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Playbook;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Playbook\Entities\Playbook;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\Playbook>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Playbook\Entities\Playbook>
  */
 class PlaybookFactory extends Factory
 {
@@ -103,7 +103,7 @@ class PlaybookFactory extends Factory
     public function withPhases(int $count = 3): static
     {
         return $this->has(
-            \App\Infrastructure\Persistence\Eloquent\Models\PlaybookPhase::factory()->count($count),
+            \App\Domain\Playbook\Entities\PlaybookPhase::factory()->count($count),
             'phases'
         );
     }
@@ -114,7 +114,7 @@ class PlaybookFactory extends Factory
     public function withTasks(int $count = 5): static
     {
         return $this->has(
-            \App\Infrastructure\Persistence\Eloquent\Models\PlaybookTask::factory()->count($count),
+            \App\Domain\Playbook\Entities\PlaybookTask::factory()->count($count),
             'tasks'
         );
     }
@@ -125,7 +125,7 @@ class PlaybookFactory extends Factory
     public function withGoals(int $count = 2): static
     {
         return $this->has(
-            \App\Infrastructure\Persistence\Eloquent\Models\PlaybookGoal::factory()->count($count),
+            \App\Domain\Playbook\Entities\PlaybookGoal::factory()->count($count),
             'goals'
         );
     }

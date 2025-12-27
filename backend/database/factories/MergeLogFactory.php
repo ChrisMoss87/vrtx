@@ -2,14 +2,14 @@
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\MergeLog;
-use App\Infrastructure\Persistence\Eloquent\Models\Module;
-use App\Infrastructure\Persistence\Eloquent\Models\ModuleRecord;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Duplicate\Entities\MergeLog;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Modules\Entities\ModuleRecord;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\MergeLog>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Duplicate\Entities\MergeLog>
  */
 class MergeLogFactory extends Factory
 {

@@ -6,12 +6,14 @@ namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use App\Domain\User\Entities\User;
+use App\Domain\Modules\Entities\Module;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ModuleApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
 
@@ -20,7 +22,7 @@ use Illuminate\Support\Facades\DB;
         parent::setUp();
 
         // Create a test user and authenticate
-        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->user = User::factory()->create();
     }
 
     /**
@@ -39,7 +41,7 @@ use Illuminate\Support\Facades\DB;
     public function test_module_index_returns_paginated_results(): void
     {
         // Create test modules
-        /* Module factory - use DB::table('modules') */->count(5)->create();
+        Module::factory()->count(5)->create();
 
         // This would normally require tenant context
         // For now, we test the model directly
@@ -50,7 +52,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_can_be_created_with_blocks_and_fields(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create([
+        $module = Module::factory()->create([
             'name' => 'Test Module',
             'singular_name' => 'Test',
             'api_name' => 'test_module',
@@ -85,7 +87,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_can_be_updated(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create([
+        $module = Module::factory()->create([
             'name' => 'Original Name',
             'is_active' => true,
         ]);
@@ -101,7 +103,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_can_be_soft_deleted(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $moduleId = $module->id;
 
         $module->delete();
@@ -113,8 +115,8 @@ use Illuminate\Support\Facades\DB;
 
     public function test_active_scope_returns_only_active_modules(): void
     {
-        /* Module factory - use DB::table('modules') */->count(3)->create(['is_active' => true]);
-        /* Module factory - use DB::table('modules') */->count(2)->create(['is_active' => false]);
+        Module::factory()->count(3)->create(['is_active' => true]);
+        Module::factory()->count(2)->create(['is_active' => false]);
 
         $activeModules = Module::active()->get();
 
@@ -126,9 +128,9 @@ use Illuminate\Support\Facades\DB;
 
     public function test_ordered_scope_orders_by_display_order(): void
     {
-        /* Module factory - use DB::table('modules') */->create(['display_order' => 3]);
-        /* Module factory - use DB::table('modules') */->create(['display_order' => 1]);
-        /* Module factory - use DB::table('modules') */->create(['display_order' => 2]);
+        Module::factory()->create(['display_order' => 3]);
+        Module::factory()->create(['display_order' => 1]);
+        Module::factory()->create(['display_order' => 2]);
 
         $orderedModules = Module::ordered()->get();
 
@@ -139,7 +141,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_find_by_api_name(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create(['api_name' => 'leads']);
+        $module = Module::factory()->create(['api_name' => 'leads']);
 
         $found = Module::findByApiName('leads');
 
@@ -156,14 +158,14 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_settings_default_to_empty_array(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $this->assertIsArray($module->settings);
     }
 
     public function test_module_default_filters_default_to_null(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         // default_filters can be null or empty array
         $this->assertTrue($module->default_filters === null || is_array($module->default_filters));

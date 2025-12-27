@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Document\Entities\SignatureSigner;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\SignatureSigner>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Document\Entities\SignatureSigner>
  */
 class SignatureSignerFactory extends Factory
 {

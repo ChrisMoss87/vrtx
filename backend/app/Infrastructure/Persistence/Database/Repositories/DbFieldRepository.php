@@ -71,7 +71,7 @@ final class DbFieldRepository implements FieldRepositoryInterface
             'width' => $field->width(),
         ];
 
-        if ($field->id() === null) {
+        if ($field->getId() === null) {
             $id = DB::table(self::TABLE)->insertGetId(
                 array_merge($data, [
                     'created_at' => now(),
@@ -80,9 +80,9 @@ final class DbFieldRepository implements FieldRepositoryInterface
             );
         } else {
             DB::table(self::TABLE)
-                ->where('id', $field->id())
+                ->where('id', $field->getId())
                 ->update(array_merge($data, ['updated_at' => now()]));
-            $id = $field->id();
+            $id = $field->getId();
         }
 
         return $this->findById($id);
@@ -119,7 +119,7 @@ final class DbFieldRepository implements FieldRepositoryInterface
             ->orderBy('display_order')
             ->get();
 
-        $optionRepo = new EloquentFieldOptionRepository();
+        $optionRepo = new DbFieldOptionRepository();
         foreach ($options as $optionRow) {
             $entity->addOption($optionRepo->toDomainEntity($optionRow));
         }

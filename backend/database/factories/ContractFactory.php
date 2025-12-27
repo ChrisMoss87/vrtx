@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Contract;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Contract\Entities\Contract;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Contract>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Contract\Entities\Contract>
  */
 class ContractFactory extends Factory
 {

@@ -10,6 +10,41 @@ use Illuminate\Support\Facades\DB;
 class ReportService
 {
     /**
+     * System fields that are allowed in queries.
+     */
+    private const SYSTEM_FIELDS = ['id', 'module_id', 'created_at', 'updated_at', 'owner_id', 'created_by'];
+
+    /**
+     * Validate and sanitize a field name to prevent SQL injection.
+     * Only alphanumeric characters and underscores are allowed.
+     */
+    private function validateFieldName(string $field): string
+    {
+        // Only allow alphanumeric characters and underscores
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $field)) {
+            throw new \InvalidArgumentException("Invalid field name: {$field}");
+        }
+
+        return $field;
+    }
+
+    /**
+     * Get safe column expression for a field.
+     * Returns parameterized expression where possible.
+     */
+    private function getSafeColumnExpression(string $field): string
+    {
+        $field = $this->validateFieldName($field);
+
+        if (in_array($field, self::SYSTEM_FIELDS, true)) {
+            return $field;
+        }
+
+        // Use validated field name in JSONB accessor
+        return "data->>'{$field}'";
+    }
+
+    /**
      * Execute a report and return results.
      */
     public function executeReport(Report $report, bool $useCache = true): array
@@ -156,14 +191,21 @@ class ReportService
             $field = $group['field'] ?? $group;
             $alias = $group['alias'] ?? $field;
 
-            if (in_array($field, ['created_at', 'updated_at'])) {
+            try {
+                $safeField = $this->validateFieldName($field);
+                $safeAlias = $this->validateFieldName($alias);
+            } catch (\InvalidArgumentException $e) {
+                continue;
+            }
+
+            if (in_array($safeField, ['created_at', 'updated_at'])) {
                 // Date grouping
                 $interval = $group['interval'] ?? 'day';
-                $selectParts[] = $this->getDateGroupExpression($field, $interval, $alias);
-                $groupByParts[] = $alias;
+                $selectParts[] = $this->getDateGroupExpression($safeField, $interval, $safeAlias);
+                $groupByParts[] = $safeAlias;
             } else {
-                $selectParts[] = "data->>'{$field}' as \"{$alias}\"";
-                $groupByParts[] = "data->>'{$field}'";
+                $selectParts[] = "data->>'{$safeField}' as \"{$safeAlias}\"";
+                $groupByParts[] = "data->>'{$safeField}'";
             }
         }
 
@@ -233,9 +275,17 @@ class ReportService
             return ['type' => 'matrix', 'data' => [], 'rows' => [], 'columns' => []];
         }
 
+        // Validate field names to prevent SQL injection
+        try {
+            $safeRowField = $this->validateFieldName($rowField);
+            $safeColField = $this->validateFieldName($colField);
+        } catch (\InvalidArgumentException $e) {
+            return ['type' => 'matrix', 'data' => [], 'rows' => [], 'columns' => []];
+        }
+
         // Get distinct values for columns
         $columns = DB::table('module_records')
-            ->selectRaw("DISTINCT data->>'{$colField}' as value")
+            ->selectRaw("DISTINCT data->>'{$safeColField}' as value")
             ->whereRaw($query->toBase()->wheres ? $this->buildWhereClause($query) : '1=1')
             ->pluck('value')
             ->filter()
@@ -246,9 +296,9 @@ class ReportService
         $aggExpr = $this->getAggregationExpression($valueAgg['function'], $valueAgg['field'], 'value');
 
         $results = DB::table('module_records')
-            ->selectRaw("data->>'{$rowField}' as row_label, data->>'{$colField}' as col_label, {$aggExpr}")
+            ->selectRaw("data->>'{$safeRowField}' as row_label, data->>'{$safeColField}' as col_label, {$aggExpr}")
             ->whereRaw($query->toBase()->wheres ? $this->buildWhereClause($query) : '1=1')
-            ->groupByRaw("data->>'{$rowField}', data->>'{$colField}'")
+            ->groupByRaw("data->>'{$safeRowField}', data->>'{$safeColField}'")
             ->get();
 
         // Transform to matrix format
@@ -282,6 +332,7 @@ class ReportService
 
     /**
      * Apply filters to query.
+     * Uses validated field names to prevent SQL injection.
      */
     protected function applyFilters($query, array $filters): void
     {
@@ -292,9 +343,13 @@ class ReportService
 
             if (!$field) continue;
 
-            // System fields vs data fields
-            $isSystemField = in_array($field, ['id', 'module_id', 'created_at', 'updated_at']);
-            $column = $isSystemField ? $field : "data->>'{$field}'";
+            try {
+                // Get safe column expression (validates field name)
+                $column = $this->getSafeColumnExpression($field);
+            } catch (\InvalidArgumentException $e) {
+                // Skip invalid field names
+                continue;
+            }
 
             match ($operator) {
                 'equals' => $query->whereRaw("{$column} = ?", [$value]),
@@ -329,8 +384,11 @@ class ReportService
 
         if (!$type && !$start && !$end) return;
 
-        $isSystemField = in_array($field, ['created_at', 'updated_at']);
-        $column = $isSystemField ? $field : "data->>'{$field}'";
+        try {
+            $column = $this->getSafeColumnExpression($field);
+        } catch (\InvalidArgumentException $e) {
+            return;
+        }
 
         if ($type) {
             // Predefined ranges
@@ -379,19 +437,35 @@ class ReportService
 
     /**
      * Get SQL expression for aggregation.
+     * Validates field and alias names to prevent SQL injection.
      */
     protected function getAggregationExpression(string $function, string $field, string $alias): string
     {
-        $column = $field === '*' ? '*' : "(data->>'{$field}')::numeric";
+        // Validate alias
+        $safeAlias = $this->validateFieldName($alias);
+
+        // Validate function - only allow known aggregation functions
+        $allowedFunctions = ['count', 'count_distinct', 'sum', 'avg', 'min', 'max'];
+        if (!in_array($function, $allowedFunctions, true)) {
+            $function = 'count';
+        }
+
+        // Validate field
+        if ($field === '*') {
+            $column = '*';
+        } else {
+            $safeField = $this->validateFieldName($field);
+            $column = "(data->>'{$safeField}')::numeric";
+        }
 
         return match ($function) {
-            'count' => "COUNT({$column}) as \"{$alias}\"",
-            'count_distinct' => "COUNT(DISTINCT {$column}) as \"{$alias}\"",
-            'sum' => "SUM({$column}) as \"{$alias}\"",
-            'avg' => "AVG({$column}) as \"{$alias}\"",
-            'min' => "MIN({$column}) as \"{$alias}\"",
-            'max' => "MAX({$column}) as \"{$alias}\"",
-            default => "COUNT(*) as \"{$alias}\"",
+            'count' => "COUNT({$column}) as \"{$safeAlias}\"",
+            'count_distinct' => "COUNT(DISTINCT {$column}) as \"{$safeAlias}\"",
+            'sum' => "SUM({$column}) as \"{$safeAlias}\"",
+            'avg' => "AVG({$column}) as \"{$safeAlias}\"",
+            'min' => "MIN({$column}) as \"{$safeAlias}\"",
+            'max' => "MAX({$column}) as \"{$safeAlias}\"",
+            default => "COUNT(*) as \"{$safeAlias}\"",
         };
     }
 
@@ -507,17 +581,27 @@ class ReportService
 
     /**
      * Get aggregate value from query.
+     * Validates field name to prevent SQL injection.
      */
     protected function getAggregateValue($query, string $aggregation, string $field): float
     {
-        $column = $field === '*' ? '*' : "data->{$field}";
+        if ($field === '*') {
+            return (float) $query->count();
+        }
+
+        // Validate field name
+        try {
+            $safeField = $this->validateFieldName($field);
+        } catch (\InvalidArgumentException $e) {
+            return 0.0;
+        }
 
         return match ($aggregation) {
             'count' => (float) $query->count(),
-            'sum' => (float) ($query->sum(DB::raw("(data->>'{$field}')::numeric")) ?? 0),
-            'avg' => (float) ($query->avg(DB::raw("(data->>'{$field}')::numeric")) ?? 0),
-            'min' => (float) ($query->min(DB::raw("(data->>'{$field}')::numeric")) ?? 0),
-            'max' => (float) ($query->max(DB::raw("(data->>'{$field}')::numeric")) ?? 0),
+            'sum' => (float) ($query->sum(DB::raw("(data->>'{$safeField}')::numeric")) ?? 0),
+            'avg' => (float) ($query->avg(DB::raw("(data->>'{$safeField}')::numeric")) ?? 0),
+            'min' => (float) ($query->min(DB::raw("(data->>'{$safeField}')::numeric")) ?? 0),
+            'max' => (float) ($query->max(DB::raw("(data->>'{$safeField}')::numeric")) ?? 0),
             default => (float) $query->count(),
         };
     }

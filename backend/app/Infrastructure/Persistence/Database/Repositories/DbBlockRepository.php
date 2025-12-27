@@ -48,11 +48,11 @@ final class DbBlockRepository implements BlockRepositoryInterface
             'settings' => json_encode($block->settings()),
         ];
 
-        if ($block->id()) {
+        if ($block->getId()) {
             DB::table(self::TABLE)
-                ->where('id', $block->id())
+                ->where('id', $block->getId())
                 ->update(array_merge($data, ['updated_at' => now()]));
-            $id = $block->id();
+            $id = $block->getId();
         } else {
             $id = DB::table(self::TABLE)->insertGetId(
                 array_merge($data, [

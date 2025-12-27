@@ -7,7 +7,7 @@ namespace App\Observers;
 use App\Domain\Shared\Contracts\EventDispatcherInterface;
 use App\Domain\User\Events\RoleCreated;
 use App\Domain\User\Events\RoleDeleted;
-use Spatie\Permission\Models\Role;
+use App\Infrastructure\Persistence\Eloquent\Models\Role;
 
 /**
  * Observer for Role model.
@@ -30,7 +30,7 @@ class RoleObserver
         $this->eventDispatcher->dispatch(new RoleCreated(
             roleId: $role->id,
             name: $role->name,
-            guardName: $role->guard_name,
+            guardName: $role->guard_name ?? 'web',
         ));
     }
 

@@ -3,7 +3,8 @@
 	import { untrack } from 'svelte';
 	import { modulesApi, type Module } from '$lib/api/modules';
 	import { Button } from '$lib/components/ui/button';
-	import { ArrowLeft, Plus, Upload, Download, Kanban, Table2 } from 'lucide-svelte';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { ArrowLeft, Plus, Upload, Download, Kanban, Table2, Layers, Settings2 } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
 	import DataTable from '$lib/components/datatable/DataTable.svelte';
 	import { ModuleKanbanView } from '$lib/components/kanban';
@@ -17,12 +18,31 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
+	// Advanced table features
+	let groupByField = $state<string>('');
+
 	// Check if module has any select/radio fields for kanban
 	const hasKanbanFields = $derived(() => {
 		if (!module?.blocks) return false;
 		return module.blocks.some((block) =>
 			block.fields?.some((field) => field.type === 'select' || field.type === 'radio')
 		);
+	});
+
+	// Get fields that can be grouped by (select, radio, lookup, boolean)
+	const groupableFields = $derived(() => {
+		if (!module?.blocks) return [];
+		const fields: { api_name: string; label: string }[] = [];
+		for (const block of module.blocks) {
+			if (block.fields) {
+				for (const field of block.fields) {
+					if (['select', 'radio', 'lookup', 'boolean', 'checkbox', 'toggle'].includes(field.type)) {
+						fields.push({ api_name: field.api_name, label: field.label });
+					}
+				}
+			}
+		}
+		return fields;
 	});
 
 	// Reload module when moduleApiName changes
@@ -207,6 +227,39 @@
 						{/if}
 					</Button>
 				{/if}
+
+				<!-- Table Settings Dropdown -->
+				{#if viewMode === 'table'}
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="outline" size="icon" title="Table settings">
+									<Settings2 class="h-4 w-4" />
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end" class="w-56">
+							<DropdownMenu.Label>Table Settings</DropdownMenu.Label>
+							<DropdownMenu.Separator />
+							<DropdownMenu.Label class="text-xs text-muted-foreground">Group By</DropdownMenu.Label>
+
+							<!-- Group By Options -->
+							<DropdownMenu.RadioGroup bind:value={groupByField}>
+								<DropdownMenu.RadioItem value="">
+									<Layers class="mr-2 h-4 w-4 opacity-50" />
+									No grouping
+								</DropdownMenu.RadioItem>
+								{#each groupableFields() as field (field.api_name)}
+									<DropdownMenu.RadioItem value={field.api_name}>
+										<Layers class="mr-2 h-4 w-4" />
+										{field.label}
+									</DropdownMenu.RadioItem>
+								{/each}
+							</DropdownMenu.RadioGroup>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				{/if}
+
 				<Button variant="outline" onclick={() => goto(`/records/${moduleApiName}/import`)}>
 					<Upload class="mr-2 h-4 w-4" />
 					Import
@@ -226,6 +279,7 @@
 			<DataTable
 				{columns}
 				{moduleApiName}
+				{module}
 				enableSelection={true}
 				enableFilters={true}
 				enableSearch={true}
@@ -234,7 +288,12 @@
 				enableViews={true}
 				enableExport={true}
 				enableBulkActions={true}
+				enableColumnResize={true}
+				enableGrouping={groupByField !== ''}
+				groupByField={groupByField || undefined}
+				enableResponsive={true}
 				onRowClick={handleRowClick}
+				onCreateNew={createRecord}
 			/>
 		{:else}
 			<div class="h-[calc(100vh-16rem)]">

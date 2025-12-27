@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\User\Entities\User;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Pipeline\Entities\Pipeline;
+use App\Domain\Pipeline\Entities\Stage;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PipelineApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -19,8 +23,8 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
@@ -46,7 +50,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_pipeline_belongs_to_module(): void
     {
-        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
+        $pipeline = Pipeline::factory()->create([
             'module_id' => $this->module->id,
         ]);
 
@@ -56,11 +60,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_pipeline_has_many_stages(): void
     {
-        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
+        $pipeline = Pipeline::factory()->create([
             'module_id' => $this->module->id,
         ]);
 
-        /* Stage factory - use DB::table('stages') */->count(3)->create([
+        Stage::factory()->count(3)->create([
             'pipeline_id' => $pipeline->id,
         ]);
 
@@ -69,7 +73,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_create_pipeline_with_stages(): void
     {
-        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->withStages()->create([
+        $pipeline = Pipeline::factory()->withStages()->create([
             'module_id' => $this->module->id,
         ]);
 
@@ -79,7 +83,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_pipeline(): void
     {
-        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
+        $pipeline = Pipeline::factory()->create([
             'module_id' => $this->module->id,
             'name' => 'Original Name',
         ]);
@@ -97,7 +101,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_soft_delete_pipeline(): void
     {
-        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
+        $pipeline = Pipeline::factory()->create([
             'module_id' => $this->module->id,
         ]);
 
@@ -111,8 +115,8 @@ use Illuminate\Support\Facades\DB;
 
     public function test_active_scope_returns_only_active_pipelines(): void
     {
-        /* Pipeline factory - use DB::table('pipelines') */->count(3)->create(['module_id' => $this->module->id, 'is_active' => true]);
-        /* Pipeline factory - use DB::table('pipelines') */->count(2)->create(['module_id' => $this->module->id, 'is_active' => false]);
+        Pipeline::factory()->count(3)->create(['module_id' => $this->module->id, 'is_active' => true]);
+        Pipeline::factory()->count(2)->create(['module_id' => $this->module->id, 'is_active' => false]);
 
         $activePipelines = Pipeline::active()->get();
 
@@ -124,10 +128,10 @@ use Illuminate\Support\Facades\DB;
 
     public function test_for_module_scope_filters_by_module(): void
     {
-        $otherModule = /* Module factory - use DB::table('modules') */->create();
+        $otherModule = Module::factory()->create();
 
-        /* Pipeline factory - use DB::table('pipelines') */->count(2)->create(['module_id' => $this->module->id]);
-        /* Pipeline factory - use DB::table('pipelines') */->count(3)->create(['module_id' => $otherModule->id]);
+        Pipeline::factory()->count(2)->create(['module_id' => $this->module->id]);
+        Pipeline::factory()->count(3)->create(['module_id' => $otherModule->id]);
 
         $modulePipelines = Pipeline::forModule($this->module->id)->get();
 
@@ -136,7 +140,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_settings_is_cast_to_array(): void
     {
-        $pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
+        $pipeline = Pipeline::factory()->create([
             'module_id' => $this->module->id,
             'settings' => ['show_totals' => true, 'value_field' => 'amount'],
         ]);

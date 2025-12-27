@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\User\Entities\User;
+use App\Domain\Modules\Entities\Module;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class RecordApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -19,8 +21,8 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Leads',
             'singular_name' => 'Lead',
             'api_name' => 'leads',
@@ -214,7 +216,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_records_are_isolated_per_module(): void
     {
-        $otherModule = /* Module factory - use DB::table('modules') */->create(['api_name' => 'contacts']);
+        $otherModule = Module::factory()->create(['api_name' => 'contacts']);
 
         DB::table('module_records')->insertGetId(['module_id' => $this->module->id, 'data' => ['name' => 'Lead 1']]);
         DB::table('module_records')->insertGetId(['module_id' => $this->module->id, 'data' => ['name' => 'Lead 2']]);

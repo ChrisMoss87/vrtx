@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Goal\Entities\Goal;
+
+use App\Domain\User\Entities\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Goal>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Goal\Entities\Goal>
  */
 class GoalFactory extends Factory
 {

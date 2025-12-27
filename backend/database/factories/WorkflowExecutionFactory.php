@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Workflow\Entities\WorkflowExecution;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\WorkflowExecution>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Workflow\Entities\WorkflowExecution>
  */
 class WorkflowExecutionFactory extends Factory
 {

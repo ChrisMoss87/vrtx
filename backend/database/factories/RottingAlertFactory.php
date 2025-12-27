@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Pipeline\Entities\RottingAlert;
+
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 

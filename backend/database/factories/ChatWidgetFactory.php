@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\ChatWidget;
+use App\Domain\Chat\Entities\ChatWidget;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\ChatWidget>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Chat\Entities\ChatWidget>
  */
 class ChatWidgetFactory extends Factory
 {

@@ -18,6 +18,11 @@ interface AuthContextInterface
     public function userId(): ?int;
 
     /**
+     * Alias for userId() - for compatibility.
+     */
+    public function getUserId(): ?int;
+
+    /**
      * Check if a user is authenticated.
      */
     public function isAuthenticated(): bool;
@@ -28,7 +33,17 @@ interface AuthContextInterface
     public function userEmail(): ?string;
 
     /**
+     * Alias for userEmail() - for compatibility.
+     */
+    public function getUserEmail(): ?string;
+
+    /**
      * Get the current user's name.
      */
     public function userName(): ?string;
+
+    /**
+     * Alias for userName() - for compatibility.
+     */
+    public function getUserName(): ?string;
 }

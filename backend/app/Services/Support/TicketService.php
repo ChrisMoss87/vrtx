@@ -2,7 +2,7 @@
 
 namespace App\Services\Support;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use Illuminate\Support\Facades\DB;
 
 class TicketService

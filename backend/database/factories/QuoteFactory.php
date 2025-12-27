@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Quote;
-use App\Infrastructure\Persistence\Eloquent\Models\QuoteTemplate;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Billing\Entities\Quote;
+use App\Domain\Billing\Entities\QuoteTemplate;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\Quote>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Billing\Entities\Quote>
  */
 class QuoteFactory extends Factory
 {
@@ -147,7 +147,7 @@ class QuoteFactory extends Factory
     public function withLineItems(int $count = 3): static
     {
         return $this->has(
-            \App\Infrastructure\Persistence\Eloquent\Models\QuoteLineItem::factory()->count($count),
+            \App\Domain\Billing\Entities\QuoteLineItem::factory()->count($count),
             'lineItems'
         );
     }

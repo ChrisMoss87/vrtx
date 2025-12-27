@@ -5,27 +5,24 @@ declare(strict_types=1);
 namespace App\Infrastructure\Persistence\Eloquent\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Spatie\Permission\Traits\HasRoles;
 
 /**
  * User Eloquent model for Laravel authentication.
  *
  * This model is required by Laravel's auth system and Sanctum for API tokens.
  * For domain logic, use App\Domain\User\Entities\User and UserRepositoryInterface.
+ *
+ * Note: Spatie HasRoles trait has been removed. Use AuthorizationApplicationService
+ * or CachedAuthorizationService for permission checks. Roles are accessed via
+ * the custom user_roles pivot table with efficient JOIN queries.
  */
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, HasRoles, Notifiable;
-
-    /**
-     * The relationships that should always be loaded.
-     *
-     * @var array<string>
-     */
-    protected $with = ['roles'];
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -80,5 +77,20 @@ class User extends Authenticatable
         data_set($preferences, $key, $value);
         $this->preferences = $preferences;
         $this->save();
+    }
+
+    /**
+     * Get the roles associated with the user.
+     *
+     * Uses the custom user_roles pivot table instead of Spatie's polymorphic model_has_roles.
+     */
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Role::class,
+            'user_roles',
+            'user_id',
+            'role_id',
+        )->withPivot(['assigned_at', 'assigned_by']);
     }
 }

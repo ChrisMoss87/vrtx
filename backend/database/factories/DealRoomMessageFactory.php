@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\DealRoom\Entities\DealRoomMessage;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\DealRoomMessage>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\DealRoom\Entities\DealRoomMessage>
  */
 class DealRoomMessageFactory extends Factory
 {

@@ -5,15 +5,49 @@ declare(strict_types=1);
 namespace App\Application\Services\AI;
 
 use App\Domain\AI\Repositories\AiPromptRepositoryInterface;
+use App\Domain\AI\Repositories\AiSettingRepositoryInterface;
+use App\Domain\AI\Repositories\AiEmailDraftRepositoryInterface;
+use App\Domain\AI\Repositories\AiUsageLogRepositoryInterface;
 use App\Domain\Shared\Contracts\AuthContextInterface;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
 
 class AIApplicationService
 {
+    private const TYPE_COMPOSE = 'compose';
+    private const TYPE_IMPROVE = 'improve';
+    private const TYPE_REPLY = 'reply';
+
+    private const TONE_PROFESSIONAL = 'professional';
+
+    private const FEATURE_EMAIL_COMPOSE = 'email_compose';
+    private const FEATURE_EMAIL_IMPROVE = 'email_improve';
+    private const FEATURE_EMAIL_REPLY = 'email_reply';
+    private const FEATURE_SUBJECT_SUGGEST = 'subject_suggest';
+    private const FEATURE_SENTIMENT = 'sentiment';
+    private const FEATURE_MEETING_SUMMARY = 'meeting_summary';
+
+    private const PROVIDER_OPENAI = 'openai';
+    private const PROVIDER_ANTHROPIC = 'anthropic';
+
+    private const MODELS = [
+        'openai' => [
+            ['id' => 'gpt-4', 'name' => 'GPT-4'],
+            ['id' => 'gpt-4-turbo', 'name' => 'GPT-4 Turbo'],
+            ['id' => 'gpt-3.5-turbo', 'name' => 'GPT-3.5 Turbo'],
+        ],
+        'anthropic' => [
+            ['id' => 'claude-3-opus', 'name' => 'Claude 3 Opus'],
+            ['id' => 'claude-3-sonnet', 'name' => 'Claude 3 Sonnet'],
+            ['id' => 'claude-3-haiku', 'name' => 'Claude 3 Haiku'],
+        ],
+    ];
+
     public function __construct(
         private AiPromptRepositoryInterface $promptRepository,
+        private AiSettingRepositoryInterface $settingRepository,
+        private AiEmailDraftRepositoryInterface $emailDraftRepository,
+        private AiUsageLogRepositoryInterface $usageLogRepository,
         private AuthContextInterface $authContext,
     ) {}
 
@@ -24,34 +58,17 @@ class AIApplicationService
     /**
      * Get AI settings
      */
-    public function getSettings(): ?AiSetting
+    public function getSettings(): ?array
     {
-        return DB::table('ai_settings')->first();
+        return $this->settingRepository->get();
     }
 
     /**
      * Update AI settings
      */
-    public function updateSettings(array $data): AiSetting
+    public function updateSettings(array $data): array
     {
-        $settings = AiSetting::firstOrCreate([]);
-
-        $settings->update([
-            'provider' => $data['provider'] ?? $settings->provider,
-            'model' => $data['model'] ?? $settings->model,
-            'max_tokens' => $data['max_tokens'] ?? $settings->max_tokens,
-            'temperature' => $data['temperature'] ?? $settings->temperature,
-            'is_enabled' => $data['is_enabled'] ?? $settings->is_enabled,
-            'monthly_budget_cents' => $data['monthly_budget_cents'] ?? $settings->monthly_budget_cents,
-        ]);
-
-        // Only update API key if provided
-        if (!empty($data['api_key'])) {
-            $settings->api_key = $data['api_key'];
-            $settings->save();
-        }
-
-        return $settings->fresh();
+        return $this->settingRepository->update($data);
     }
 
     /**
@@ -61,11 +78,11 @@ class AIApplicationService
     {
         $settings = $this->getSettings();
 
-        if (!$settings || !$settings->is_enabled) {
+        if (!$settings || !$settings['is_enabled']) {
             return ['success' => false, 'error' => 'AI is not enabled'];
         }
 
-        if (!$settings->api_key) {
+        if (!$settings['api_key']) {
             return ['success' => false, 'error' => 'No API key configured'];
         }
 
@@ -76,8 +93,8 @@ class AIApplicationService
 
             return [
                 'success' => true,
-                'provider' => $settings->provider,
-                'model' => $settings->model,
+                'provider' => $settings['provider'],
+                'model' => $settings['model'],
                 'response' => $response['content'],
             ];
         } catch (\Exception $e) {
@@ -90,7 +107,7 @@ class AIApplicationService
      */
     public function getAvailableModels(): array
     {
-        return AiSetting::MODELS;
+        return self::MODELS;
     }
 
     /**
@@ -98,17 +115,7 @@ class AIApplicationService
      */
     public function isAvailable(): bool
     {
-        $settings = $this->getSettings();
-
-        if (!$settings || !$settings->is_enabled) {
-            return false;
-        }
-
-        if ($settings->isBudgetExceeded()) {
-            return false;
-        }
-
-        return true;
+        return $this->settingRepository->isAvailable();
     }
 
     // =========================================================================
@@ -170,7 +177,7 @@ class AIApplicationService
     /**
      * Compose an email
      */
-    public function composeEmail(array $data): AiEmailDraft
+    public function composeEmail(array $data): int
     {
         $settings = $this->ensureAvailable();
 
@@ -184,7 +191,7 @@ class AIApplicationService
             'context' => $data['context'] ?? '',
             'recipient_name' => $data['recipient_name'] ?? 'the recipient',
             'sender_name' => $this->authContext->userName() ?? 'the sender',
-            'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
+            'tone' => $data['tone'] ?? self::TONE_PROFESSIONAL,
             'key_points' => $data['key_points'] ?? '',
         ];
 
@@ -193,19 +200,19 @@ class AIApplicationService
         $response = $this->callProviderWithLogging(
             $settings,
             $messages,
-            AiUsageLog::FEATURE_EMAIL_COMPOSE,
+            self::FEATURE_EMAIL_COMPOSE,
             'email_draft',
             null
         );
 
-        return DB::table('ai_email_drafts')->insertGetId([
+        return $this->emailDraftRepository->create([
             'user_id' => $this->authContext->userId(),
-            'type' => AiEmailDraft::TYPE_COMPOSE,
-            'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
+            'type' => self::TYPE_COMPOSE,
+            'tone' => $data['tone'] ?? self::TONE_PROFESSIONAL,
             'context' => $data,
             'prompt' => $data['key_points'] ?? '',
             'generated_content' => $response['content'],
-            'model_used' => $settings->model,
+            'model_used' => $settings['model'],
             'tokens_used' => $response['usage']['total_tokens'] ?? 0,
         ]);
     }
@@ -213,7 +220,7 @@ class AIApplicationService
     /**
      * Improve an existing email
      */
-    public function improveEmail(array $data): AiEmailDraft
+    public function improveEmail(array $data): int
     {
         $settings = $this->ensureAvailable();
 
@@ -226,7 +233,7 @@ class AIApplicationService
         $variables = [
             'original_email' => $data['original_content'],
             'improvement_instructions' => $data['instructions'] ?? 'Make it more professional and clear',
-            'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
+            'tone' => $data['tone'] ?? self::TONE_PROFESSIONAL,
         ];
 
         $messages = $this->promptRepository->getMessages($prompt, $variables);
@@ -234,19 +241,19 @@ class AIApplicationService
         $response = $this->callProviderWithLogging(
             $settings,
             $messages,
-            AiUsageLog::FEATURE_EMAIL_IMPROVE,
+            self::FEATURE_EMAIL_IMPROVE,
             'email_draft',
             null
         );
 
-        return DB::table('ai_email_drafts')->insertGetId([
+        return $this->emailDraftRepository->create([
             'user_id' => $this->authContext->userId(),
-            'type' => AiEmailDraft::TYPE_IMPROVE,
-            'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
+            'type' => self::TYPE_IMPROVE,
+            'tone' => $data['tone'] ?? self::TONE_PROFESSIONAL,
             'context' => $data,
             'original_content' => $data['original_content'],
             'generated_content' => $response['content'],
-            'model_used' => $settings->model,
+            'model_used' => $settings['model'],
             'tokens_used' => $response['usage']['total_tokens'] ?? 0,
         ]);
     }
@@ -254,7 +261,7 @@ class AIApplicationService
     /**
      * Generate email reply
      */
-    public function generateReply(array $data): AiEmailDraft
+    public function generateReply(array $data): int
     {
         $settings = $this->ensureAvailable();
 
@@ -267,7 +274,7 @@ class AIApplicationService
         $variables = [
             'original_email' => $data['original_email'],
             'reply_intent' => $data['reply_intent'] ?? '',
-            'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
+            'tone' => $data['tone'] ?? self::TONE_PROFESSIONAL,
             'sender_name' => $this->authContext->userName() ?? 'the sender',
         ];
 
@@ -276,20 +283,20 @@ class AIApplicationService
         $response = $this->callProviderWithLogging(
             $settings,
             $messages,
-            AiUsageLog::FEATURE_EMAIL_REPLY,
+            self::FEATURE_EMAIL_REPLY,
             'email_draft',
             null
         );
 
-        return DB::table('ai_email_drafts')->insertGetId([
+        return $this->emailDraftRepository->create([
             'user_id' => $this->authContext->userId(),
-            'type' => AiEmailDraft::TYPE_REPLY,
-            'tone' => $data['tone'] ?? AiEmailDraft::TONE_PROFESSIONAL,
+            'type' => self::TYPE_REPLY,
+            'tone' => $data['tone'] ?? self::TONE_PROFESSIONAL,
             'context' => $data,
             'original_content' => $data['original_email'],
             'prompt' => $data['reply_intent'] ?? '',
             'generated_content' => $response['content'],
-            'model_used' => $settings->model,
+            'model_used' => $settings['model'],
             'tokens_used' => $response['usage']['total_tokens'] ?? 0,
         ]);
     }
@@ -319,7 +326,7 @@ class AIApplicationService
         $response = $this->callProviderWithLogging(
             $settings,
             $messages,
-            AiUsageLog::FEATURE_SUBJECT_SUGGEST,
+            self::FEATURE_SUBJECT_SUGGEST,
             null,
             null
         );
@@ -338,22 +345,21 @@ class AIApplicationService
      */
     public function getUserEmailDrafts(int $limit = 20): array
     {
-        return DB::table('ai_email_drafts')->where('user_id', $this->authContext->userId())
-            ->orderByDesc('created_at')
-            ->limit($limit)
-            ->get()
-            ->map(fn($draft) => $draft->toArray())
-            ->all();
+        $userId = $this->authContext->userId();
+
+        if (!$userId) {
+            return [];
+        }
+
+        return $this->emailDraftRepository->findByUserId($userId, $limit);
     }
 
     /**
      * Mark draft as used
      */
-    public function markDraftAsUsed(int $draftId): AiEmailDraft
+    public function markDraftAsUsed(int $draftId): array
     {
-        $draft = DB::table('ai_email_drafts')->where('id', $draftId)->first();
-        $draft->markAsUsed();
-        return $draft;
+        return $this->emailDraftRepository->markAsUsed($draftId);
     }
 
     // =========================================================================
@@ -375,7 +381,7 @@ class AIApplicationService
         $response = $this->callProviderWithLogging(
             $settings,
             $messages,
-            AiUsageLog::FEATURE_SENTIMENT,
+            self::FEATURE_SENTIMENT,
             $entityType,
             $entityId
         );
@@ -412,7 +418,7 @@ class AIApplicationService
         $response = $this->callProviderWithLogging(
             $settings,
             $messages,
-            AiUsageLog::FEATURE_MEETING_SUMMARY,
+            self::FEATURE_MEETING_SUMMARY,
             $entityType,
             $entityId,
             maxTokens: 2000
@@ -464,7 +470,7 @@ class AIApplicationService
      */
     public function getUsageStats(?string $startDate = null, ?string $endDate = null): array
     {
-        return AiUsageLog::getSummary($startDate, $endDate);
+        return $this->usageLogRepository->getSummary($startDate, $endDate);
     }
 
     /**
@@ -472,22 +478,7 @@ class AIApplicationService
      */
     public function getUsageByUser(?string $startDate = null, ?string $endDate = null): array
     {
-        $query = DB::table('ai_usage_logs')
-            ->selectRaw('user_id, COUNT(*) as request_count, SUM(cost_cents) as total_cost, SUM(input_tokens + output_tokens) as total_tokens')
-            ->groupBy('user_id')
-            ->with(['user:id,name,email']);
-
-        if ($startDate) {
-            $query->where('created_at', '>=', $startDate);
-        }
-        if ($endDate) {
-            $query->where('created_at', '<=', $endDate);
-        }
-
-        return $query->orderByDesc('total_cost')
-            ->get()
-            ->map(fn($item) => $item->toArray())
-            ->all();
+        return $this->usageLogRepository->getByUser($startDate, $endDate);
     }
 
     /**
@@ -495,19 +486,7 @@ class AIApplicationService
      */
     public function getUsageTrend(int $days = 30): array
     {
-        $startDate = Carbon::now()->subDays($days);
-
-        $usage = DB::table('ai_usage_logs')->where('created_at', '>=', $startDate)
-            ->selectRaw("DATE(created_at) as date, COUNT(*) as requests, SUM(cost_cents) as cost")
-            ->groupByRaw('DATE(created_at)')
-            ->orderBy('date')
-            ->get();
-
-        return $usage->map(fn($row) => [
-            'date' => $row->date,
-            'requests' => $row->requests,
-            'cost_cents' => $row->cost,
-        ])->toArray();
+        return $this->usageLogRepository->getTrend($days);
     }
 
     /**
@@ -523,14 +502,14 @@ class AIApplicationService
 
         return [
             'configured' => true,
-            'is_enabled' => $settings->is_enabled,
-            'budget_cents' => $settings->monthly_budget_cents,
-            'used_cents' => $settings->monthly_usage_cents,
-            'remaining_cents' => $settings->getRemainingBudgetCents(),
-            'budget_exceeded' => $settings->isBudgetExceeded(),
-            'budget_reset_at' => $settings->budget_reset_at?->toIso8601String(),
-            'usage_percent' => $settings->monthly_budget_cents
-                ? round(($settings->monthly_usage_cents / $settings->monthly_budget_cents) * 100, 1)
+            'is_enabled' => $settings['is_enabled'],
+            'budget_cents' => $settings['monthly_budget_cents'],
+            'used_cents' => $settings['monthly_usage_cents'],
+            'remaining_cents' => $this->settingRepository->getRemainingBudgetCents(),
+            'budget_exceeded' => $this->settingRepository->isBudgetExceeded(),
+            'budget_reset_at' => $settings['budget_reset_at']?->toIso8601String(),
+            'usage_percent' => $settings['monthly_budget_cents']
+                ? round(($settings['monthly_usage_cents'] / $settings['monthly_budget_cents']) * 100, 1)
                 : null,
         ];
     }
@@ -540,10 +519,7 @@ class AIApplicationService
      */
     public function resetMonthlyUsage(): void
     {
-        $settings = $this->getSettings();
-        if ($settings) {
-            $settings->resetMonthlyUsage();
-        }
+        $this->settingRepository->resetMonthlyUsage();
     }
 
     // =========================================================================
@@ -553,19 +529,19 @@ class AIApplicationService
     /**
      * Ensure AI is available, throw if not
      */
-    private function ensureAvailable(): AiSetting
+    private function ensureAvailable(): array
     {
         $settings = $this->getSettings();
 
-        if (!$settings || !$settings->is_enabled) {
+        if (!$settings || !$settings['is_enabled']) {
             throw new \RuntimeException('AI features are not enabled');
         }
 
-        if (!$settings->api_key) {
+        if (!$settings['api_key']) {
             throw new \RuntimeException('AI API key not configured');
         }
 
-        if ($settings->isBudgetExceeded()) {
+        if ($this->settingRepository->isBudgetExceeded()) {
             throw new \RuntimeException('Monthly AI budget exceeded');
         }
 
@@ -576,7 +552,7 @@ class AIApplicationService
      * Call provider and log usage
      */
     private function callProviderWithLogging(
-        AiSetting $settings,
+        array $settings,
         array $messages,
         string $feature,
         ?string $entityType,
@@ -588,12 +564,12 @@ class AIApplicationService
         // Calculate cost
         $inputTokens = $response['usage']['prompt_tokens'] ?? 0;
         $outputTokens = $response['usage']['completion_tokens'] ?? 0;
-        $costCents = $settings->calculateCost($inputTokens, $outputTokens);
+        $costCents = $this->settingRepository->calculateCost($inputTokens, $outputTokens);
 
         // Log usage
-        DB::table('ai_usage_logs')->insertGetId([
+        $this->usageLogRepository->create([
             'feature' => $feature,
-            'model' => $settings->model,
+            'model' => $settings['model'],
             'input_tokens' => $inputTokens,
             'output_tokens' => $outputTokens,
             'cost_cents' => $costCents,
@@ -603,7 +579,7 @@ class AIApplicationService
         ]);
 
         // Update monthly usage
-        $settings->recordUsage($costCents);
+        $this->settingRepository->recordUsage($costCents);
 
         return $response;
     }
@@ -611,30 +587,30 @@ class AIApplicationService
     /**
      * Call the AI provider
      */
-    private function callProvider(AiSetting $settings, array $messages, ?int $maxTokens = null): array
+    private function callProvider(array $settings, array $messages, ?int $maxTokens = null): array
     {
-        $maxTokens = $maxTokens ?? $settings->max_tokens ?? 1000;
+        $maxTokens = $maxTokens ?? $settings['max_tokens'] ?? 1000;
 
-        return match ($settings->provider) {
-            AiSetting::PROVIDER_OPENAI => $this->callOpenAI($settings, $messages, $maxTokens),
-            AiSetting::PROVIDER_ANTHROPIC => $this->callAnthropic($settings, $messages, $maxTokens),
-            default => throw new \RuntimeException("Unsupported provider: {$settings->provider}"),
+        return match ($settings['provider']) {
+            self::PROVIDER_OPENAI => $this->callOpenAI($settings, $messages, $maxTokens),
+            self::PROVIDER_ANTHROPIC => $this->callAnthropic($settings, $messages, $maxTokens),
+            default => throw new \RuntimeException("Unsupported provider: {$settings['provider']}"),
         };
     }
 
     /**
      * Call OpenAI API
      */
-    private function callOpenAI(AiSetting $settings, array $messages, int $maxTokens): array
+    private function callOpenAI(array $settings, array $messages, int $maxTokens): array
     {
         $response = Http::withHeaders([
-            'Authorization' => "Bearer {$settings->api_key}",
+            'Authorization' => "Bearer {$settings['api_key']}",
             'Content-Type' => 'application/json',
         ])->post('https://api.openai.com/v1/chat/completions', [
-            'model' => $settings->model,
+            'model' => $settings['model'],
             'messages' => $messages,
             'max_tokens' => $maxTokens,
-            'temperature' => (float) $settings->temperature,
+            'temperature' => (float) $settings['temperature'],
         ]);
 
         if (!$response->successful()) {
@@ -652,7 +628,7 @@ class AIApplicationService
     /**
      * Call Anthropic API
      */
-    private function callAnthropic(AiSetting $settings, array $messages, int $maxTokens): array
+    private function callAnthropic(array $settings, array $messages, int $maxTokens): array
     {
         // Extract system prompt if present
         $systemPrompt = null;
@@ -667,7 +643,7 @@ class AIApplicationService
         }
 
         $payload = [
-            'model' => $settings->model,
+            'model' => $settings['model'],
             'max_tokens' => $maxTokens,
             'messages' => $filteredMessages,
         ];
@@ -677,7 +653,7 @@ class AIApplicationService
         }
 
         $response = Http::withHeaders([
-            'x-api-key' => $settings->api_key,
+            'x-api-key' => $settings['api_key'],
             'anthropic-version' => '2023-06-01',
             'Content-Type' => 'application/json',
         ])->post('https://api.anthropic.com/v1/messages', $payload);

@@ -6,12 +6,15 @@ namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use App\Domain\User\Entities\User;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Reporting\Entities\Report;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ReportApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -21,8 +24,8 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
@@ -51,7 +54,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_reports(): void
     {
-        /* Report factory - use DB::table('reports') */->count(3)->create([
+        Report::factory()->count(3)->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
         ]);
@@ -69,13 +72,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_filter_reports_by_module(): void
     {
-        $otherModule = /* Module factory - use DB::table('modules') */->create();
+        $otherModule = Module::factory()->create();
 
-        /* Report factory - use DB::table('reports') */->count(2)->create([
+        Report::factory()->count(2)->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
         ]);
-        /* Report factory - use DB::table('reports') */->create([
+        Report::factory()->create([
             'module_id' => $otherModule->id,
             'user_id' => $this->user->id,
         ]);
@@ -91,12 +94,12 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_filter_reports_by_type(): void
     {
-        /* Report factory - use DB::table('reports') */->count(2)->create([
+        Report::factory()->count(2)->create([
             'module_id' => $this->module->id,
             'type' => 'tabular',
             'user_id' => $this->user->id,
         ]);
-        /* Report factory - use DB::table('reports') */->create([
+        Report::factory()->create([
             'module_id' => $this->module->id,
             'type' => 'summary',
             'user_id' => $this->user->id,
@@ -170,7 +173,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_show_report(): void
     {
-        $report = /* Report factory - use DB::table('reports') */->create([
+        $report = Report::factory()->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
         ]);
@@ -200,7 +203,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_report(): void
     {
-        $report = /* Report factory - use DB::table('reports') */->create([
+        $report = Report::factory()->create([
             'name' => 'Original Name',
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
@@ -228,7 +231,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_report(): void
     {
-        $report = /* Report factory - use DB::table('reports') */->create([
+        $report = Report::factory()->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
         ]);
@@ -249,7 +252,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_execute_report(): void
     {
-        $report = /* Report factory - use DB::table('reports') */->create([
+        $report = Report::factory()->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'type' => 'tabular',
@@ -273,7 +276,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_toggle_report_public(): void
     {
-        $report = /* Report factory - use DB::table('reports') */->create([
+        $report = Report::factory()->create([
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,
             'is_public' => false,
@@ -287,14 +290,14 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_see_public_reports_from_other_users(): void
     {
-        $otherUser = /* User factory - use DB::table('users') */->create();
+        $otherUser = User::factory()->create();
 
-        /* Report factory - use DB::table('reports') */->create([
+        Report::factory()->create([
             'module_id' => $this->module->id,
             'user_id' => $otherUser->id,
             'is_public' => true,
         ]);
-        /* Report factory - use DB::table('reports') */->create([
+        Report::factory()->create([
             'module_id' => $this->module->id,
             'user_id' => $otherUser->id,
             'is_public' => false,
@@ -315,7 +318,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_clone_report(): void
     {
-        $report = /* Report factory - use DB::table('reports') */->create([
+        $report = Report::factory()->create([
             'name' => 'Original Report',
             'module_id' => $this->module->id,
             'user_id' => $this->user->id,

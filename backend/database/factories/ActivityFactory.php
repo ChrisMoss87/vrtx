@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Activity;
+use App\Domain\Activity\Entities\Activity;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use App\Domain\User\Entities\User;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Activity>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Activity\Entities\Activity>
  */
 class ActivityFactory extends Factory
 {

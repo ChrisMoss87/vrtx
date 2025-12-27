@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\PortalAccessToken;
-use App\Infrastructure\Persistence\Eloquent\Models\PortalUser;
+use App\Domain\Portal\Entities\PortalAccessToken;
+use App\Domain\Portal\Entities\PortalUser;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\PortalAccessToken>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Portal\Entities\PortalAccessToken>
  */
 class PortalAccessTokenFactory extends Factory
 {

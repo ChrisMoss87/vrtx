@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Blueprint\Entities\BlueprintTransitionExecution;
+
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\BlueprintTransitionExecution>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Blueprint\Entities\BlueprintTransitionExecution>
  */
 class BlueprintTransitionExecutionFactory extends Factory
 {

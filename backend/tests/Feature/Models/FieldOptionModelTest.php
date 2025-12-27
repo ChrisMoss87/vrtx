@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Models;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Modules\Entities\Module;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class FieldOptionModelTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -24,7 +25,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_create_field_option(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
@@ -48,7 +49,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_option_belongs_to_field(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Priority',
@@ -68,7 +69,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_option_active_scope(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
@@ -98,7 +99,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_option_ordered_scope(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Priority',
@@ -119,7 +120,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_option_metadata_is_cast_to_array(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
@@ -155,7 +156,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_option_cascade_deletes_with_field(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
@@ -176,7 +177,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_option_supports_color(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
@@ -196,7 +197,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_multiple_options_for_single_field(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',

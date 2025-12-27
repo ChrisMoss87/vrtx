@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
+use App\Domain\Tenancy\Repositories\TenantRepositoryInterface;
+use App\Infrastructure\Tenancy\TenancyManager;
 use App\Services\TimeMachine\SnapshotService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,7 +14,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Stancl\Tenancy\Contracts\Tenant;
 
 /**
  * Job to create daily snapshots for active records.
@@ -28,9 +29,11 @@ class CreateDailySnapshotsJob implements ShouldQueue
      */
     public function handle(
         SnapshotService $snapshotService,
-        ModuleRepositoryInterface $moduleRepository
+        ModuleRepositoryInterface $moduleRepository,
+        TenantRepositoryInterface $tenantRepository,
+        TenancyManager $tenancyManager,
     ): void {
-        $tenants = tenancy()->all();
+        $tenants = $tenantRepository->all();
 
         Log::info('Starting daily snapshot creation', [
             'tenant_count' => count($tenants),
@@ -40,7 +43,7 @@ class CreateDailySnapshotsJob implements ShouldQueue
 
         foreach ($tenants as $tenant) {
             try {
-                tenancy()->initialize($tenant);
+                $tenancyManager->initialize($tenant);
 
                 $modules = $moduleRepository->findActiveModules();
 
@@ -50,20 +53,20 @@ class CreateDailySnapshotsJob implements ShouldQueue
 
                     if ($count > 0) {
                         Log::info('Created daily snapshots', [
-                            'tenant_id' => $tenant->getTenantKey(),
+                            'tenant_id' => $tenant->id()->value(),
                             'module' => $module->apiName(),
                             'count' => $count,
                         ]);
                     }
                 }
 
-                tenancy()->end();
+                $tenancyManager->end();
             } catch (\Throwable $e) {
                 Log::error('Failed to create daily snapshots for tenant', [
-                    'tenant_id' => $tenant->getTenantKey(),
+                    'tenant_id' => $tenant->id()->value(),
                     'error' => $e->getMessage(),
                 ]);
-                tenancy()->end();
+                $tenancyManager->end();
             }
         }
 

@@ -319,6 +319,33 @@ final class DbModuleRecordRepository implements ModuleRecordRepositoryInterface
         return $query;
     }
 
+    public function findByPeriod(
+        int $moduleId,
+        ?DateTimeImmutable $periodStart = null,
+        ?DateTimeImmutable $periodEnd = null,
+        ?int $userId = null
+    ): array {
+        $query = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
+            ->whereNull('deleted_at');
+
+        if ($periodStart !== null) {
+            $query->where('created_at', '>=', $periodStart->format('Y-m-d H:i:s'));
+        }
+
+        if ($periodEnd !== null) {
+            $query->where('created_at', '<=', $periodEnd->format('Y-m-d H:i:s'));
+        }
+
+        if ($userId !== null) {
+            $query->where('created_by', $userId);
+        }
+
+        $rows = $query->orderBy('created_at', 'desc')->get();
+
+        return array_map(fn($row) => $this->toDomain($row), $rows->all());
+    }
+
     public function calculateMetric(
         int $moduleId,
         string $field,
@@ -364,6 +391,101 @@ final class DbModuleRecordRepository implements ModuleRecordRepositoryInterface
             'count_distinct' => (float) $query->selectRaw('COUNT(DISTINCT data->>?)', [$field])->value('count') ?? 0,
             default => (float) $query->count(),
         };
+    }
+
+    public function findByIdAsArray(int $recordId): ?array
+    {
+        $row = DB::table(self::TABLE)
+            ->where('id', $recordId)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$row) {
+            return null;
+        }
+
+        return $this->rowToArray($row);
+    }
+
+    public function update(int $recordId, array $data): ?array
+    {
+        $exists = DB::table(self::TABLE)
+            ->where('id', $recordId)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if (!$exists) {
+            return null;
+        }
+
+        $updateData = ['updated_at' => now()];
+
+        if (isset($data['data'])) {
+            $updateData['data'] = json_encode($data['data']);
+        }
+
+        foreach ($data as $key => $value) {
+            if ($key !== 'data' && in_array($key, ['owner_id', 'assigned_to', 'updated_by'])) {
+                $updateData[$key] = $value;
+            }
+        }
+
+        DB::table(self::TABLE)
+            ->where('id', $recordId)
+            ->update($updateData);
+
+        return $this->findByIdAsArray($recordId);
+    }
+
+    public function findByModuleId(int $moduleId, ?int $limit = null): array
+    {
+        $query = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
+            ->whereNull('deleted_at')
+            ->orderByDesc('created_at');
+
+        if ($limit) {
+            $query->limit($limit);
+        }
+
+        return $query->get()->map(fn($row) => $this->rowToArray($row))->toArray();
+    }
+
+    public function findMatchingRecords(
+        int $moduleId,
+        int $excludeRecordId,
+        string $field,
+        mixed $value,
+        string $matchType = 'exact'
+    ): array {
+        $query = DB::table(self::TABLE)
+            ->where('module_id', $moduleId)
+            ->where('id', '!=', $excludeRecordId)
+            ->whereNull('deleted_at');
+
+        $query = match ($matchType) {
+            'exact' => $query->whereRaw("data->>? = ?", [$field, $value]),
+            'fuzzy' => $query->whereRaw("data->>? ILIKE ?", [$field, "%{$value}%"]),
+            'email_domain' => $query->whereRaw("data->>? ILIKE ?", [$field, "%@" . substr(strrchr((string) $value, "@"), 1)]),
+            default => $query->whereRaw("data->>? = ?", [$field, $value]),
+        };
+
+        return $query->limit(100)->get()->map(fn($row) => $this->rowToArray($row))->toArray();
+    }
+
+    private function rowToArray(stdClass $row): array
+    {
+        return [
+            'id' => (int) $row->id,
+            'module_id' => (int) $row->module_id,
+            'data' => $row->data ? (is_string($row->data) ? json_decode($row->data, true) : $row->data) : [],
+            'owner_id' => $row->owner_id ? (int) $row->owner_id : null,
+            'assigned_to' => $row->assigned_to ? (int) $row->assigned_to : null,
+            'created_by' => $row->created_by ? (int) $row->created_by : null,
+            'updated_by' => $row->updated_by ? (int) $row->updated_by : null,
+            'created_at' => $row->created_at,
+            'updated_at' => $row->updated_at,
+        ];
     }
 
     /**

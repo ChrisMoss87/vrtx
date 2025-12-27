@@ -203,6 +203,7 @@
 			featureFlag: 'ai.sidebar',
 			items: [
 				{ title: 'AI Settings', url: '/admin/ai' },
+				{ title: 'Documents', url: '/documents' },
 				{ title: 'Document Templates', url: '/admin/document-templates' },
 				{ title: 'Recordings', url: '/recordings' }
 			]

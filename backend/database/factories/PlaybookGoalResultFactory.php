@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\PlaybookGoal;
-use App\Infrastructure\Persistence\Eloquent\Models\PlaybookGoalResult;
-use App\Infrastructure\Persistence\Eloquent\Models\PlaybookInstance;
+use App\Domain\Playbook\Entities\PlaybookGoal;
+use App\Domain\Playbook\Entities\PlaybookGoalResult;
+use App\Domain\Playbook\Entities\PlaybookInstance;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\PlaybookGoalResult>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Playbook\Entities\PlaybookGoalResult>
  */
 class PlaybookGoalResultFactory extends Factory
 {

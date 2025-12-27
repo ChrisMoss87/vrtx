@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Modules;
 
-use App\Domain\Modules\DTOs\CreateBlockDTO;
-use App\Domain\Modules\DTOs\CreateFieldDTO;
-use App\Domain\Modules\DTOs\CreateModuleDTO;
-use App\Domain\Modules\DTOs\UpdateModuleDTO;
+use App\Domain\Modules\Entities\Block;
+use App\Domain\Modules\Entities\Field;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Modules\Repositories\BlockRepositoryInterface;
+use App\Domain\Modules\Repositories\FieldRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
+use App\Domain\Modules\ValueObjects\BlockType;
+use App\Domain\Modules\ValueObjects\FieldType;
+use App\Domain\Modules\ValueObjects\ModuleSettings;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +23,12 @@ use Illuminate\Support\Facades\DB;
 
 class ModuleController extends Controller
 {
+    public function __construct(
+        private readonly ModuleRepositoryInterface $moduleRepository,
+        private readonly BlockRepositoryInterface $blockRepository,
+        private readonly FieldRepositoryInterface $fieldRepository,
+        private readonly ModuleRecordRepositoryInterface $recordRepository,
+    ) {}
 
     /**
      * Get all modules.
@@ -24,11 +36,9 @@ class ModuleController extends Controller
     public function index(): JsonResponse
     {
         try {
-            $modules = Module::with(['blocks.fields.options', 'fields.options'])
-                ->orderBy('display_order')
-                ->get();
+            $modules = $this->moduleRepository->findAll();
 
-            return $this->listResponse($modules->toArray(), 'modules');
+            return $this->listResponse($this->serializeModules($modules), 'modules');
         } catch (\Exception $e) {
             return $this->handleException($e, 'Failed to fetch modules', 'ModuleController@index');
         }
@@ -40,14 +50,40 @@ class ModuleController extends Controller
     public function active(): JsonResponse
     {
         try {
-            $modules = Module::with(['blocks.fields.options', 'fields.options'])
-                ->where('is_active', true)
-                ->orderBy('display_order')
-                ->get();
+            $modules = $this->moduleRepository->findActive();
 
-            return $this->listResponse($modules->toArray(), 'modules');
+            return $this->listResponse($this->serializeModules($modules), 'modules');
         } catch (\Exception $e) {
             return $this->handleException($e, 'Failed to fetch active modules', 'ModuleController@active');
+        }
+    }
+
+    /**
+     * Get record counts for all active modules.
+     */
+    public function stats(): JsonResponse
+    {
+        try {
+            $modules = $this->moduleRepository->findActive();
+            $stats = [];
+
+            foreach ($modules as $module) {
+                $count = $this->recordRepository->count($module->getId());
+                $stats[] = [
+                    'id' => $module->getId(),
+                    'name' => $module->getName(),
+                    'api_name' => $module->getApiName(),
+                    'icon' => $module->getIcon(),
+                    'count' => $count,
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats,
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Failed to fetch module stats', 'ModuleController@stats');
         }
     }
 
@@ -84,96 +120,73 @@ class ModuleController extends Controller
                 'blocks.*.fields.*.options' => 'nullable|array',
             ]);
 
-            // Convert blocks array to CreateBlockDTO array and collect all fields
-            $blocks = [];
-            $allFields = [];
-
-            foreach ($validated['blocks'] ?? [] as $blockIndex => $blockData) {
-                $blockData['display_order'] = $blockData['display_order'] ?? $blockIndex;
-                $block = CreateBlockDTO::fromArray($blockData);
-                $blocks[] = $block;
-
-                // Convert fields for this block and add to all fields list
-                foreach ($blockData['fields'] ?? [] as $fieldIndex => $fieldData) {
-                    // Auto-generate api_name if not provided
-                    if (empty($fieldData['api_name'])) {
-                        $fieldData['api_name'] = Str::snake($fieldData['label']);
-                    }
-
-                    $fieldData['display_order'] = $fieldData['display_order'] ?? $fieldIndex;
-                    $fieldData['blockApiName'] = $blockData['name']; // Use block name to associate field with block
-
-                    $allFields[] = CreateFieldDTO::fromArray($fieldData);
-                }
+            // Check if module name already exists
+            if ($this->moduleRepository->existsByName($validated['name'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A module with this name already exists',
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            // Build the module DTO
-            $moduleData = [
-                'name' => $validated['name'],
-                'singularName' => $validated['singular_name'],
-                'icon' => $validated['icon'] ?? null,
-                'description' => $validated['description'] ?? null,
-                'isActive' => $validated['is_active'] ?? true,
-                'settings' => $validated['settings'] ?? [],
-                'displayOrder' => $validated['display_order'] ?? 0,
-                'blocks' => $blocks,
-                'fields' => $allFields, // All fields with blockApiName set
-            ];
-
-            $dto = CreateModuleDTO::fromArray($moduleData);
-
-            // Create module using Database directly since we need to handle blocks/fields
-            $module = DB::table('modules')->insertGetId([
-                'name' => $dto->name,
-                'singular_name' => $dto->singularName,
-                'api_name' => Str::snake($dto->name),
-                'icon' => $dto->icon,
-                'description' => $dto->description,
-                'is_active' => $dto->isActive,
-                'settings' => $dto->settings,
-                'display_order' => $dto->displayOrder,
-            ]);
-
-            // Create blocks and fields
-            foreach ($dto->blocks as $blockIndex => $blockDto) {
-                $block = $module->blocks()->create([
-                    'name' => $blockDto->name,
-                    'type' => $blockDto->type,
-                    'display_order' => $blockDto->displayOrder ?? $blockIndex,
-                    'settings' => $blockDto->settings ?? [],
-                ]);
-            }
-
-            // Create fields and associate with blocks
-            foreach ($dto->fields as $fieldDto) {
-                $block = $module->blocks()->where('name', $fieldDto->blockApiName)->first();
-                $module->fields()->create([
-                    'block_id' => $block?->id,
-                    'label' => $fieldDto->label,
-                    'api_name' => $fieldDto->apiName,
-                    'type' => $fieldDto->type,
-                    'is_required' => $fieldDto->isRequired,
-                    'display_order' => $fieldDto->displayOrder,
-                    'width' => $fieldDto->width ?? 100,
-                    'settings' => $fieldDto->settings ?? [],
-                ]);
-            }
-
-            // Update default view settings if provided
-            if (isset($validated['default_filters']) || isset($validated['default_sorting']) ||
-                isset($validated['default_column_visibility']) || isset($validated['default_page_size'])) {
-                $module->update([
+            // Create the module entity
+            $settings = ModuleSettings::fromArray(array_merge(
+                $validated['settings'] ?? [],
+                [
                     'default_filters' => $validated['default_filters'] ?? null,
                     'default_sorting' => $validated['default_sorting'] ?? null,
                     'default_column_visibility' => $validated['default_column_visibility'] ?? null,
                     'default_page_size' => $validated['default_page_size'] ?? 50,
-                ]);
+                ]
+            ));
+
+            $module = Module::create(
+                name: $validated['name'],
+                singularName: $validated['singular_name'],
+                icon: $validated['icon'] ?? null,
+                description: $validated['description'] ?? null,
+                settings: $settings,
+                displayOrder: $validated['display_order'] ?? 0
+            );
+
+            // Save the module
+            $savedModule = $this->moduleRepository->save($module);
+
+            // Create blocks and fields
+            foreach ($validated['blocks'] ?? [] as $blockIndex => $blockData) {
+                $block = Block::create(
+                    moduleId: $savedModule->getId(),
+                    name: $blockData['name'],
+                    type: BlockType::from($blockData['type']),
+                    displayOrder: $blockData['display_order'] ?? $blockIndex,
+                    settings: $blockData['settings'] ?? []
+                );
+
+                $savedBlock = $this->blockRepository->save($block);
+
+                // Create fields for this block
+                foreach ($blockData['fields'] ?? [] as $fieldIndex => $fieldData) {
+                    $apiName = $fieldData['api_name'] ?? Str::snake($fieldData['label']);
+
+                    $field = Field::create(
+                        moduleId: $savedModule->getId(),
+                        blockId: $savedBlock->getId(),
+                        label: $fieldData['label'],
+                        type: FieldType::from($fieldData['type']),
+                        isRequired: $fieldData['is_required'] ?? false,
+                        displayOrder: $fieldData['display_order'] ?? $fieldIndex,
+                    );
+
+                    $this->fieldRepository->save($field);
+                }
             }
+
+            // Reload the module with all relations
+            $createdModule = $this->moduleRepository->findById($savedModule->getId());
 
             return response()->json([
                 'success' => true,
                 'message' => 'Module created successfully',
-                'module' => $module->load(['blocks.fields.options', 'fields.options']),
+                'module' => $this->serializeModule($createdModule),
             ], Response::HTTP_CREATED);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -196,7 +209,7 @@ class ModuleController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $module = Module::with(['blocks.fields.options', 'fields.options'])->find($id);
+            $module = $this->moduleRepository->findById($id);
 
             if (!$module) {
                 return response()->json([
@@ -207,7 +220,7 @@ class ModuleController extends Controller
 
             return response()->json([
                 'success' => true,
-                'module' => $module,
+                'module' => $this->serializeModule($module),
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -224,7 +237,7 @@ class ModuleController extends Controller
     public function showByApiName(string $apiName): JsonResponse
     {
         try {
-            $module = DB::table('modules')->where('api_name', $apiName)->first();
+            $module = $this->moduleRepository->findByApiName($apiName);
 
             if (!$module) {
                 return response()->json([
@@ -235,7 +248,7 @@ class ModuleController extends Controller
 
             return response()->json([
                 'success' => true,
-                'module' => $module->load(['blocks.fields.options', 'fields.options']),
+                'module' => $this->serializeModule($module),
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -264,102 +277,64 @@ class ModuleController extends Controller
                 'default_sorting' => 'nullable|array',
                 'default_column_visibility' => 'nullable|array',
                 'default_page_size' => 'nullable|integer|min:10|max:200',
-                // Full blocks and fields update support
-                'blocks' => 'nullable|array',
-                'blocks.*.id' => 'nullable|integer',
-                'blocks.*.name' => 'required_with:blocks|string',
-                'blocks.*.type' => 'required_with:blocks|in:section,tab,accordion,card',
-                'blocks.*.display_order' => 'nullable|integer',
-                'blocks.*.settings' => 'nullable|array',
-                'blocks.*.fields' => 'nullable|array',
-                'blocks.*.fields.*.id' => 'nullable|integer',
-                'blocks.*.fields.*.label' => 'required_with:blocks.*.fields|string',
-                'blocks.*.fields.*.type' => 'required_with:blocks.*.fields|string',
-                'blocks.*.fields.*.api_name' => 'nullable|string',
-                'blocks.*.fields.*.is_required' => 'nullable|boolean',
-                'blocks.*.fields.*.is_unique' => 'nullable|boolean',
-                'blocks.*.fields.*.is_searchable' => 'nullable|boolean',
-                'blocks.*.fields.*.is_filterable' => 'nullable|boolean',
-                'blocks.*.fields.*.is_sortable' => 'nullable|boolean',
-                'blocks.*.fields.*.is_mass_updatable' => 'nullable|boolean',
-                'blocks.*.fields.*.description' => 'nullable|string',
-                'blocks.*.fields.*.help_text' => 'nullable|string',
-                'blocks.*.fields.*.placeholder' => 'nullable|string',
-                'blocks.*.fields.*.default_value' => 'nullable|string',
-                'blocks.*.fields.*.display_order' => 'nullable|integer',
-                'blocks.*.fields.*.width' => 'nullable|integer',
-                'blocks.*.fields.*.validation_rules' => 'nullable|array',
-                'blocks.*.fields.*.settings' => 'nullable|array',
-                'blocks.*.fields.*.conditional_visibility' => 'nullable|array',
-                'blocks.*.fields.*.field_dependency' => 'nullable|array',
-                'blocks.*.fields.*.formula_definition' => 'nullable|array',
-                'blocks.*.fields.*.options' => 'nullable|array',
-                'blocks.*.fields.*.options.*.id' => 'nullable|integer',
-                'blocks.*.fields.*.options.*.label' => 'required_with:blocks.*.fields.*.options|string',
-                'blocks.*.fields.*.options.*.value' => 'required_with:blocks.*.fields.*.options|string',
-                'blocks.*.fields.*.options.*.color' => 'nullable|string',
-                'blocks.*.fields.*.options.*.display_order' => 'nullable|integer',
             ]);
 
-            $module = DB::table('modules')->where('id', $id)->first();
+            $module = $this->moduleRepository->findById($id);
 
-            // Use database transaction for atomic updates
-            \DB::transaction(function () use ($module, $validated) {
-                // Update basic module fields
-                if (isset($validated['name'])) {
-                    $module->name = $validated['name'];
-                }
-                if (isset($validated['singular_name'])) {
-                    $module->singular_name = $validated['singular_name'];
-                }
-                if (array_key_exists('icon', $validated)) {
-                    $module->icon = $validated['icon'];
-                }
-                if (array_key_exists('description', $validated)) {
-                    $module->description = $validated['description'];
-                }
-                if (isset($validated['settings'])) {
-                    $module->settings = $validated['settings'];
-                }
-                if (isset($validated['display_order'])) {
-                    $module->display_order = $validated['display_order'];
-                }
-                if (isset($validated['is_active'])) {
-                    $module->is_active = $validated['is_active'];
-                }
+            if (!$module) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Module not found',
+                ], Response::HTTP_NOT_FOUND);
+            }
 
-                // Update default view settings
-                if (array_key_exists('default_filters', $validated)) {
-                    $module->default_filters = $validated['default_filters'];
-                }
-                if (array_key_exists('default_sorting', $validated)) {
-                    $module->default_sorting = $validated['default_sorting'];
-                }
-                if (array_key_exists('default_column_visibility', $validated)) {
-                    $module->default_column_visibility = $validated['default_column_visibility'];
-                }
-                if (isset($validated['default_page_size'])) {
-                    $module->default_page_size = $validated['default_page_size'];
-                }
+            // Update module details if provided
+            if (isset($validated['name']) || isset($validated['singular_name']) ||
+                array_key_exists('icon', $validated) || array_key_exists('description', $validated)) {
+                $module = $module->updateDetails(
+                    name: $validated['name'] ?? $module->getName(),
+                    singularName: $validated['singular_name'] ?? $module->getSingularName(),
+                    icon: array_key_exists('icon', $validated) ? $validated['icon'] : $module->getIcon(),
+                    description: array_key_exists('description', $validated) ? $validated['description'] : $module->getDescription()
+                );
+            }
 
-                $module->save();
+            // Update display order if provided
+            if (isset($validated['display_order'])) {
+                $module = $module->updateDisplayOrder($validated['display_order']);
+            }
 
-                // Handle blocks and fields update if provided
-                if (isset($validated['blocks'])) {
-                    $this->syncBlocks($module, $validated['blocks']);
-                }
-            });
+            // Update active status if provided
+            if (isset($validated['is_active'])) {
+                $module = $validated['is_active'] ? $module->activate() : $module->deactivate();
+            }
+
+            // Update settings if provided
+            if (isset($validated['settings']) || isset($validated['default_filters']) ||
+                isset($validated['default_sorting']) || isset($validated['default_column_visibility']) ||
+                isset($validated['default_page_size'])) {
+                $currentSettings = $module->getSettings()->jsonSerialize();
+                $newSettings = ModuleSettings::fromArray(array_merge(
+                    $currentSettings,
+                    $validated['settings'] ?? [],
+                    [
+                        'default_filters' => $validated['default_filters'] ?? ($currentSettings['default_filters'] ?? null),
+                        'default_sorting' => $validated['default_sorting'] ?? ($currentSettings['default_sorting'] ?? null),
+                        'default_column_visibility' => $validated['default_column_visibility'] ?? ($currentSettings['default_column_visibility'] ?? null),
+                        'default_page_size' => $validated['default_page_size'] ?? ($currentSettings['default_page_size'] ?? 50),
+                    ]
+                ));
+                $module = $module->updateSettings($newSettings);
+            }
+
+            // Save the updated module
+            $updatedModule = $this->moduleRepository->save($module);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Module updated successfully',
-                'module' => $module->fresh()->load(['blocks.fields.options', 'fields.options']),
+                'module' => $this->serializeModule($updatedModule),
             ]);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Module not found',
-            ], Response::HTTP_NOT_FOUND);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -376,182 +351,12 @@ class ModuleController extends Controller
     }
 
     /**
-     * Sync blocks for a module (create, update, delete).
-     */
-    private function syncBlocks(Module $module, array $blocksData): void
-    {
-        $existingBlockIds = $module->blocks->pluck('id')->toArray();
-        $incomingBlockIds = [];
-
-        foreach ($blocksData as $index => $blockData) {
-            $blockData['display_order'] = $blockData['display_order'] ?? $index;
-
-            if (!empty($blockData['id'])) {
-                // Update existing block
-                $block = DB::table('blocks')->where('id', $blockData['id'])->first();
-                if ($block && $block->module_id === $module->id) {
-                    $block->update([
-                        'name' => $blockData['name'],
-                        'type' => $blockData['type'],
-                        'display_order' => $blockData['display_order'],
-                        'settings' => $blockData['settings'] ?? [],
-                    ]);
-                    $incomingBlockIds[] = $block->id;
-
-                    // Sync fields for this block
-                    if (isset($blockData['fields'])) {
-                        $this->syncFields($module, $block, $blockData['fields']);
-                    }
-                }
-            } else {
-                // Create new block
-                $block = DB::table('blocks')->insertGetId([
-                    'module_id' => $module->id,
-                    'name' => $blockData['name'],
-                    'type' => $blockData['type'],
-                    'display_order' => $blockData['display_order'],
-                    'settings' => $blockData['settings'] ?? [],
-                ]);
-                $incomingBlockIds[] = $block->id;
-
-                // Create fields for this block
-                if (isset($blockData['fields'])) {
-                    $this->syncFields($module, $block, $blockData['fields']);
-                }
-            }
-        }
-
-        // Delete blocks that were removed (along with their fields)
-        $blocksToDelete = array_diff($existingBlockIds, $incomingBlockIds);
-        if (!empty($blocksToDelete)) {
-            // Delete fields in these blocks first
-            DB::table('fields')->whereIn('block_id', $blocksToDelete)->delete();
-            // Delete the blocks
-            DB::table('blocks')->whereIn('id', $blocksToDelete)->delete();
-        }
-    }
-
-    /**
-     * Sync fields for a block (create, update, delete).
-     */
-    private function syncFields(Module $module, object $block, array $fieldsData): void
-    {
-        $existingFieldIds = $block->fields->pluck('id')->toArray();
-        $incomingFieldIds = [];
-
-        foreach ($fieldsData as $index => $fieldData) {
-            $fieldData['display_order'] = $fieldData['display_order'] ?? $index;
-
-            // Auto-generate api_name if not provided
-            if (empty($fieldData['api_name'])) {
-                $fieldData['api_name'] = Str::snake($fieldData['label']);
-            }
-
-            $fieldPayload = [
-                'module_id' => $module->id,
-                'block_id' => $block->id,
-                'label' => $fieldData['label'],
-                'api_name' => $fieldData['api_name'],
-                'type' => $fieldData['type'],
-                'description' => $fieldData['description'] ?? null,
-                'help_text' => $fieldData['help_text'] ?? null,
-                'placeholder' => $fieldData['placeholder'] ?? null,
-                'is_required' => $fieldData['is_required'] ?? false,
-                'is_unique' => $fieldData['is_unique'] ?? false,
-                'is_searchable' => $fieldData['is_searchable'] ?? true,
-                'is_filterable' => $fieldData['is_filterable'] ?? true,
-                'is_sortable' => $fieldData['is_sortable'] ?? true,
-                'is_mass_updatable' => $fieldData['is_mass_updatable'] ?? true,
-                'default_value' => $fieldData['default_value'] ?? null,
-                'display_order' => $fieldData['display_order'],
-                'width' => $fieldData['width'] ?? 100,
-                'validation_rules' => $fieldData['validation_rules'] ?? [],
-                'settings' => $fieldData['settings'] ?? [],
-                'conditional_visibility' => $fieldData['conditional_visibility'] ?? null,
-                'field_dependency' => $fieldData['field_dependency'] ?? null,
-                'formula_definition' => $fieldData['formula_definition'] ?? null,
-            ];
-
-            if (!empty($fieldData['id'])) {
-                // Update existing field
-                $field = DB::table('fields')->where('id', $fieldData['id'])->first();
-                if ($field && $field->module_id === $module->id) {
-                    $field->update($fieldPayload);
-                    $incomingFieldIds[] = $field->id;
-
-                    // Sync options for this field
-                    if (isset($fieldData['options'])) {
-                        $this->syncFieldOptions($field, $fieldData['options']);
-                    }
-                }
-            } else {
-                // Create new field
-                $field = DB::table('fields')->insertGetId($fieldPayload);
-                $incomingFieldIds[] = $field->id;
-
-                // Create options for this field
-                if (isset($fieldData['options'])) {
-                    $this->syncFieldOptions($field, $fieldData['options']);
-                }
-            }
-        }
-
-        // Delete fields that were removed
-        $fieldsToDelete = array_diff($existingFieldIds, $incomingFieldIds);
-        if (!empty($fieldsToDelete)) {
-            // Delete options first
-            DB::table('field_options')->whereIn('field_id', $fieldsToDelete)->delete();
-            // Delete the fields
-            DB::table('fields')->whereIn('id', $fieldsToDelete)->delete();
-        }
-    }
-
-    /**
-     * Sync options for a field (create, update, delete).
-     */
-    private function syncFieldOptions(object $field, array $optionsData): void
-    {
-        $existingOptionIds = $field->options->pluck('id')->toArray();
-        $incomingOptionIds = [];
-
-        foreach ($optionsData as $index => $optionData) {
-            $optionPayload = [
-                'field_id' => $field->id,
-                'label' => $optionData['label'],
-                'value' => $optionData['value'],
-                'color' => $optionData['color'] ?? null,
-                'display_order' => $optionData['display_order'] ?? $index,
-                'is_active' => $optionData['is_active'] ?? true,
-            ];
-
-            if (!empty($optionData['id'])) {
-                // Update existing option
-                $option = DB::table('field_options')->where('id', $optionData['id'])->first();
-                if ($option && $option->field_id === $field->id) {
-                    $option->update($optionPayload);
-                    $incomingOptionIds[] = $option->id;
-                }
-            } else {
-                // Create new option
-                $option = DB::table('field_options')->insertGetId($optionPayload);
-                $incomingOptionIds[] = $option->id;
-            }
-        }
-
-        // Delete options that were removed
-        $optionsToDelete = array_diff($existingOptionIds, $incomingOptionIds);
-        if (!empty($optionsToDelete)) {
-            DB::table('field_options')->whereIn('id', $optionsToDelete)->delete();
-        }
-    }
-
-    /**
      * Delete a module.
      */
     public function destroy(int $id): JsonResponse
     {
         try {
-            $module = DB::table('modules')->where('id', $id)->first();
+            $module = $this->moduleRepository->findById($id);
 
             if (!$module) {
                 return response()->json([
@@ -560,7 +365,7 @@ class ModuleController extends Controller
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            $module->delete();
+            $this->moduleRepository->delete($id);
 
             return response()->json([
                 'success' => true,
@@ -583,14 +388,17 @@ class ModuleController extends Controller
         try {
             $validated = $request->validate([
                 'modules' => 'required|array',
-                'modules.*.id' => 'required|integer|exists:modules,id',
+                'modules.*.id' => 'required|integer',
                 'modules.*.display_order' => 'required|integer|min:0',
             ]);
 
-            \DB::transaction(function () use ($validated) {
+            DB::transaction(function () use ($validated) {
                 foreach ($validated['modules'] as $moduleData) {
-                    DB::table('modules')->where('id', $moduleData['id'])
-                        ->update(['display_order' => $moduleData['display_order']]);
+                    $module = $this->moduleRepository->findById($moduleData['id']);
+                    if ($module) {
+                        $updatedModule = $module->updateDisplayOrder($moduleData['display_order']);
+                        $this->moduleRepository->save($updatedModule);
+                    }
                 }
             });
 
@@ -619,7 +427,7 @@ class ModuleController extends Controller
     public function toggleStatus(int $id): JsonResponse
     {
         try {
-            $module = DB::table('modules')->where('id', $id)->first();
+            $module = $this->moduleRepository->findById($id);
 
             if (!$module) {
                 return response()->json([
@@ -629,13 +437,13 @@ class ModuleController extends Controller
             }
 
             // Toggle the status
-            $module->is_active = !$module->is_active;
-            $module->save();
+            $updatedModule = $module->isActive() ? $module->deactivate() : $module->activate();
+            $savedModule = $this->moduleRepository->save($updatedModule);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Module status updated successfully',
-                'module' => $module->load(['blocks.fields.options', 'fields.options']),
+                'module' => $this->serializeModule($savedModule),
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -644,5 +452,126 @@ class ModuleController extends Controller
                 'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Serialize a module entity to array for JSON response.
+     */
+    private function serializeModule(Module $module): array
+    {
+        $blocks = [];
+        foreach ($module->getBlocks() as $block) {
+            $fields = [];
+            foreach ($block->fields() as $field) {
+                $options = [];
+                foreach ($field->options() as $option) {
+                    $options[] = [
+                        'id' => $option->getId(),
+                        'label' => $option->label(),
+                        'value' => $option->value(),
+                        'color' => $option->color(),
+                        'display_order' => $option->displayOrder(),
+                        'is_active' => $option->isActive(),
+                    ];
+                }
+
+                $fields[] = [
+                    'id' => $field->getId(),
+                    'module_id' => $field->moduleId(),
+                    'block_id' => $field->blockId(),
+                    'label' => $field->label(),
+                    'api_name' => $field->apiName(),
+                    'type' => $field->type()->value,
+                    'description' => $field->description(),
+                    'help_text' => $field->helpText(),
+                    'is_required' => $field->isRequired(),
+                    'is_unique' => $field->isUnique(),
+                    'is_searchable' => $field->isSearchable(),
+                    'is_filterable' => $field->isFilterable(),
+                    'is_sortable' => $field->isSortable(),
+                    'default_value' => $field->defaultValue(),
+                    'display_order' => $field->displayOrder(),
+                    'width' => $field->width(),
+                    'settings' => $field->settings()->jsonSerialize(),
+                    'options' => $options,
+                ];
+            }
+
+            $blocks[] = [
+                'id' => $block->getId(),
+                'module_id' => $block->moduleId(),
+                'name' => $block->name(),
+                'type' => $block->type()->value,
+                'display_order' => $block->displayOrder(),
+                'settings' => $block->settings(),
+                'fields' => $fields,
+            ];
+        }
+
+        // Standalone fields (not in blocks)
+        $standaloneFields = [];
+        foreach ($module->getFields() as $field) {
+            if ($field->blockId() === null) {
+                $options = [];
+                foreach ($field->options() as $option) {
+                    $options[] = [
+                        'id' => $option->getId(),
+                        'label' => $option->label(),
+                        'value' => $option->value(),
+                        'color' => $option->color(),
+                        'display_order' => $option->displayOrder(),
+                        'is_active' => $option->isActive(),
+                    ];
+                }
+
+                $standaloneFields[] = [
+                    'id' => $field->getId(),
+                    'module_id' => $field->moduleId(),
+                    'block_id' => null,
+                    'label' => $field->label(),
+                    'api_name' => $field->apiName(),
+                    'type' => $field->type()->value,
+                    'description' => $field->description(),
+                    'help_text' => $field->helpText(),
+                    'is_required' => $field->isRequired(),
+                    'is_unique' => $field->isUnique(),
+                    'is_searchable' => $field->isSearchable(),
+                    'is_filterable' => $field->isFilterable(),
+                    'is_sortable' => $field->isSortable(),
+                    'default_value' => $field->defaultValue(),
+                    'display_order' => $field->displayOrder(),
+                    'width' => $field->width(),
+                    'settings' => $field->settings()->jsonSerialize(),
+                    'options' => $options,
+                ];
+            }
+        }
+
+        return [
+            'id' => $module->getId(),
+            'name' => $module->getName(),
+            'singular_name' => $module->getSingularName(),
+            'api_name' => $module->getApiName(),
+            'icon' => $module->getIcon(),
+            'description' => $module->getDescription(),
+            'is_active' => $module->isActive(),
+            'settings' => $module->getSettings()->jsonSerialize(),
+            'display_order' => $module->getDisplayOrder(),
+            'created_at' => $module->getCreatedAt()->format('Y-m-d H:i:s'),
+            'updated_at' => $module->getUpdatedAt()?->format('Y-m-d H:i:s'),
+            'blocks' => $blocks,
+            'fields' => $standaloneFields,
+        ];
+    }
+
+    /**
+     * Serialize multiple module entities.
+     *
+     * @param array<Module> $modules
+     * @return array
+     */
+    private function serializeModules(array $modules): array
+    {
+        return array_map(fn (Module $module) => $this->serializeModule($module), $modules);
     }
 }

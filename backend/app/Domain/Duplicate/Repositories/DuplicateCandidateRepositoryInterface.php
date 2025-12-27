@@ -70,6 +70,11 @@ interface DuplicateCandidateRepositoryInterface
     public function exists(int $moduleId, int $recordIdA, int $recordIdB): ?array;
 
     /**
+     * Find by record pair.
+     */
+    public function findByRecordPair(int $moduleId, int $recordIdA, int $recordIdB): ?array;
+
+    /**
      * Create a new candidate.
      */
     public function create(array $data): array;

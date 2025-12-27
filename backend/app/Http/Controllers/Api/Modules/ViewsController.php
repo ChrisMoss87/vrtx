@@ -30,9 +30,15 @@ class ViewsController extends Controller
 
         $userId = Auth::id();
 
-        $views = DB::table('module_views')->where('module_id', $module->id)
-            ->accessibleBy($userId)
-            ->ordered()
+        $views = DB::table('module_views')
+            ->where('module_id', $module->id)
+            ->where(function ($query) use ($userId) {
+                $query->where('is_system', true)
+                    ->orWhere('created_by', $userId)
+                    ->orWhere('is_shared', true);
+            })
+            ->orderBy('is_system', 'desc')
+            ->orderBy('name', 'asc')
             ->get();
 
         return response()->json([
@@ -57,9 +63,14 @@ class ViewsController extends Controller
 
         $userId = Auth::id();
 
-        $view = DB::table('module_views')->where('module_id', $module->id)
+        $view = DB::table('module_views')
+            ->where('module_id', $module->id)
             ->where('id', $viewId)
-            ->accessibleBy($userId)
+            ->where(function ($query) use ($userId) {
+                $query->where('is_system', true)
+                    ->orWhere('created_by', $userId)
+                    ->orWhere('is_shared', true);
+            })
             ->first();
 
         if (!$view) {
@@ -113,16 +124,35 @@ class ViewsController extends Controller
 
         // If setting as default, unset other default views for this user
         if ($validated['is_default'] ?? false) {
-            DB::table('module_views')->where('module_id', $module->id)
-                ->where('user_id', $userId)
+            DB::table('module_views')
+                ->where('module_id', $module->id)
+                ->where('created_by', $userId)
                 ->update(['is_default' => false]);
         }
 
-        $view = DB::table('module_views')->insertGetId([
+        // Build insert data with proper JSON encoding
+        $insertData = [
             'module_id' => $module->id,
-            'user_id' => $userId,
-            ...$validated,
-        ]);
+            'created_by' => $userId,
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'view_type' => $validated['view_type'] ?? 'table',
+            'kanban_config' => isset($validated['kanban_config']) ? json_encode($validated['kanban_config']) : null,
+            'filters' => isset($validated['filters']) ? json_encode($validated['filters']) : json_encode([]),
+            'sorting' => isset($validated['sorting']) ? json_encode($validated['sorting']) : json_encode([]),
+            'column_visibility' => isset($validated['column_visibility']) ? json_encode($validated['column_visibility']) : null,
+            'column_order' => isset($validated['column_order']) ? json_encode($validated['column_order']) : null,
+            'column_widths' => isset($validated['column_widths']) ? json_encode($validated['column_widths']) : null,
+            'page_size' => $validated['page_size'] ?? 50,
+            'is_default' => $validated['is_default'] ?? false,
+            'is_shared' => $validated['is_shared'] ?? false,
+            'is_system' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        $viewId = DB::table('module_views')->insertGetId($insertData);
+        $view = DB::table('module_views')->where('id', $viewId)->first();
 
         return response()->json([
             'success' => true,
@@ -181,18 +211,27 @@ class ViewsController extends Controller
 
         // If setting as default, unset other default views for this user
         if (($validated['is_default'] ?? false) && !$view->is_default) {
-            DB::table('module_views')->where('module_id', $module->id)
+            DB::table('module_views')
+                ->where('module_id', $module->id)
                 ->where('user_id', $userId)
                 ->where('id', '!=', $viewId)
                 ->update(['is_default' => false]);
         }
 
-        $view->update($validated);
+        // Add updated_at timestamp
+        $validated['updated_at'] = now();
+
+        DB::table('module_views')
+            ->where('id', $viewId)
+            ->update($validated);
+
+        // Fetch updated view
+        $updatedView = DB::table('module_views')->where('id', $viewId)->first();
 
         return response()->json([
             'success' => true,
             'message' => 'View updated successfully',
-            'view' => $view,
+            'view' => $updatedView,
         ]);
     }
 
@@ -212,19 +251,18 @@ class ViewsController extends Controller
 
         $userId = Auth::id();
 
-        $view = DB::table('module_views')->where('module_id', $module->id)
+        $deleted = DB::table('module_views')
+            ->where('module_id', $module->id)
             ->where('id', $viewId)
-            ->where('user_id', $userId)
-            ->first();
+            ->where('created_by', $userId)
+            ->delete();
 
-        if (!$view) {
+        if (!$deleted) {
             return response()->json([
                 'success' => false,
                 'message' => 'View not found or you do not have permission to delete it',
             ], Response::HTTP_NOT_FOUND);
         }
-
-        $view->delete();
 
         return response()->json([
             'success' => true,
@@ -289,23 +327,34 @@ class ViewsController extends Controller
             ], Response::HTTP_NOT_FOUND);
         }
 
-        // Get fields with options (select, multiselect, radio)
-        $fields = DB::table('fields')->where('module_id', $module->id)
-            ->whereIn('type', ['select', 'radio'])
-            ->with('options')
+        // Get fields with options (select, multiselect, radio, picklist)
+        $fields = DB::table('fields')
+            ->where('module_id', $module->id)
+            ->whereIn('type', ['picklist', 'select', 'radio'])
             ->orderBy('display_order')
             ->get()
-            ->map(fn ($field) => [
-                'api_name' => $field->api_name,
-                'label' => $field->label,
-                'type' => $field->type,
-                'options' => $field->options->map(fn ($opt) => [
-                    'value' => $opt->value,
-                    'label' => $opt->label,
-                    'color' => $opt->color ?? $opt->metadata['color'] ?? null,
-                    'display_order' => $opt->display_order,
-                ]),
-            ]);
+            ->map(function ($field) {
+                // Fetch options for this field
+                $options = DB::table('field_options')
+                    ->where('field_id', $field->id)
+                    ->orderBy('display_order')
+                    ->get();
+
+                return [
+                    'api_name' => $field->api_name,
+                    'label' => $field->label,
+                    'type' => $field->type,
+                    'options' => $options->map(function ($opt) {
+                        $metadata = is_string($opt->metadata) ? json_decode($opt->metadata, true) : ($opt->metadata ?? []);
+                        return [
+                            'value' => $opt->value,
+                            'label' => $opt->label,
+                            'color' => $opt->color ?? $metadata['color'] ?? null,
+                            'display_order' => $opt->display_order,
+                        ];
+                    }),
+                ];
+            });
 
         return response()->json([
             'success' => true,
@@ -350,20 +399,30 @@ class ViewsController extends Controller
             ];
         } else {
             // Saved view mode
-            $view = DB::table('module_views')->where('module_id', $module->id)
+            $view = DB::table('module_views')
+                ->where('module_id', $module->id)
                 ->where('id', $viewId)
-                ->accessibleBy($userId)
+                ->where(function ($query) use ($userId) {
+                    $query->where('is_system', true)
+                        ->orWhere('created_by', $userId)
+                        ->orWhere('is_shared', true);
+                })
                 ->first();
 
-            if (!$view || !$view->isKanban()) {
+            if (!$view || ($view->type ?? null) !== 'kanban') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Kanban view not found',
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            $config = $view->kanban_config ?? [];
-            $groupByField = $view->getKanbanGroupByField();
+            // Parse kanban_config if it's a JSON string
+            $kanbanConfig = $view->kanban_config;
+            if (is_string($kanbanConfig)) {
+                $kanbanConfig = json_decode($kanbanConfig, true) ?? [];
+            }
+            $config = $kanbanConfig ?? [];
+            $groupByField = $config['group_by_field'] ?? null;
 
             if (!$groupByField) {
                 return response()->json([
@@ -373,10 +432,10 @@ class ViewsController extends Controller
             }
         }
 
-        // Get the field and its options
-        $field = DB::table('fields')->where('module_id', $module->id)
+        // Get the field
+        $field = DB::table('fields')
+            ->where('module_id', $module->id)
             ->where('api_name', $groupByField)
-            ->with('options')
             ->first();
 
         if (!$field) {
@@ -386,14 +445,21 @@ class ViewsController extends Controller
             ], Response::HTTP_BAD_REQUEST);
         }
 
+        // Get field options
+        $fieldOptions = DB::table('field_options')
+            ->where('field_id', $field->id)
+            ->orderBy('display_order')
+            ->get();
+
         $valueField = $config['value_field'] ?? null;
         $titleField = $config['title_field'] ?? 'name';
 
         // Build columns from field options
         $columns = [];
-        foreach ($field->options as $option) {
+        foreach ($fieldOptions as $option) {
             // Color can be stored directly or in metadata
-            $optionColor = $option->color ?? $option->metadata['color'] ?? '#6b7280';
+            $metadata = is_string($option->metadata) ? json_decode($option->metadata, true) : ($option->metadata ?? []);
+            $optionColor = $option->color ?? $metadata['color'] ?? '#6b7280';
             $columns[$option->value] = [
                 'id' => $option->value,
                 'name' => $option->label,
@@ -446,7 +512,13 @@ class ViewsController extends Controller
 
         // Group records by field value
         foreach ($records as $record) {
-            $data = $record->data ?? [];
+            // Decode JSON data if it's a string
+            $data = $record->data;
+            if (is_string($data)) {
+                $data = json_decode($data, true) ?? [];
+            }
+            $data = $data ?? [];
+
             $columnValue = $data[$groupByField] ?? '_uncategorized';
 
             // Handle case where value doesn't match any option
@@ -454,9 +526,12 @@ class ViewsController extends Controller
                 $columnValue = '_uncategorized';
             }
 
+            // Build a smart title using available data
+            $title = $this->buildCardTitle($data, $titleField, $record->id);
+
             $cardData = [
                 'id' => $record->id,
-                'title' => $data[$titleField] ?? "Record #{$record->id}",
+                'title' => $title,
                 'data' => $data,
             ];
 
@@ -519,12 +594,17 @@ class ViewsController extends Controller
             $groupByField = $validated['group_by_field'];
         } else {
             // Saved view mode
-            $view = DB::table('module_views')->where('module_id', $module->id)
+            $view = DB::table('module_views')
+                ->where('module_id', $module->id)
                 ->where('id', $viewId)
-                ->accessibleBy($userId)
+                ->where(function ($query) use ($userId) {
+                    $query->where('is_system', true)
+                        ->orWhere('created_by', $userId)
+                        ->orWhere('is_shared', true);
+                })
                 ->first();
 
-            if (!$view || !$view->isKanban()) {
+            if (!$view || ($view->type ?? null) !== 'kanban') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Kanban view not found',
@@ -536,10 +616,16 @@ class ViewsController extends Controller
                 'new_value' => 'required|string',
             ]);
 
-            $groupByField = $view->getKanbanGroupByField();
+            // Parse kanban_config if it's a JSON string
+            $kanbanConfig = $view->kanban_config;
+            if (is_string($kanbanConfig)) {
+                $kanbanConfig = json_decode($kanbanConfig, true) ?? [];
+            }
+            $groupByField = $kanbanConfig['group_by_field'] ?? null;
         }
 
-        $record = DB::table('module_records')->where('module_id', $module->id)
+        $record = DB::table('module_records')
+            ->where('module_id', $module->id)
             ->where('id', $validated['record_id'])
             ->first();
 
@@ -551,11 +637,16 @@ class ViewsController extends Controller
         }
 
         // Update the field value
-        $data = $record->data ?? [];
+        $data = is_string($record->data) ? json_decode($record->data, true) : ($record->data ?? []);
         $oldValue = $data[$groupByField] ?? null;
         $data[$groupByField] = $validated['new_value'];
-        $record->data = $data;
-        $record->save();
+
+        DB::table('module_records')
+            ->where('id', $record->id)
+            ->update([
+                'data' => json_encode($data),
+                'updated_at' => now(),
+            ]);
 
         return response()->json([
             'success' => true,
@@ -613,5 +704,58 @@ class ViewsController extends Controller
                 }
                 break;
         }
+    }
+
+    /**
+     * Build a smart title for a kanban card.
+     *
+     * Tries the configured title_field first, then falls back to common field patterns.
+     */
+    private function buildCardTitle(array $data, ?string $titleField, int $recordId): string
+    {
+        // Try configured title_field first
+        if ($titleField && !empty($data[$titleField])) {
+            return (string) $data[$titleField];
+        }
+
+        // Try common name patterns
+        if (!empty($data['name'])) {
+            return (string) $data['name'];
+        }
+
+        // Try first_name + last_name combination
+        $firstName = $data['first_name'] ?? '';
+        $lastName = $data['last_name'] ?? '';
+        if ($firstName || $lastName) {
+            return trim("{$firstName} {$lastName}");
+        }
+
+        // Try title field
+        if (!empty($data['title'])) {
+            return (string) $data['title'];
+        }
+
+        // Try subject field (for tasks, tickets, etc.)
+        if (!empty($data['subject'])) {
+            return (string) $data['subject'];
+        }
+
+        // Try deal_name for deals
+        if (!empty($data['deal_name'])) {
+            return (string) $data['deal_name'];
+        }
+
+        // Try company for leads/contacts
+        if (!empty($data['company'])) {
+            return (string) $data['company'];
+        }
+
+        // Try email as last resort
+        if (!empty($data['email'])) {
+            return (string) $data['email'];
+        }
+
+        // Fallback to record ID
+        return "Record #{$recordId}";
     }
 }

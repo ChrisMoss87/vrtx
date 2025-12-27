@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Document\Entities\SignatureField;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\SignatureField>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Document\Entities\SignatureField>
  */
 class SignatureFieldFactory extends Factory
 {

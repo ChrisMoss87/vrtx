@@ -23,6 +23,18 @@
 	import { emailsApi, type EmailMessage } from '$lib/api/email';
 	import { cn } from '$lib/utils';
 	import { formatDistanceToNow } from 'date-fns';
+	import DOMPurify from 'isomorphic-dompurify';
+
+	/**
+	 * Sanitize HTML content to prevent XSS attacks.
+	 */
+	function sanitizeHtml(html: string): string {
+		return DOMPurify.sanitize(html, {
+			ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'div', 'span', 'table', 'tr', 'td', 'th', 'thead', 'tbody', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code', 'img'],
+			ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style', 'target'],
+			ALLOW_DATA_ATTR: false,
+		});
+	}
 
 	interface Props {
 		messages: EmailMessage[];
@@ -220,12 +232,12 @@
 					<Collapsible.Content>
 						<Separator />
 						<div class="p-4">
-							<!-- Email body -->
+							<!-- Email body (XSS sanitized) -->
 							<div
 								class="prose prose-sm dark:prose-invert max-w-none"
 							>
 								{#if message.body_html}
-									{@html message.body_html}
+									{@html sanitizeHtml(message.body_html)}
 								{:else}
 									<pre class="whitespace-pre-wrap font-sans">{message.body_text ?? ''}</pre>
 								{/if}

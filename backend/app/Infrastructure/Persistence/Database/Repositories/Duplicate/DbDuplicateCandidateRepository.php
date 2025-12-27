@@ -211,6 +211,11 @@ class DbDuplicateCandidateRepository implements DuplicateCandidateRepositoryInte
 
     public function exists(int $moduleId, int $recordIdA, int $recordIdB): ?array
     {
+        return $this->findByRecordPair($moduleId, $recordIdA, $recordIdB);
+    }
+
+    public function findByRecordPair(int $moduleId, int $recordIdA, int $recordIdB): ?array
+    {
         $row = DB::table(self::TABLE)
             ->where('module_id', $moduleId)
             ->where('record_id_a', $recordIdA)

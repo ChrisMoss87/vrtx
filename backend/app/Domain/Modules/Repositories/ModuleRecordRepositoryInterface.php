@@ -89,4 +89,34 @@ interface ModuleRecordRepositoryInterface
         ?DateTimeImmutable $periodEnd = null,
         ?int $userId = null
     ): array;
+
+    /**
+     * Find a record by ID and return as array.
+     */
+    public function findByIdAsArray(int $recordId): ?array;
+
+    /**
+     * Update a record by ID.
+     */
+    public function update(int $recordId, array $data): ?array;
+
+    /**
+     * Find records by module ID.
+     *
+     * @return array<array>
+     */
+    public function findByModuleId(int $moduleId, ?int $limit = null): array;
+
+    /**
+     * Find records matching a field value for duplicate detection.
+     *
+     * @return array<array>
+     */
+    public function findMatchingRecords(
+        int $moduleId,
+        int $excludeRecordId,
+        string $field,
+        mixed $value,
+        string $matchType = 'exact'
+    ): array;
 }

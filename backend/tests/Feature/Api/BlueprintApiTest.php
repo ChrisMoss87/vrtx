@@ -6,12 +6,17 @@ namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use App\Domain\User\Entities\User;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Blueprint\Entities\Blueprint;
+use App\Domain\Blueprint\Entities\BlueprintState;
+use App\Domain\Blueprint\Entities\BlueprintTransition;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class BlueprintApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -21,8 +26,8 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
@@ -51,7 +56,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_all_blueprints(): void
     {
-        /* Blueprint factory - use DB::table('blueprints') */->count(3)->create([
+        Blueprint::factory()->count(3)->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -69,13 +74,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_filter_blueprints_by_module(): void
     {
-        $otherModule = /* Module factory - use DB::table('modules') */->create();
+        $otherModule = Module::factory()->create();
 
-        /* Blueprint factory - use DB::table('blueprints') */->count(2)->create([
+        Blueprint::factory()->count(2)->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        /* Blueprint factory - use DB::table('blueprints') */->create([
+        Blueprint::factory()->create([
             'module_id' => $otherModule->id,
             'created_by' => $this->user->id,
         ]);
@@ -141,7 +146,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_show_blueprint(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -171,7 +176,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_blueprint(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'name' => 'Original Name',
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
@@ -199,7 +204,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_blueprint(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -220,7 +225,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_toggle_blueprint_active_status(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'is_active' => false,
             'created_by' => $this->user->id,
@@ -238,11 +243,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_blueprint_states(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        /* BlueprintState factory - use DB::table('blueprint_states') */->count(3)->create([
+        BlueprintState::factory()->count(3)->create([
             'blueprint_id' => $blueprint->id,
         ]);
 
@@ -259,7 +264,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_create_blueprint_state(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -284,11 +289,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_blueprint_state(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $state = /* BlueprintState factory - use DB::table('blueprint_states') */->create([
+        $state = BlueprintState::factory()->create([
             'blueprint_id' => $blueprint->id,
             'name' => 'Original',
         ]);
@@ -303,11 +308,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_blueprint_state(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $state = /* BlueprintState factory - use DB::table('blueprint_states') */->create([
+        $state = BlueprintState::factory()->create([
             'blueprint_id' => $blueprint->id,
         ]);
 
@@ -323,13 +328,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_blueprint_transitions(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $fromState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
-        $toState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
-        /* BlueprintTransition factory - use DB::table('blueprint_transitions') */->create([
+        $fromState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        $toState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        BlueprintTransition::factory()->create([
             'blueprint_id' => $blueprint->id,
             'from_state_id' => $fromState->id,
             'to_state_id' => $toState->id,
@@ -348,12 +353,12 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_create_blueprint_transition(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $fromState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id, 'name' => 'Draft']);
-        $toState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id, 'name' => 'Review']);
+        $fromState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id, 'name' => 'Draft']);
+        $toState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id, 'name' => 'Review']);
 
         $response = $this->postJson("/api/v1/blueprints/{$blueprint->id}/transitions", [
             'name' => 'Submit for Review',
@@ -374,11 +379,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_cannot_create_transition_to_same_state(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $state = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        $state = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
 
         $response = $this->postJson("/api/v1/blueprints/{$blueprint->id}/transitions", [
             'name' => 'Invalid Transition',
@@ -391,13 +396,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_blueprint_transition(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $fromState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
-        $toState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
-        $transition = /* BlueprintTransition factory - use DB::table('blueprint_transitions') */->create([
+        $fromState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        $toState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        $transition = BlueprintTransition::factory()->create([
             'blueprint_id' => $blueprint->id,
             'from_state_id' => $fromState->id,
             'to_state_id' => $toState->id,
@@ -414,13 +419,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_blueprint_transition(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $fromState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
-        $toState = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
-        $transition = /* BlueprintTransition factory - use DB::table('blueprint_transitions') */->create([
+        $fromState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        $toState = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        $transition = BlueprintTransition::factory()->create([
             'blueprint_id' => $blueprint->id,
             'from_state_id' => $fromState->id,
             'to_state_id' => $toState->id,
@@ -438,11 +443,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_sync_blueprint_states(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $existingState = /* BlueprintState factory - use DB::table('blueprint_states') */->create([
+        $existingState = BlueprintState::factory()->create([
             'blueprint_id' => $blueprint->id,
             'name' => 'Existing',
         ]);
@@ -476,12 +481,12 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_blueprint_layout(): void
     {
-        $blueprint = /* Blueprint factory - use DB::table('blueprints') */->create([
+        $blueprint = Blueprint::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $state1 = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
-        $state2 = /* BlueprintState factory - use DB::table('blueprint_states') */->create(['blueprint_id' => $blueprint->id]);
+        $state1 = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
+        $state2 = BlueprintState::factory()->create(['blueprint_id' => $blueprint->id]);
 
         $response = $this->putJson("/api/v1/blueprints/{$blueprint->id}/layout", [
             'layout' => [

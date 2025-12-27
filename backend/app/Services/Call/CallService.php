@@ -2,7 +2,7 @@
 
 namespace App\Services\Call;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -271,8 +271,17 @@ class CallService
 
     public function getQueueStats(CallQueue $queue): array
     {
-        $members = $queue->members()->with('user')->get();
-        $todayCalls = Call::whereJsonContains('metadata->queue_id', $queue->id)
+        return $this->getQueueStatsById($queue->id);
+    }
+
+    public function getQueueStatsById(int $queueId): array
+    {
+        $members = DB::table('call_queue_members')
+            ->where('queue_id', $queueId)
+            ->get();
+
+        $todayCalls = DB::table('calls')
+            ->whereRaw("metadata::jsonb @> ?", [json_encode(['queue_id' => $queueId])])
             ->whereDate('created_at', today())
             ->get();
 

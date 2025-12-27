@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Tests;
 
+use App\Infrastructure\Tenancy\Middleware\InitializeTenancyByDomain;
+use App\Infrastructure\Tenancy\Middleware\InitializeTenancyBySubdomain;
+use App\Infrastructure\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Artisan;
-use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
-use Stancl\Tenancy\Middleware\InitializeTenancyByPath;
-use Stancl\Tenancy\Middleware\InitializeTenancyBySubdomain;
-use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 
 /**
  * Base test case for tenant-aware tests.
@@ -47,7 +46,6 @@ abstract class TenantTestCase extends TestCase
         $this->withoutMiddleware([
             InitializeTenancyByDomain::class,
             InitializeTenancyBySubdomain::class,
-            InitializeTenancyByPath::class,
             PreventAccessFromCentralDomains::class,
         ]);
     }

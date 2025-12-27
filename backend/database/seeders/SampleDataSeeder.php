@@ -52,9 +52,9 @@ class SampleDataSeeder extends Seeder
         $types = ['customer', 'prospect', 'partner', 'vendor', 'competitor'];
 
         for ($i = 0; $i < $count; $i++) {
-            $record = DB::table('module_records')->insertGetId([
+            $id = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'name' => $this->faker->company,
                     'website' => $this->faker->url,
                     'industry' => $this->faker->randomElement($industries),
@@ -69,10 +69,12 @@ class SampleDataSeeder extends Seeder
                     'type' => $this->faker->randomElement($types),
                     'annual_revenue' => $this->faker->numberBetween(100000, 50000000),
                     'description' => $this->faker->paragraph,
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-            $ids[] = $record->id;
+            $ids[] = $id;
         }
 
         $this->command->info("  - Created {$count} organizations");
@@ -91,9 +93,9 @@ class SampleDataSeeder extends Seeder
         $departments = ['Sales', 'Marketing', 'Engineering', 'Finance', 'HR', 'Operations', 'Executive', 'IT', 'Support'];
 
         for ($i = 0; $i < $count; $i++) {
-            $record = DB::table('module_records')->insertGetId([
+            $id = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'first_name' => $this->faker->firstName,
                     'last_name' => $this->faker->lastName,
                     'email' => $this->faker->unique()->safeEmail,
@@ -110,10 +112,12 @@ class SampleDataSeeder extends Seeder
                     'lead_source' => $this->faker->randomElement($sources),
                     'do_not_contact' => $this->faker->boolean(10),
                     'notes' => $this->faker->optional(0.3)->paragraph,
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-            $ids[] = $record->id;
+            $ids[] = $id;
         }
 
         $this->command->info("  - Created {$count} contacts");
@@ -138,9 +142,9 @@ class SampleDataSeeder extends Seeder
             $unitPrice = $this->faker->numberBetween(100, 10000);
             $cost = round($unitPrice * $this->faker->randomFloat(2, 0.3, 0.6), 2);
 
-            $record = DB::table('module_records')->insertGetId([
+            $id = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'name' => $this->faker->randomElement($productNames) . ' ' . $this->faker->word,
                     'sku' => strtoupper($this->faker->bothify('???-####')),
                     'description' => $this->faker->paragraph,
@@ -153,10 +157,12 @@ class SampleDataSeeder extends Seeder
                     'reorder_level' => $this->faker->numberBetween(10, 50),
                     'is_active' => $this->faker->boolean(90),
                     'vendor' => $this->faker->company,
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-            $ids[] = $record->id;
+            $ids[] = $id;
         }
 
         $this->command->info("  - Created {$count} products");
@@ -169,7 +175,12 @@ class SampleDataSeeder extends Seeder
         if (!$module) return [];
 
         $pipeline = DB::table('pipelines')->where('module_id', $module->id)->first();
-        $stages = $pipeline ? $pipeline->stages()->orderBy('display_order')->get() : collect();
+        $stages = $pipeline
+            ? DB::table('pipeline_stages')
+                ->where('pipeline_id', $pipeline->id)
+                ->orderBy('display_order')
+                ->get()
+            : collect();
 
         $ids = [];
         $sources = ['website', 'referral', 'partner', 'outbound', 'inbound', 'event', 'other'];
@@ -177,16 +188,17 @@ class SampleDataSeeder extends Seeder
         for ($i = 0; $i < $count; $i++) {
             $stage = $stages->isNotEmpty() ? $stages->random() : null;
             $amount = $this->faker->numberBetween(5000, 500000);
+            $probability = $stage ? ($stage->probability ?? 50) : 50;
 
             $expectedClose = $this->faker->dateTimeBetween('-1 month', '+3 months');
 
-            $record = DB::table('module_records')->insertGetId([
+            $id = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'name' => $this->faker->company . ' - ' . $this->faker->words(3, true),
                     'amount' => $amount,
-                    'probability' => $stage ? $stage->probability : 50,
-                    'expected_revenue' => $amount * (($stage ? $stage->probability : 50) / 100),
+                    'probability' => $probability,
+                    'expected_revenue' => $amount * ($probability / 100),
                     'organization_id' => !empty($orgIds) ? $this->faker->randomElement($orgIds) : null,
                     'contact_id' => !empty($contactIds) ? $this->faker->randomElement($contactIds) : null,
                     'stage' => $stage ? (string) $stage->id : 'prospecting',
@@ -194,10 +206,12 @@ class SampleDataSeeder extends Seeder
                     'source' => $this->faker->randomElement($sources),
                     'description' => $this->faker->paragraph,
                     'next_step' => $this->faker->optional()->sentence,
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-            $ids[] = $record->id;
+            $ids[] = $id;
         }
 
         $this->command->info("  - Created {$count} deals");
@@ -221,9 +235,9 @@ class SampleDataSeeder extends Seeder
             $status = $this->faker->randomElement($statuses);
             $dueDate = $this->faker->dateTimeBetween('-1 week', '+2 weeks');
 
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'subject' => $this->faker->randomElement($subjects),
                     'description' => $this->faker->optional()->paragraph,
                     'priority' => $this->faker->randomElement($priorities),
@@ -233,8 +247,10 @@ class SampleDataSeeder extends Seeder
                     'related_to_id' => $this->faker->boolean() && !empty($contactIds)
                         ? $this->faker->randomElement($contactIds)
                         : (!empty($dealIds) ? $this->faker->randomElement($dealIds) : null),
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -259,9 +275,9 @@ class SampleDataSeeder extends Seeder
             $duration = $this->faker->randomElement([15, 30, 45, 60, 90, 120]);
             $endTime = (clone $startTime)->modify("+{$duration} minutes");
 
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'subject' => $this->faker->randomElement($subjects),
                     'type' => $type,
                     'description' => $this->faker->optional()->paragraph,
@@ -272,8 +288,10 @@ class SampleDataSeeder extends Seeder
                     'deal_id' => !empty($dealIds) ? $this->faker->randomElement($dealIds) : null,
                     'outcome' => $startTime < now() ? $this->faker->randomElement($outcomes) : null,
                     'next_action' => $this->faker->optional()->sentence,
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -286,7 +304,12 @@ class SampleDataSeeder extends Seeder
         if (!$module) return;
 
         $pipeline = DB::table('pipelines')->where('module_id', $module->id)->first();
-        $stages = $pipeline ? $pipeline->stages()->orderBy('display_order')->get() : collect();
+        $stages = $pipeline
+            ? DB::table('pipeline_stages')
+                ->where('pipeline_id', $pipeline->id)
+                ->orderBy('display_order')
+                ->get()
+            : collect();
 
         $priorities = ['low', 'medium', 'high', 'critical'];
         $severities = ['minor', 'major', 'critical', 'blocker'];
@@ -301,9 +324,9 @@ class SampleDataSeeder extends Seeder
             $stage = $stages->isNotEmpty() ? $stages->random() : null;
             $openedDate = $this->faker->dateTimeBetween('-3 months', 'now');
 
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'case_number' => 'CS-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
                     'subject' => $this->faker->randomElement($subjects),
                     'description' => $this->faker->paragraph(3),
@@ -315,8 +338,10 @@ class SampleDataSeeder extends Seeder
                     'organization_id' => !empty($orgIds) ? $this->faker->randomElement($orgIds) : null,
                     'sla_due_date' => (clone $openedDate)->modify('+24 hours')->format('Y-m-d H:i:s'),
                     'escalated' => $this->faker->boolean(20),
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -338,14 +363,14 @@ class SampleDataSeeder extends Seeder
             $taxAmount = round($subtotal * 0.1, 2);
             $discountAmount = $this->faker->boolean(30) ? $this->faker->numberBetween(100, 1000) : 0;
             $total = $subtotal + $taxAmount - $discountAmount;
-            $amountPaid = $status === 'paid' ? $total : ($status === 'sent' || $status === 'overdue' ? 0 : $this->faker->numberBetween(0, $total));
+            $amountPaid = $status === 'paid' ? $total : ($status === 'sent' || $status === 'overdue' ? 0 : $this->faker->numberBetween(0, (int) $total));
 
             $invoiceDate = $this->faker->dateTimeBetween('-3 months', 'now');
             $dueDate = (clone $invoiceDate)->modify('+30 days');
 
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'invoice_number' => 'INV-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
                     'status' => $status,
                     'subtotal' => $subtotal,
@@ -362,8 +387,10 @@ class SampleDataSeeder extends Seeder
                     'payment_terms' => $this->faker->randomElement($paymentTerms),
                     'payment_method' => $status === 'paid' ? $this->faker->randomElement($paymentMethods) : null,
                     'notes' => $this->faker->optional()->paragraph,
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -388,9 +415,9 @@ class SampleDataSeeder extends Seeder
             $quoteDate = $this->faker->dateTimeBetween('-2 months', 'now');
             $validUntil = (clone $quoteDate)->modify('+30 days');
 
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'quote_number' => 'QT-' . str_pad((string)($i + 1), 5, '0', STR_PAD_LEFT),
                     'subject' => $this->faker->company . ' - ' . $this->faker->words(2, true),
                     'status' => $status,
@@ -406,8 +433,10 @@ class SampleDataSeeder extends Seeder
                     'accepted_date' => $status === 'accepted' ? $this->faker->dateTimeBetween($quoteDate, 'now')->format('Y-m-d') : null,
                     'terms' => 'Quote valid for 30 days. Prices subject to change.',
                     'notes' => $this->faker->optional()->paragraph,
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -431,9 +460,9 @@ class SampleDataSeeder extends Seeder
             $endTime = (clone $startTime)->modify("+{$duration} minutes");
             $allDay = $this->faker->boolean(10);
 
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'title' => $this->faker->randomElement($titles),
                     'description' => $this->faker->optional()->paragraph,
                     'location' => $this->faker->randomElement(['Conference Room A', 'Conference Room B', 'Zoom', 'Google Meet', 'Teams', 'On-site']),
@@ -443,8 +472,10 @@ class SampleDataSeeder extends Seeder
                     'all_day' => $allDay,
                     'is_recurring' => $this->faker->boolean(20),
                     'reminder_minutes' => $this->faker->randomElement(['none', '5_minutes', '15_minutes', '30_minutes', '1_hour']),
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -465,9 +496,9 @@ class SampleDataSeeder extends Seeder
         for ($i = 0; $i < $count; $i++) {
             $relatedType = $this->faker->randomElement(['contact', 'organization', 'deal']);
 
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => [
+                'data' => json_encode([
                     'title' => $this->faker->randomElement($titles) . ' - ' . $this->faker->date(),
                     'content' => $this->faker->paragraphs(3, true),
                     'related_to_type' => $relatedType,
@@ -476,8 +507,10 @@ class SampleDataSeeder extends Seeder
                         : ($relatedType === 'deal' && !empty($dealIds) ? $this->faker->randomElement($dealIds) : null),
                     'is_pinned' => $this->faker->boolean(15),
                     'visibility' => $this->faker->randomElement($visibilities),
-                ],
+                ]),
                 'created_by' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 

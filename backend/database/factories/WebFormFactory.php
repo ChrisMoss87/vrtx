@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\WebForm\Entities\WebForm;
+
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\WebForm>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\WebForm\Entities\WebForm>
  */
 class WebFormFactory extends Factory
 {

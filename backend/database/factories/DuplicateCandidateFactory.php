@@ -2,12 +2,14 @@
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Duplicate\Entities\DuplicateCandidate;
+
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\DuplicateCandidate>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Duplicate\Entities\DuplicateCandidate>
  */
 class DuplicateCandidateFactory extends Factory
 {

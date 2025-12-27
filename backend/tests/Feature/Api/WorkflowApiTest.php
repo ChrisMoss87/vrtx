@@ -17,8 +17,8 @@ class WorkflowApiTest extends TenantTestCase
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Deals',
             'singular_name' => 'Deal',
             'api_name' => 'deals',
@@ -33,7 +33,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_list_all_workflows(): void
     {
-        /* Workflow factory - use DB::table('workflows') */->count(3)->create([
+        Workflow::factory()->count(3)->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -52,13 +52,13 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_filter_workflows_by_module(): void
     {
-        $otherModule = /* Module factory - use DB::table('modules') */->create();
+        $otherModule = Module::factory()->create();
 
-        /* Workflow factory - use DB::table('workflows') */->count(2)->create([
+        Workflow::factory()->count(2)->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        /* Workflow factory - use DB::table('workflows') */->create([
+        Workflow::factory()->create([
             'module_id' => $otherModule->id,
             'created_by' => $this->user->id,
         ]);
@@ -71,12 +71,12 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_filter_workflows_by_active_status(): void
     {
-        /* Workflow factory - use DB::table('workflows') */->count(2)->create([
+        Workflow::factory()->count(2)->create([
             'module_id' => $this->module->id,
             'is_active' => true,
             'created_by' => $this->user->id,
         ]);
-        /* Workflow factory - use DB::table('workflows') */->create([
+        Workflow::factory()->create([
             'module_id' => $this->module->id,
             'is_active' => false,
             'created_by' => $this->user->id,
@@ -90,12 +90,12 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_filter_workflows_by_trigger_type(): void
     {
-        /* Workflow factory - use DB::table('workflows') */->create([
+        Workflow::factory()->create([
             'module_id' => $this->module->id,
             'trigger_type' => 'record_created',
             'created_by' => $this->user->id,
         ]);
-        /* Workflow factory - use DB::table('workflows') */->count(2)->create([
+        Workflow::factory()->count(2)->create([
             'module_id' => $this->module->id,
             'trigger_type' => 'record_updated',
             'created_by' => $this->user->id,
@@ -242,7 +242,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_show_workflow(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -276,7 +276,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_update_workflow(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'name' => 'Original Name',
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
@@ -303,11 +303,11 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_update_workflow_steps(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $step = /* WorkflowStep factory - use DB::table('workflow_steps') */->create([
+        $step = WorkflowStep::factory()->create([
             'workflow_id' => $workflow->id,
             'name' => 'Original Step',
         ]);
@@ -350,7 +350,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_delete_workflow(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -379,7 +379,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_toggle_workflow_active_status(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'is_active' => false,
             'created_by' => $this->user->id,
@@ -411,13 +411,13 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_clone_workflow(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'name' => 'Original Workflow',
             'module_id' => $this->module->id,
             'is_active' => true,
             'created_by' => $this->user->id,
         ]);
-        /* WorkflowStep factory - use DB::table('workflow_steps') */->count(2)->create([
+        WorkflowStep::factory()->count(2)->create([
             'workflow_id' => $workflow->id,
         ]);
 
@@ -448,7 +448,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_trigger_workflow_manually(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'allow_manual_trigger' => true,
             'created_by' => $this->user->id,
@@ -474,7 +474,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_cannot_trigger_workflow_when_manual_trigger_disabled(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'allow_manual_trigger' => false,
             'created_by' => $this->user->id,
@@ -495,11 +495,11 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_get_workflow_executions(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        /* WorkflowExecution factory - use DB::table('workflow_executions') */->count(5)->create([
+        WorkflowExecution::factory()->count(5)->create([
             'workflow_id' => $workflow->id,
             'triggered_by' => $this->user->id,
         ]);
@@ -519,16 +519,16 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_filter_executions_by_status(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        /* WorkflowExecution factory - use DB::table('workflow_executions') */->count(2)->create([
+        WorkflowExecution::factory()->count(2)->create([
             'workflow_id' => $workflow->id,
             'status' => 'completed',
             'triggered_by' => $this->user->id,
         ]);
-        /* WorkflowExecution factory - use DB::table('workflow_executions') */->create([
+        WorkflowExecution::factory()->create([
             'workflow_id' => $workflow->id,
             'status' => 'failed',
             'triggered_by' => $this->user->id,
@@ -542,11 +542,11 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_show_single_execution(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $execution = /* WorkflowExecution factory - use DB::table('workflow_executions') */->create([
+        $execution = WorkflowExecution::factory()->create([
             'workflow_id' => $workflow->id,
             'triggered_by' => $this->user->id,
         ]);
@@ -565,7 +565,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_returns_404_for_nonexistent_execution(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
@@ -581,19 +581,19 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_can_reorder_workflow_steps(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
-        $step1 = /* WorkflowStep factory - use DB::table('workflow_steps') */->create([
+        $step1 = WorkflowStep::factory()->create([
             'workflow_id' => $workflow->id,
             'order' => 0,
         ]);
-        $step2 = /* WorkflowStep factory - use DB::table('workflow_steps') */->create([
+        $step2 = WorkflowStep::factory()->create([
             'workflow_id' => $workflow->id,
             'order' => 1,
         ]);
-        $step3 = /* WorkflowStep factory - use DB::table('workflow_steps') */->create([
+        $step3 = WorkflowStep::factory()->create([
             'workflow_id' => $workflow->id,
             'order' => 2,
         ]);
@@ -615,7 +615,7 @@ class WorkflowApiTest extends TenantTestCase
 
     public function test_cannot_reorder_steps_with_invalid_step_ids(): void
     {
-        $workflow = /* Workflow factory - use DB::table('workflows') */->create([
+        $workflow = Workflow::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);

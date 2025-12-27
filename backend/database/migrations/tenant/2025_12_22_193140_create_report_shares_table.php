@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('report_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->cascadeOnDelete();
-            $table->foreignId('team_id')->nullable()->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('team_id')->nullable(); // No FK constraint - teams table may not exist
             $table->string('permission')->default('view'); // view, edit
             $table->foreignId('shared_by')->constrained('users')->cascadeOnDelete();
             $table->timestamps();

@@ -6,12 +6,13 @@ namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use App\Domain\User\Entities\User;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class RbacApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $adminUser;
     protected Role $adminRole;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->adminUser = /* User factory - use DB::table('users') */->create();
+        $this->adminUser = User::factory()->create();
 
         // Create admin role with all RBAC permissions
         $this->adminRole = DB::table('roles')->insertGetId(['name' => 'super_admin', 'guard_name' => 'web']);
@@ -146,7 +147,7 @@ use Illuminate\Support\Facades\DB;
     public function test_cannot_delete_role_with_users(): void
     {
         $role = DB::table('roles')->insertGetId(['name' => 'role_with_users', 'guard_name' => 'web']);
-        $user = /* User factory - use DB::table('users') */->create();
+        $user = User::factory()->create();
         $user->assignRole($role);
 
         $response = $this->deleteJson("/api/v1/roles/{$role->id}");
@@ -244,7 +245,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_users(): void
     {
-        /* User factory - use DB::table('users') */->count(5)->create();
+        User::factory()->count(5)->create();
 
         $response = $this->getJson('/api/v1/users');
 
@@ -261,7 +262,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_assign_role_to_user(): void
     {
-        $user = /* User factory - use DB::table('users') */->create();
+        $user = User::factory()->create();
         $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
 
         $response = $this->postJson("/api/v1/users/{$user->id}/roles", [
@@ -274,7 +275,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_remove_role_from_user(): void
     {
-        $user = /* User factory - use DB::table('users') */->create();
+        $user = User::factory()->create();
         $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
         $user->assignRole($role);
 
@@ -286,7 +287,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_sync_user_roles(): void
     {
-        $user = /* User factory - use DB::table('users') */->create();
+        $user = User::factory()->create();
         $role1 = DB::table('roles')->insertGetId(['name' => 'role1', 'guard_name' => 'web']);
         $role2 = DB::table('roles')->insertGetId(['name' => 'role2', 'guard_name' => 'web']);
         $role3 = DB::table('roles')->insertGetId(['name' => 'role3', 'guard_name' => 'web']);
@@ -305,7 +306,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_get_user_permissions(): void
     {
-        $user = /* User factory - use DB::table('users') */->create();
+        $user = User::factory()->create();
         $role = DB::table('roles')->insertGetId(['name' => 'test_role', 'guard_name' => 'web']);
         $permission = DB::table('permissions')->insertGetId(['name' => 'test.view', 'guard_name' => 'web']);
         $role->givePermissionTo($permission);
@@ -326,7 +327,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_assign_direct_permission_to_user(): void
     {
-        $user = /* User factory - use DB::table('users') */->create();
+        $user = User::factory()->create();
         $permission = DB::table('permissions')->insertGetId(['name' => 'special.permission', 'guard_name' => 'web']);
 
         $response = $this->postJson("/api/v1/users/{$user->id}/permissions", [
@@ -343,7 +344,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_user_without_permission_cannot_manage_roles(): void
     {
-        $regularUser = /* User factory - use DB::table('users') */->create();
+        $regularUser = User::factory()->create();
         Sanctum::actingAs($regularUser);
 
         $response = $this->getJson('/api/v1/roles');
@@ -353,7 +354,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_user_without_permission_cannot_manage_users(): void
     {
-        $regularUser = /* User factory - use DB::table('users') */->create();
+        $regularUser = User::factory()->create();
         Sanctum::actingAs($regularUser);
 
         $response = $this->getJson('/api/v1/users');

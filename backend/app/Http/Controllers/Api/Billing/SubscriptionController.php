@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Billing;
 
 use App\Http\Controllers\Controller;
 use App\Services\PluginLicenseService;
+use App\Services\TenantSubscription;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -167,34 +168,32 @@ class SubscriptionController extends Controller
 
         // In production, this would create/update a Stripe subscription
         // For now, we'll update directly (for development/testing)
-        $subscription = DB::table('tenant_subscriptions')->first();
+        $exists = DB::table('tenant_subscriptions')->exists();
+        $periodEnd = $billingCycle === TenantSubscription::CYCLE_YEARLY
+            ? now()->addYear()
+            : now()->addMonth();
 
-        if ($subscription) {
-            $subscription->update([
-                'plan' => $plan,
-                'billing_cycle' => $billingCycle,
-                'user_count' => $userCount,
-                'price_per_user' => $pricePerUser,
-                'current_period_start' => now(),
-                'current_period_end' => $billingCycle === TenantSubscription::CYCLE_YEARLY
-                    ? now()->addYear()
-                    : now()->addMonth(),
-            ]);
+        $data = [
+            'plan' => $plan,
+            'billing_cycle' => $billingCycle,
+            'user_count' => $userCount,
+            'price_per_user' => $pricePerUser,
+            'current_period_start' => now(),
+            'current_period_end' => $periodEnd,
+            'updated_at' => now(),
+        ];
+
+        if ($exists) {
+            DB::table('tenant_subscriptions')->update($data);
         } else {
-            $subscription = DB::table('tenant_subscriptions')->insertGetId([
-                'plan' => $plan,
-                'status' => TenantSubscription::STATUS_ACTIVE,
-                'billing_cycle' => $billingCycle,
-                'user_count' => $userCount,
-                'price_per_user' => $pricePerUser,
-                'current_period_start' => now(),
-                'current_period_end' => $billingCycle === TenantSubscription::CYCLE_YEARLY
-                    ? now()->addYear()
-                    : now()->addMonth(),
-            ]);
+            $data['status'] = TenantSubscription::STATUS_ACTIVE;
+            $data['created_at'] = now();
+            DB::table('tenant_subscriptions')->insert($data);
         }
 
         $this->licenseService->clearCache();
+
+        $subscription = DB::table('tenant_subscriptions')->first();
 
         return response()->json([
             'message' => 'Subscription updated successfully',
@@ -218,9 +217,10 @@ class SubscriptionController extends Controller
         }
 
         // In production, this would cancel the Stripe subscription
-        $subscription->update([
-            'status' => TenantSubscription::STATUS_CANCELLED,
+        DB::table('tenant_subscriptions')->update([
+            'status' => TenantSubscription::STATUS_CANCELED,
             'cancelled_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $this->licenseService->clearCache();

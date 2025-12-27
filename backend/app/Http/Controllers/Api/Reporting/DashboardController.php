@@ -30,12 +30,34 @@ class DashboardController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $dashboards = Dashboard::accessibleBy(Auth::id())
-            ->with('user:id,name')
-            ->withCount('widgets')
+        $userId = Auth::id();
+
+        // Query dashboards accessible by user (owned by user OR public)
+        $dashboards = DB::table('dashboards')
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhere('is_public', true);
+            })
+            ->whereNull('deleted_at')
             ->orderBy('is_default', 'desc')
             ->orderBy('updated_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($dashboard) {
+                // Add widget count
+                $dashboard->widgets_count = DB::table('dashboard_widgets')
+                    ->where('dashboard_id', $dashboard->id)
+                    ->count();
+
+                // Add user info
+                if ($dashboard->user_id) {
+                    $dashboard->user = DB::table('users')
+                        ->where('id', $dashboard->user_id)
+                        ->select(['id', 'name'])
+                        ->first();
+                }
+
+                return $dashboard;
+            });
 
         return response()->json(['data' => $dashboards]);
     }
@@ -45,8 +67,27 @@ class DashboardController extends Controller
      */
     public function widgetTypes(): JsonResponse
     {
+        // Widget types supported by the dashboard system
+        $types = [
+            ['id' => 'report', 'name' => 'Report', 'description' => 'Display a saved report'],
+            ['id' => 'kpi', 'name' => 'KPI', 'description' => 'Single value KPI metric'],
+            ['id' => 'chart', 'name' => 'Chart', 'description' => 'Custom chart visualization'],
+            ['id' => 'table', 'name' => 'Table', 'description' => 'Data table display'],
+            ['id' => 'activity', 'name' => 'Activity', 'description' => 'Recent activity feed'],
+            ['id' => 'pipeline', 'name' => 'Pipeline', 'description' => 'Sales pipeline view'],
+            ['id' => 'tasks', 'name' => 'Tasks', 'description' => 'Task list widget'],
+            ['id' => 'calendar', 'name' => 'Calendar', 'description' => 'Calendar events'],
+            ['id' => 'text', 'name' => 'Text', 'description' => 'Rich text content'],
+            ['id' => 'iframe', 'name' => 'iFrame', 'description' => 'Embedded external content'],
+            ['id' => 'goal_kpi', 'name' => 'Goal KPI', 'description' => 'Goal progress indicator'],
+            ['id' => 'leaderboard', 'name' => 'Leaderboard', 'description' => 'Sales leaderboard'],
+            ['id' => 'funnel', 'name' => 'Funnel', 'description' => 'Sales funnel chart'],
+            ['id' => 'progress', 'name' => 'Progress', 'description' => 'Progress bar widget'],
+            ['id' => 'recent_records', 'name' => 'Recent Records', 'description' => 'Recently created/updated records'],
+        ];
+
         return response()->json([
-            'data' => DashboardWidget::getTypes(),
+            'data' => $types,
         ]);
     }
 

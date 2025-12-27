@@ -49,6 +49,7 @@ return new class extends Migration
             $table->timestamp('completed_at')->nullable();
             $table->integer('duration_ms')->nullable();
             $table->enum('status', ['running', 'completed', 'failed', 'cancelled'])->default('running');
+            $table->timestamps();
 
             $table->index(['connection_id', 'created_at']);
             $table->index(['entity_type', 'status']);

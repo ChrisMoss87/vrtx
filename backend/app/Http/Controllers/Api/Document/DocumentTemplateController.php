@@ -13,6 +13,12 @@ use Illuminate\Support\Facades\DB;
 
 class DocumentTemplateController extends Controller
 {
+    // Document template categories
+    private const CATEGORIES = ['quote', 'invoice', 'contract', 'proposal', 'letter', 'report', 'other'];
+
+    // Supported output formats
+    private const OUTPUT_FORMATS = ['pdf', 'docx', 'html'];
+
     public function __construct(
         protected DocumentTemplateService $service,
         protected DocumentApplicationService $appService
@@ -20,35 +26,64 @@ class DocumentTemplateController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $userId = auth()->id();
+
         $query = DB::table('document_templates')
-            ->accessibleBy(auth()->id())
-            ->with('createdBy');
+            ->where(function ($q) use ($userId) {
+                $q->where('created_by', $userId)
+                    ->orWhere('is_shared', true);
+            });
 
         if ($request->has('category')) {
-            $query->category($request->category);
+            $query->where('category', $request->category);
         }
 
         if ($request->boolean('active_only', true)) {
-            $query->active();
+            $query->where('is_active', true);
         }
 
         if ($request->has('search')) {
             $query->where('name', 'ilike', '%' . $request->search . '%');
         }
 
-        $templates = $query->orderBy('name')->paginate($request->integer('per_page', 25));
+        // Get paginated results
+        $perPage = $request->integer('per_page', 25);
+        $page = $request->integer('page', 1);
+        $total = $query->count();
 
-        return response()->json($templates);
+        $templates = $query->orderBy('name')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get()
+            ->map(function ($template) {
+                if ($template->created_by) {
+                    $template->createdBy = DB::table('users')
+                        ->where('id', $template->created_by)
+                        ->select(['id', 'name'])
+                        ->first();
+                }
+                return $template;
+            });
+
+        return response()->json([
+            'data' => $templates,
+            'meta' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => ceil($total / $perPage),
+            ],
+        ]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'category' => 'nullable|string|in:' . implode(',', DocumentTemplate::CATEGORIES),
+            'category' => 'nullable|string|in:' . implode(',', self::CATEGORIES),
             'description' => 'nullable|string',
             'content' => 'required|string',
-            'output_format' => 'nullable|string|in:' . implode(',', DocumentTemplate::OUTPUT_FORMATS),
+            'output_format' => 'nullable|string|in:' . implode(',', self::OUTPUT_FORMATS),
             'page_settings' => 'nullable|array',
             'header_settings' => 'nullable|array',
             'footer_settings' => 'nullable|array',
@@ -61,21 +96,25 @@ class DocumentTemplateController extends Controller
         return response()->json($template, 201);
     }
 
-    public function show(DocumentTemplate $documentTemplate): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $documentTemplate->load(['createdBy', 'updatedBy']);
+        $template = $this->service->findById($id);
 
-        return response()->json($documentTemplate);
+        if (!$template) {
+            return response()->json(['message' => 'Template not found'], 404);
+        }
+
+        return response()->json($template);
     }
 
-    public function update(Request $request, DocumentTemplate $documentTemplate): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'category' => 'nullable|string|in:' . implode(',', DocumentTemplate::CATEGORIES),
+            'category' => 'nullable|string|in:' . implode(',', self::CATEGORIES),
             'description' => 'nullable|string',
             'content' => 'sometimes|string',
-            'output_format' => 'nullable|string|in:' . implode(',', DocumentTemplate::OUTPUT_FORMATS),
+            'output_format' => 'nullable|string|in:' . implode(',', self::OUTPUT_FORMATS),
             'page_settings' => 'nullable|array',
             'header_settings' => 'nullable|array',
             'footer_settings' => 'nullable|array',
@@ -84,34 +123,34 @@ class DocumentTemplateController extends Controller
             'is_shared' => 'nullable|boolean',
         ]);
 
-        $template = $this->service->update($documentTemplate, $validated);
+        $template = $this->service->updateById($id, $validated);
 
         return response()->json($template);
     }
 
-    public function destroy(DocumentTemplate $documentTemplate): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $this->service->delete($documentTemplate);
+        $this->service->deleteById($id);
 
         return response()->json(['message' => 'Template deleted']);
     }
 
-    public function duplicate(DocumentTemplate $documentTemplate): JsonResponse
+    public function duplicate(int $id): JsonResponse
     {
-        $copy = $this->service->duplicate($documentTemplate);
+        $copy = $this->service->duplicateById($id);
 
         return response()->json($copy, 201);
     }
 
-    public function generate(Request $request, DocumentTemplate $documentTemplate): JsonResponse
+    public function generate(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'record_type' => 'required|string',
             'record_id' => 'required|integer',
         ]);
 
-        $document = $this->service->generate(
-            $documentTemplate,
+        $document = $this->service->generateById(
+            $id,
             $validated['record_type'],
             $validated['record_id']
         );
@@ -119,7 +158,7 @@ class DocumentTemplateController extends Controller
         return response()->json($document, 201);
     }
 
-    public function preview(Request $request, DocumentTemplate $documentTemplate): JsonResponse
+    public function preview(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'record_type' => 'nullable|string',
@@ -127,13 +166,13 @@ class DocumentTemplateController extends Controller
         ]);
 
         if (isset($validated['record_type']) && isset($validated['record_id'])) {
-            $html = $this->service->preview(
-                $documentTemplate,
+            $html = $this->service->previewById(
+                $id,
                 $validated['record_type'],
                 $validated['record_id']
             );
         } else {
-            $html = $this->service->previewWithSampleData($documentTemplate);
+            $html = $this->service->previewWithSampleDataById($id);
         }
 
         return response()->json(['html' => $html]);
@@ -148,32 +187,51 @@ class DocumentTemplateController extends Controller
 
     public function generatedDocuments(Request $request): JsonResponse
     {
-        $query = GeneratedDocument::with(['template', 'createdBy']);
+        $query = DB::table('generated_documents');
 
         if ($request->has('record_type') && $request->has('record_id')) {
-            $query->forRecord($request->record_type, $request->integer('record_id'));
+            $query->where('record_type', $request->record_type)
+                ->where('record_id', $request->integer('record_id'));
         }
 
         if ($request->has('template_id')) {
             $query->where('template_id', $request->integer('template_id'));
         }
 
+        $perPage = $request->integer('per_page', 25);
+        $page = $request->integer('page', 1);
+        $total = $query->count();
+
         $documents = $query->orderByDesc('created_at')
-            ->paginate($request->integer('per_page', 25));
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
 
-        return response()->json($documents);
+        return response()->json([
+            'data' => $documents,
+            'meta' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => (int) ceil($total / $perPage),
+            ],
+        ]);
     }
 
-    public function showGeneratedDocument(GeneratedDocument $generatedDocument): JsonResponse
+    public function showGeneratedDocument(int $id): JsonResponse
     {
-        $generatedDocument->load(['template', 'createdBy', 'sendLogs']);
+        $document = DB::table('generated_documents')->where('id', $id)->first();
 
-        return response()->json($generatedDocument);
+        if (!$document) {
+            return response()->json(['message' => 'Document not found'], 404);
+        }
+
+        return response()->json($document);
     }
 
-    public function deleteGeneratedDocument(GeneratedDocument $generatedDocument): JsonResponse
+    public function deleteGeneratedDocument(int $id): JsonResponse
     {
-        $generatedDocument->delete();
+        DB::table('generated_documents')->where('id', $id)->delete();
 
         return response()->json(['message' => 'Document deleted']);
     }

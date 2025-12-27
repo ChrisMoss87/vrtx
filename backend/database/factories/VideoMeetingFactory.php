@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Video\Entities\VideoMeeting;
+
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\VideoMeeting>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Video\Entities\VideoMeeting>
  */
 class VideoMeetingFactory extends Factory
 {

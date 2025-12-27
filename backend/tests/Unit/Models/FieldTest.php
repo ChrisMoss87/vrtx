@@ -10,14 +10,14 @@ use App\Domain\Modules\ValueObjects\FormulaDefinition;
 use App\Domain\Modules\ValueObjects\LookupConfiguration;
 use App\Domain\Modules\ValueObjects\ValidationRule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class FieldTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
-    protected Module $module;
+    protected $module;
 
     protected function setUp(): void
     {

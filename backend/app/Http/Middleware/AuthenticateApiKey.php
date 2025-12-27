@@ -4,213 +4,120 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Application\Services\ApiKey\ApiKeyApplicationService;
 use Closure;
+use DomainException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Middleware to authenticate API requests using API keys.
+ *
+ * Uses the ApiKeyApplicationService for efficient cached validation
+ * with Redis-based rate limiting.
+ */
 class AuthenticateApiKey
 {
+    public function __construct(
+        private readonly ApiKeyApplicationService $apiKeyService,
+    ) {}
+
     /**
      * Handle an incoming request.
      */
     public function handle(Request $request, Closure $next, ?string ...$scopes): Response
     {
-        $startTime = microtime(true);
+        $ip = $request->ip() ?? '';
 
-        $apiKeyString = $this->extractApiKey($request);
+        // Extract API key from request headers only (security: query params could be logged)
+        // Note: Query parameter support removed for security - keys in URLs can be logged
+        $plainKey = $this->apiKeyService->extractKeyFromRequest(
+            $request->header('Authorization'),
+            $request->header('X-API-Key'),
+            null, // Intentionally disabled query parameter support for security
+        );
 
-        if (!$apiKeyString) {
+        if (!$plainKey) {
             return response()->json([
                 'error' => 'API key required',
                 'message' => 'Provide API key via Authorization header (Bearer token) or X-API-Key header',
             ], 401);
         }
 
-        $apiKey = $this->verifyApiKey($apiKeyString);
+        try {
+            // Validate with rate limit check using cached service
+            $requiredScope = !empty($scopes) ? $scopes[0] : null;
+            $apiKey = $this->apiKeyService->validateApiKeyWithRateLimit($plainKey, $ip, $requiredScope);
 
-        if (!$apiKey) {
+            // Check additional scopes if multiple required
+            if (count($scopes) > 1) {
+                foreach (array_slice($scopes, 1) as $scope) {
+                    if (!$apiKey->hasScope($scope)) {
+                        throw new DomainException("Missing required scope: {$scope}");
+                    }
+                }
+            }
+
+            // Attach API key info to request for use in controllers
+            $request->attributes->set('api_key', $apiKey);
+            $request->attributes->set('api_user_id', $apiKey->getUserId());
+            $request->attributes->set('api_key_id', $apiKey->getIdValue());
+
+            $response = $next($request);
+
+            // Record the request for logging and analytics
+            $this->apiKeyService->recordRequest(
+                $apiKey,
+                $request->path(),
+                $request->method(),
+                $ip,
+                $response->getStatusCode(),
+            );
+
+            return $response;
+        } catch (DomainException $e) {
+            $message = $e->getMessage();
+
+            if (str_contains($message, 'Invalid API key')) {
+                return response()->json([
+                    'error' => 'Invalid API key',
+                    'message' => 'The provided API key is invalid, expired, or revoked',
+                ], 401);
+            }
+
+            if (str_contains($message, 'IP')) {
+                return response()->json([
+                    'error' => 'IP not allowed',
+                    'message' => 'Your IP address is not in the allowed list for this API key',
+                ], 403);
+            }
+
+            if (str_contains($message, 'Rate limit')) {
+                return response()->json([
+                    'error' => 'Rate limit exceeded',
+                    'message' => 'You have exceeded the rate limit for this API key',
+                    'retry_after' => 60,
+                ], 429);
+            }
+
+            if (str_contains($message, 'scope') || str_contains($message, 'Scope')) {
+                return response()->json([
+                    'error' => 'Insufficient permissions',
+                    'message' => $message,
+                ], 403);
+            }
+
+            if (str_contains($message, 'expired') || str_contains($message, 'inactive')) {
+                return response()->json([
+                    'error' => 'API key invalid',
+                    'message' => $message,
+                ], 401);
+            }
+
             return response()->json([
-                'error' => 'Invalid API key',
-                'message' => 'The provided API key is invalid, expired, or revoked',
+                'error' => 'Authentication failed',
+                'message' => $message,
             ], 401);
         }
-
-        // Check IP whitelist
-        if (!$this->isIpAllowed($apiKey, $request->ip())) {
-            $this->logRequest($apiKey, $request, 403, $startTime);
-
-            return response()->json([
-                'error' => 'IP not allowed',
-                'message' => 'Your IP address is not in the allowed list for this API key',
-            ], 403);
-        }
-
-        // Check required scopes
-        if (!empty($scopes) && !$this->hasAllScopes($apiKey, $scopes)) {
-            $this->logRequest($apiKey, $request, 403, $startTime);
-
-            return response()->json([
-                'error' => 'Insufficient permissions',
-                'message' => 'This API key does not have the required scopes: ' . implode(', ', $scopes),
-            ], 403);
-        }
-
-        // Check rate limit
-        if ($this->isRateLimited($apiKey)) {
-            $this->logRequest($apiKey, $request, 429, $startTime);
-
-            return response()->json([
-                'error' => 'Rate limit exceeded',
-                'message' => 'You have exceeded the rate limit for this API key',
-                'retry_after' => 60,
-            ], 429);
-        }
-
-        // Record usage
-        $this->recordUsage($apiKey, $request->ip());
-
-        // Attach API key to request for use in controllers
-        $request->attributes->set('api_key', $apiKey);
-        $request->attributes->set('api_user_id', $apiKey->user_id);
-
-        $response = $next($request);
-
-        // Log the request
-        $this->logRequest($apiKey, $request, $response->getStatusCode(), $startTime);
-
-        return $response;
-    }
-
-    /**
-     * Verify API key and return it if valid.
-     */
-    protected function verifyApiKey(string $keyString): ?object
-    {
-        $hashedKey = hash('sha256', $keyString);
-
-        $apiKey = DB::table('api_keys')
-            ->where('key', $hashedKey)
-            ->where('is_active', true)
-            ->where(function ($query) {
-                $query->whereNull('expires_at')
-                    ->orWhere('expires_at', '>', now());
-            })
-            ->first();
-
-        return $apiKey;
-    }
-
-    /**
-     * Check if IP is allowed.
-     */
-    protected function isIpAllowed(object $apiKey, ?string $ip): bool
-    {
-        if (empty($apiKey->ip_whitelist)) {
-            return true;
-        }
-
-        $whitelist = is_string($apiKey->ip_whitelist)
-            ? json_decode($apiKey->ip_whitelist, true)
-            : $apiKey->ip_whitelist;
-
-        if (empty($whitelist)) {
-            return true;
-        }
-
-        return in_array($ip, $whitelist);
-    }
-
-    /**
-     * Check if API key has all required scopes.
-     */
-    protected function hasAllScopes(object $apiKey, array $requiredScopes): bool
-    {
-        $keyScopes = is_string($apiKey->scopes ?? null)
-            ? json_decode($apiKey->scopes, true)
-            : ($apiKey->scopes ?? []);
-
-        foreach ($requiredScopes as $scope) {
-            if (!in_array($scope, $keyScopes)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Check if API key is rate limited.
-     */
-    protected function isRateLimited(object $apiKey): bool
-    {
-        $rateLimit = $apiKey->rate_limit ?? 1000;
-
-        $requestCount = DB::table('api_request_logs')
-            ->where('api_key_id', $apiKey->id)
-            ->where('created_at', '>=', now()->subMinute())
-            ->count();
-
-        return $requestCount >= $rateLimit;
-    }
-
-    /**
-     * Record API key usage.
-     */
-    protected function recordUsage(object $apiKey, ?string $ip): void
-    {
-        DB::table('api_keys')
-            ->where('id', $apiKey->id)
-            ->update([
-                'last_used_at' => now(),
-                'last_used_ip' => $ip,
-                'usage_count' => DB::raw('usage_count + 1'),
-            ]);
-    }
-
-    /**
-     * Extract API key from request.
-     */
-    protected function extractApiKey(Request $request): ?string
-    {
-        // Try Authorization header first (Bearer token)
-        $authHeader = $request->header('Authorization');
-        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
-            return substr($authHeader, 7);
-        }
-
-        // Try X-API-Key header
-        $apiKeyHeader = $request->header('X-API-Key');
-        if ($apiKeyHeader) {
-            return $apiKeyHeader;
-        }
-
-        // Try query parameter (least secure, discouraged)
-        $queryKey = $request->query('api_key');
-        if ($queryKey) {
-            return $queryKey;
-        }
-
-        return null;
-    }
-
-    /**
-     * Log the API request.
-     */
-    protected function logRequest(object $apiKey, Request $request, int $statusCode, float $startTime): void
-    {
-        $responseTimeMs = (int) ((microtime(true) - $startTime) * 1000);
-
-        DB::table('api_request_logs')->insert([
-            'api_key_id' => $apiKey->id,
-            'method' => $request->method(),
-            'path' => $request->path(),
-            'query_params' => $request->query() ? json_encode($request->query()) : null,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'status_code' => $statusCode,
-            'response_time_ms' => $responseTimeMs,
-            'created_at' => now(),
-        ]);
     }
 }

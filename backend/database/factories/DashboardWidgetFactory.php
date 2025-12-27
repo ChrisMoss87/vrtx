@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Reporting\Entities\DashboardWidget;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\DashboardWidget>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Reporting\Entities\DashboardWidget>
  */
 class DashboardWidgetFactory extends Factory
 {

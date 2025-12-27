@@ -125,15 +125,35 @@ class EmailTemplate
         $this->variables = array_unique(array_merge($matches[1] ?? [], $subjectMatches[1] ?? []));
     }
 
+    /**
+     * Render the email template with data.
+     *
+     * SECURITY: All variable values are HTML-escaped to prevent XSS attacks.
+     * If you need to insert trusted HTML content, use the {{{variable}}} syntax
+     * (triple braces) which bypasses escaping.
+     *
+     * @param array<string, mixed> $data Template variables and their values
+     * @return array{subject: string, body_html: string, body_text: string}
+     */
     public function render(array $data): array
     {
         $subject = $this->subject ?? '';
         $body = $this->bodyHtml ?? '';
 
         foreach ($data as $key => $value) {
+            $stringValue = (string) $value;
+
+            // Regular placeholder - HTML escape for safety
             $placeholder = '{{' . $key . '}}';
-            $subject = str_replace($placeholder, (string) $value, $subject);
-            $body = str_replace($placeholder, (string) $value, $body);
+            $escapedValue = htmlspecialchars($stringValue, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $body = str_replace($placeholder, $escapedValue, $body);
+
+            // Subject line doesn't need HTML escaping (plain text)
+            $subject = str_replace($placeholder, $stringValue, $subject);
+
+            // Triple-brace placeholder for trusted HTML content (no escaping)
+            $rawPlaceholder = '{{{' . $key . '}}}';
+            $body = str_replace($rawPlaceholder, $stringValue, $body);
         }
 
         return [

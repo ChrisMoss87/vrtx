@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\MeetingAnalyticsCache;
+use App\Domain\Scheduling\Entities\MeetingAnalyticsCache;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\MeetingAnalyticsCache>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Scheduling\Entities\MeetingAnalyticsCache>
  */
 class MeetingAnalyticsCacheFactory extends Factory
 {

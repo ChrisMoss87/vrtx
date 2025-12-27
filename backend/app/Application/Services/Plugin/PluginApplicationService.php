@@ -4,361 +4,595 @@ declare(strict_types=1);
 
 namespace App\Application\Services\Plugin;
 
+use App\Domain\Plugin\Entities\Plugin;
+use App\Domain\Plugin\Entities\PluginLicense;
 use App\Domain\Plugin\Repositories\PluginRepositoryInterface;
+use App\Domain\Plugin\Services\PluginLicenseValidationService;
+use App\Domain\Plugin\Services\PluginRequirementsService;
+use App\Domain\Plugin\Services\PluginUsageService;
+use App\Domain\Plugin\ValueObjects\LicenseStatus;
+use App\Domain\Plugin\ValueObjects\Money;
+use App\Domain\Plugin\ValueObjects\PluginSlug;
+use App\Domain\Plugin\ValueObjects\PricingModel;
 use App\Domain\Shared\Contracts\AuthContextInterface;
+use Illuminate\Support\Facades\Cache;
 
 class PluginApplicationService
 {
+    private const CACHE_TTL = 300; // 5 minutes
+
     public function __construct(
         private PluginRepositoryInterface $repository,
         private AuthContextInterface $authContext,
+        private PluginLicenseValidationService $licenseValidation,
+        private PluginRequirementsService $requirementsService,
+        private PluginUsageService $usageService,
     ) {}
 
     // =========================================================================
-    // QUERY USE CASES - PLUGIN CATALOG (Central DB)
+    // QUERY USE CASES - PLUGIN CATALOG
     // =========================================================================
 
-    /**
-     * List plugins from the catalog.
-     */
     public function listPlugins(array $filters = []): array
     {
         return $this->repository->listPlugins($filters);
     }
 
-    /**
-     * Get a single plugin by ID.
-     */
     public function getPlugin(int $id): ?array
     {
-        return $this->repository->findById($id);
+        return $this->repository->findByIdAsArray($id);
     }
 
-    /**
-     * Get a plugin by slug.
-     */
     public function getPluginBySlug(string $slug): ?array
     {
         return $this->repository->findBySlug($slug);
     }
 
-    /**
-     * Get plugins by category.
-     */
     public function getPluginsByCategory(string $category): array
     {
         return $this->repository->getPluginsByCategory($category);
     }
 
-    /**
-     * Get available plugins (active in catalog).
-     */
     public function getAvailablePlugins(): array
     {
-        return $this->repository->getAvailablePlugins();
+        $plugins = $this->repository->getAvailablePlugins();
+        $licensedPluginSlugs = $this->getLicensedPluginSlugs();
+
+        // Annotate plugins with license status
+        return array_map(function (array $plugin) use ($licensedPluginSlugs) {
+            $plugin['is_licensed'] = in_array($plugin['slug'], $licensedPluginSlugs, true);
+            return $plugin;
+        }, $plugins);
     }
 
-    // =========================================================================
-    // COMMAND USE CASES - PLUGIN CATALOG (Central DB)
-    // =========================================================================
-
-    /**
-     * Create a new plugin in the catalog.
-     */
-    public function createPlugin(array $data): array
+    public function getAvailablePluginsGroupedByCategory(): array
     {
-        return $this->repository->createPlugin($data);
-    }
+        $plugins = $this->getAvailablePlugins();
+        $grouped = [];
 
-    /**
-     * Update a plugin in the catalog.
-     */
-    public function updatePlugin(int $id, array $data): array
-    {
-        return $this->repository->updatePlugin($id, $data);
-    }
+        foreach ($plugins as $plugin) {
+            $category = $plugin['category'] ?? 'other';
+            if (!isset($grouped[$category])) {
+                $grouped[$category] = [
+                    'category' => $category,
+                    'plugins' => [],
+                ];
+            }
+            $grouped[$category]['plugins'][] = $plugin;
+        }
 
-    /**
-     * Delete a plugin from the catalog.
-     */
-    public function deletePlugin(int $id): bool
-    {
-        return $this->repository->deletePlugin($id);
+        return array_values($grouped);
     }
 
     // =========================================================================
-    // QUERY USE CASES - PLUGIN BUNDLES (Central DB)
+    // QUERY USE CASES - BUNDLES
     // =========================================================================
 
-    /**
-     * List plugin bundles.
-     */
     public function listBundles(array $filters = []): array
     {
         return $this->repository->listBundles($filters);
     }
 
-    /**
-     * Get a single bundle by ID.
-     */
     public function getBundle(int $id): ?array
     {
         return $this->repository->findBundleById($id);
     }
 
-    /**
-     * Get a bundle by slug.
-     */
     public function getBundleBySlug(string $slug): ?array
     {
         return $this->repository->findBundleBySlug($slug);
     }
 
-    /**
-     * Get active bundles.
-     */
     public function getActiveBundles(): array
     {
-        return $this->repository->getActiveBundles();
+        $bundles = $this->repository->getActiveBundles();
+        $licensedPluginSlugs = $this->getLicensedPluginSlugs();
+
+        return array_map(function (array $bundle) use ($licensedPluginSlugs) {
+            $bundlePlugins = $bundle['plugins'] ?? [];
+            $licensedCount = count(array_intersect($bundlePlugins, $licensedPluginSlugs));
+            $bundle['licensed_count'] = $licensedCount;
+            $bundle['is_fully_licensed'] = $licensedCount === count($bundlePlugins);
+            return $bundle;
+        }, $bundles);
     }
 
     // =========================================================================
-    // COMMAND USE CASES - PLUGIN BUNDLES (Central DB)
+    // QUERY USE CASES - LICENSES
     // =========================================================================
 
-    /**
-     * Create a new plugin bundle.
-     */
-    public function createBundle(array $data): array
-    {
-        return $this->repository->createBundle($data);
-    }
-
-    /**
-     * Update a plugin bundle.
-     */
-    public function updateBundle(int $id, array $data): array
-    {
-        return $this->repository->updateBundle($id, $data);
-    }
-
-    /**
-     * Delete a plugin bundle.
-     */
-    public function deleteBundle(int $id): bool
-    {
-        return $this->repository->deleteBundle($id);
-    }
-
-    // =========================================================================
-    // QUERY USE CASES - PLUGIN LICENSES (Tenant DB)
-    // =========================================================================
-
-    /**
-     * List plugin licenses for the current tenant.
-     */
     public function listLicenses(array $filters = []): array
     {
         return $this->repository->listLicenses($filters);
     }
 
-    /**
-     * Get a single license by ID.
-     */
-    public function getLicense(int $id): ?array
-    {
-        return $this->repository->findLicenseById($id);
-    }
-
-    /**
-     * Get license for a specific plugin.
-     */
-    public function getLicenseForPlugin(string $pluginSlug): ?array
-    {
-        return $this->repository->getLicenseForPlugin($pluginSlug);
-    }
-
-    /**
-     * Get all active licenses.
-     */
     public function getActiveLicenses(): array
     {
         return $this->repository->getActiveLicenses();
     }
 
-    /**
-     * Get installed/licensed plugins for tenant.
-     */
+    public function getActiveLicensesWithPluginDetails(): array
+    {
+        $licenses = $this->repository->getActiveLicenses();
+        $result = [];
+
+        foreach ($licenses as $license) {
+            $plugin = $this->repository->findBySlug($license['plugin_slug']);
+            if ($plugin) {
+                $license['plugin'] = $plugin;
+            }
+            $result[] = $license;
+        }
+
+        return $result;
+    }
+
+    public function getLicenseForPlugin(string $pluginSlug): ?array
+    {
+        return $this->repository->getLicenseForPlugin($pluginSlug);
+    }
+
+    public function isPluginLicensed(string $pluginSlug): bool
+    {
+        $cacheKey = "plugin_license:{$pluginSlug}";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($pluginSlug) {
+            // Check if included in current plan
+            $currentPlan = $this->getCurrentPlan();
+            if ($this->licenseValidation->isPluginIncludedInPlan(
+                PluginSlug::fromString($pluginSlug),
+                $currentPlan
+            )) {
+                return true;
+            }
+
+            // Check for active license
+            return $this->repository->isPluginInstalled($pluginSlug);
+        });
+    }
+
+    public function getLicensedPluginSlugs(): array
+    {
+        return Cache::remember('licensed_plugins', self::CACHE_TTL, function () {
+            $currentPlan = $this->getCurrentPlan();
+
+            // Get plugins included in plan
+            $includedPlugins = $this->licenseValidation->getPluginsForPlan($currentPlan);
+
+            // Get additional licensed plugins
+            $licenses = $this->repository->getActiveLicenses();
+            $licensedPlugins = array_column($licenses, 'plugin_slug');
+
+            return array_unique(array_merge($includedPlugins, $licensedPlugins));
+        });
+    }
+
     public function getInstalledPlugins(): array
     {
         return $this->repository->getInstalledPlugins();
     }
 
-    /**
-     * Check if a plugin is licensed/installed.
-     */
-    public function isPluginInstalled(string $pluginSlug): bool
-    {
-        return $this->repository->isPluginInstalled($pluginSlug);
-    }
-
     // =========================================================================
-    // COMMAND USE CASES - PLUGIN LICENSES (Tenant DB)
+    // COMMAND USE CASES - LICENSE MANAGEMENT
     // =========================================================================
 
     /**
-     * Activate/install a plugin license.
+     * Activate a plugin license.
+     *
+     * @return array{success: bool, license?: array, errors?: string[]}
      */
-    public function activatePlugin(array $data): array
+    public function activatePlugin(string $pluginSlug, array $options = []): array
     {
-        return $this->repository->activatePlugin($data);
+        $plugin = $this->repository->findBySlug($pluginSlug);
+        if (!$plugin) {
+            return [
+                'success' => false,
+                'errors' => ['Plugin not found'],
+            ];
+        }
+
+        $existingLicense = $this->repository->getLicenseForPlugin($pluginSlug);
+        $currentPlan = $this->getCurrentPlan();
+
+        // Check if already included in plan
+        if ($this->licenseValidation->isPluginIncludedInPlan(
+            PluginSlug::fromString($pluginSlug),
+            $currentPlan
+        )) {
+            return [
+                'success' => false,
+                'errors' => ['Plugin is already included in your current plan'],
+            ];
+        }
+
+        // Validate license creation
+        // Note: We'd need to reconstitute entities here for proper validation
+        // For now, we'll do basic validation with arrays
+        if ($existingLicense !== null && $existingLicense['status'] === LicenseStatus::ACTIVE) {
+            return [
+                'success' => false,
+                'errors' => ['Plugin is already licensed'],
+            ];
+        }
+
+        // Create the license
+        $licenseData = [
+            'plugin_slug' => $pluginSlug,
+            'bundle_slug' => $options['bundle_slug'] ?? null,
+            'pricing_model' => $plugin['pricing_model'] ?? PricingModel::PER_USER,
+            'quantity' => $options['quantity'] ?? 1,
+            'price_monthly' => $plugin['price_monthly'] ?? null,
+            'external_subscription_item_id' => $options['external_subscription_item_id'] ?? null,
+            'expires_at' => $options['expires_at'] ?? null,
+        ];
+
+        $license = $this->repository->activatePlugin($licenseData);
+
+        $this->clearCache();
+
+        // Build detailed response with next steps
+        $features = $this->parseFeatures($plugin['features'] ?? null);
+        $settingsPath = $this->getPluginSettingsPath($pluginSlug, $plugin['category'] ?? null);
+        $nextSteps = $this->getPluginNextSteps($pluginSlug, $plugin);
+
+        return [
+            'success' => true,
+            'license' => $license,
+            'plugin' => [
+                'name' => $plugin['name'],
+                'slug' => $plugin['slug'],
+                'description' => $plugin['description'],
+                'category' => $plugin['category'],
+            ],
+            'features_unlocked' => $features,
+            'settings_path' => $settingsPath,
+            'next_steps' => $nextSteps,
+        ];
     }
 
     /**
-     * Update a plugin license.
+     * Parse features from JSON or array.
      */
-    public function updateLicense(int $id, array $data): array
+    private function parseFeatures(mixed $features): array
     {
-        return $this->repository->updateLicense($id, $data);
+        if (is_string($features)) {
+            return json_decode($features, true) ?? [];
+        }
+        return is_array($features) ? $features : [];
     }
 
     /**
-     * Deactivate/uninstall a plugin.
+     * Get the settings path for a plugin.
      */
-    public function deactivatePlugin(string $pluginSlug): bool
+    private function getPluginSettingsPath(string $slug, ?string $category): ?string
     {
-        return $this->repository->deactivatePlugin($pluginSlug);
+        // Integration plugins go to integrations settings with provider highlighted
+        if (str_starts_with($slug, 'integration-')) {
+            $provider = str_replace('integration-', '', $slug);
+            return "/settings/integrations?provider={$provider}";
+        }
+
+        // Plugin-specific paths
+        $pluginPaths = [
+            'forecasting-basic' => '/forecasting',
+            'forecasting-pro' => '/forecasting',
+            'quotes-invoices' => '/quotes',
+            'quotes-view' => '/quotes',
+            'duplicate-detection' => '/settings/data-management',
+            'deal-rotting' => '/settings/pipelines',
+            'web-forms-basic' => '/web-forms',
+            'web-forms-pro' => '/web-forms',
+            'blueprints-basic' => '/blueprints',
+            'blueprints-pro' => '/blueprints',
+            'workflows-advanced' => '/workflows',
+            'time-machine' => '/time-machine',
+            'scenario-planner' => '/forecasting/scenarios',
+            'revenue-graph' => '/analytics/revenue-graph',
+            'deal-rooms' => '/deal-rooms',
+            'competitor-battlecards' => '/competitors',
+            'whatsapp-integration' => '/settings/communication?tab=whatsapp',
+            'live-chat' => '/settings/communication?tab=chat',
+            'scheduling' => '/scheduling',
+            'email-sequences' => '/cadences',
+            'ai-assistant' => '/settings/ai',
+            'ai-insights' => '/settings/ai',
+        ];
+
+        if (isset($pluginPaths[$slug])) {
+            return $pluginPaths[$slug];
+        }
+
+        // Category-based fallback paths
+        return match ($category) {
+            'communication' => '/settings/communication',
+            'marketing' => '/marketing',
+            'analytics' => '/analytics',
+            'documents' => '/documents',
+            'ai' => '/settings/ai',
+            'sales' => '/settings/billing/plugins',
+            default => '/settings/billing/plugins',
+        };
     }
 
     /**
-     * Cancel a license.
+     * Get next steps after activating a plugin.
      */
-    public function cancelLicense(int $id): array
+    private function getPluginNextSteps(string $slug, array $plugin): array
     {
-        return $this->repository->cancelLicense($id);
+        $steps = [];
+        $settingsPath = $this->getPluginSettingsPath($slug, $plugin['category'] ?? null);
+
+        // Integration plugins need to be connected
+        if (str_starts_with($slug, 'integration-')) {
+            $provider = ucfirst(str_replace('integration-', '', $slug));
+            $steps[] = [
+                'title' => "Connect your {$provider} account",
+                'description' => "Authorize access to your {$provider} account to enable data synchronization.",
+                'action' => 'Connect Account',
+                'path' => $settingsPath,
+            ];
+        } else {
+            // Non-integration plugins - provide guidance based on category
+            $actionText = match ($plugin['category'] ?? '') {
+                'analytics' => 'View your new analytics dashboards and reports.',
+                'ai' => 'Configure AI settings and start using intelligent features.',
+                'documents' => 'Create and manage documents with your new capabilities.',
+                'communication' => 'Set up your communication channels.',
+                'marketing' => 'Start building campaigns with new marketing tools.',
+                default => 'Explore your new features and capabilities.',
+            };
+
+            if ($settingsPath !== '/settings/billing/plugins') {
+                $steps[] = [
+                    'title' => 'Get started',
+                    'description' => $actionText,
+                    'action' => 'Open Feature',
+                    'path' => $settingsPath,
+                ];
+            }
+        }
+
+        // Add feature list if available
+        $features = $this->parseFeatures($plugin['features'] ?? null);
+        if (!empty($features)) {
+            $featureList = implode(', ', array_slice($features, 0, 3));
+            if (count($features) > 3) {
+                $featureList .= ', and ' . (count($features) - 3) . ' more';
+            }
+
+            $steps[] = [
+                'title' => 'Features now available',
+                'description' => $featureList,
+                'action' => null,
+                'path' => null,
+            ];
+        }
+
+        return $steps;
+    }
+
+    /**
+     * Deactivate a plugin license.
+     *
+     * @return array{success: bool, errors?: string[]}
+     */
+    public function deactivatePlugin(string $pluginSlug): array
+    {
+        $license = $this->repository->getLicenseForPlugin($pluginSlug);
+
+        if (!$license) {
+            return [
+                'success' => false,
+                'errors' => ['No active license found'],
+            ];
+        }
+
+        if (!empty($license['bundle_slug'])) {
+            return [
+                'success' => false,
+                'errors' => ['Cannot deactivate a bundled plugin individually'],
+            ];
+        }
+
+        $result = $this->repository->deactivatePlugin($pluginSlug);
+
+        if ($result) {
+            $this->clearCache();
+        }
+
+        return [
+            'success' => $result,
+            'errors' => $result ? [] : ['Failed to deactivate plugin'],
+        ];
+    }
+
+    /**
+     * Cancel a license by ID.
+     */
+    public function cancelLicense(int $licenseId): array
+    {
+        $license = $this->repository->findLicenseById($licenseId);
+
+        if (!$license) {
+            return [
+                'success' => false,
+                'errors' => ['License not found'],
+            ];
+        }
+
+        if (!empty($license['bundle_slug'])) {
+            return [
+                'success' => false,
+                'errors' => ['Cannot cancel a bundled license individually'],
+            ];
+        }
+
+        $result = $this->repository->cancelLicense($licenseId);
+        $this->clearCache();
+
+        return [
+            'success' => true,
+            'license' => $result,
+        ];
     }
 
     /**
      * Reactivate a cancelled license.
      */
-    public function reactivateLicense(int $id, ?\DateTimeInterface $expiresAt = null): array
+    public function reactivateLicense(int $licenseId, ?\DateTimeInterface $expiresAt = null): array
     {
-        return $this->repository->reactivateLicense($id, $expiresAt);
+        $license = $this->repository->findLicenseById($licenseId);
+
+        if (!$license) {
+            return [
+                'success' => false,
+                'errors' => ['License not found'],
+            ];
+        }
+
+        if ($license['status'] === LicenseStatus::ACTIVE) {
+            return [
+                'success' => false,
+                'errors' => ['License is already active'],
+            ];
+        }
+
+        $result = $this->repository->reactivateLicense($licenseId, $expiresAt);
+        $this->clearCache();
+
+        return [
+            'success' => true,
+            'license' => $result,
+        ];
     }
 
     // =========================================================================
-    // QUERY USE CASES - PLUGIN USAGE (Tenant DB)
+    // QUERY USE CASES - USAGE
     // =========================================================================
 
-    /**
-     * Get usage for a plugin and metric.
-     */
     public function getPluginUsage(string $pluginSlug, string $metric): ?array
     {
         return $this->repository->getPluginUsage($pluginSlug, $metric);
     }
 
-    /**
-     * Get all usage metrics for a plugin.
-     */
-    public function getPluginUsageMetrics(string $pluginSlug): array
-    {
-        return $this->repository->getPluginUsageMetrics($pluginSlug);
-    }
-
-    /**
-     * List usage for all plugins in current period.
-     */
     public function listPluginUsage(): array
     {
         return $this->repository->listPluginUsage();
     }
 
-    /**
-     * Check if usage limit is reached.
-     */
-    public function isUsageLimitReached(string $pluginSlug, string $metric): bool
+    public function checkUsageLimit(string $metric): array
     {
-        return $this->repository->isUsageLimitReached($pluginSlug, $metric);
+        $currentPlan = $this->getCurrentPlan();
+        $limit = $this->usageService->getMetricLimit($currentPlan, $metric);
+
+        $usage = $this->repository->getPluginUsage('core', $metric);
+        $used = $usage['quantity'] ?? 0;
+
+        return $this->usageService->calculateUsageMetrics($used, $limit);
+    }
+
+    public function getUsageStats(): array
+    {
+        $currentPlan = $this->getCurrentPlan();
+        $limits = $this->usageService->getLimitsForPlan($currentPlan);
+        $stats = [];
+
+        foreach (array_keys($limits) as $metric) {
+            $stats[$metric] = $this->checkUsageLimit($metric);
+        }
+
+        return $stats;
     }
 
     // =========================================================================
-    // COMMAND USE CASES - PLUGIN USAGE (Tenant DB)
+    // COMMAND USE CASES - USAGE
     // =========================================================================
 
-    /**
-     * Track/increment plugin usage.
-     */
-    public function trackUsage(string $pluginSlug, string $metric, int $amount = 1, ?int $limit = null, ?float $overageRate = null): array
+    public function trackUsage(string $metric, int $amount = 1): array
     {
-        return $this->repository->trackUsage($pluginSlug, $metric, $amount, $limit, $overageRate);
-    }
+        $currentPlan = $this->getCurrentPlan();
+        $limit = $this->usageService->getMetricLimit($currentPlan, $metric);
 
-    /**
-     * Reset usage for a plugin metric (new period).
-     */
-    public function resetUsage(string $pluginSlug, string $metric): array
-    {
-        return $this->repository->resetUsage($pluginSlug, $metric);
-    }
-
-    /**
-     * Update usage limits.
-     */
-    public function updateUsageLimits(string $pluginSlug, string $metric, ?int $limitQuantity, ?float $overageRate = null): ?array
-    {
-        return $this->repository->updateUsageLimits($pluginSlug, $metric, $limitQuantity, $overageRate);
+        return $this->repository->trackUsage('core', $metric, $amount, $limit);
     }
 
     // =========================================================================
-    // ANALYTICS USE CASES
+    // ANALYTICS
     // =========================================================================
 
-    /**
-     * Get plugin statistics.
-     */
     public function getPluginStats(): array
     {
         return $this->repository->getPluginStats();
     }
 
-    /**
-     * Get license statistics for tenant.
-     */
     public function getLicenseStats(): array
     {
         return $this->repository->getLicenseStats();
     }
 
-    /**
-     * Get usage statistics for all plugins.
-     */
-    public function getUsageStats(): array
-    {
-        return $this->repository->getUsageStats();
-    }
-
-    /**
-     * Get detailed usage for a specific plugin.
-     */
-    public function getPluginUsageReport(string $pluginSlug, int $months = 3): array
-    {
-        return $this->repository->getPluginUsageReport($pluginSlug, $months);
-    }
-
-    /**
-     * Get plugin recommendations based on usage and features.
-     */
     public function getPluginRecommendations(int $limit = 5): array
     {
         return $this->repository->getPluginRecommendations($limit);
     }
 
-    /**
-     * Get expiring licenses.
-     */
     public function getExpiringLicenses(int $days = 30): array
     {
         return $this->repository->getExpiringLicenses($days);
+    }
+
+    /**
+     * Get complete license state for API response.
+     */
+    public function getLicenseState(): array
+    {
+        $currentPlan = $this->getCurrentPlan();
+
+        return [
+            'plan' => $currentPlan,
+            'plugins' => $this->getLicensedPluginSlugs(),
+            'usage' => $this->getUsageStats(),
+        ];
+    }
+
+    // =========================================================================
+    // HELPER METHODS
+    // =========================================================================
+
+    public function clearCache(): void
+    {
+        Cache::forget('licensed_plugins');
+
+        // Clear plugin-specific caches
+        $plugins = $this->repository->findAll();
+        foreach ($plugins as $plugin) {
+            Cache::forget("plugin_license:{$plugin['slug']}");
+        }
+    }
+
+    private function getCurrentPlan(): string
+    {
+        // This would typically come from the tenant subscription
+        // For now, we'll use a default or check the auth context
+        return 'professional'; // Default to professional for development
     }
 }

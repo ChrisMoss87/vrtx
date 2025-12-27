@@ -1,14 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api;
 
+use App\Domain\User\Repositories\UserRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class UserSearchController extends Controller
 {
+    public function __construct(
+        private readonly UserRepositoryInterface $userRepository
+    ) {}
+
     /**
      * Search users for mentions.
      */
@@ -22,26 +28,16 @@ class UserSearchController extends Controller
         $query = $validated['q'] ?? '';
         $limit = $validated['limit'] ?? 10;
 
-        $users = User::query()
-            ->when($query, function ($q) use ($query) {
-                $q->where(function ($q) use ($query) {
-                    $q->where('name', 'LIKE', "%{$query}%")
-                      ->orWhere('email', 'LIKE', "%{$query}%");
-                });
-            })
-            ->limit($limit)
-            ->get(['id', 'name', 'email']);
+        $users = $this->userRepository->search($query, $limit);
 
         return response()->json([
             'success' => true,
-            'users' => $users->map(function ($user) {
-                return [
-                    'id' => (string) $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'avatar' => null, // Could add avatar support later
-                ];
-            }),
+            'users' => array_map(fn(array $user) => [
+                'id' => (string) $user['id'],
+                'name' => $user['name'],
+                'email' => $user['email'],
+                'avatar' => null,
+            ], $users),
         ]);
     }
 }

@@ -11,12 +11,13 @@ use App\Domain\Modules\ValueObjects\FormulaDefinition;
 use App\Domain\Modules\ValueObjects\LookupConfiguration;
 use App\Domain\Modules\ValueObjects\ValidationRule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Modules\Entities\Module;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class FieldModelTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -30,7 +31,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_create_field(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
@@ -49,7 +50,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_belongs_to_module(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Email',
@@ -63,7 +64,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_belongs_to_block(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Basic Info',
@@ -84,7 +85,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_has_options_relationship(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
@@ -109,7 +110,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_conditional_visibility_object_accessor(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Conditional Field',
@@ -137,7 +138,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_validation_rule_object_accessor(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Email',
@@ -155,7 +156,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_lookup_configuration_object_accessor(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Related Contact',
@@ -180,7 +181,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_has_conditional_visibility(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         // Field with conditions - should have visibility enabled
         $fieldWithVisibility = DB::table('fields')->insertGetId([
@@ -210,7 +211,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_is_formula_field(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $formulaField = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
@@ -238,7 +239,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_is_lookup_field(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $lookupField = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
@@ -264,7 +265,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_get_dependencies(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
@@ -290,7 +291,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_is_visible(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
@@ -312,7 +313,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_get_validation_rules(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
@@ -337,7 +338,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_cascade_deletes_with_module(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Test Field',
@@ -354,7 +355,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_cascade_deletes_with_block(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
@@ -376,7 +377,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_field_cascade_deletes_options(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
             'label' => 'Status',
@@ -397,7 +398,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_unique_api_name_per_module(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         DB::table('fields')->insertGetId([
             'module_id' => $module->id,
@@ -418,7 +419,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_all_field_types_supported(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $types = [
             'text', 'email', 'phone', 'url', 'textarea', 'rich_text',

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\LandingPage\Entities\LandingPageVisit;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\LandingPageVisit>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\LandingPage\Entities\LandingPageVisit>
  */
 class LandingPageVisitFactory extends Factory
 {

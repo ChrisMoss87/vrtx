@@ -462,15 +462,17 @@ Visit `/datatable-demo` to see all features in action.
 
 ## Future Enhancements
 
-- [ ] Column resizing
-- [ ] Column reordering (drag & drop)
-- [ ] Row grouping
-- [ ] Virtual scrolling
-- [ ] Advanced export options (PDF)
+- [x] Column resizing - Enable via `enableColumnResize={true}` prop, drag column borders to resize
+- [x] Column reordering (drag & drop) - Works in Columns dropdown (DataTableColumnToggle)
+- [x] Row grouping - Enable via Table Settings dropdown → Group By, uses `DataTableGroupedBody.svelte`
+- [x] Virtual scrolling - Enable via Table Settings dropdown → Virtual Scroll toggle
+- [x] Advanced export options (PDF) - Works via Export dropdown in toolbar
 - [ ] Cell validation
 - [ ] Conditional formatting
-- [ ] Column freezing
-- [ ] Mobile-optimized view
+- [x] Column freezing/pinning - Pin columns via Columns dropdown → hover row → click pin icons
+- [x] Mobile-optimized view - Auto-enables on mobile via `enableResponsive={true}` (default), shows card view
+
+Legend: [x] = Complete & Active, [ ] = Not implemented
 
 ## License
 

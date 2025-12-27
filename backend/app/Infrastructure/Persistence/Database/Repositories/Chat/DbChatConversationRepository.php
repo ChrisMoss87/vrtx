@@ -600,6 +600,11 @@ class DbChatConversationRepository implements ChatConversationRepositoryInterfac
         return $result;
     }
 
+    public function deleteByWidgetId(int $widgetId): int
+    {
+        return DB::table(self::TABLE)->where('widget_id', $widgetId)->delete();
+    }
+
     // =========================================================================
     // MAPPING METHODS
     // =========================================================================

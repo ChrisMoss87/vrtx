@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use App\Services\Rotting\DealRottingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;

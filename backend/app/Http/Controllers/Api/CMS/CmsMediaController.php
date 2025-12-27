@@ -21,6 +21,44 @@ class CmsMediaController extends Controller
     private const TABLE_FOLDERS = 'cms_media_folders';
     private const TABLE_USERS = 'users';
 
+    /**
+     * Allowed file extensions for CMS media uploads.
+     */
+    private const ALLOWED_EXTENSIONS = [
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'rtf',
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+        'mp4', 'mov', 'avi', 'mp3', 'wav', 'ogg', 'webm',
+        'zip', 'rar', '7z',
+    ];
+
+    /**
+     * Dangerous file extensions that should never be allowed.
+     */
+    private const DANGEROUS_EXTENSIONS = [
+        'php', 'phtml', 'php3', 'php4', 'php5', 'phps', 'phar',
+        'exe', 'bat', 'cmd', 'com', 'sh', 'bash', 'zsh',
+        'js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx',
+        'py', 'pyc', 'pyo', 'rb', 'pl', 'cgi',
+        'jar', 'war', 'ear', 'class',
+        'asp', 'aspx', 'jsp', 'jspx',
+        'htaccess', 'htpasswd', 'ini', 'config',
+        'dll', 'so', 'dylib',
+    ];
+
+    /**
+     * Dangerous MIME types that indicate executable content.
+     */
+    private const DANGEROUS_MIME_TYPES = [
+        'application/x-php',
+        'text/x-php',
+        'application/x-httpd-php',
+        'application/x-executable',
+        'application/x-sharedlib',
+        'application/x-shellscript',
+        'application/javascript',
+        'text/javascript',
+    ];
+
     public function __construct(
         private readonly CmsMediaRepositoryInterface $mediaRepository
     ) {}
@@ -68,7 +106,32 @@ class CmsMediaController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'file' => 'required|file|max:51200', // 50MB max
+            'file' => [
+                'required',
+                'file',
+                'max:51200', // 50MB max
+                function ($attribute, $value, $fail) {
+                    $extension = strtolower($value->getClientOriginalExtension());
+
+                    // Block dangerous extensions
+                    if (in_array($extension, self::DANGEROUS_EXTENSIONS, true)) {
+                        $fail('This file type is not allowed for security reasons.');
+                        return;
+                    }
+
+                    // Check if extension is in allowed list
+                    if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
+                        $fail('This file type is not supported. Allowed types: ' . implode(', ', self::ALLOWED_EXTENSIONS));
+                        return;
+                    }
+
+                    // Block if MIME type suggests executable
+                    $mimeType = $value->getMimeType();
+                    if (in_array($mimeType, self::DANGEROUS_MIME_TYPES, true)) {
+                        $fail('This file type is not allowed for security reasons.');
+                    }
+                },
+            ],
             'folder_id' => 'nullable|integer|exists:cms_media_folders,id',
             'alt_text' => 'nullable|string|max:255',
             'caption' => 'nullable|string',

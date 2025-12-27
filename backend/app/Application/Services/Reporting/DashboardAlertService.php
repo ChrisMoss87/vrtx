@@ -4,23 +4,31 @@ declare(strict_types=1);
 
 namespace App\Application\Services\Reporting;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Reporting\Repositories\DashboardWidgetAlertRepositoryInterface;
+use App\Domain\Reporting\Repositories\DashboardWidgetAlertHistoryRepositoryInterface;
 use App\Services\NotificationService;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class DashboardAlertService
 {
+    // Condition types
+    public const CONDITION_ABOVE = 'above';
+    public const CONDITION_BELOW = 'below';
+    public const CONDITION_PERCENT_CHANGE = 'percent_change';
+    public const CONDITION_EQUALS = 'equals';
+
     public function __construct(
-        private NotificationService $notificationService
+        private readonly DashboardWidgetAlertRepositoryInterface $alertRepository,
+        private readonly DashboardWidgetAlertHistoryRepositoryInterface $historyRepository,
+        private readonly NotificationService $notificationService
     ) {}
 
     /**
      * Create a new alert for a widget
      */
-    public function createAlert(int $widgetId, int $userId, array $data): DashboardWidgetAlert
+    public function createAlert(int $widgetId, int $userId, array $data): array
     {
-        return DB::table('dashboard_widget_alerts')->insertGetId([
+        return $this->alertRepository->create([
             'widget_id' => $widgetId,
             'user_id' => $userId,
             'name' => $data['name'],
@@ -37,60 +45,73 @@ class DashboardAlertService
     /**
      * Update an existing alert
      */
-    public function updateAlert(DashboardWidgetAlert $alert, array $data): DashboardWidgetAlert
+    public function updateAlert(int $alertId, array $data): ?array
     {
-        $alert->update($data);
-
-        return $alert->fresh();
+        return $this->alertRepository->update($alertId, $data);
     }
 
     /**
      * Delete an alert
      */
-    public function deleteAlert(DashboardWidgetAlert $alert): void
+    public function deleteAlert(int $alertId): bool
     {
-        $alert->delete();
+        return $this->alertRepository->delete($alertId);
     }
 
     /**
      * Toggle alert active status
      */
-    public function toggleAlert(DashboardWidgetAlert $alert): DashboardWidgetAlert
+    public function toggleAlert(int $alertId): ?array
     {
-        $alert->update(['is_active' => ! $alert->is_active]);
-
-        return $alert->fresh();
+        return $this->alertRepository->toggleActive($alertId);
     }
 
     /**
      * Check if an alert should be triggered based on current value
      */
-    public function checkAlert(DashboardWidgetAlert $alert, mixed $currentValue): bool
+    public function checkAlert(int $alertId, mixed $currentValue): bool
     {
-        if (! $alert->is_active) {
+        $alert = $this->alertRepository->findById($alertId);
+
+        if (!$alert || !$alert['is_active']) {
             return false;
         }
 
-        if ($alert->isInCooldown()) {
+        if ($this->alertRepository->isInCooldown($alertId)) {
             return false;
         }
 
         // Get previous value if needed for percent change
         $previousValue = null;
-        if ($alert->condition_type === DashboardWidgetAlert::CONDITION_PERCENT_CHANGE && $alert->comparison_period) {
-            $previousValue = $this->getPreviousValue($alert);
+        if ($alert['condition_type'] === self::CONDITION_PERCENT_CHANGE && ($alert['comparison_period'] ?? null)) {
+            $previousValue = $this->getPreviousValue($alertId, $alert['cooldown_minutes'] ?? 60);
         }
 
-        return $alert->checkCondition((float) $currentValue, $previousValue);
+        return $this->evaluateCondition(
+            $alert['condition_type'],
+            (float) $currentValue,
+            (float) $alert['threshold_value'],
+            $previousValue
+        );
     }
 
     /**
      * Trigger an alert and send notifications
      */
-    public function triggerAlert(DashboardWidgetAlert $alert, mixed $value, array $context = []): DashboardWidgetAlertHistory
+    public function triggerAlert(int $alertId, mixed $value, array $context = []): array
     {
+        $alert = $this->alertRepository->findById($alertId);
+        if (!$alert) {
+            throw new \InvalidArgumentException("Alert not found: {$alertId}");
+        }
+
         // Record the trigger
-        $history = $alert->recordTrigger((float) $value, $context);
+        $history = $this->historyRepository->create([
+            'alert_id' => $alertId,
+            'triggered_value' => (float) $value,
+            'threshold_value' => (float) $alert['threshold_value'],
+            'context' => $context,
+        ]);
 
         // Send notifications
         $this->sendAlertNotifications($alert, $history);
@@ -105,39 +126,35 @@ class DashboardAlertService
     {
         $triggeredAlerts = [];
 
-        $alerts = DashboardWidgetAlert::active()
-            ->whereHas('widget', function ($query) use ($dashboardId) {
-                $query->where('dashboard_id', $dashboardId);
-            })
-            ->with('widget')
-            ->get();
+        $alerts = $this->alertRepository->findActiveByDashboardId($dashboardId);
 
         foreach ($alerts as $alert) {
-            $widgetId = $alert->widget_id;
-            $data = $widgetData[$widgetId] ?? null;
+            $alertWidgetId = $alert['widget_id'];
+            $data = $widgetData[$alertWidgetId] ?? null;
 
-            if (! $data) {
+            if (!$data) {
                 continue;
             }
 
             // Extract the value based on widget type
-            $value = $this->extractWidgetValue($alert->widget, $data);
+            $widget = $this->alertRepository->getWidget($alert['id']);
+            $value = $this->extractWidgetValue($widget, $data);
 
             if ($value === null) {
                 continue;
             }
 
             try {
-                if ($this->checkAlert($alert, $value)) {
-                    $history = $this->triggerAlert($alert, $value, [
-                        'widget_title' => $alert->widget->title,
+                if ($this->checkAlert($alert['id'], $value)) {
+                    $history = $this->triggerAlert($alert['id'], $value, [
+                        'widget_title' => $widget['title'] ?? 'Widget',
                         'dashboard_id' => $dashboardId,
                     ]);
                     $triggeredAlerts[] = $history;
                 }
             } catch (\Exception $e) {
                 Log::error('Failed to process alert', [
-                    'alert_id' => $alert->id,
+                    'alert_id' => $alert['id'],
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -149,21 +166,35 @@ class DashboardAlertService
     /**
      * Get previous value for comparison
      */
-    protected function getPreviousValue(DashboardWidgetAlert $alert): ?float
+    protected function getPreviousValue(int $alertId, int $cooldownMinutes): ?float
     {
-        // Get the last triggered value from history
-        $lastHistory = $alert->history()
-            ->where('created_at', '<', now()->subMinutes($alert->cooldown_minutes))
-            ->orderByDesc('created_at')
-            ->first();
+        return $this->historyRepository->getLastTriggeredValue($alertId, $cooldownMinutes);
+    }
 
-        return $lastHistory?->triggered_value;
+    /**
+     * Evaluate if a condition is met
+     */
+    protected function evaluateCondition(
+        string $conditionType,
+        float $currentValue,
+        float $threshold,
+        ?float $previousValue = null
+    ): bool {
+        return match ($conditionType) {
+            self::CONDITION_ABOVE => $currentValue > $threshold,
+            self::CONDITION_BELOW => $currentValue < $threshold,
+            self::CONDITION_EQUALS => abs($currentValue - $threshold) < 0.0001,
+            self::CONDITION_PERCENT_CHANGE => $previousValue !== null && $previousValue > 0
+                ? abs(($currentValue - $previousValue) / $previousValue * 100) >= $threshold
+                : false,
+            default => false,
+        };
     }
 
     /**
      * Extract the relevant value from widget data
      */
-    protected function extractWidgetValue(DashboardWidget $widget, mixed $data): ?float
+    protected function extractWidgetValue(?array $widget, mixed $data): ?float
     {
         if (is_numeric($data)) {
             return (float) $data;
@@ -192,42 +223,45 @@ class DashboardAlertService
     /**
      * Send notifications for a triggered alert
      */
-    protected function sendAlertNotifications(DashboardWidgetAlert $alert, DashboardWidgetAlertHistory $history): void
+    protected function sendAlertNotifications(array $alert, array $history): void
     {
-        $channels = $alert->notification_channels ?? ['in_app'];
-        $user = $alert->user;
-        $widget = $alert->widget;
+        $channels = $alert['notification_channels'] ?? ['in_app'];
+        $user = $this->alertRepository->getUser($alert['id']);
+        $widget = $this->alertRepository->getWidget($alert['id']);
+
+        if (!$user) {
+            return;
+        }
 
         $title = $this->getAlertTitle($alert);
-        $message = $this->getAlertMessage($alert, $history);
+        $message = $this->getAlertMessage($alert, $history, $widget);
 
         foreach ($channels as $channel) {
             try {
                 switch ($channel) {
                     case 'in_app':
                         $this->notificationService->create([
-                            'user_id' => $user->id,
+                            'user_id' => $user['id'],
                             'type' => 'dashboard_alert',
                             'title' => $title,
                             'message' => $message,
                             'data' => [
-                                'alert_id' => $alert->id,
-                                'history_id' => $history->id,
-                                'dashboard_id' => $widget->dashboard_id,
-                                'widget_id' => $widget->id,
-                                'severity' => $alert->severity,
+                                'alert_id' => $alert['id'],
+                                'history_id' => $history['id'],
+                                'dashboard_id' => $widget['dashboard_id'] ?? null,
+                                'widget_id' => $widget['id'] ?? null,
+                                'severity' => $alert['severity'] ?? 'warning',
                             ],
                         ]);
                         break;
 
                     case 'email':
                         // Email notification would be handled here
-                        // $this->sendEmailAlert($user, $title, $message, $alert);
                         break;
                 }
             } catch (\Exception $e) {
                 Log::error('Failed to send alert notification', [
-                    'alert_id' => $alert->id,
+                    'alert_id' => $alert['id'],
                     'channel' => $channel,
                     'error' => $e->getMessage(),
                 ]);
@@ -238,35 +272,35 @@ class DashboardAlertService
     /**
      * Get alert title based on severity
      */
-    protected function getAlertTitle(DashboardWidgetAlert $alert): string
+    protected function getAlertTitle(array $alert): string
     {
-        $severityPrefix = match ($alert->severity) {
-            'critical' => '🚨 Critical Alert: ',
-            'warning' => '⚠️ Warning: ',
-            default => 'ℹ️ Alert: ',
+        $severityPrefix = match ($alert['severity'] ?? 'info') {
+            'critical' => 'Critical Alert: ',
+            'warning' => 'Warning: ',
+            default => 'Alert: ',
         };
 
-        return $severityPrefix.$alert->name;
+        return $severityPrefix . ($alert['name'] ?? 'Dashboard Alert');
     }
 
     /**
      * Get alert message
      */
-    protected function getAlertMessage(DashboardWidgetAlert $alert, DashboardWidgetAlertHistory $history): string
+    protected function getAlertMessage(array $alert, array $history, ?array $widget): string
     {
-        $widgetTitle = $alert->widget?->title ?? 'Widget';
-        $condition = match ($alert->condition_type) {
-            'above' => 'exceeded',
-            'below' => 'dropped below',
-            'percent_change' => 'changed by',
-            'equals' => 'reached',
+        $widgetTitle = $widget['title'] ?? 'Widget';
+        $condition = match ($alert['condition_type'] ?? '') {
+            self::CONDITION_ABOVE => 'exceeded',
+            self::CONDITION_BELOW => 'dropped below',
+            self::CONDITION_PERCENT_CHANGE => 'changed by',
+            self::CONDITION_EQUALS => 'reached',
             default => 'triggered',
         };
 
-        $valueDisplay = number_format((float) $history->triggered_value, 2);
-        $thresholdDisplay = number_format((float) $history->threshold_value, 2);
+        $valueDisplay = number_format((float) ($history['triggered_value'] ?? 0), 2);
+        $thresholdDisplay = number_format((float) ($history['threshold_value'] ?? 0), 2);
 
-        if ($alert->condition_type === 'percent_change') {
+        if (($alert['condition_type'] ?? '') === self::CONDITION_PERCENT_CHANGE) {
             return sprintf(
                 '%s: Value %s %s%% (threshold: %s%%)',
                 $widgetTitle,
@@ -290,40 +324,27 @@ class DashboardAlertService
      */
     public function getAlertHistory(int $userId, ?int $dashboardId = null, int $limit = 50): array
     {
-        $query = DB::table('dashboard_widget_alert_histories')
-            ->whereHas('alert', function ($q) use ($userId, $dashboardId) {
-                $q->where('user_id', $userId);
-                if ($dashboardId) {
-                    $q->whereHas('widget', function ($wq) use ($dashboardId) {
-                        $wq->where('dashboard_id', $dashboardId);
-                    });
-                }
-            })
-            ->with(['alert.widget'])
-            ->orderByDesc('created_at')
-            ->limit($limit);
-
-        return $query->get()->toArray();
+        return $this->historyRepository->findByUserId($userId, $dashboardId, $limit);
     }
 
     /**
      * Acknowledge an alert history entry
      */
-    public function acknowledgeAlert(DashboardWidgetAlertHistory $history, int $userId): DashboardWidgetAlertHistory
+    public function acknowledgeAlert(int $historyId, int $userId): ?array
     {
-        $history->acknowledge($userId);
+        $this->historyRepository->acknowledge($historyId, $userId);
 
-        return $history->fresh();
+        return $this->historyRepository->findById($historyId);
     }
 
     /**
      * Dismiss an alert history entry
      */
-    public function dismissAlert(DashboardWidgetAlertHistory $history, int $userId): DashboardWidgetAlertHistory
+    public function dismissAlert(int $historyId, int $userId): ?array
     {
-        $history->dismiss($userId);
+        $this->historyRepository->dismiss($historyId, $userId);
 
-        return $history->fresh();
+        return $this->historyRepository->findById($historyId);
     }
 
     /**
@@ -331,10 +352,6 @@ class DashboardAlertService
      */
     public function getUnacknowledgedCount(int $userId): int
     {
-        return DashboardWidgetAlertHistory::unacknowledged()
-            ->whereHas('alert', function ($q) use ($userId) {
-                $q->where('user_id', $userId);
-            })
-            ->count();
+        return $this->historyRepository->getUnacknowledgedCount($userId);
     }
 }

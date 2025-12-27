@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Models;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\User\Entities\User;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ModuleRecordModelTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -24,7 +26,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_create_module_record(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
@@ -44,7 +46,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_record_belongs_to_module(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Test'],
@@ -56,8 +58,8 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_record_belongs_to_creator(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
-        $user = /* User factory - use DB::table('users') */->create();
+        $module = Module::factory()->create();
+        $user = User::factory()->create();
 
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
@@ -71,8 +73,8 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_record_belongs_to_updater(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
-        $user = /* User factory - use DB::table('users') */->create();
+        $module = Module::factory()->create();
+        $user = User::factory()->create();
 
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
@@ -86,7 +88,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_get_field_from_data(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => [
@@ -104,7 +106,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_set_field_in_data(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Original'],
@@ -119,7 +121,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_record_data_is_cast_to_array(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => [
@@ -147,7 +149,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_record_soft_deletes(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Test'],
@@ -162,7 +164,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_record_cascade_deletes_with_module(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
             'data' => ['name' => 'Test'],
@@ -177,7 +179,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_search_scope_finds_matching_records(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
@@ -201,7 +203,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_where_field_scope_filters_by_field_value(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
@@ -225,7 +227,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_order_by_field_scope_sorts_by_field(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
@@ -255,7 +257,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_complex_nested_data_storage(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,

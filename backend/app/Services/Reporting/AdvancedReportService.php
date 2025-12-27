@@ -13,9 +13,48 @@ use Illuminate\Support\Facades\DB;
  */
 class AdvancedReportService
 {
+    /**
+     * System fields that are stored directly on the module_records table.
+     */
+    private const SYSTEM_FIELDS = ['id', 'module_id', 'created_at', 'updated_at', 'owner_id', 'created_by'];
+
+    /**
+     * Valid table aliases for joins.
+     */
+    private const VALID_ALIAS_PATTERN = '/^[a-zA-Z_][a-zA-Z0-9_]*$/';
+
     public function __construct(
         protected ReportService $reportService,
     ) {}
+
+    /**
+     * Validate field name to prevent SQL injection.
+     * Only allows alphanumeric characters and underscores.
+     *
+     * @throws \InvalidArgumentException if field name is invalid
+     */
+    private function validateFieldName(string $field): string
+    {
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $field)) {
+            throw new \InvalidArgumentException("Invalid field name: {$field}");
+        }
+
+        return $field;
+    }
+
+    /**
+     * Validate table alias to prevent SQL injection.
+     *
+     * @throws \InvalidArgumentException if alias is invalid
+     */
+    private function validateAlias(string $alias): string
+    {
+        if (!preg_match(self::VALID_ALIAS_PATTERN, $alias)) {
+            throw new \InvalidArgumentException("Invalid table alias: {$alias}");
+        }
+
+        return $alias;
+    }
 
     /**
      * Execute a cross-object report with joins.
@@ -575,15 +614,20 @@ class AdvancedReportService
 
     /**
      * Build a column reference for SQL.
+     * Validates both alias and field name to prevent SQL injection.
      */
     protected function buildColumnReference(string $alias, string $field, bool $forNumeric = false): string
     {
+        // Validate alias and field to prevent SQL injection
+        $alias = $this->validateAlias($alias);
+        $field = $this->validateFieldName($field);
+
         // System fields
-        if (in_array($field, ['id', 'created_at', 'updated_at', 'module_id'])) {
+        if (in_array($field, self::SYSTEM_FIELDS, true)) {
             return "{$alias}.{$field}";
         }
 
-        // JSON field
+        // JSON field (validated field name prevents injection)
         return "{$alias}.data->>'{$field}'";
     }
 

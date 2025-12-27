@@ -12,6 +12,69 @@ use Symfony\Component\HttpFoundation\Response;
 class FileUploadController extends Controller
 {
     /**
+     * Magic byte signatures for common file types.
+     * Used to verify file content matches declared type.
+     */
+    private const MAGIC_BYTES = [
+        'jpg' => ["\xFF\xD8\xFF"],
+        'jpeg' => ["\xFF\xD8\xFF"],
+        'png' => ["\x89PNG\x0D\x0A\x1A\x0A"],
+        'gif' => ["GIF87a", "GIF89a"],
+        'webp' => ["RIFF"],  // WebP starts with RIFF...WEBP
+        'pdf' => ["%PDF"],
+        'zip' => ["PK\x03\x04", "PK\x05\x06"],
+        'rar' => ["Rar!\x1A\x07"],
+        '7z' => ["\x37\x7A\xBC\xAF\x27\x1C"],
+        'doc' => ["\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"],
+        'docx' => ["PK\x03\x04"],  // OOXML is ZIP-based
+        'xls' => ["\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"],
+        'xlsx' => ["PK\x03\x04"],  // OOXML is ZIP-based
+        'mp4' => ["\x00\x00\x00\x18ftypmp4", "\x00\x00\x00\x1Cftypisom", "\x00\x00\x00\x20ftypisom"],
+        'mp3' => ["\xFF\xFB", "\xFF\xFA", "\xFF\xF3", "\xFF\xF2", "ID3"],
+        'wav' => ["RIFF"],
+        'svg' => ["<?xml", "<svg"],  // Text-based
+        'txt' => [],  // No signature for plain text
+        'csv' => [],  // No signature for CSV
+        'rtf' => ["{\\rtf"],
+    ];
+
+    /**
+     * Validate file magic bytes match the declared extension.
+     */
+    private function validateMagicBytes(\Illuminate\Http\UploadedFile $file, string $extension): bool
+    {
+        $extension = strtolower($extension);
+
+        // Skip validation for file types without magic bytes
+        if (!isset(self::MAGIC_BYTES[$extension]) || empty(self::MAGIC_BYTES[$extension])) {
+            return true;
+        }
+
+        $signatures = self::MAGIC_BYTES[$extension];
+        $handle = fopen($file->getRealPath(), 'rb');
+
+        if (!$handle) {
+            return false;
+        }
+
+        // Read first 32 bytes for signature checking
+        $header = fread($handle, 32);
+        fclose($handle);
+
+        if ($header === false) {
+            return false;
+        }
+
+        foreach ($signatures as $signature) {
+            if (str_starts_with($header, $signature)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Upload a file.
      */
     public function upload(Request $request): JsonResponse
@@ -75,6 +138,12 @@ class FileUploadController extends Controller
 
                     if (in_array($mimeType, $dangerousMimes)) {
                         $fail('This file type is not allowed for security reasons.');
+                        return;
+                    }
+
+                    // SECURITY: Validate magic bytes match declared extension
+                    if (!$this->validateMagicBytes($value, $extension)) {
+                        $fail('File content does not match the declared file type.');
                     }
                 },
             ],

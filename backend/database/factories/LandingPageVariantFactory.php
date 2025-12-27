@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\LandingPage\Entities\LandingPageVariant;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\LandingPageVariant>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\LandingPage\Entities\LandingPageVariant>
  */
 class LandingPageVariantFactory extends Factory
 {

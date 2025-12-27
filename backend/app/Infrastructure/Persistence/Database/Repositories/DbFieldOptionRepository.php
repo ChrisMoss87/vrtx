@@ -42,11 +42,11 @@ final class DbFieldOptionRepository implements FieldOptionRepositoryInterface
             'display_order' => $option->displayOrder(),
         ];
 
-        if ($option->id() !== null) {
+        if ($option->getId() !== null) {
             DB::table(self::TABLE)
-                ->where('id', $option->id())
+                ->where('id', $option->getId())
                 ->update(array_merge($data, ['updated_at' => now()]));
-            $id = $option->id();
+            $id = $option->getId();
         } else {
             $id = DB::table(self::TABLE)->insertGetId(
                 array_merge($data, [

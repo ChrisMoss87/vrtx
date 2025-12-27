@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Call\Entities\Call;
+
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Call>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Call\Entities\Call>
  */
 class CallFactory extends Factory
 {

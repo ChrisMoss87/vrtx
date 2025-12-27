@@ -571,13 +571,25 @@
 			// Backend returns { records, meta } not { data, meta }
 			const apiData = response.data;
 			tableState.data = apiData.records || [];
+
+			// Parse pagination values
+			const currentPage = apiData.meta?.current_page || 1;
+			const perPage = apiData.meta?.per_page || 50;
+			const total = apiData.meta?.total || 0;
+			const lastPage = apiData.meta?.last_page || Math.ceil(total / perPage) || 1;
+
+			// Calculate from/to with fallback if API doesn't return them
+			const recordCount = (apiData.records || []).length;
+			const calculatedFrom = total > 0 ? (currentPage - 1) * perPage + 1 : 0;
+			const calculatedTo = total > 0 ? Math.min(calculatedFrom + recordCount - 1, total) : 0;
+
 			tableState.pagination = {
-				page: apiData.meta?.current_page || 1,
-				perPage: apiData.meta?.per_page || 50,
-				total: apiData.meta?.total || 0,
-				from: apiData.meta?.from || 0,
-				to: apiData.meta?.to || 0,
-				lastPage: apiData.meta?.last_page || 1
+				page: currentPage,
+				perPage: perPage,
+				total: total,
+				from: apiData.meta?.from || calculatedFrom,
+				to: apiData.meta?.to || calculatedTo,
+				lastPage: lastPage
 			};
 
 			// Update URL with current state (optional, can be enabled later)

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Goal\Entities\GoalMilestone;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\GoalMilestone>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Goal\Entities\GoalMilestone>
  */
 class GoalMilestoneFactory extends Factory
 {

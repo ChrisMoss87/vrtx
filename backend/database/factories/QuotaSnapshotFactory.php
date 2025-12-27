@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Quota;
-use App\Infrastructure\Persistence\Eloquent\Models\QuotaSnapshot;
+use App\Domain\Goal\Entities\Quota;
+use App\Domain\Goal\Entities\QuotaSnapshot;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\QuotaSnapshot>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Goal\Entities\QuotaSnapshot>
  */
 class QuotaSnapshotFactory extends Factory
 {

@@ -16,12 +16,100 @@ use Illuminate\Support\Facades\Storage;
 
 class ImportExportApplicationService
 {
+    /**
+     * System fields that are stored directly on the table.
+     */
+    private const SYSTEM_FIELDS = ['id', 'module_id', 'created_at', 'updated_at', 'owner_id', 'created_by'];
+
+    /**
+     * Valid operators for filtering.
+     */
+    private const VALID_OPERATORS = ['=', '!=', '<', '>', '<=', '>=', 'ILIKE', 'NOT ILIKE', 'IS NULL', 'IS NOT NULL'];
+
+    /**
+     * Valid sort directions.
+     */
+    private const VALID_DIRECTIONS = ['asc', 'desc', 'ASC', 'DESC'];
+
     public function __construct(
         private ImportRepositoryInterface $importRepository,
         private AuthContextInterface $authContext,
         private ModuleRepositoryInterface $moduleRepository,
         private ModuleRecordRepositoryInterface $moduleRecordRepository,
     ) {}
+
+    /**
+     * Validate field name to prevent SQL injection.
+     * Only allows alphanumeric characters and underscores.
+     *
+     * @throws \InvalidArgumentException if field name is invalid
+     */
+    private function validateFieldName(string $field): string
+    {
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $field)) {
+            throw new \InvalidArgumentException("Invalid field name: {$field}");
+        }
+
+        return $field;
+    }
+
+    /**
+     * Validate operator to prevent SQL injection.
+     */
+    private function validateOperator(string $operator): string
+    {
+        $normalizedOperator = strtoupper(trim($operator));
+
+        // Map common operators
+        $operatorMap = [
+            '=' => '=',
+            '!=' => '!=',
+            '<>' => '!=',
+            '<' => '<',
+            '>' => '>',
+            '<=' => '<=',
+            '>=' => '>=',
+            'LIKE' => 'ILIKE',
+            'ILIKE' => 'ILIKE',
+            'NOT LIKE' => 'NOT ILIKE',
+            'NOT ILIKE' => 'NOT ILIKE',
+        ];
+
+        if (isset($operatorMap[$normalizedOperator])) {
+            return $operatorMap[$normalizedOperator];
+        }
+
+        if (in_array($normalizedOperator, self::VALID_OPERATORS, true)) {
+            return $normalizedOperator;
+        }
+
+        // Default to equals for invalid operators
+        return '=';
+    }
+
+    /**
+     * Validate sort direction.
+     */
+    private function validateDirection(string $direction): string
+    {
+        $normalizedDirection = strtolower(trim($direction));
+
+        return in_array($normalizedDirection, ['asc', 'desc'], true) ? $normalizedDirection : 'asc';
+    }
+
+    /**
+     * Get safe column expression for JSONB data field.
+     */
+    private function getSafeColumnExpression(string $field): string
+    {
+        $field = $this->validateFieldName($field);
+
+        if (in_array($field, self::SYSTEM_FIELDS, true)) {
+            return $field;
+        }
+
+        return "data->>'{$field}'";
+    }
 
     // ==========================================
     // IMPORT QUERY USE CASES
@@ -614,19 +702,23 @@ class ImportExportApplicationService
      */
     public function listExportTemplates(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = DB::table('export_templates')
-            ->with(['module', 'user']);
+        $query = DB::table('export_templates');
 
         if (!empty($filters['module_id'])) {
             $query->where('module_id', $filters['module_id']);
         }
 
+        // Filter by accessibility (user can access own templates or shared ones)
         if (!empty($filters['user_id'])) {
-            $query->accessibleBy($filters['user_id']);
+            $userId = $filters['user_id'];
+            $query->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('is_shared', true);
+            });
         }
 
         if (!empty($filters['shared_only'])) {
-            $query->shared();
+            $query->where('is_shared', true);
         }
 
         if (!empty($filters['search'])) {
@@ -860,6 +952,7 @@ class ImportExportApplicationService
 
     /**
      * Apply filters to export query.
+     * Uses validated field names and operators to prevent SQL injection.
      */
     private function applyExportFilters($query, ?array $filters): void
     {
@@ -873,13 +966,21 @@ class ImportExportApplicationService
             $value = $filter['value'] ?? null;
 
             if ($field && $value !== null) {
-                $query->whereRaw("data->>'{$field}' {$operator} ?", [$value]);
+                try {
+                    $column = $this->getSafeColumnExpression($field);
+                    $safeOperator = $this->validateOperator($operator);
+                    $query->whereRaw("{$column} {$safeOperator} ?", [$value]);
+                } catch (\InvalidArgumentException $e) {
+                    // Skip invalid fields
+                    continue;
+                }
             }
         }
     }
 
     /**
      * Apply sorting to export query.
+     * Uses validated field names and directions to prevent SQL injection.
      */
     private function applyExportSorting($query, ?array $sorting): void
     {
@@ -893,7 +994,14 @@ class ImportExportApplicationService
             $direction = $sort['direction'] ?? 'asc';
 
             if ($field) {
-                $query->orderByRaw("data->>'{$field}' {$direction}");
+                try {
+                    $column = $this->getSafeColumnExpression($field);
+                    $safeDirection = $this->validateDirection($direction);
+                    $query->orderByRaw("{$column} {$safeDirection}");
+                } catch (\InvalidArgumentException $e) {
+                    // Skip invalid fields
+                    continue;
+                }
             }
         }
     }

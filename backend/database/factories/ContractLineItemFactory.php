@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Contract;
-use App\Infrastructure\Persistence\Eloquent\Models\ContractLineItem;
-use App\Infrastructure\Persistence\Eloquent\Models\Product;
+use App\Domain\Contract\Entities\Contract;
+use App\Domain\Contract\Entities\ContractLineItem;
+use App\Domain\Billing\Entities\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\ContractLineItem>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Contract\Entities\ContractLineItem>
  */
 class ContractLineItemFactory extends Factory
 {

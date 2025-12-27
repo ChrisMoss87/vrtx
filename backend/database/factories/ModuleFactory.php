@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Module;
+use App\Domain\Modules\Entities\Module;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\Module>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Modules\Entities\Module>
  */
 class ModuleFactory extends Factory
 {

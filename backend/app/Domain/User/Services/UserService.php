@@ -26,14 +26,25 @@ class UserService
         ?string $search = null,
         ?string $role = null,
         ?string $status = null,
-        int $perPage = 25
+        int $perPage = 25,
+        int $page = 1
     ): PaginatedResult {
-        $isActive = null;
-        if ($status !== null && $this->userRepository->hasActiveStatusColumn()) {
-            $isActive = $status === 'active';
+        $filters = [];
+
+        if ($search !== null) {
+            $filters['search'] = $search;
         }
 
-        return $this->userRepository->list($search, $role, $isActive, $perPage);
+        if ($role !== null) {
+            // Convert role name to role_id if needed
+            $filters['role_id'] = is_numeric($role) ? (int) $role : null;
+        }
+
+        if ($status !== null && $this->userRepository->hasActiveStatusColumn()) {
+            $filters['is_active'] = $status === 'active';
+        }
+
+        return $this->userRepository->findWithFilters($filters, $perPage, $page);
     }
 
     /**

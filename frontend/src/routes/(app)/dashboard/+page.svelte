@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { modulesApi, type Module } from '$lib/api/modules';
+	import { modulesApi, type Module, type ModuleStat } from '$lib/api/modules';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
@@ -21,20 +21,24 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
-	// Module stats with counts (would come from API in production)
+	// Module stats with counts from API
 	let stats = $state<{ name: string; apiName: string; count: number; icon: typeof Users }[]>([]);
 
 	onMount(async () => {
 		try {
-			const allModules = await modulesApi.getActive();
+			// Fetch both modules and stats in parallel
+			const [allModules, moduleStats] = await Promise.all([
+				modulesApi.getActive(),
+				modulesApi.getStats()
+			]);
 			modules = allModules;
 
-			// Create stats from active modules
-			stats = allModules.slice(0, 4).map((mod) => ({
-				name: mod.name,
-				apiName: mod.api_name,
-				count: 0, // Would be fetched from a counts endpoint
-				icon: getIconForModule(mod.api_name)
+			// Create stats from API response
+			stats = moduleStats.slice(0, 4).map((stat) => ({
+				name: stat.name,
+				apiName: stat.api_name,
+				count: stat.count,
+				icon: getIconForModule(stat.api_name)
 			}));
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load dashboard data';

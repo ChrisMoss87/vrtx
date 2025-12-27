@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Services\TenantSubscription;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -98,14 +99,19 @@ class TenantDefaultDataSeeder extends Seeder
      */
     private function initializeSubscription(): void
     {
-        // Check if a subscription already exists
-        if (TenantSubscription::exists()) {
+        // Check if tenant_subscriptions table exists and if a subscription already exists
+        if (!DB::getSchemaBuilder()->hasTable('tenant_subscriptions')) {
+            $this->command->info('✓ Subscription table not yet created, skipping');
+            return;
+        }
+
+        if (DB::table('tenant_subscriptions')->exists()) {
             $this->command->info('✓ Subscription already exists');
             return;
         }
 
         // Create a default free subscription
-        DB::table('tenant_subscriptions')->insertGetId([
+        DB::table('tenant_subscriptions')->insert([
             'plan' => TenantSubscription::PLAN_FREE,
             'status' => TenantSubscription::STATUS_ACTIVE,
             'billing_cycle' => TenantSubscription::CYCLE_MONTHLY,
@@ -113,6 +119,8 @@ class TenantDefaultDataSeeder extends Seeder
             'price_per_user' => 0,
             'current_period_start' => now(),
             'current_period_end' => now()->addMonth(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $this->command->info('✓ Initialized free subscription');

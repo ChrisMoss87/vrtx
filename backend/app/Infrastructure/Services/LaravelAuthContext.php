@@ -17,6 +17,11 @@ final class LaravelAuthContext implements AuthContextInterface
         return Auth::id();
     }
 
+    public function getUserId(): ?int
+    {
+        return $this->userId();
+    }
+
     public function isAuthenticated(): bool
     {
         return Auth::check();
@@ -27,8 +32,18 @@ final class LaravelAuthContext implements AuthContextInterface
         return Auth::user()?->email;
     }
 
+    public function getUserEmail(): ?string
+    {
+        return $this->userEmail();
+    }
+
     public function userName(): ?string
     {
         return Auth::user()?->name;
+    }
+
+    public function getUserName(): ?string
+    {
+        return $this->userName();
     }
 }

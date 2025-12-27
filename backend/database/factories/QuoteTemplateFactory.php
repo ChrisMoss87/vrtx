@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\QuoteTemplate;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Billing\Entities\QuoteTemplate;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\QuoteTemplate>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Billing\Entities\QuoteTemplate>
  */
 class QuoteTemplateFactory extends Factory
 {

@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Models;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Modules\Entities\Module;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class BlockModelTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -24,7 +25,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_create_block(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
@@ -41,7 +42,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_block_belongs_to_module(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
@@ -54,7 +55,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_block_has_fields_relationship(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
@@ -75,7 +76,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_block_ordered_scope(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         DB::table('blocks')->insertGetId(['module_id' => $module->id, 'name' => 'Third', 'type' => 'section', 'display_order' => 2]);
         DB::table('blocks')->insertGetId(['module_id' => $module->id, 'name' => 'First', 'type' => 'section', 'display_order' => 0]);
@@ -90,7 +91,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_block_settings_are_cast_to_array(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test',
@@ -118,7 +119,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_block_cascade_deletes_with_module(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
@@ -134,7 +135,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_block_cascade_deletes_fields(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
@@ -156,7 +157,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_block_supports_different_types(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $types = ['section', 'tab', 'accordion', 'card'];
 

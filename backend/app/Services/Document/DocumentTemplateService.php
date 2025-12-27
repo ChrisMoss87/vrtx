@@ -4,54 +4,100 @@ declare(strict_types=1);
 
 namespace App\Services\Document;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Infrastructure\Services\Pdf\ChromePdfService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class DocumentTemplateService
 {
-    protected MergeFieldService $mergeFieldService;
+    public function __construct(
+        protected MergeFieldService $mergeFieldService,
+        protected ChromePdfService $pdfService
+    ) {}
 
-    public function __construct(MergeFieldService $mergeFieldService)
+    public function findById(int $id): ?object
     {
-        $this->mergeFieldService = $mergeFieldService;
+        return DB::table('document_templates')->where('id', $id)->first();
     }
 
-    public function create(array $data): DocumentTemplate
+    public function create(array $data): object
     {
         $data['created_by'] = Auth::id();
-        $data['merge_fields'] = $this->extractMergeFields($data['content'] ?? '');
+        $data['merge_fields'] = json_encode($this->extractMergeFields($data['content'] ?? ''));
+        $data['created_at'] = now();
+        $data['updated_at'] = now();
 
-        return DB::table('document_templates')->insertGetId($data);
-    }
-
-    public function update(DocumentTemplate $template, array $data): DocumentTemplate
-    {
-        $data['updated_by'] = Auth::id();
-
-        if (isset($data['content'])) {
-            $data['merge_fields'] = $this->extractMergeFields($data['content']);
+        // Encode JSON fields
+        foreach (['page_settings', 'header_settings', 'footer_settings', 'conditional_blocks'] as $field) {
+            if (isset($data[$field]) && is_array($data[$field])) {
+                $data[$field] = json_encode($data[$field]);
+            }
         }
 
-        $template->update($data);
-        $template->incrementVersion();
+        $id = DB::table('document_templates')->insertGetId($data);
 
-        return $template->fresh();
+        return $this->findById($id);
     }
 
-    public function delete(DocumentTemplate $template): bool
+    public function updateById(int $id, array $data): object
     {
-        return $template->delete();
+        $data['updated_by'] = Auth::id();
+        $data['updated_at'] = now();
+
+        if (isset($data['content'])) {
+            $data['merge_fields'] = json_encode($this->extractMergeFields($data['content']));
+        }
+
+        // Encode JSON fields
+        foreach (['page_settings', 'header_settings', 'footer_settings', 'conditional_blocks'] as $field) {
+            if (isset($data[$field]) && is_array($data[$field])) {
+                $data[$field] = json_encode($data[$field]);
+            }
+        }
+
+        // Increment version
+        DB::table('document_templates')->where('id', $id)->increment('version');
+        DB::table('document_templates')->where('id', $id)->update($data);
+
+        return $this->findById($id);
     }
 
-    public function duplicate(DocumentTemplate $template): DocumentTemplate
+    public function deleteById(int $id): bool
     {
-        return $template->duplicate(Auth::id());
+        return DB::table('document_templates')->where('id', $id)->delete() > 0;
     }
 
-    public function generate(DocumentTemplate $template, string $recordType, int $recordId): GeneratedDocument
+    public function duplicateById(int $id): object
     {
+        $template = $this->findById($id);
+
+        if (!$template) {
+            throw new \RuntimeException('Template not found');
+        }
+
+        $newData = (array) $template;
+        unset($newData['id']);
+        $newData['name'] = $template->name . ' (Copy)';
+        $newData['created_by'] = Auth::id();
+        $newData['created_at'] = now();
+        $newData['updated_at'] = now();
+        $newData['version'] = 1;
+
+        $newId = DB::table('document_templates')->insertGetId($newData);
+
+        return $this->findById($newId);
+    }
+
+    public function generateById(int $id, string $recordType, int $recordId): object
+    {
+        $template = $this->findById($id);
+
+        if (!$template) {
+            throw new \RuntimeException('Template not found');
+        }
+
         // Get the record data
         $data = $this->mergeFieldService->getRecordData($recordType, $recordId);
 
@@ -59,36 +105,59 @@ class DocumentTemplateService
         $mergedContent = $this->mergeFieldService->merge($template->content, $data);
 
         // Apply conditional blocks
-        $mergedContent = $this->applyConditionalBlocks($mergedContent, $template->conditional_blocks ?? [], $data);
+        $conditionalBlocks = is_string($template->conditional_blocks)
+            ? json_decode($template->conditional_blocks, true)
+            : ($template->conditional_blocks ?? []);
+        $mergedContent = $this->applyConditionalBlocks($mergedContent, $conditionalBlocks, $data);
 
         // Create the generated document
-        $document = DB::table('generated_documents')->insertGetId([
+        $documentId = DB::table('generated_documents')->insertGetId([
             'template_id' => $template->id,
             'record_type' => $recordType,
             'record_id' => $recordId,
-            'name' => $this->generateDocumentName($template, $data),
-            'output_format' => $template->output_format,
-            'merged_data' => $data,
+            'name' => $this->generateDocumentNameFromTemplate($template, $data),
+            'output_format' => $template->output_format ?? 'pdf',
+            'merged_data' => json_encode($data),
             'created_by' => Auth::id(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
-        // Generate the actual file (PDF, DOCX, etc.)
-        $this->generateFile($document, $mergedContent, $template);
+        $document = DB::table('generated_documents')->where('id', $documentId)->first();
 
-        return $document;
+        // Generate the actual file (PDF, DOCX, etc.)
+        $this->generateFileFromTemplate($document, $mergedContent, $template);
+
+        return DB::table('generated_documents')->where('id', $documentId)->first();
     }
 
-    public function preview(DocumentTemplate $template, string $recordType, int $recordId): string
+    public function previewById(int $id, string $recordType, int $recordId): string
     {
+        $template = $this->findById($id);
+
+        if (!$template) {
+            throw new \RuntimeException('Template not found');
+        }
+
         $data = $this->mergeFieldService->getRecordData($recordType, $recordId);
         $mergedContent = $this->mergeFieldService->merge($template->content, $data);
-        $mergedContent = $this->applyConditionalBlocks($mergedContent, $template->conditional_blocks ?? [], $data);
+
+        $conditionalBlocks = is_string($template->conditional_blocks)
+            ? json_decode($template->conditional_blocks, true)
+            : ($template->conditional_blocks ?? []);
+        $mergedContent = $this->applyConditionalBlocks($mergedContent, $conditionalBlocks, $data);
 
         return $mergedContent;
     }
 
-    public function previewWithSampleData(DocumentTemplate $template): string
+    public function previewWithSampleDataById(int $id): string
     {
+        $template = $this->findById($id);
+
+        if (!$template) {
+            throw new \RuntimeException('Template not found');
+        }
+
         $data = $this->mergeFieldService->getSampleData();
         $mergedContent = $this->mergeFieldService->merge($template->content, $data);
 
@@ -149,7 +218,7 @@ class DocumentTemplateService
         };
     }
 
-    protected function generateDocumentName(DocumentTemplate $template, array $data): string
+    protected function generateDocumentNameFromTemplate(object $template, array $data): string
     {
         $name = $template->name;
 
@@ -166,70 +235,93 @@ class DocumentTemplateService
         return $name;
     }
 
-    protected function generateFile(GeneratedDocument $document, string $content, DocumentTemplate $template): void
+    protected function generateFileFromTemplate(object $document, string $content, object $template): void
     {
         $filename = Str::slug($document->name) . '-' . $document->id;
+        $outputFormat = $template->output_format ?? 'pdf';
 
-        switch ($template->output_format) {
-            case DocumentTemplate::OUTPUT_PDF:
-                $this->generatePdf($document, $content, $template, $filename);
+        switch ($outputFormat) {
+            case 'pdf':
+                $this->generatePdfFromTemplate($document, $content, $template, $filename);
                 break;
-            case DocumentTemplate::OUTPUT_DOCX:
-                $this->generateDocx($document, $content, $template, $filename);
+            case 'docx':
+                $this->generateDocxFromTemplate($document, $content, $template, $filename);
                 break;
-            case DocumentTemplate::OUTPUT_HTML:
-                $this->generateHtml($document, $content, $template, $filename);
+            case 'html':
+                $this->generateHtmlFromTemplate($document, $content, $template, $filename);
                 break;
         }
     }
 
-    protected function generatePdf(GeneratedDocument $document, string $content, DocumentTemplate $template, string $filename): void
+    protected function generatePdfFromTemplate(object $document, string $content, object $template, string $filename): void
     {
         // Apply template styling
-        $html = $this->buildHtmlDocument($content, $template);
+        $html = $this->buildHtmlDocumentFromTemplate($content, $template);
 
-        // Store the HTML for now - in production, use DomPDF or similar
-        $path = "documents/{$filename}.html";
-        \Storage::put($path, $html);
+        $pageSettings = is_string($template->page_settings)
+            ? json_decode($template->page_settings, true)
+            : ($template->page_settings ?? []);
 
-        $document->file_path = $path;
-        $document->file_url = \Storage::url($path);
-        $document->file_size = strlen($html);
-        $document->save();
+        // Generate PDF using headless Chrome
+        $pdfContent = $this->pdfService->generateFromHtml($html, [
+            'paper_size' => $pageSettings['paper_size'] ?? 'A4',
+            'landscape' => ($pageSettings['orientation'] ?? 'portrait') === 'landscape',
+            'print_background' => true,
+        ]);
+
+        $path = "documents/{$filename}.pdf";
+        Storage::put($path, $pdfContent);
+
+        DB::table('generated_documents')->where('id', $document->id)->update([
+            'file_path' => $path,
+            'file_url' => Storage::url($path),
+            'file_size' => strlen($pdfContent),
+            'updated_at' => now(),
+        ]);
     }
 
-    protected function generateDocx(GeneratedDocument $document, string $content, DocumentTemplate $template, string $filename): void
+    protected function generateDocxFromTemplate(object $document, string $content, object $template, string $filename): void
     {
         // Store as HTML for now - in production, use PhpWord or similar
-        $html = $this->buildHtmlDocument($content, $template);
+        $html = $this->buildHtmlDocumentFromTemplate($content, $template);
 
         $path = "documents/{$filename}.html";
-        \Storage::put($path, $html);
+        Storage::put($path, $html);
 
-        $document->file_path = $path;
-        $document->file_url = \Storage::url($path);
-        $document->file_size = strlen($html);
-        $document->save();
+        DB::table('generated_documents')->where('id', $document->id)->update([
+            'file_path' => $path,
+            'file_url' => Storage::url($path),
+            'file_size' => strlen($html),
+            'updated_at' => now(),
+        ]);
     }
 
-    protected function generateHtml(GeneratedDocument $document, string $content, DocumentTemplate $template, string $filename): void
+    protected function generateHtmlFromTemplate(object $document, string $content, object $template, string $filename): void
     {
-        $html = $this->buildHtmlDocument($content, $template);
+        $html = $this->buildHtmlDocumentFromTemplate($content, $template);
 
         $path = "documents/{$filename}.html";
-        \Storage::put($path, $html);
+        Storage::put($path, $html);
 
-        $document->file_path = $path;
-        $document->file_url = \Storage::url($path);
-        $document->file_size = strlen($html);
-        $document->save();
+        DB::table('generated_documents')->where('id', $document->id)->update([
+            'file_path' => $path,
+            'file_url' => Storage::url($path),
+            'file_size' => strlen($html),
+            'updated_at' => now(),
+        ]);
     }
 
-    protected function buildHtmlDocument(string $content, DocumentTemplate $template): string
+    protected function buildHtmlDocumentFromTemplate(string $content, object $template): string
     {
-        $pageSettings = $template->page_settings ?? [];
-        $headerSettings = $template->header_settings ?? [];
-        $footerSettings = $template->footer_settings ?? [];
+        $pageSettings = is_string($template->page_settings)
+            ? json_decode($template->page_settings, true)
+            : ($template->page_settings ?? []);
+        $headerSettings = is_string($template->header_settings)
+            ? json_decode($template->header_settings, true)
+            : ($template->header_settings ?? []);
+        $footerSettings = is_string($template->footer_settings)
+            ? json_decode($template->footer_settings, true)
+            : ($template->footer_settings ?? []);
 
         $header = $headerSettings['content'] ?? '';
         $footer = $footerSettings['content'] ?? '';

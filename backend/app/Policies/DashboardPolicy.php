@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Policies;
 
 use App\Domain\Reporting\Entities\Dashboard;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\User\Entities\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class DashboardPolicy

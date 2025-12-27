@@ -6,10 +6,12 @@ namespace App\Providers;
 
 // Module Domain
 use App\Domain\Modules\Repositories\BlockRepositoryInterface;
+use App\Domain\Modules\Repositories\FieldOptionRepositoryInterface;
 use App\Domain\Modules\Repositories\FieldRepositoryInterface;
 use App\Domain\Modules\Repositories\ModuleRecordRepositoryInterface;
 use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\DbBlockRepository;
+use App\Infrastructure\Persistence\Database\Repositories\DbFieldOptionRepository;
 use App\Infrastructure\Persistence\Database\Repositories\DbFieldRepository;
 use App\Infrastructure\Persistence\Database\Repositories\DbModuleRecordRepository;
 use App\Infrastructure\Persistence\Database\Repositories\DbModuleRepository;
@@ -21,7 +23,6 @@ use App\Domain\Shared\Contracts\HasherInterface;
 use App\Domain\Shared\Contracts\LoggerInterface;
 use App\Domain\Shared\Contracts\StringHelperInterface;
 use App\Domain\Shared\Contracts\ValidatorInterface;
-use App\Infrastructure\Services\LaravelAuthContext;
 use App\Infrastructure\Services\LaravelEventDispatcher;
 use App\Infrastructure\Services\LaravelHasher;
 use App\Infrastructure\Services\LaravelLogger;
@@ -57,9 +58,13 @@ use App\Infrastructure\Persistence\Database\Repositories\Blueprint\DbTransitionE
 use App\Domain\Reporting\Repositories\ReportRepositoryInterface;
 use App\Domain\Reporting\Repositories\DashboardRepositoryInterface;
 use App\Domain\Reporting\Repositories\DashboardTemplateRepositoryInterface;
+use App\Domain\Reporting\Repositories\DashboardWidgetAlertRepositoryInterface;
+use App\Domain\Reporting\Repositories\DashboardWidgetAlertHistoryRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\Reporting\DbReportRepository;
 use App\Infrastructure\Persistence\Database\Repositories\Reporting\DbDashboardRepository;
 use App\Infrastructure\Persistence\Database\Repositories\Reporting\DbDashboardTemplateRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Reporting\DbDashboardWidgetAlertRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Reporting\DbDashboardWidgetAlertHistoryRepository;
 
 // Forecasting Domain
 use App\Domain\Forecasting\Repositories\ForecastScenarioRepositoryInterface;
@@ -113,6 +118,10 @@ use App\Infrastructure\Persistence\Database\Repositories\DealRoom\DbDealRoomRepo
 use App\Domain\Activity\Repositories\ActivityRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\Activity\DbActivityRepository;
 
+// AuditLog Domain
+use App\Domain\AuditLog\Repositories\AuditLogRepositoryInterface;
+use App\Infrastructure\Persistence\Database\Repositories\AuditLog\DbAuditLogRepository;
+
 // Pipeline Domain
 use App\Domain\Pipeline\Repositories\PipelineRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\Pipeline\DbPipelineRepository;
@@ -135,7 +144,17 @@ use App\Infrastructure\Persistence\Database\Repositories\Proposal\DbProposalRepo
 
 // Chat Domain
 use App\Domain\Chat\Repositories\ChatConversationRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatWidgetRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatVisitorRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatAgentStatusRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatMessageRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatCannedResponseRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\Chat\DbChatConversationRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Chat\DbChatWidgetRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Chat\DbChatVisitorRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Chat\DbChatAgentStatusRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Chat\DbChatMessageRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Chat\DbChatCannedResponseRepository;
 
 // Sms Domain
 use App\Domain\Sms\Repositories\SmsMessageRepositoryInterface;
@@ -147,7 +166,11 @@ use App\Infrastructure\Persistence\Database\Repositories\WhatsApp\DbWhatsappConv
 
 // Call Domain
 use App\Domain\Call\Repositories\CallRepositoryInterface;
+use App\Domain\Call\Repositories\CallQueueRepositoryInterface;
+use App\Domain\Call\Repositories\CallQueueMemberRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\Call\DbCallRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Call\DbCallQueueRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Call\DbCallQueueMemberRepository;
 
 // Inbox Domain
 use App\Domain\Inbox\Repositories\InboxConversationRepositoryInterface;
@@ -175,11 +198,19 @@ use App\Infrastructure\Persistence\Database\Repositories\ImportExport\DbImportRe
 
 // Duplicate Domain
 use App\Domain\Duplicate\Repositories\DuplicateCandidateRepositoryInterface;
+use App\Domain\Duplicate\Repositories\DuplicateRuleRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\Duplicate\DbDuplicateCandidateRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Duplicate\DbDuplicateRuleRepository;
 
 // AI Domain
 use App\Domain\AI\Repositories\AiPromptRepositoryInterface;
+use App\Domain\AI\Repositories\AiSettingRepositoryInterface;
+use App\Domain\AI\Repositories\AiEmailDraftRepositoryInterface;
+use App\Domain\AI\Repositories\AiUsageLogRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\AI\DbAiPromptRepository;
+use App\Infrastructure\Persistence\Database\Repositories\AI\DbAiSettingRepository;
+use App\Infrastructure\Persistence\Database\Repositories\AI\DbAiEmailDraftRepository;
+use App\Infrastructure\Persistence\Database\Repositories\AI\DbAiUsageLogRepository;
 
 // Goal Domain
 use App\Domain\Goal\Repositories\GoalRepositoryInterface;
@@ -203,6 +234,10 @@ use App\Infrastructure\Persistence\Database\Repositories\Webhook\DbWebhookReposi
 
 // Plugin Domain
 use App\Domain\Plugin\Repositories\PluginRepositoryInterface;
+use App\Domain\Plugin\Services\PluginLicenseValidationService;
+use App\Domain\Plugin\Services\PluginRequirementsService;
+use App\Domain\Plugin\Services\PluginUsageService;
+use App\Application\Services\Plugin\PluginApplicationService;
 use App\Infrastructure\Persistence\Database\Repositories\Plugin\DbPluginRepository;
 
 // Video Domain
@@ -227,6 +262,21 @@ use App\Domain\User\Repositories\SessionRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\User\DbUserRepository;
 use App\Infrastructure\Persistence\Database\Repositories\User\DbSessionRepository;
 
+// Authorization Domain
+use App\Domain\Authorization\Repositories\RoleRepositoryInterface;
+use App\Domain\Authorization\Repositories\ModulePermissionRepositoryInterface;
+use App\Infrastructure\Persistence\Database\Repositories\Authorization\DbRoleRepository;
+use App\Infrastructure\Persistence\Database\Repositories\Authorization\DbModulePermissionRepository;
+use App\Infrastructure\Authorization\CachedAuthorizationService;
+use App\Infrastructure\Authorization\LaravelAuthContext;
+use App\Application\Services\Authorization\AuthorizationApplicationService;
+
+// ApiKey Domain
+use App\Domain\ApiKey\Repositories\ApiKeyRepositoryInterface;
+use App\Infrastructure\Persistence\Database\Repositories\ApiKey\DbApiKeyRepository;
+use App\Infrastructure\ApiKey\CachedApiKeyService;
+use App\Application\Services\ApiKey\ApiKeyApplicationService;
+
 // Wizard Domain
 use App\Domain\Wizard\Repositories\WizardRepositoryInterface;
 use App\Infrastructure\Persistence\Database\Repositories\Wizard\DbWizardRepository;
@@ -240,6 +290,18 @@ use App\Infrastructure\Persistence\Database\Repositories\CMS\DbCmsPageRepository
 use App\Infrastructure\Persistence\Database\Repositories\CMS\DbCmsTemplateRepository;
 use App\Infrastructure\Persistence\Database\Repositories\CMS\DbCmsMediaRepository;
 use App\Infrastructure\Persistence\Database\Repositories\CMS\DbCmsFormRepository;
+
+// CollaborativeDocument Domain
+use App\Domain\CollaborativeDocument\Repositories\CollaborativeDocumentRepositoryInterface;
+use App\Domain\CollaborativeDocument\Repositories\DocumentFolderRepositoryInterface;
+use App\Domain\CollaborativeDocument\Repositories\DocumentVersionRepositoryInterface;
+use App\Domain\CollaborativeDocument\Repositories\DocumentCollaboratorRepositoryInterface;
+use App\Domain\CollaborativeDocument\Repositories\DocumentCommentRepositoryInterface;
+use App\Infrastructure\Persistence\Database\Repositories\CollaborativeDocument\DbCollaborativeDocumentRepository;
+use App\Infrastructure\Persistence\Database\Repositories\CollaborativeDocument\DbDocumentFolderRepository;
+use App\Infrastructure\Persistence\Database\Repositories\CollaborativeDocument\DbDocumentVersionRepository;
+use App\Infrastructure\Persistence\Database\Repositories\CollaborativeDocument\DbDocumentCollaboratorRepository;
+use App\Infrastructure\Persistence\Database\Repositories\CollaborativeDocument\DbDocumentCommentRepository;
 
 // Analytics Domain
 use App\Domain\Analytics\Repositories\AnalyticsAlertRepositoryInterface;
@@ -276,6 +338,7 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->registerCompetitorRepositories();
         $this->registerDealRoomRepositories();
         $this->registerActivityRepositories();
+        $this->registerAuditLogRepositories();
         $this->registerPipelineRepositories();
         $this->registerCampaignRepositories();
         $this->registerCadenceRepositories();
@@ -308,11 +371,15 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->registerIntegrationRepositories();
         $this->registerCmsRepositories();
         $this->registerWorkflowDomainServices();
+        $this->registerAuthorizationRepositories();
+        $this->registerApiKeyRepositories();
+        $this->registerCollaborativeDocumentRepositories();
     }
 
     private function registerSharedInfrastructure(): void
     {
-        $this->app->bind(AuthContextInterface::class, LaravelAuthContext::class);
+        // Use the Authorization LaravelAuthContext which has domain user support
+        $this->app->bind(AuthContextInterface::class, \App\Infrastructure\Authorization\LaravelAuthContext::class);
         $this->app->bind(EventDispatcherInterface::class, LaravelEventDispatcher::class);
         $this->app->bind(LoggerInterface::class, LaravelLogger::class);
         $this->app->bind(ValidatorInterface::class, LaravelValidator::class);
@@ -325,6 +392,7 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(ModuleRepositoryInterface::class, DbModuleRepository::class);
         $this->app->bind(BlockRepositoryInterface::class, DbBlockRepository::class);
         $this->app->bind(FieldRepositoryInterface::class, DbFieldRepository::class);
+        $this->app->bind(FieldOptionRepositoryInterface::class, DbFieldOptionRepository::class);
         $this->app->bind(ModuleRecordRepositoryInterface::class, DbModuleRecordRepository::class);
     }
 
@@ -349,6 +417,8 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(ReportRepositoryInterface::class, DbReportRepository::class);
         $this->app->bind(DashboardRepositoryInterface::class, DbDashboardRepository::class);
         $this->app->bind(DashboardTemplateRepositoryInterface::class, DbDashboardTemplateRepository::class);
+        $this->app->bind(DashboardWidgetAlertRepositoryInterface::class, DbDashboardWidgetAlertRepository::class);
+        $this->app->bind(DashboardWidgetAlertHistoryRepositoryInterface::class, DbDashboardWidgetAlertHistoryRepository::class);
     }
 
     private function registerForecastingRepositories(): void
@@ -442,6 +512,11 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(ActivityRepositoryInterface::class, DbActivityRepository::class);
     }
 
+    private function registerAuditLogRepositories(): void
+    {
+        $this->app->bind(AuditLogRepositoryInterface::class, DbAuditLogRepository::class);
+    }
+
     private function registerPipelineRepositories(): void
     {
         $this->app->bind(PipelineRepositoryInterface::class, DbPipelineRepository::class);
@@ -470,6 +545,11 @@ class RepositoryServiceProvider extends ServiceProvider
     private function registerChatRepositories(): void
     {
         $this->app->bind(ChatConversationRepositoryInterface::class, DbChatConversationRepository::class);
+        $this->app->bind(ChatWidgetRepositoryInterface::class, DbChatWidgetRepository::class);
+        $this->app->bind(ChatVisitorRepositoryInterface::class, DbChatVisitorRepository::class);
+        $this->app->bind(ChatAgentStatusRepositoryInterface::class, DbChatAgentStatusRepository::class);
+        $this->app->bind(ChatMessageRepositoryInterface::class, DbChatMessageRepository::class);
+        $this->app->bind(ChatCannedResponseRepositoryInterface::class, DbChatCannedResponseRepository::class);
     }
 
     private function registerSmsRepositories(): void
@@ -485,6 +565,8 @@ class RepositoryServiceProvider extends ServiceProvider
     private function registerCallRepositories(): void
     {
         $this->app->bind(CallRepositoryInterface::class, DbCallRepository::class);
+        $this->app->bind(CallQueueRepositoryInterface::class, DbCallQueueRepository::class);
+        $this->app->bind(CallQueueMemberRepositoryInterface::class, DbCallQueueMemberRepository::class);
     }
 
     private function registerInboxRepositories(): void
@@ -520,11 +602,15 @@ class RepositoryServiceProvider extends ServiceProvider
     private function registerDuplicateRepositories(): void
     {
         $this->app->bind(DuplicateCandidateRepositoryInterface::class, DbDuplicateCandidateRepository::class);
+        $this->app->bind(DuplicateRuleRepositoryInterface::class, DbDuplicateRuleRepository::class);
     }
 
     private function registerAIRepositories(): void
     {
         $this->app->bind(AiPromptRepositoryInterface::class, DbAiPromptRepository::class);
+        $this->app->bind(AiSettingRepositoryInterface::class, DbAiSettingRepository::class);
+        $this->app->bind(AiEmailDraftRepositoryInterface::class, DbAiEmailDraftRepository::class);
+        $this->app->bind(AiUsageLogRepositoryInterface::class, DbAiUsageLogRepository::class);
     }
 
     private function registerGoalRepositories(): void
@@ -555,6 +641,31 @@ class RepositoryServiceProvider extends ServiceProvider
     private function registerPluginRepositories(): void
     {
         $this->app->bind(PluginRepositoryInterface::class, DbPluginRepository::class);
+
+        // Plugin Domain Services
+        $this->app->singleton(PluginLicenseValidationService::class);
+        $this->app->singleton(PluginRequirementsService::class);
+        $this->app->singleton(PluginUsageService::class);
+
+        // Plugin Application Service
+        $this->app->singleton(PluginApplicationService::class, function ($app) {
+            return new PluginApplicationService(
+                $app->make(PluginRepositoryInterface::class),
+                $app->make(AuthContextInterface::class),
+                $app->make(PluginLicenseValidationService::class),
+                $app->make(PluginRequirementsService::class),
+                $app->make(PluginUsageService::class),
+            );
+        });
+
+        // PluginLicenseService (legacy service refactored to use domain services)
+        $this->app->singleton(\App\Services\PluginLicenseService::class, function ($app) {
+            return new \App\Services\PluginLicenseService(
+                $app->make(PluginRepositoryInterface::class),
+                $app->make(PluginLicenseValidationService::class),
+                $app->make(PluginUsageService::class),
+            );
+        });
     }
 
     private function registerVideoRepositories(): void
@@ -622,6 +733,61 @@ class RepositoryServiceProvider extends ServiceProvider
                 $app->make(LoggerInterface::class),
             );
         });
+    }
+
+    private function registerAuthorizationRepositories(): void
+    {
+        // Repository bindings
+        $this->app->bind(RoleRepositoryInterface::class, DbRoleRepository::class);
+        $this->app->bind(ModulePermissionRepositoryInterface::class, DbModulePermissionRepository::class);
+
+        // Cached Authorization Service (singleton for performance)
+        $this->app->singleton(CachedAuthorizationService::class, function ($app) {
+            return new CachedAuthorizationService(
+                $app->make(RoleRepositoryInterface::class),
+                $app->make(ModulePermissionRepositoryInterface::class),
+            );
+        });
+
+        // Authorization Application Service
+        $this->app->singleton(AuthorizationApplicationService::class, function ($app) {
+            return new AuthorizationApplicationService(
+                $app->make(RoleRepositoryInterface::class),
+                $app->make(ModulePermissionRepositoryInterface::class),
+                $app->make(UserRepositoryInterface::class),
+                $app->make(CachedAuthorizationService::class),
+            );
+        });
+    }
+
+    private function registerApiKeyRepositories(): void
+    {
+        // Repository binding
+        $this->app->bind(ApiKeyRepositoryInterface::class, DbApiKeyRepository::class);
+
+        // Cached ApiKey Service (singleton for performance)
+        $this->app->singleton(CachedApiKeyService::class, function ($app) {
+            return new CachedApiKeyService(
+                $app->make(ApiKeyRepositoryInterface::class),
+            );
+        });
+
+        // ApiKey Application Service
+        $this->app->singleton(ApiKeyApplicationService::class, function ($app) {
+            return new ApiKeyApplicationService(
+                $app->make(ApiKeyRepositoryInterface::class),
+                $app->make(CachedApiKeyService::class),
+            );
+        });
+    }
+
+    private function registerCollaborativeDocumentRepositories(): void
+    {
+        $this->app->bind(CollaborativeDocumentRepositoryInterface::class, DbCollaborativeDocumentRepository::class);
+        $this->app->bind(DocumentFolderRepositoryInterface::class, DbDocumentFolderRepository::class);
+        $this->app->bind(DocumentVersionRepositoryInterface::class, DbDocumentVersionRepository::class);
+        $this->app->bind(DocumentCollaboratorRepositoryInterface::class, DbDocumentCollaboratorRepository::class);
+        $this->app->bind(DocumentCommentRepositoryInterface::class, DbDocumentCommentRepository::class);
     }
 
     /**

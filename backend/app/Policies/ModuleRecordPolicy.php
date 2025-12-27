@@ -6,8 +6,8 @@ namespace App\Policies;
 
 use App\Domain\Modules\Entities\Module;
 use App\Domain\Modules\Entities\ModuleRecord;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
-use App\Services\RbacService;
+use App\Infrastructure\Authorization\CachedAuthorizationService;
+use App\Domain\User\Entities\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class ModuleRecordPolicy
@@ -15,7 +15,7 @@ class ModuleRecordPolicy
     use HandlesAuthorization;
 
     public function __construct(
-        private RbacService $rbacService
+        private readonly CachedAuthorizationService $authService,
     ) {}
 
     /**
@@ -23,7 +23,7 @@ class ModuleRecordPolicy
      */
     public function viewAny(User $user, Module $module): bool
     {
-        return $this->rbacService->canAccessModule($user, $module, 'view');
+        return $this->authService->canAccessModule($user->id, $module->id(), 'view');
     }
 
     /**
@@ -31,7 +31,9 @@ class ModuleRecordPolicy
      */
     public function view(User $user, ModuleRecord $record): bool
     {
-        return $this->rbacService->canViewRecord($user, $record);
+        $ownerId = $record->createdBy();
+
+        return $this->authService->canViewRecord($user->id, $record->moduleId(), $ownerId);
     }
 
     /**
@@ -39,7 +41,7 @@ class ModuleRecordPolicy
      */
     public function create(User $user, Module $module): bool
     {
-        return $this->rbacService->canAccessModule($user, $module, 'create');
+        return $this->authService->canAccessModule($user->id, $module->id(), 'create');
     }
 
     /**
@@ -47,7 +49,9 @@ class ModuleRecordPolicy
      */
     public function update(User $user, ModuleRecord $record): bool
     {
-        return $this->rbacService->canEditRecord($user, $record);
+        $ownerId = $record->createdBy();
+
+        return $this->authService->canEditRecord($user->id, $record->moduleId(), $ownerId);
     }
 
     /**
@@ -55,7 +59,9 @@ class ModuleRecordPolicy
      */
     public function delete(User $user, ModuleRecord $record): bool
     {
-        return $this->rbacService->canDeleteRecord($user, $record);
+        $ownerId = $record->createdBy();
+
+        return $this->authService->canDeleteRecord($user->id, $record->moduleId(), $ownerId);
     }
 
     /**
@@ -63,7 +69,7 @@ class ModuleRecordPolicy
      */
     public function export(User $user, Module $module): bool
     {
-        return $this->rbacService->canAccessModule($user, $module, 'export');
+        return $this->authService->canAccessModule($user->id, $module->id(), 'export');
     }
 
     /**
@@ -71,6 +77,6 @@ class ModuleRecordPolicy
      */
     public function import(User $user, Module $module): bool
     {
-        return $this->rbacService->canAccessModule($user, $module, 'import');
+        return $this->authService->canAccessModule($user->id, $module->id(), 'import');
     }
 }

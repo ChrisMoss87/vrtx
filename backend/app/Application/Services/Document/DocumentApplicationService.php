@@ -30,26 +30,30 @@ class DocumentApplicationService
      */
     public function listTemplates(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = DB::table('document_templates')->with(['createdBy']);
+        $query = DB::table('document_templates');
 
         // Filter by active status
         if (!empty($filters['active_only'])) {
-            $query->active();
+            $query->where('is_active', true);
         }
 
         // Filter by category
         if (!empty($filters['category'])) {
-            $query->category($filters['category']);
+            $query->where('category', $filters['category']);
         }
 
-        // Filter by accessibility
+        // Filter by accessibility (user can access own templates or shared ones)
         if (!empty($filters['accessible_by'])) {
-            $query->accessibleBy($filters['accessible_by']);
+            $userId = $filters['accessible_by'];
+            $query->where(function ($q) use ($userId) {
+                $q->where('created_by', $userId)
+                    ->orWhere('is_shared', true);
+            });
         }
 
         // Filter shared only
         if (!empty($filters['shared_only'])) {
-            $query->shared();
+            $query->where('is_shared', true);
         }
 
         // Search

@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Application\Services\Chat;
 
 use App\Domain\Chat\Repositories\ChatConversationRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatWidgetRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatVisitorRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatAgentStatusRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatMessageRepositoryInterface;
+use App\Domain\Chat\Repositories\ChatCannedResponseRepositoryInterface;
 use App\Domain\Shared\Contracts\AuthContextInterface;
 use App\Domain\Shared\ValueObjects\PaginatedResult;
-use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -15,6 +19,11 @@ class ChatApplicationService
 {
     public function __construct(
         private ChatConversationRepositoryInterface $conversationRepository,
+        private ChatWidgetRepositoryInterface $widgetRepository,
+        private ChatVisitorRepositoryInterface $visitorRepository,
+        private ChatAgentStatusRepositoryInterface $agentStatusRepository,
+        private ChatMessageRepositoryInterface $messageRepository,
+        private ChatCannedResponseRepositoryInterface $cannedResponseRepository,
         private AuthContextInterface $authContext,
     ) {}
 
@@ -27,69 +36,39 @@ class ChatApplicationService
      */
     public function listWidgets(bool $activeOnly = false): Collection
     {
-        $query = DB::table('chat_widgets');
-
-        if ($activeOnly) {
-            $query->where('is_active', true);
-        }
-
-        return $query->orderBy('name')->get();
+        return $this->widgetRepository->findAll($activeOnly);
     }
 
     /**
      * Get a widget by ID
      */
-    public function getWidget(int $widgetId): ?ChatWidget
+    public function getWidget(int $widgetId): ?array
     {
-        return DB::table('chat_widgets')->where('id', $widgetId)->first();
+        return $this->widgetRepository->findById($widgetId);
     }
 
     /**
      * Get widget by key (for embed)
      */
-    public function getWidgetByKey(string $key): ?ChatWidget
+    public function getWidgetByKey(string $key): ?array
     {
-        return DB::table('chat_widgets')->where('widget_key', $key)
-            ->where('is_active', true)
-            ->first();
+        return $this->widgetRepository->findByKey($key);
     }
 
     /**
      * Create a widget
      */
-    public function createWidget(array $data): ChatWidget
+    public function createWidget(array $data): int
     {
-        $widget = new ChatWidget();
-
-        return DB::table('chat_widgets')->insertGetId([
-            'name' => $data['name'],
-            'is_active' => $data['is_active'] ?? true,
-            'settings' => array_merge($widget->getDefaultSettings(), $data['settings'] ?? []),
-            'styling' => array_merge($widget->getDefaultStyling(), $data['styling'] ?? []),
-            'routing_rules' => $data['routing_rules'] ?? null,
-            'business_hours' => $data['business_hours'] ?? null,
-            'allowed_domains' => $data['allowed_domains'] ?? null,
-        ]);
+        return $this->widgetRepository->create($data);
     }
 
     /**
      * Update a widget
      */
-    public function updateWidget(int $widgetId, array $data): ChatWidget
+    public function updateWidget(int $widgetId, array $data): array
     {
-        $widget = DB::table('chat_widgets')->where('id', $widgetId)->first();
-
-        $widget->update([
-            'name' => $data['name'] ?? $widget->name,
-            'is_active' => $data['is_active'] ?? $widget->is_active,
-            'settings' => $data['settings'] ?? $widget->settings,
-            'styling' => $data['styling'] ?? $widget->styling,
-            'routing_rules' => $data['routing_rules'] ?? $widget->routing_rules,
-            'business_hours' => $data['business_hours'] ?? $widget->business_hours,
-            'allowed_domains' => $data['allowed_domains'] ?? $widget->allowed_domains,
-        ]);
-
-        return $widget->fresh();
+        return $this->widgetRepository->update($widgetId, $data);
     }
 
     /**
@@ -98,12 +77,11 @@ class ChatApplicationService
     public function deleteWidget(int $widgetId): bool
     {
         return DB::transaction(function () use ($widgetId) {
-            // Delete related data
-            ChatMessage::whereHas('conversation', fn($q) => $q->where('widget_id', $widgetId))->delete();
-            ChatConversation::where('widget_id', $widgetId)->delete();
-            DB::table('chat_visitors')->where('widget_id', $widgetId)->delete();
+            $this->messageRepository->deleteByWidgetId($widgetId);
+            $this->conversationRepository->deleteByWidgetId($widgetId);
+            $this->visitorRepository->deleteByWidgetId($widgetId);
 
-            return DB::table('chat_widgets')->where('id', $widgetId)->first()->delete();
+            return $this->widgetRepository->delete($widgetId);
         });
     }
 
@@ -112,23 +90,7 @@ class ChatApplicationService
      */
     public function getWidgetStatus(int $widgetId): array
     {
-        $widget = DB::table('chat_widgets')->where('id', $widgetId)->first();
-
-        $onlineAgents = ChatAgentStatus::online()->with(['user:id,name'])->get();
-        $availableAgents = ChatAgentStatus::available()->count();
-
-        return [
-            'widget_active' => $widget->is_active,
-            'is_online' => $widget->isOnline(),
-            'online_agents' => $onlineAgents->count(),
-            'available_agents' => $availableAgents,
-            'agents' => $onlineAgents->map(fn($a) => [
-                'user_id' => $a->user_id,
-                'name' => $a->user->name,
-                'status' => $a->status,
-                'active_conversations' => $a->active_conversations,
-            ])->toArray(),
-        ];
+        return $this->widgetRepository->getStatus($widgetId);
     }
 
     /**
@@ -136,8 +98,7 @@ class ChatApplicationService
      */
     public function getWidgetEmbedCode(int $widgetId): string
     {
-        $widget = DB::table('chat_widgets')->where('id', $widgetId)->first();
-        return $widget->getEmbedCode();
+        return $this->widgetRepository->getEmbedCode($widgetId);
     }
 
     // =========================================================================
@@ -147,53 +108,33 @@ class ChatApplicationService
     /**
      * Get or create a visitor
      */
-    public function getOrCreateVisitor(int $widgetId, string $fingerprint, array $data = []): ChatVisitor
+    public function getOrCreateVisitor(int $widgetId, string $fingerprint, array $data = []): array
     {
-        return ChatVisitor::firstOrCreate(
-            [
-                'widget_id' => $widgetId,
-                'fingerprint' => $fingerprint,
-            ],
-            [
-                'ip_address' => $data['ip_address'] ?? null,
-                'user_agent' => $data['user_agent'] ?? null,
-                'country' => $data['country'] ?? null,
-                'city' => $data['city'] ?? null,
-                'referrer' => $data['referrer'] ?? null,
-                'first_seen_at' => now(),
-                'last_seen_at' => now(),
-            ]
-        );
+        return $this->visitorRepository->firstOrCreate($widgetId, $fingerprint, $data);
     }
 
     /**
      * Identify a visitor
      */
-    public function identifyVisitor(int $visitorId, string $email, ?string $name = null): ChatVisitor
+    public function identifyVisitor(int $visitorId, string $email, ?string $name = null): array
     {
-        $visitor = DB::table('chat_visitors')->where('id', $visitorId)->first();
-        $visitor->identify($email, $name);
-        return $visitor->fresh(['contact']);
+        return $this->visitorRepository->identify($visitorId, $email, $name);
     }
 
     /**
      * Record page view
      */
-    public function recordPageView(int $visitorId, string $url, ?string $title = null): ChatVisitor
+    public function recordPageView(int $visitorId, string $url, ?string $title = null): array
     {
-        $visitor = DB::table('chat_visitors')->where('id', $visitorId)->first();
-        $visitor->recordPageView($url, $title);
-        return $visitor;
+        return $this->visitorRepository->recordPageView($visitorId, $url, $title);
     }
 
     /**
      * Get visitor by fingerprint
      */
-    public function getVisitorByFingerprint(int $widgetId, string $fingerprint): ?ChatVisitor
+    public function getVisitorByFingerprint(int $widgetId, string $fingerprint): ?array
     {
-        return DB::table('chat_visitors')->where('widget_id', $widgetId)
-            ->byFingerprint($fingerprint)
-            ->first();
+        return $this->visitorRepository->findByFingerprint($widgetId, $fingerprint);
     }
 
     /**
@@ -201,11 +142,7 @@ class ChatApplicationService
      */
     public function getOnlineVisitors(int $widgetId, int $minutesThreshold = 5): Collection
     {
-        return DB::table('chat_visitors')->where('widget_id', $widgetId)
-            ->where('last_seen_at', '>=', now()->subMinutes($minutesThreshold))
-            ->with(['contact'])
-            ->orderByDesc('last_seen_at')
-            ->get();
+        return $this->visitorRepository->findOnlineVisitors($widgetId, $minutesThreshold);
     }
 
     // =========================================================================
@@ -278,65 +215,86 @@ class ChatApplicationService
     /**
      * Start a new conversation
      */
-    public function startConversation(int $widgetId, int $visitorId, array $data = []): ChatConversation
+    public function startConversation(int $widgetId, int $visitorId, array $data = []): array
     {
         return DB::transaction(function () use ($widgetId, $visitorId, $data) {
-            $conversation = ChatConversation::create([
+            $conversation = $this->conversationRepository->create([
                 'widget_id' => $widgetId,
                 'visitor_id' => $visitorId,
-                'status' => ChatConversation::STATUS_OPEN,
-                'priority' => $data['priority'] ?? ChatConversation::PRIORITY_NORMAL,
+                'status' => 'open',
+                'priority' => $data['priority'] ?? 'normal',
                 'department' => $data['department'] ?? null,
                 'subject' => $data['subject'] ?? null,
             ]);
 
             // Auto-assign if routing rules exist
-            $widget = DB::table('chat_widgets')->where('id', $widgetId)->first();
-            $agent = $this->findAvailableAgent($widget->routing_rules, $data['department'] ?? null);
+            $widget = $this->widgetRepository->findById($widgetId);
+            $routingRules = $widget['routing_rules'] ?? null;
+            if (is_string($routingRules)) {
+                $routingRules = json_decode($routingRules, true);
+            }
+
+            $agent = $this->agentStatusRepository->findBestAvailableAgent(
+                $routingRules,
+                $data['department'] ?? null
+            );
 
             if ($agent) {
-                $conversation->assign($agent->user_id);
+                $conversation = $this->conversationRepository->assign($conversation['id'], $agent['user_id']);
             }
 
             // Add initial message if provided
             if (!empty($data['initial_message'])) {
-                $conversation->addMessage(
+                $this->messageRepository->create(
+                    $conversation['id'],
                     $data['initial_message'],
-                    ChatMessage::SENDER_VISITOR
+                    'visitor'
                 );
             }
 
-            return $conversation->load(['visitor', 'assignedAgent']);
+            return $this->conversationRepository->findByIdWithRelations($conversation['id'], [
+                'visitor',
+                'assignedAgent',
+            ]);
         });
     }
 
     /**
      * Send a message
      */
-    public function sendMessage(int $conversationId, string $content, string $senderType, ?int $senderId = null, array $options = []): ChatMessage
-    {
-        $conversation = ChatConversation::findOrFail($conversationId);
+    public function sendMessage(
+        int $conversationId,
+        string $content,
+        string $senderType,
+        ?int $senderId = null,
+        array $options = []
+    ): array {
+        $conversation = $this->conversationRepository->findByIdAsArray($conversationId);
 
-        // Reopen if closed and visitor sends message
-        if ($conversation->status === ChatConversation::STATUS_CLOSED && $senderType === ChatMessage::SENDER_VISITOR) {
-            $conversation->reopen();
+        if (!$conversation) {
+            throw new \RuntimeException('Conversation not found');
         }
 
-        return $conversation->addMessage($content, $senderType, $senderId, $options);
+        // Reopen if closed and visitor sends message
+        if ($conversation['status'] === 'closed' && $senderType === 'visitor') {
+            $this->conversationRepository->reopen($conversationId);
+        }
+
+        return $this->messageRepository->create($conversationId, $content, $senderType, $senderId, $options);
     }
 
     /**
      * Send visitor message (for widget)
      */
-    public function sendVisitorMessage(int $conversationId, string $content): ChatMessage
+    public function sendVisitorMessage(int $conversationId, string $content): array
     {
-        return $this->sendMessage($conversationId, $content, ChatMessage::SENDER_VISITOR);
+        return $this->sendMessage($conversationId, $content, 'visitor');
     }
 
     /**
      * Send agent message
      */
-    public function sendAgentMessage(int $conversationId, string $content, array $options = []): ChatMessage
+    public function sendAgentMessage(int $conversationId, string $content, array $options = []): array
     {
         $userId = $this->authContext->userId();
 
@@ -347,13 +305,13 @@ class ChatApplicationService
         $message = $this->sendMessage(
             $conversationId,
             $content,
-            ChatMessage::SENDER_AGENT,
+            'agent',
             $userId,
             $options
         );
 
         // Update agent activity
-        ChatAgentStatus::getOrCreate($userId)->recordActivity();
+        $this->agentStatusRepository->recordActivity($userId);
 
         return $message;
     }
@@ -377,28 +335,31 @@ class ChatApplicationService
     /**
      * Transfer conversation to another agent
      */
-    public function transferConversation(int $conversationId, int $newAgentId, ?string $note = null): ChatConversation
+    public function transferConversation(int $conversationId, int $newAgentId, ?string $note = null): array
     {
-        $conversation = ChatConversation::findOrFail($conversationId);
-        $previousAgent = $conversation->assignedAgent;
+        $conversation = $this->conversationRepository->findByIdAsArray($conversationId);
+
+        if (!$conversation) {
+            throw new \RuntimeException('Conversation not found');
+        }
 
         // Unassign from current agent
-        $conversation->unassign();
+        $this->conversationRepository->unassign($conversationId);
 
         // Assign to new agent
-        $conversation->assign($newAgentId);
+        $this->conversationRepository->assign($conversationId, $newAgentId);
 
         // Add system message about transfer
-        $newAgent = DB::table('chat_agent_statuss')->where('user_id', $newAgentId)->first()?->user;
-        $agentName = $newAgent?->name ?? 'another agent';
+        $newAgent = $this->agentStatusRepository->findByUserId($newAgentId);
+        $agentName = $newAgent['user']['name'] ?? 'another agent';
         $transferMessage = "Conversation transferred to {$agentName}";
         if ($note) {
             $transferMessage .= ". Note: {$note}";
         }
 
-        $conversation->addMessage($transferMessage, ChatMessage::SENDER_SYSTEM, null, ['is_internal' => true]);
+        $this->messageRepository->create($conversationId, $transferMessage, 'system', null, ['is_internal' => true]);
 
-        return $conversation->fresh(['assignedAgent']);
+        return $this->conversationRepository->findByIdWithRelations($conversationId, ['assignedAgent']);
     }
 
     /**
@@ -446,17 +407,7 @@ class ChatApplicationService
      */
     public function markMessagesAsRead(int $conversationId, string $readerType): int
     {
-        $query = DB::table('chat_messages')->where('conversation_id', $conversationId)
-            ->whereNull('read_at');
-
-        // Mark messages from the opposite party as read
-        if ($readerType === 'agent') {
-            $query->where('sender_type', ChatMessage::SENDER_VISITOR);
-        } else {
-            $query->where('sender_type', ChatMessage::SENDER_AGENT);
-        }
-
-        return $query->update(['read_at' => now()]);
+        return $this->messageRepository->markAsRead($conversationId, $readerType);
     }
 
     // =========================================================================
@@ -466,64 +417,49 @@ class ChatApplicationService
     /**
      * Get agent status
      */
-    public function getAgentStatus(?int $userId = null): ChatAgentStatus
+    public function getAgentStatus(?int $userId = null): array
     {
-        return ChatAgentStatus::getOrCreate($userId ?? $this->authContext->userId());
+        return $this->agentStatusRepository->getOrCreate($userId ?? $this->authContext->userId());
     }
 
     /**
      * Set agent online
      */
-    public function setAgentOnline(?int $userId = null): ChatAgentStatus
+    public function setAgentOnline(?int $userId = null): array
     {
-        $status = ChatAgentStatus::getOrCreate($userId ?? $this->authContext->userId());
-        $status->setOnline();
-        return $status->fresh();
+        return $this->agentStatusRepository->setStatus($userId ?? $this->authContext->userId(), 'online');
     }
 
     /**
      * Set agent away
      */
-    public function setAgentAway(?int $userId = null): ChatAgentStatus
+    public function setAgentAway(?int $userId = null): array
     {
-        $status = ChatAgentStatus::getOrCreate($userId ?? $this->authContext->userId());
-        $status->setAway();
-        return $status->fresh();
+        return $this->agentStatusRepository->setStatus($userId ?? $this->authContext->userId(), 'away');
     }
 
     /**
      * Set agent busy
      */
-    public function setAgentBusy(?int $userId = null): ChatAgentStatus
+    public function setAgentBusy(?int $userId = null): array
     {
-        $status = ChatAgentStatus::getOrCreate($userId ?? $this->authContext->userId());
-        $status->setBusy();
-        return $status->fresh();
+        return $this->agentStatusRepository->setStatus($userId ?? $this->authContext->userId(), 'busy');
     }
 
     /**
      * Set agent offline
      */
-    public function setAgentOffline(?int $userId = null): ChatAgentStatus
+    public function setAgentOffline(?int $userId = null): array
     {
-        $status = ChatAgentStatus::getOrCreate($userId ?? $this->authContext->userId());
-        $status->setOffline();
-        return $status->fresh();
+        return $this->agentStatusRepository->setStatus($userId ?? $this->authContext->userId(), 'offline');
     }
 
     /**
      * Update agent settings
      */
-    public function updateAgentSettings(array $data, ?int $userId = null): ChatAgentStatus
+    public function updateAgentSettings(array $data, ?int $userId = null): array
     {
-        $status = ChatAgentStatus::getOrCreate($userId ?? $this->authContext->userId());
-
-        $status->update([
-            'max_conversations' => $data['max_conversations'] ?? $status->max_conversations,
-            'departments' => $data['departments'] ?? $status->departments,
-        ]);
-
-        return $status->fresh();
+        return $this->agentStatusRepository->updateSettings($userId ?? $this->authContext->userId(), $data);
     }
 
     /**
@@ -531,9 +467,7 @@ class ChatApplicationService
      */
     public function getOnlineAgents(): Collection
     {
-        return ChatAgentStatus::online()
-            ->with(['user:id,name,email'])
-            ->get();
+        return $this->agentStatusRepository->findOnline();
     }
 
     /**
@@ -541,13 +475,7 @@ class ChatApplicationService
      */
     public function getAvailableAgents(?string $department = null): Collection
     {
-        $query = ChatAgentStatus::available()->with(['user:id,name,email']);
-
-        if ($department) {
-            $query->inDepartment($department);
-        }
-
-        return $query->orderBy('active_conversations')->get();
+        return $this->agentStatusRepository->findAvailable($department);
     }
 
     // =========================================================================
@@ -565,23 +493,13 @@ class ChatApplicationService
             return collect([]);
         }
 
-        $query = ChatCannedResponse::forUser($userId);
-
-        if (!empty($filters['category'])) {
-            $query->where('category', $filters['category']);
-        }
-
-        if (!empty($filters['search'])) {
-            $query->search($filters['search']);
-        }
-
-        return $query->orderBy('usage_count', 'desc')->get();
+        return $this->cannedResponseRepository->findForUser($userId, $filters);
     }
 
     /**
      * Get canned response by shortcut
      */
-    public function getCannedResponseByShortcut(string $shortcut): ?ChatCannedResponse
+    public function getCannedResponseByShortcut(string $shortcut): ?array
     {
         $userId = $this->authContext->userId();
 
@@ -589,15 +507,13 @@ class ChatApplicationService
             return null;
         }
 
-        return ChatCannedResponse::forUser($userId)
-            ->byShortcut($shortcut)
-            ->first();
+        return $this->cannedResponseRepository->findByShortcut($userId, $shortcut);
     }
 
     /**
      * Create canned response
      */
-    public function createCannedResponse(array $data): ChatCannedResponse
+    public function createCannedResponse(array $data): int
     {
         $userId = $this->authContext->userId();
 
@@ -605,7 +521,7 @@ class ChatApplicationService
             throw new \RuntimeException('User must be authenticated to create canned responses');
         }
 
-        return DB::table('chat_canned_responses')->insertGetId([
+        return $this->cannedResponseRepository->create([
             'shortcut' => $data['shortcut'],
             'title' => $data['title'],
             'content' => $data['content'],
@@ -618,19 +534,9 @@ class ChatApplicationService
     /**
      * Update canned response
      */
-    public function updateCannedResponse(int $responseId, array $data): ChatCannedResponse
+    public function updateCannedResponse(int $responseId, array $data): array
     {
-        $response = DB::table('chat_canned_responses')->where('id', $responseId)->first();
-
-        $response->update([
-            'shortcut' => $data['shortcut'] ?? $response->shortcut,
-            'title' => $data['title'] ?? $response->title,
-            'content' => $data['content'] ?? $response->content,
-            'category' => $data['category'] ?? $response->category,
-            'is_global' => $data['is_global'] ?? $response->is_global,
-        ]);
-
-        return $response->fresh();
+        return $this->cannedResponseRepository->update($responseId, $data);
     }
 
     /**
@@ -638,18 +544,17 @@ class ChatApplicationService
      */
     public function deleteCannedResponse(int $responseId): bool
     {
-        return DB::table('chat_canned_responses')->where('id', $responseId)->first()->delete();
+        return $this->cannedResponseRepository->delete($responseId);
     }
 
     /**
      * Use canned response in conversation
      */
-    public function useCannedResponse(int $conversationId, int $responseId, array $variables = []): ChatMessage
+    public function useCannedResponse(int $conversationId, int $responseId, array $variables = []): array
     {
-        $response = DB::table('chat_canned_responses')->where('id', $responseId)->first();
-        $response->incrementUsage();
+        $this->cannedResponseRepository->incrementUsage($responseId);
 
-        $content = $response->renderContent($variables);
+        $content = $this->cannedResponseRepository->renderContent($responseId, $variables);
 
         return $this->sendAgentMessage($conversationId, $content);
     }
@@ -672,26 +577,5 @@ class ChatApplicationService
     public function getHourlyChatVolume(int $days = 7): array
     {
         return $this->conversationRepository->getHourlyChatVolume($days);
-    }
-
-    // =========================================================================
-    // HELPER METHODS
-    // =========================================================================
-
-    /**
-     * Find an available agent based on routing rules
-     */
-    private function findAvailableAgent(?array $routingRules, ?string $department): ?ChatAgentStatus
-    {
-        $query = ChatAgentStatus::available();
-
-        if ($department) {
-            $query->inDepartment($department);
-        }
-
-        // Round-robin: get agent with fewest active conversations
-        return $query->orderBy('active_conversations')
-            ->orderBy('last_activity_at', 'desc')
-            ->first();
     }
 }

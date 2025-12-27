@@ -58,4 +58,6 @@ interface ChatConversationRepositoryInterface
     public function getAgentPerformance(int $userId, ?string $startDate = null, ?string $endDate = null): array;
 
     public function getHourlyChatVolume(int $days = 7): array;
+
+    public function deleteByWidgetId(int $widgetId): int;
 }

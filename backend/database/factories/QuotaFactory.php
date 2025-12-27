@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Quota;
-use App\Infrastructure\Persistence\Eloquent\Models\QuotaPeriod;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Goal\Entities\Quota;
+use App\Domain\Goal\Entities\QuotaPeriod;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\Quota>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Goal\Entities\Quota>
  */
 class QuotaFactory extends Factory
 {

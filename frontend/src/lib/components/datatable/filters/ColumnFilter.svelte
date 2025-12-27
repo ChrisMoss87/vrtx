@@ -9,6 +9,7 @@
 	import DateFilter from './DateFilter.svelte';
 	import SelectFilter from './SelectFilter.svelte';
 	import BooleanFilter from './BooleanFilter.svelte';
+	import UserFilter from './UserFilter.svelte';
 
 	interface Props {
 		column: ColumnDef;
@@ -91,7 +92,22 @@
 				return 'boolean';
 
 			case 'lookup':
-				// Lookups should use select filter if options are available
+				// Check if this is a user lookup (assigned_to, owner, user, created_by, etc.)
+				const lookupTarget = column.meta?.lookupModule || column.meta?.lookup_module || '';
+				const fieldName = column.id.toLowerCase();
+				const isUserLookup =
+					lookupTarget === 'users' ||
+					fieldName.includes('assigned') ||
+					fieldName.includes('owner') ||
+					fieldName.includes('user_id') ||
+					fieldName.includes('created_by') ||
+					fieldName.includes('updated_by');
+
+				if (isUserLookup) {
+					return 'user';
+				}
+
+				// Other lookups use select filter if options are available
 				const options = getFilterOptions();
 				return options.length > 0 ? 'select' : 'text';
 
@@ -191,6 +207,13 @@
 				/>
 			{:else if filterType === 'boolean'}
 				<BooleanFilter
+					field={column.id}
+					initialValue={currentFilter}
+					onApply={handleApply}
+					onClose={handleClose}
+				/>
+			{:else if filterType === 'user'}
+				<UserFilter
 					field={column.id}
 					initialValue={currentFilter}
 					onApply={handleApply}

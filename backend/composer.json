@@ -7,14 +7,13 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "barryvdh/laravel-dompdf": "^3.1",
+        "ext-zip": "*",
+        "ext-xmlreader": "*",
         "laravel/framework": "^12.0",
         "laravel/reverb": "^1.6",
         "laravel/sanctum": "^4.2",
         "laravel/tinker": "^2.10.1",
-        "phpoffice/phpspreadsheet": "^5.3",
-        "spatie/laravel-permission": "^6.23",
-        "stancl/tenancy": "^3.9"
+        "spatie/laravel-permission": "^6.23"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

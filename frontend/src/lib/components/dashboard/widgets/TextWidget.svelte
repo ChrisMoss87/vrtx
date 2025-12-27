@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
 	import { FileText } from 'lucide-svelte';
+	import DOMPurify from 'isomorphic-dompurify';
 
 	interface Props {
 		title: string;
@@ -8,6 +9,17 @@
 	}
 
 	let { title, content = '' }: Props = $props();
+
+	/**
+	 * Sanitize HTML content to prevent XSS attacks.
+	 */
+	function sanitizeHtml(html: string): string {
+		return DOMPurify.sanitize(html, {
+			ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code'],
+			ALLOWED_ATTR: ['href', 'class', 'style', 'target'],
+			ALLOW_DATA_ATTR: false,
+		});
+	}
 </script>
 
 <Card.Root class="h-full">
@@ -20,8 +32,7 @@
 	<Card.Content>
 		{#if content}
 			<div class="prose prose-sm dark:prose-invert max-w-none">
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-				{@html content}
+				{@html sanitizeHtml(content)}
 			</div>
 		{:else}
 			<p class="text-center text-sm text-muted-foreground">No content</p>

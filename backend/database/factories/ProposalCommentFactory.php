@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Proposal;
-use App\Infrastructure\Persistence\Eloquent\Models\ProposalComment;
-use App\Infrastructure\Persistence\Eloquent\Models\ProposalSection;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Proposal\Entities\Proposal;
+use App\Domain\Proposal\Entities\ProposalComment;
+use App\Domain\Proposal\Entities\ProposalSection;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\ProposalComment>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Proposal\Entities\ProposalComment>
  */
 class ProposalCommentFactory extends Factory
 {

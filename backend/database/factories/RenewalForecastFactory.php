@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Contract\Entities\RenewalForecast;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\RenewalForecast>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Contract\Entities\RenewalForecast>
  */
 class RenewalForecastFactory extends Factory
 {

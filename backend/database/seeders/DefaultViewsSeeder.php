@@ -496,25 +496,31 @@ class DefaultViewsSeeder extends Seeder
         $this->command->info('  - Created ' . count($views) . ' event views');
     }
 
-    private function createViews(Module $module, array $views): void
+    private function createViews(object $module, array $views): void
     {
         foreach ($views as $index => $viewData) {
-            ModuleView::firstOrCreate(
-                [
+            // Check if view already exists
+            $exists = DB::table('module_views')
+                ->where('module_id', $module->id)
+                ->where('name', $viewData['name'])
+                ->exists();
+
+            if (!$exists) {
+                DB::table('module_views')->insert([
                     'module_id' => $module->id,
                     'name' => $viewData['name'],
-                ],
-                [
                     'user_id' => 1,
                     'is_default' => $viewData['is_default'] ?? false,
                     'is_shared' => true,
                     'display_order' => $index,
-                    'filters' => $viewData['filters'] ?? [],
-                    'sorting' => $viewData['sorting'] ?? [],
-                    'column_visibility' => $this->buildColumnVisibility($viewData['columns'] ?? []),
-                    'column_order' => $viewData['columns'] ?? [],
-                ]
-            );
+                    'filters' => json_encode($viewData['filters'] ?? []),
+                    'sorting' => json_encode($viewData['sorting'] ?? []),
+                    'column_visibility' => json_encode($this->buildColumnVisibility($viewData['columns'] ?? [])),
+                    'column_order' => json_encode($viewData['columns'] ?? []),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
         }
     }
 

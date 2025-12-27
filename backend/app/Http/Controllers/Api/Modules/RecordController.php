@@ -7,7 +7,7 @@ namespace App\Http\Controllers\Api\Modules;
 use App\Application\Services\RecordService;
 use App\Domain\Modules\Entities\ModuleRecord;
 use App\Http\Controllers\Controller;
-use App\Services\RbacService;
+use App\Infrastructure\Authorization\CachedAuthorizationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +16,7 @@ final class RecordController extends Controller
 {
     public function __construct(
         private readonly RecordService $recordService,
-        private readonly RbacService $rbacService
+        private readonly CachedAuthorizationService $authService,
     ) {}
 
     /**
@@ -34,7 +34,7 @@ final class RecordController extends Controller
         }
 
         // Check view permission
-        if (!$this->rbacService->canAccessModule($request->user(), $module, 'view')) {
+        if (!$this->authService->canAccessModule($request->user()->id, $module->id, 'view')) {
             return response()->json([
                 'error' => 'You do not have permission to view records in this module',
             ], 403);
@@ -73,7 +73,7 @@ final class RecordController extends Controller
             }
 
             // Filter hidden fields from records
-            $hiddenFields = $this->rbacService->getHiddenFields($request->user(), $module);
+            $hiddenFields = $this->authService->getRestrictedFields($request->user()->id, $module->id);
 
             return response()->json([
                 'records' => array_map(fn (ModuleRecord $record) => $this->transformRecord($record, $hiddenFields), $result['data']),
@@ -131,7 +131,7 @@ final class RecordController extends Controller
         }
 
         // Check create permission
-        if (!$this->rbacService->canAccessModule($request->user(), $module, 'create')) {
+        if (!$this->authService->canAccessModule($request->user()->id, $module->id, 'create')) {
             return response()->json([
                 'error' => 'You do not have permission to create records in this module',
             ], 403);
@@ -174,7 +174,7 @@ final class RecordController extends Controller
         }
 
         // Check edit permission at module level
-        if (!$this->rbacService->canAccessModule($request->user(), $module, 'edit')) {
+        if (!$this->authService->canAccessModule($request->user()->id, $module->id, 'edit')) {
             return response()->json([
                 'error' => 'You do not have permission to edit records in this module',
             ], 403);
@@ -182,10 +182,13 @@ final class RecordController extends Controller
 
         // Check record-level access (ownership rules)
         $existingRecord = DB::table('module_records')->where('id', $recordId)->first();
-        if ($existingRecord && !$this->rbacService->canEditRecord($request->user(), $existingRecord)) {
-            return response()->json([
-                'error' => 'You do not have permission to edit this record',
-            ], 403);
+        if ($existingRecord) {
+            $ownerId = $existingRecord->owner_id ?? $existingRecord->created_by;
+            if (!$this->authService->canEditRecord($request->user()->id, $module->id, $ownerId)) {
+                return response()->json([
+                    'error' => 'You do not have permission to edit this record',
+                ], 403);
+            }
         }
 
         $validated = $request->validate([
@@ -339,7 +342,7 @@ final class RecordController extends Controller
         }
 
         // Check delete permission at module level
-        if (!$this->rbacService->canAccessModule($request->user(), $module, 'delete')) {
+        if (!$this->authService->canAccessModule($request->user()->id, $module->id, 'delete')) {
             return response()->json([
                 'error' => 'You do not have permission to delete records in this module',
             ], 403);
@@ -347,10 +350,13 @@ final class RecordController extends Controller
 
         // Check record-level access (ownership rules)
         $existingRecord = DB::table('module_records')->where('id', $recordId)->first();
-        if ($existingRecord && !$this->rbacService->canDeleteRecord($request->user(), $existingRecord)) {
-            return response()->json([
-                'error' => 'You do not have permission to delete this record',
-            ], 403);
+        if ($existingRecord) {
+            $ownerId = $existingRecord->owner_id ?? $existingRecord->created_by;
+            if (!$this->authService->canDeleteRecord($request->user()->id, $module->id, $ownerId)) {
+                return response()->json([
+                    'error' => 'You do not have permission to delete this record',
+                ], 403);
+            }
         }
 
         try {
@@ -418,8 +424,8 @@ final class RecordController extends Controller
                 foreach ($selectedRecords as $record) {
                     $data = $record->data();
                     $results[] = [
-                        'id' => $record->id(),
-                        'label' => $data[$displayField] ?? "Record #{$record->id()}",
+                        'id' => $record->getId(),
+                        'label' => $data[$displayField] ?? "Record #{$record->getId()}",
                         'data' => $data,
                     ];
                 }
@@ -437,7 +443,7 @@ final class RecordController extends Controller
 
                 foreach ($searchResult['data'] as $record) {
                     // Skip if already in selected results
-                    $recordId = $record->id();
+                    $recordId = $record->getId();
                     $alreadyIncluded = false;
                     foreach ($results as $existing) {
                         if ($existing['id'] === $recordId) {
@@ -468,8 +474,8 @@ final class RecordController extends Controller
                 foreach ($defaultResult['data'] as $record) {
                     $data = $record->data();
                     $results[] = [
-                        'id' => $record->id(),
-                        'label' => $data[$displayField] ?? "Record #{$record->id()}",
+                        'id' => $record->getId(),
+                        'label' => $data[$displayField] ?? "Record #{$record->getId()}",
                         'data' => $data,
                     ];
                 }
@@ -534,7 +540,7 @@ final class RecordController extends Controller
         }
 
         return [
-            'id' => $record->id(),
+            'id' => $record->getId(),
             'module_id' => $record->moduleId(),
             'data' => $data,
             'created_by' => $record->createdBy(),

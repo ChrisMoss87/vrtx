@@ -17,13 +17,17 @@ class ReportTemplateController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = ReportTemplate::accessibleBy(Auth::id())
-            ->with('module:id,name,api_name')
-            ->with('user:id,name');
+        $userId = Auth::id();
+
+        $query = DB::table('report_templates')
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('is_public', true);
+            });
 
         // Filter by module
         if ($request->has('module_id')) {
-            $query->forModule($request->input('module_id'));
+            $query->where('module_id', $request->input('module_id'));
         }
 
         // Filter by type
@@ -36,16 +40,40 @@ class ReportTemplateController extends Controller
             $query->where('name', 'ilike', '%' . $request->input('search') . '%');
         }
 
+        // Get paginated results
+        $perPage = $request->input('per_page', 20);
+        $page = $request->integer('page', 1);
+        $total = $query->count();
+
         $templates = $query->orderBy('name')
-            ->paginate($request->input('per_page', 20));
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get()
+            ->map(function ($template) {
+                // Add module info
+                if ($template->module_id) {
+                    $template->module = DB::table('modules')
+                        ->where('id', $template->module_id)
+                        ->select(['id', 'name', 'api_name'])
+                        ->first();
+                }
+                // Add user info
+                if ($template->user_id) {
+                    $template->user = DB::table('users')
+                        ->where('id', $template->user_id)
+                        ->select(['id', 'name'])
+                        ->first();
+                }
+                return $template;
+            });
 
         return response()->json([
-            'data' => $templates->items(),
+            'data' => $templates,
             'meta' => [
-                'current_page' => $templates->currentPage(),
-                'last_page' => $templates->lastPage(),
-                'per_page' => $templates->perPage(),
-                'total' => $templates->total(),
+                'current_page' => $page,
+                'last_page' => (int) ceil($total / $perPage),
+                'per_page' => (int) $perPage,
+                'total' => $total,
             ],
         ]);
     }

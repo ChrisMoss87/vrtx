@@ -2,12 +2,12 @@
 
 namespace App\Providers;
 
+use App\Infrastructure\Persistence\Eloquent\Models\Role;
 use App\Observers\RoleObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use Spatie\Permission\Models\Role;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,9 +24,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Register observer for Role events (Spatie package)
+        // Register observer for Role events (custom DDD models)
         // Note: Module, ModuleRecord, and BlueprintApprovalRequest events
-        // are now dispatched directly from their repositories (pure DDD)/compact
+        // are now dispatched directly from their repositories (pure DDD)
         Role::observe(RoleObserver::class);
 
         // Configure rate limiters
@@ -43,9 +43,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 
-        // Strict rate limiter for authentication: 5 requests per minute
+        // Strict rate limiter for authentication
+        // Much higher limit for local/testing to support E2E tests
         RateLimiter::for('auth', function (Request $request) {
-            return Limit::perMinute(5)->by($request->ip());
+            $limit = app()->environment('local', 'testing') ? 1000 : 5;
+            return Limit::perMinute($limit)->by($request->ip());
         });
 
         // File upload rate limiter: 20 uploads per minute

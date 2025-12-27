@@ -4,37 +4,41 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Domain\Activity\Entities\Activity;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Modules\Entities\ModuleRecord;
+use App\Domain\User\Entities\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class ActivityApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
     protected ModuleRecord $record;
-    protected Role $role;
+    protected int $roleId;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Contacts',
             'singular_name' => 'Contact',
             'api_name' => 'contacts',
         ]);
-        $this->record = /* ModuleRecord factory - use DB::table('module_records') */->create([
+        $this->record = ModuleRecord::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
 
         // Create role with activity permissions
-        $this->role = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web']);
+        $this->roleId = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()]);
         $permissions = [
             'activity.view',
             'activity.create',
@@ -42,10 +46,14 @@ use Illuminate\Support\Facades\DB;
             'activity.delete',
         ];
         foreach ($permissions as $permName) {
-            $perm = DB::table('permissions')->insertGetId(['name' => $permName, 'guard_name' => 'web']);
-            $this->role->givePermissionTo($perm);
+            $permId = DB::table('permissions')->insertGetId(['name' => $permName, 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('role_has_permissions')->insert(['role_id' => $this->roleId, 'permission_id' => $permId]);
         }
-        $this->user->assignRole($this->role);
+        DB::table('model_has_roles')->insert([
+            'role_id' => $this->roleId,
+            'model_type' => User::class,
+            'model_id' => $this->user->id,
+        ]);
 
         Sanctum::actingAs($this->user);
     }
@@ -82,7 +90,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_activities(): void
     {
-        /* Activity factory - use DB::table('activities') */->count(5)->create([
+        Activity::factory()->count(5)->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
@@ -103,13 +111,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_filter_activities_by_type(): void
     {
-        /* Activity factory - use DB::table('activities') */->count(2)->create([
+        Activity::factory()->count(2)->create([
             'user_id' => $this->user->id,
             'type' => 'call',
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
         ]);
-        /* Activity factory - use DB::table('activities') */->create([
+        Activity::factory()->create([
             'user_id' => $this->user->id,
             'type' => 'meeting',
             'subject_type' => ModuleRecord::class,
@@ -127,7 +135,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_get_timeline(): void
     {
-        /* Activity factory - use DB::table('activities') */->count(5)->create([
+        Activity::factory()->count(5)->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
@@ -144,7 +152,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_get_upcoming_activities(): void
     {
-        /* Activity factory - use DB::table('activities') */->count(3)->create([
+        Activity::factory()->count(3)->create([
             'user_id' => $this->user->id,
             'scheduled_at' => now()->addDays(2),
             'completed_at' => null,
@@ -163,7 +171,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_get_overdue_activities(): void
     {
-        /* Activity factory - use DB::table('activities') */->count(2)->create([
+        Activity::factory()->count(2)->create([
             'user_id' => $this->user->id,
             'scheduled_at' => now()->subDays(2),
             'completed_at' => null,
@@ -237,7 +245,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_show_activity(): void
     {
-        $activity = /* Activity factory - use DB::table('activities') */->create([
+        $activity = Activity::factory()->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
@@ -267,7 +275,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_activity(): void
     {
-        $activity = /* Activity factory - use DB::table('activities') */->create([
+        $activity = Activity::factory()->create([
             'title' => 'Original Title',
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
@@ -296,7 +304,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_activity(): void
     {
-        $activity = /* Activity factory - use DB::table('activities') */->create([
+        $activity = Activity::factory()->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
@@ -318,7 +326,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_complete_activity(): void
     {
-        $activity = /* Activity factory - use DB::table('activities') */->create([
+        $activity = Activity::factory()->create([
             'user_id' => $this->user->id,
             'completed_at' => null,
             'subject_type' => ModuleRecord::class,
@@ -340,7 +348,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_complete_activity_with_outcome(): void
     {
-        $activity = /* Activity factory - use DB::table('activities') */->create([
+        $activity = Activity::factory()->create([
             'type' => 'call',
             'user_id' => $this->user->id,
             'completed_at' => null,
@@ -362,7 +370,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_toggle_activity_pin(): void
     {
-        $activity = /* Activity factory - use DB::table('activities') */->create([
+        $activity = Activity::factory()->create([
             'user_id' => $this->user->id,
             'is_pinned' => false,
             'subject_type' => ModuleRecord::class,
@@ -389,17 +397,17 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_filter_activities_by_related_record(): void
     {
-        $otherRecord = /* ModuleRecord factory - use DB::table('module_records') */->create([
+        $otherRecord = ModuleRecord::factory()->create([
             'module_id' => $this->module->id,
             'created_by' => $this->user->id,
         ]);
 
-        /* Activity factory - use DB::table('activities') */->count(2)->create([
+        Activity::factory()->count(2)->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
         ]);
-        /* Activity factory - use DB::table('activities') */->create([
+        Activity::factory()->create([
             'user_id' => $this->user->id,
             'subject_type' => ModuleRecord::class,
             'subject_id' => $otherRecord->id,
@@ -420,13 +428,13 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_filter_activities_by_date_range(): void
     {
-        /* Activity factory - use DB::table('activities') */->create([
+        Activity::factory()->create([
             'user_id' => $this->user->id,
             'scheduled_at' => now()->subDays(5),
             'subject_type' => ModuleRecord::class,
             'subject_id' => $this->record->id,
         ]);
-        /* Activity factory - use DB::table('activities') */->create([
+        Activity::factory()->create([
             'user_id' => $this->user->id,
             'scheduled_at' => now()->addDays(5),
             'subject_type' => ModuleRecord::class,

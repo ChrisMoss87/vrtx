@@ -322,6 +322,19 @@ export interface ModulesResponse {
 	modules: Module[];
 }
 
+export interface ModuleStat {
+	id: number;
+	name: string;
+	api_name: string;
+	icon: string | null;
+	count: number;
+}
+
+export interface ModuleStatsResponse {
+	success: boolean;
+	data: ModuleStat[];
+}
+
 export interface ModuleResponse {
 	module: Module;
 }
@@ -342,6 +355,11 @@ export class ModulesApi {
 	async getActive(): Promise<Module[]> {
 		const response = await this.client.get<ModulesResponse>('/modules/active');
 		return response.modules;
+	}
+
+	async getStats(): Promise<ModuleStat[]> {
+		const response = await this.client.get<ModuleStatsResponse>('/modules/stats');
+		return response.data;
 	}
 
 	async getById(id: number): Promise<Module> {

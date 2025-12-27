@@ -7,6 +7,34 @@
 
 	const slug = $derived($page.params.slug);
 
+	/**
+	 * Sanitize custom CSS to prevent CSS injection attacks.
+	 * Removes dangerous patterns like javascript:, expression(), @import, behavior, etc.
+	 */
+	function sanitizeCss(css: string): string {
+		if (!css) return '';
+
+		// Remove JavaScript URLs
+		let sanitized = css.replace(/javascript\s*:/gi, '');
+
+		// Remove expression() (IE-specific but still dangerous)
+		sanitized = sanitized.replace(/expression\s*\([^)]*\)/gi, '');
+
+		// Remove behavior property (IE-specific)
+		sanitized = sanitized.replace(/behavior\s*:\s*[^;]+;?/gi, '');
+
+		// Remove @import to prevent loading external stylesheets
+		sanitized = sanitized.replace(/@import\s+[^;]+;?/gi, '');
+
+		// Remove url() with data: or javascript: protocols
+		sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*(data:|javascript:)[^)]*\)/gi, 'url()');
+
+		// Remove -moz-binding (Firefox XBL binding)
+		sanitized = sanitized.replace(/-moz-binding\s*:\s*[^;]+;?/gi, '');
+
+		return sanitized;
+	}
+
 	let pageData = $state<{
 		id: number;
 		name: string;
@@ -165,7 +193,7 @@
 			<link rel="icon" href={pageData.favicon_url} />
 		{/if}
 		{#if pageData.styles?.custom_css}
-			{@html `<style>${pageData.styles.custom_css}</style>`}
+			{@html `<style>${sanitizeCss(pageData.styles.custom_css)}</style>`}
 		{/if}
 	{/if}
 </svelte:head>

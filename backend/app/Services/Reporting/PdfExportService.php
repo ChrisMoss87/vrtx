@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Services\Reporting;
 
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
+use App\Domain\Reporting\Entities\Dashboard;
+use App\Domain\Reporting\Entities\Report;
+use App\Infrastructure\Services\Pdf\ChromePdfService;
 
 class PdfExportService
 {
+    public function __construct(
+        protected ChromePdfService $pdfService
+    ) {}
+
     /**
      * Export a report to PDF.
      */
@@ -17,15 +21,11 @@ class PdfExportService
     {
         $html = $this->generateReportHtml($report, $data, $options);
 
-        $pdf = Pdf::loadHTML($html)
-            ->setPaper($options['paper'] ?? 'a4', $options['orientation'] ?? 'portrait')
-            ->setOptions([
-                'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled' => true,
-                'defaultFont' => 'sans-serif',
-            ]);
-
-        return $pdf->output();
+        return $this->pdfService->generateFromHtml($html, [
+            'paper_size' => $options['paper'] ?? 'A4',
+            'landscape' => ($options['orientation'] ?? 'portrait') === 'landscape',
+            'print_background' => true,
+        ]);
     }
 
     /**
@@ -35,15 +35,11 @@ class PdfExportService
     {
         $html = $this->generateDashboardHtml($dashboard, $widgetData, $options);
 
-        $pdf = Pdf::loadHTML($html)
-            ->setPaper($options['paper'] ?? 'a4', $options['orientation'] ?? 'landscape')
-            ->setOptions([
-                'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled' => true,
-                'defaultFont' => 'sans-serif',
-            ]);
-
-        return $pdf->output();
+        return $this->pdfService->generateFromHtml($html, [
+            'paper_size' => $options['paper'] ?? 'A4',
+            'landscape' => ($options['orientation'] ?? 'landscape') === 'landscape',
+            'print_background' => true,
+        ]);
     }
 
     /**

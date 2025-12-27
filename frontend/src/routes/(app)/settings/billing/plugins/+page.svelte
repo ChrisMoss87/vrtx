@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { license } from '$lib/stores/license';
 	import { apiClient } from '$lib/api/client';
 	import { PlanBadge } from '$lib/components/billing';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { toast } from 'svelte-sonner';
@@ -15,6 +17,9 @@
 	import Sparkles from 'lucide-svelte/icons/sparkles';
 	import Lock from 'lucide-svelte/icons/lock';
 	import ArrowLeft from 'lucide-svelte/icons/arrow-left';
+	import ArrowRight from 'lucide-svelte/icons/arrow-right';
+	import Settings from 'lucide-svelte/icons/settings';
+	import PartyPopper from 'lucide-svelte/icons/party-popper';
 
 	interface Plugin {
 		id: number;
@@ -41,12 +46,30 @@
 		plugins: Plugin[];
 	}
 
+	interface NextStep {
+		title: string;
+		description: string;
+		action: string;
+		path: string | null;
+	}
+
+	interface ActivationResult {
+		plugin: { name: string; slug: string; description: string; category: string };
+		features_unlocked: string[];
+		settings_path: string | null;
+		next_steps: NextStep[];
+	}
+
 	let plugins: Plugin[] = $state([]);
 	let bundles: Bundle[] = $state([]);
 	let licensedPluginSlugs: string[] = $state([]);
 	let loading = $state(true);
 	let searchQuery = $state('');
 	let activeCategory = $state('all');
+
+	// Activation success dialog state
+	let showActivationSuccess = $state(false);
+	let activationResult: ActivationResult | null = $state(null);
 
 	// Get highlighted plugin from URL
 	const highlightedPlugin = $derived($page.url.searchParams.get('highlight'));
@@ -92,12 +115,39 @@
 
 	async function activatePlugin(slug: string) {
 		try {
-			await apiClient.post(`/billing/plugins/${slug}/activate`);
+			const response = await apiClient.post<{
+				message: string;
+				plugin: ActivationResult['plugin'];
+				features_unlocked: string[];
+				settings_path: string | null;
+				next_steps: NextStep[];
+			}>(`/billing/plugins/${slug}/activate`);
+
 			licensedPluginSlugs = [...licensedPluginSlugs, slug];
 			await license.load(); // Refresh license state
-			toast.success('Plugin activated successfully');
+
+			// Show activation success dialog
+			activationResult = {
+				plugin: response.plugin,
+				features_unlocked: response.features_unlocked || [],
+				settings_path: response.settings_path,
+				next_steps: response.next_steps || []
+			};
+			showActivationSuccess = true;
 		} catch (error: any) {
 			toast.error(error.message || 'Failed to activate plugin');
+		}
+	}
+
+	function closeActivationDialog() {
+		showActivationSuccess = false;
+		activationResult = null;
+	}
+
+	function goToSettings() {
+		if (activationResult?.settings_path) {
+			goto(activationResult.settings_path);
+			closeActivationDialog();
 		}
 	}
 
@@ -235,12 +285,12 @@
 								</p>
 								<div class="mt-3">
 									<p class="text-2xl font-bold">
-										${plugin.price_monthly}
+										${Number(plugin.price_monthly) || 0}
 										<span class="text-sm font-normal text-muted-foreground">/mo</span>
 									</p>
-									{#if plugin.price_yearly > 0}
+									{#if Number(plugin.price_yearly) > 0 && Number(plugin.price_monthly) > 0}
 										<p class="text-xs text-muted-foreground">
-											or ${plugin.price_yearly}/year (save {Math.round((1 - plugin.price_yearly / (plugin.price_monthly * 12)) * 100)}%)
+											or ${plugin.price_yearly}/year (save {Math.round((1 - Number(plugin.price_yearly) / (Number(plugin.price_monthly) * 12)) * 100)}%)
 										</p>
 									{/if}
 								</div>
@@ -303,11 +353,11 @@
 							<Card.Content>
 								<div class="mb-4">
 									<p class="text-3xl font-bold">
-										${bundle.price_monthly}
+										${Number(bundle.price_monthly) || 0}
 										<span class="text-sm font-normal text-muted-foreground">/mo</span>
 									</p>
 									<p class="text-sm text-muted-foreground">
-										or ${bundle.price_yearly}/year
+										or ${Number(bundle.price_yearly) || 0}/year
 									</p>
 								</div>
 
@@ -369,7 +419,7 @@
 										{plugin.description}
 									</p>
 									<p class="mt-2 text-sm">
-										<span class="font-medium">${plugin.price_monthly}</span>/month
+										<span class="font-medium">${Number(plugin.price_monthly) || 0}</span>/month
 									</p>
 								</Card.Content>
 								<Card.Footer class="pt-2">
@@ -398,7 +448,7 @@
 								<p class="text-2xl font-bold">
 									${plugins
 										.filter((p) => isLicensed(p.slug))
-										.reduce((sum, p) => sum + p.price_monthly, 0)
+										.reduce((sum, p) => sum + (Number(p.price_monthly) || 0), 0)
 										.toFixed(2)}
 									<span class="text-sm font-normal text-muted-foreground">/mo</span>
 								</p>
@@ -410,3 +460,68 @@
 		</Tabs.Root>
 	{/if}
 </div>
+
+<!-- Activation Success Dialog -->
+<Dialog.Root bind:open={showActivationSuccess}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+				<PartyPopper class="h-6 w-6 text-green-600" />
+			</div>
+			<Dialog.Title class="text-center">Plugin Activated!</Dialog.Title>
+			<Dialog.Description class="text-center">
+				{#if activationResult?.plugin}
+					<span class="font-medium">{activationResult.plugin.name}</span> is now active on your account.
+				{/if}
+			</Dialog.Description>
+		</Dialog.Header>
+
+		{#if activationResult}
+			<div class="space-y-4">
+				<!-- Features Unlocked -->
+				{#if activationResult.features_unlocked.length > 0}
+					<div class="rounded-lg border bg-muted/50 p-4">
+						<h4 class="mb-2 text-sm font-medium flex items-center gap-2">
+							<Sparkles class="h-4 w-4 text-amber-500" />
+							Features Unlocked
+						</h4>
+						<ul class="space-y-1">
+							{#each activationResult.features_unlocked as feature}
+								<li class="flex items-center gap-2 text-sm text-muted-foreground">
+									<Check class="h-3 w-3 text-green-500" />
+									{feature}
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+
+				<!-- Next Steps -->
+				{#if activationResult.next_steps.length > 0}
+					<div class="space-y-3">
+						<h4 class="text-sm font-medium">Next Steps</h4>
+						{#each activationResult.next_steps as step}
+							<div class="rounded-lg border p-3">
+								<p class="font-medium text-sm">{step.title}</p>
+								<p class="text-xs text-muted-foreground mt-1">{step.description}</p>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+
+		<Dialog.Footer class="flex-col sm:flex-row gap-2">
+			<Button variant="outline" onclick={closeActivationDialog} class="w-full sm:w-auto">
+				Done
+			</Button>
+			{#if activationResult?.settings_path}
+				<Button onclick={goToSettings} class="w-full sm:w-auto">
+					<Settings class="mr-2 h-4 w-4" />
+					Configure Now
+					<ArrowRight class="ml-2 h-4 w-4" />
+				</Button>
+			{/if}
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>

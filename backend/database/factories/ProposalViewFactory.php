@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Proposal;
-use App\Infrastructure\Persistence\Eloquent\Models\ProposalView;
+use App\Domain\Proposal\Entities\Proposal;
+use App\Domain\Proposal\Entities\ProposalView;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\ProposalView>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Proposal\Entities\ProposalView>
  */
 class ProposalViewFactory extends Factory
 {

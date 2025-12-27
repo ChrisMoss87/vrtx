@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Models;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Modules\Entities\Module;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ModuleModelTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected function setUp(): void
     {
@@ -45,7 +46,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_has_blocks_relationship(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
@@ -60,7 +61,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_has_fields_relationship(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $field = DB::table('fields')->insertGetId([
             'module_id' => $module->id,
@@ -76,7 +77,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_has_records_relationship(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
 
         $record = DB::table('module_records')->insertGetId([
             'module_id' => $module->id,
@@ -89,8 +90,8 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_active_scope(): void
     {
-        /* Module factory - use DB::table('modules') */->create(['is_active' => true, 'api_name' => 'active']);
-        /* Module factory - use DB::table('modules') */->create(['is_active' => false, 'api_name' => 'inactive']);
+        Module::factory()->create(['is_active' => true, 'api_name' => 'active']);
+        Module::factory()->create(['is_active' => false, 'api_name' => 'inactive']);
 
         $activeModules = Module::active()->get();
 
@@ -100,9 +101,9 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_ordered_scope(): void
     {
-        /* Module factory - use DB::table('modules') */->create(['api_name' => 'third', 'display_order' => 2]);
-        /* Module factory - use DB::table('modules') */->create(['api_name' => 'first', 'display_order' => 0]);
-        /* Module factory - use DB::table('modules') */->create(['api_name' => 'second', 'display_order' => 1]);
+        Module::factory()->create(['api_name' => 'third', 'display_order' => 2]);
+        Module::factory()->create(['api_name' => 'first', 'display_order' => 0]);
+        Module::factory()->create(['api_name' => 'second', 'display_order' => 1]);
 
         $modules = Module::ordered()->get();
 
@@ -113,7 +114,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_find_by_api_name(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create(['api_name' => 'contacts']);
+        $module = Module::factory()->create(['api_name' => 'contacts']);
 
         $found = Module::findByApiName('contacts');
 
@@ -130,7 +131,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_soft_deletes(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create(['api_name' => 'test']);
+        $module = Module::factory()->create(['api_name' => 'test']);
 
         $module->delete();
 
@@ -141,7 +142,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_cascade_deletes_blocks(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create();
+        $module = Module::factory()->create();
         $block = DB::table('blocks')->insertGetId([
             'module_id' => $module->id,
             'name' => 'Test Block',
@@ -157,7 +158,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_module_settings_are_cast_to_array(): void
     {
-        $module = /* Module factory - use DB::table('modules') */->create([
+        $module = Module::factory()->create([
             'settings' => ['color' => 'blue', 'icon_size' => 'large'],
         ]);
 

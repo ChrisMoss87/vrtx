@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\ImportExport\Entities\Import;
+
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Import>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\ImportExport\Entities\Import>
  */
 class ImportFactory extends Factory
 {

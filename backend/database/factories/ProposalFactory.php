@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Proposal;
-use App\Infrastructure\Persistence\Eloquent\Models\ProposalTemplate;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Proposal\Entities\Proposal;
+use App\Domain\Proposal\Entities\ProposalTemplate;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\Proposal>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Proposal\Entities\Proposal>
  */
 class ProposalFactory extends Factory
 {
@@ -147,7 +147,7 @@ class ProposalFactory extends Factory
     public function withSections(int $count = 4): static
     {
         return $this->has(
-            \App\Infrastructure\Persistence\Eloquent\Models\ProposalSection::factory()->count($count),
+            \App\Domain\Proposal\Entities\ProposalSection::factory()->count($count),
             'sections'
         );
     }
@@ -158,7 +158,7 @@ class ProposalFactory extends Factory
     public function withPricingItems(int $count = 3): static
     {
         return $this->has(
-            \App\Infrastructure\Persistence\Eloquent\Models\ProposalPricingItem::factory()->count($count),
+            \App\Domain\Proposal\Entities\ProposalPricingItem::factory()->count($count),
             'pricingItems'
         );
     }

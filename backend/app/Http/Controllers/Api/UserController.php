@@ -36,16 +36,16 @@ class UserController extends Controller
             search: $validated['search'] ?? null,
             role: $validated['role'] ?? null,
             status: $validated['status'] ?? null,
-            perPage: $validated['per_page'] ?? 25,
+            perPage: (int) ($validated['per_page'] ?? 25),
         );
 
         return response()->json([
-            'data' => $users->items(),
+            'data' => $users->items,
             'meta' => [
-                'current_page' => $users->currentPage(),
-                'last_page' => $users->lastPage(),
-                'per_page' => $users->perPage(),
-                'total' => $users->total(),
+                'current_page' => $users->currentPage,
+                'last_page' => $users->lastPage,
+                'per_page' => $users->perPage,
+                'total' => $users->total,
             ],
         ]);
     }

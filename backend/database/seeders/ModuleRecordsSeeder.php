@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Infrastructure\Persistence\Eloquent\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -24,10 +23,10 @@ class ModuleRecordsSeeder extends Seeder
     {
         $this->command->info('Seeding Module Records...');
 
-        $this->userId = User::first()?->id ?? 1;
+        $this->userId = DB::table('users')->first()?->id ?? 1;
 
         // Clear existing records first
-        DB::table('module_records')->forceDelete();
+        DB::table('module_records')->delete();
 
         // Seed in order (organizations first for lookups)
         $this->seedOrganizations();
@@ -37,6 +36,11 @@ class ModuleRecordsSeeder extends Seeder
         $this->seedTasks();
         $this->seedActivities();
         $this->seedNotes();
+        $this->seedCases();
+        $this->seedProducts();
+        $this->seedInvoices();
+        $this->seedEvents();
+        $this->seedQuotes();
         $this->seedWorkflows();
 
         // Seed additional features
@@ -78,13 +82,15 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($organizations as $org) {
-            $record = DB::table('module_records')->insertGetId([
+            $recordId = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
-                'data' => array_merge($org, ['assigned_to' => $this->userId]),
+                'data' => json_encode(array_merge($org, ['assigned_to' => $this->userId])),
                 'created_by' => $this->userId,
                 'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-            $this->organizationIds[] = $record->id;
+            $this->organizationIds[] = $recordId;
         }
 
         $this->command->info('  Created ' . count($organizations) . ' organizations');
@@ -129,16 +135,18 @@ class ModuleRecordsSeeder extends Seeder
                 unset($contact['organization_id']);
             }
 
-            $record = DB::table('module_records')->insertGetId([
+            $recordId = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
-                'data' => array_merge($contact, [
+                'data' => json_encode(array_merge($contact, [
                     'assigned_to' => $this->userId,
                     'do_not_contact' => false,
-                ]),
+                ])),
                 'created_by' => $this->userId,
                 'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-            $this->contactIds[] = $record->id;
+            $this->contactIds[] = $recordId;
         }
 
         $this->command->info('  Created ' . count($contacts) . ' contacts');
@@ -186,13 +194,15 @@ class ModuleRecordsSeeder extends Seeder
             // Calculate expected revenue
             $deal['expected_revenue'] = (int) ($deal['amount'] * $deal['probability'] / 100);
 
-            $record = DB::table('module_records')->insertGetId([
+            $recordId = DB::table('module_records')->insertGetId([
                 'module_id' => $module->id,
-                'data' => array_merge($deal, ['assigned_to' => $this->userId]),
+                'data' => json_encode(array_merge($deal, ['assigned_to' => $this->userId])),
                 'created_by' => $this->userId,
                 'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-            $this->dealIds[] = $record->id;
+            $this->dealIds[] = $recordId;
         }
 
         $this->command->info('  Created ' . count($deals) . ' deals');
@@ -222,14 +232,16 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($leads as $lead) {
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => array_merge($lead, [
+                'data' => json_encode(array_merge($lead, [
                     'assigned_to' => $this->userId,
                     'tags' => $lead['rating'] === 'hot' ? ['high_priority', 'demo_requested'] : [],
-                ]),
+                ])),
                 'created_by' => $this->userId,
                 'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -258,14 +270,16 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($tasks as $task) {
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => array_merge($task, [
+                'data' => json_encode(array_merge($task, [
                     'assigned_to' => $this->userId,
                     'tags' => $task['priority'] === 'Urgent' ? ['Urgent', 'Follow-up'] : ['Follow-up'],
-                ]),
+                ])),
                 'created_by' => $this->userId,
                 'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -294,11 +308,13 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($activities as $activity) {
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => array_merge($activity, ['assigned_to' => $this->userId]),
+                'data' => json_encode(array_merge($activity, ['assigned_to' => $this->userId])),
                 'created_by' => $this->userId,
                 'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -322,15 +338,186 @@ class ModuleRecordsSeeder extends Seeder
         ];
 
         foreach ($notes as $note) {
-            DB::table('module_records')->insertGetId([
+            DB::table('module_records')->insert([
                 'module_id' => $module->id,
-                'data' => $note,
+                'data' => json_encode($note),
                 'created_by' => $this->userId,
                 'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
         $this->command->info('  Created ' . count($notes) . ' notes');
+    }
+
+    private function seedCases(): void
+    {
+        $module = DB::table('modules')->where('api_name', 'cases')->first();
+        if (!$module) {
+            $this->command->warn('  Cases module not found');
+            return;
+        }
+
+        $cases = [
+            ['subject' => 'Cannot access dashboard after login', 'description' => 'User reports blank screen after successful login. Cleared cache but issue persists.', 'status' => 'open', 'priority' => 'high', 'type' => 'bug', 'category' => 'Technical Support', 'contact_id' => $this->contactIds[0] ?? null, 'organization_id' => $this->organizationIds[0] ?? null],
+            ['subject' => 'Feature request: Export to PDF', 'description' => 'Customer requesting ability to export reports directly to PDF format.', 'status' => 'in_progress', 'priority' => 'medium', 'type' => 'feature_request', 'category' => 'Product Feedback', 'contact_id' => $this->contactIds[1] ?? null, 'organization_id' => $this->organizationIds[1] ?? null],
+            ['subject' => 'Billing discrepancy on invoice #1234', 'description' => 'Customer claims they were double charged for the monthly subscription.', 'status' => 'open', 'priority' => 'high', 'type' => 'billing', 'category' => 'Billing', 'contact_id' => $this->contactIds[2] ?? null, 'organization_id' => $this->organizationIds[2] ?? null],
+            ['subject' => 'Integration with Slack not working', 'description' => 'Slack notifications stopped working after recent update. No error messages displayed.', 'status' => 'pending', 'priority' => 'medium', 'type' => 'bug', 'category' => 'Integrations', 'contact_id' => $this->contactIds[3] ?? null, 'organization_id' => $this->organizationIds[3] ?? null],
+            ['subject' => 'How to set up custom workflows?', 'description' => 'New customer needs guidance on configuring automated workflows for their sales process.', 'status' => 'resolved', 'priority' => 'low', 'type' => 'question', 'category' => 'Training', 'contact_id' => $this->contactIds[4] ?? null, 'organization_id' => $this->organizationIds[4] ?? null],
+            ['subject' => 'Data import failed with error', 'description' => 'CSV import showing "Invalid format" error. File attached for review.', 'status' => 'open', 'priority' => 'medium', 'type' => 'bug', 'category' => 'Technical Support', 'contact_id' => $this->contactIds[5] ?? null, 'organization_id' => $this->organizationIds[5] ?? null],
+            ['subject' => 'Request for API documentation', 'description' => 'Developer team needs updated API docs for v2 endpoints.', 'status' => 'resolved', 'priority' => 'low', 'type' => 'question', 'category' => 'Documentation', 'contact_id' => $this->contactIds[6] ?? null, 'organization_id' => $this->organizationIds[6] ?? null],
+            ['subject' => 'Performance issues on large datasets', 'description' => 'Reports taking over 30 seconds to load with 100k+ records.', 'status' => 'in_progress', 'priority' => 'high', 'type' => 'bug', 'category' => 'Performance', 'contact_id' => $this->contactIds[7] ?? null, 'organization_id' => $this->organizationIds[7] ?? null],
+        ];
+
+        foreach ($cases as $case) {
+            DB::table('module_records')->insert([
+                'module_id' => $module->id,
+                'data' => json_encode(array_merge($case, ['assigned_to' => $this->userId])),
+                'created_by' => $this->userId,
+                'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->command->info('  Created ' . count($cases) . ' cases');
+    }
+
+    private function seedProducts(): void
+    {
+        $module = DB::table('modules')->where('api_name', 'products')->first();
+        if (!$module) {
+            $this->command->warn('  Products module not found');
+            return;
+        }
+
+        $products = [
+            ['name' => 'Enterprise CRM License', 'sku' => 'CRM-ENT-001', 'description' => 'Full enterprise CRM license with unlimited users', 'price' => 999.00, 'cost' => 200.00, 'category' => 'Software', 'type' => 'subscription', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'Professional CRM License', 'sku' => 'CRM-PRO-001', 'description' => 'Professional CRM license for up to 50 users', 'price' => 499.00, 'cost' => 100.00, 'category' => 'Software', 'type' => 'subscription', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'Starter CRM License', 'sku' => 'CRM-STR-001', 'description' => 'Starter CRM license for small teams up to 10 users', 'price' => 99.00, 'cost' => 20.00, 'category' => 'Software', 'type' => 'subscription', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'Implementation Services', 'sku' => 'SVC-IMP-001', 'description' => 'Professional implementation and onboarding services', 'price' => 5000.00, 'cost' => 2000.00, 'category' => 'Services', 'type' => 'one_time', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'Training Package - Basic', 'sku' => 'SVC-TRN-001', 'description' => '4-hour virtual training session for up to 10 users', 'price' => 500.00, 'cost' => 150.00, 'category' => 'Services', 'type' => 'one_time', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'Training Package - Advanced', 'sku' => 'SVC-TRN-002', 'description' => 'Full-day on-site training for unlimited users', 'price' => 2500.00, 'cost' => 800.00, 'category' => 'Services', 'type' => 'one_time', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'Premium Support Add-on', 'sku' => 'SUP-PRM-001', 'description' => '24/7 priority support with dedicated account manager', 'price' => 299.00, 'cost' => 50.00, 'category' => 'Support', 'type' => 'subscription', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'API Access Add-on', 'sku' => 'ADD-API-001', 'description' => 'Extended API access with higher rate limits', 'price' => 199.00, 'cost' => 25.00, 'category' => 'Add-ons', 'type' => 'subscription', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'Data Migration Service', 'sku' => 'SVC-MIG-001', 'description' => 'Full data migration from legacy CRM systems', 'price' => 3000.00, 'cost' => 1000.00, 'category' => 'Services', 'type' => 'one_time', 'status' => 'active', 'tax_rate' => 0],
+            ['name' => 'Custom Integration', 'sku' => 'SVC-INT-001', 'description' => 'Custom integration development (per integration)', 'price' => 2000.00, 'cost' => 600.00, 'category' => 'Services', 'type' => 'one_time', 'status' => 'active', 'tax_rate' => 0],
+        ];
+
+        foreach ($products as $product) {
+            DB::table('module_records')->insert([
+                'module_id' => $module->id,
+                'data' => json_encode($product),
+                'created_by' => $this->userId,
+                'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->command->info('  Created ' . count($products) . ' products');
+    }
+
+    private function seedInvoices(): void
+    {
+        $module = DB::table('modules')->where('api_name', 'invoices')->first();
+        if (!$module) {
+            $this->command->warn('  Invoices module not found');
+            return;
+        }
+
+        $invoices = [
+            ['invoice_number' => 'INV-2024-001', 'subject' => 'Enterprise License - Annual', 'status' => 'paid', 'issue_date' => now()->subDays(30)->format('Y-m-d'), 'due_date' => now()->subDays(15)->format('Y-m-d'), 'subtotal' => 11988.00, 'tax_amount' => 0, 'total' => 11988.00, 'amount_paid' => 11988.00, 'balance_due' => 0, 'organization_id' => $this->organizationIds[0] ?? null, 'contact_id' => $this->contactIds[0] ?? null],
+            ['invoice_number' => 'INV-2024-002', 'subject' => 'Implementation Services', 'status' => 'paid', 'issue_date' => now()->subDays(25)->format('Y-m-d'), 'due_date' => now()->subDays(10)->format('Y-m-d'), 'subtotal' => 5000.00, 'tax_amount' => 0, 'total' => 5000.00, 'amount_paid' => 5000.00, 'balance_due' => 0, 'organization_id' => $this->organizationIds[1] ?? null, 'contact_id' => $this->contactIds[1] ?? null],
+            ['invoice_number' => 'INV-2024-003', 'subject' => 'Professional License - Monthly', 'status' => 'sent', 'issue_date' => now()->subDays(5)->format('Y-m-d'), 'due_date' => now()->addDays(25)->format('Y-m-d'), 'subtotal' => 499.00, 'tax_amount' => 0, 'total' => 499.00, 'amount_paid' => 0, 'balance_due' => 499.00, 'organization_id' => $this->organizationIds[2] ?? null, 'contact_id' => $this->contactIds[2] ?? null],
+            ['invoice_number' => 'INV-2024-004', 'subject' => 'Training Package - Advanced', 'status' => 'overdue', 'issue_date' => now()->subDays(45)->format('Y-m-d'), 'due_date' => now()->subDays(15)->format('Y-m-d'), 'subtotal' => 2500.00, 'tax_amount' => 0, 'total' => 2500.00, 'amount_paid' => 0, 'balance_due' => 2500.00, 'organization_id' => $this->organizationIds[3] ?? null, 'contact_id' => $this->contactIds[3] ?? null],
+            ['invoice_number' => 'INV-2024-005', 'subject' => 'Starter License + Support', 'status' => 'draft', 'issue_date' => now()->format('Y-m-d'), 'due_date' => now()->addDays(30)->format('Y-m-d'), 'subtotal' => 398.00, 'tax_amount' => 0, 'total' => 398.00, 'amount_paid' => 0, 'balance_due' => 398.00, 'organization_id' => $this->organizationIds[4] ?? null, 'contact_id' => $this->contactIds[4] ?? null],
+            ['invoice_number' => 'INV-2024-006', 'subject' => 'Data Migration Service', 'status' => 'partial', 'issue_date' => now()->subDays(20)->format('Y-m-d'), 'due_date' => now()->addDays(10)->format('Y-m-d'), 'subtotal' => 3000.00, 'tax_amount' => 0, 'total' => 3000.00, 'amount_paid' => 1500.00, 'balance_due' => 1500.00, 'organization_id' => $this->organizationIds[5] ?? null, 'contact_id' => $this->contactIds[5] ?? null],
+            ['invoice_number' => 'INV-2024-007', 'subject' => 'Custom Integration x2', 'status' => 'sent', 'issue_date' => now()->subDays(3)->format('Y-m-d'), 'due_date' => now()->addDays(27)->format('Y-m-d'), 'subtotal' => 4000.00, 'tax_amount' => 0, 'total' => 4000.00, 'amount_paid' => 0, 'balance_due' => 4000.00, 'organization_id' => $this->organizationIds[6] ?? null, 'contact_id' => $this->contactIds[6] ?? null],
+            ['invoice_number' => 'INV-2024-008', 'subject' => 'Enterprise License Renewal', 'status' => 'paid', 'issue_date' => now()->subDays(60)->format('Y-m-d'), 'due_date' => now()->subDays(30)->format('Y-m-d'), 'subtotal' => 11988.00, 'tax_amount' => 0, 'total' => 11988.00, 'amount_paid' => 11988.00, 'balance_due' => 0, 'organization_id' => $this->organizationIds[7] ?? null, 'contact_id' => $this->contactIds[7] ?? null],
+        ];
+
+        foreach ($invoices as $invoice) {
+            DB::table('module_records')->insert([
+                'module_id' => $module->id,
+                'data' => json_encode(array_merge($invoice, ['assigned_to' => $this->userId])),
+                'created_by' => $this->userId,
+                'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->command->info('  Created ' . count($invoices) . ' invoices');
+    }
+
+    private function seedEvents(): void
+    {
+        $module = DB::table('modules')->where('api_name', 'events')->first();
+        if (!$module) {
+            $this->command->warn('  Events module not found');
+            return;
+        }
+
+        $events = [
+            ['title' => 'Q4 Sales Kickoff', 'description' => 'Quarterly sales team meeting to review targets and strategies', 'type' => 'meeting', 'status' => 'scheduled', 'start_date' => now()->addDays(7)->setHour(9)->format('Y-m-d H:i:s'), 'end_date' => now()->addDays(7)->setHour(12)->format('Y-m-d H:i:s'), 'location' => 'Main Conference Room', 'is_all_day' => false],
+            ['title' => 'Product Demo - TechStart', 'description' => 'Live product demonstration for potential enterprise client', 'type' => 'demo', 'status' => 'scheduled', 'start_date' => now()->addDays(3)->setHour(14)->format('Y-m-d H:i:s'), 'end_date' => now()->addDays(3)->setHour(15)->format('Y-m-d H:i:s'), 'location' => 'Zoom Meeting', 'is_all_day' => false, 'related_to_type' => 'Organization', 'related_to_id' => $this->organizationIds[1] ?? null],
+            ['title' => 'Annual Customer Conference', 'description' => 'Yearly customer appreciation and product roadmap event', 'type' => 'conference', 'status' => 'scheduled', 'start_date' => now()->addDays(45)->format('Y-m-d'), 'end_date' => now()->addDays(47)->format('Y-m-d'), 'location' => 'Convention Center', 'is_all_day' => true],
+            ['title' => 'Training: New Feature Rollout', 'description' => 'Internal training on upcoming feature release', 'type' => 'training', 'status' => 'scheduled', 'start_date' => now()->addDays(14)->setHour(10)->format('Y-m-d H:i:s'), 'end_date' => now()->addDays(14)->setHour(16)->format('Y-m-d H:i:s'), 'location' => 'Training Room B', 'is_all_day' => false],
+            ['title' => 'Contract Negotiation - Global Industries', 'description' => 'Final contract terms discussion', 'type' => 'meeting', 'status' => 'scheduled', 'start_date' => now()->addDays(2)->setHour(11)->format('Y-m-d H:i:s'), 'end_date' => now()->addDays(2)->setHour(12)->format('Y-m-d H:i:s'), 'location' => 'Video Call', 'is_all_day' => false, 'related_to_type' => 'Organization', 'related_to_id' => $this->organizationIds[2] ?? null],
+            ['title' => 'Trade Show - SaaS Connect', 'description' => 'Industry trade show booth and presentations', 'type' => 'trade_show', 'status' => 'scheduled', 'start_date' => now()->addDays(30)->format('Y-m-d'), 'end_date' => now()->addDays(32)->format('Y-m-d'), 'location' => 'Las Vegas Convention Center', 'is_all_day' => true],
+            ['title' => 'Weekly Team Standup', 'description' => 'Regular team sync meeting', 'type' => 'meeting', 'status' => 'completed', 'start_date' => now()->subDays(1)->setHour(9)->format('Y-m-d H:i:s'), 'end_date' => now()->subDays(1)->setHour(9)->addMinutes(30)->format('Y-m-d H:i:s'), 'location' => 'Slack Huddle', 'is_all_day' => false],
+            ['title' => 'Webinar: Best Practices for CRM', 'description' => 'Public webinar on CRM implementation best practices', 'type' => 'webinar', 'status' => 'scheduled', 'start_date' => now()->addDays(21)->setHour(13)->format('Y-m-d H:i:s'), 'end_date' => now()->addDays(21)->setHour(14)->format('Y-m-d H:i:s'), 'location' => 'Online', 'is_all_day' => false],
+            ['title' => 'Customer Success Review - Acme Corp', 'description' => 'Quarterly business review with key customer', 'type' => 'meeting', 'status' => 'scheduled', 'start_date' => now()->addDays(10)->setHour(15)->format('Y-m-d H:i:s'), 'end_date' => now()->addDays(10)->setHour(16)->format('Y-m-d H:i:s'), 'location' => 'Customer Office', 'is_all_day' => false, 'related_to_type' => 'Organization', 'related_to_id' => $this->organizationIds[0] ?? null],
+            ['title' => 'Holiday Office Closure', 'description' => 'Office closed for winter holidays', 'type' => 'holiday', 'status' => 'scheduled', 'start_date' => now()->addDays(60)->format('Y-m-d'), 'end_date' => now()->addDays(62)->format('Y-m-d'), 'location' => 'All Offices', 'is_all_day' => true],
+        ];
+
+        foreach ($events as $event) {
+            DB::table('module_records')->insert([
+                'module_id' => $module->id,
+                'data' => json_encode(array_merge($event, ['assigned_to' => $this->userId])),
+                'created_by' => $this->userId,
+                'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->command->info('  Created ' . count($events) . ' events');
+    }
+
+    private function seedQuotes(): void
+    {
+        $module = DB::table('modules')->where('api_name', 'quotes')->first();
+        if (!$module) {
+            $this->command->warn('  Quotes module not found');
+            return;
+        }
+
+        $quotes = [
+            ['quote_number' => 'QT-2024-001', 'title' => 'Enterprise Software Bundle', 'status' => 'accepted', 'valid_until' => now()->addDays(30)->format('Y-m-d'), 'subtotal' => 15988.00, 'discount_percent' => 10, 'discount_amount' => 1598.80, 'tax_amount' => 0, 'total' => 14389.20, 'organization_id' => $this->organizationIds[0] ?? null, 'contact_id' => $this->contactIds[0] ?? null, 'deal_id' => $this->dealIds[0] ?? null],
+            ['quote_number' => 'QT-2024-002', 'title' => 'Professional Services Package', 'status' => 'sent', 'valid_until' => now()->addDays(14)->format('Y-m-d'), 'subtotal' => 7500.00, 'discount_percent' => 0, 'discount_amount' => 0, 'tax_amount' => 0, 'total' => 7500.00, 'organization_id' => $this->organizationIds[1] ?? null, 'contact_id' => $this->contactIds[1] ?? null, 'deal_id' => $this->dealIds[1] ?? null],
+            ['quote_number' => 'QT-2024-003', 'title' => 'Starter Plan - Annual', 'status' => 'draft', 'valid_until' => now()->addDays(30)->format('Y-m-d'), 'subtotal' => 1188.00, 'discount_percent' => 15, 'discount_amount' => 178.20, 'tax_amount' => 0, 'total' => 1009.80, 'organization_id' => $this->organizationIds[2] ?? null, 'contact_id' => $this->contactIds[2] ?? null, 'deal_id' => $this->dealIds[2] ?? null],
+            ['quote_number' => 'QT-2024-004', 'title' => 'Custom Integration Project', 'status' => 'sent', 'valid_until' => now()->addDays(21)->format('Y-m-d'), 'subtotal' => 12000.00, 'discount_percent' => 5, 'discount_amount' => 600.00, 'tax_amount' => 0, 'total' => 11400.00, 'organization_id' => $this->organizationIds[3] ?? null, 'contact_id' => $this->contactIds[3] ?? null, 'deal_id' => $this->dealIds[3] ?? null],
+            ['quote_number' => 'QT-2024-005', 'title' => 'Data Migration + Training', 'status' => 'expired', 'valid_until' => now()->subDays(7)->format('Y-m-d'), 'subtotal' => 5500.00, 'discount_percent' => 0, 'discount_amount' => 0, 'tax_amount' => 0, 'total' => 5500.00, 'organization_id' => $this->organizationIds[4] ?? null, 'contact_id' => $this->contactIds[4] ?? null, 'deal_id' => $this->dealIds[4] ?? null],
+            ['quote_number' => 'QT-2024-006', 'title' => 'Enterprise Renewal', 'status' => 'accepted', 'valid_until' => now()->subDays(30)->format('Y-m-d'), 'subtotal' => 11988.00, 'discount_percent' => 20, 'discount_amount' => 2397.60, 'tax_amount' => 0, 'total' => 9590.40, 'organization_id' => $this->organizationIds[5] ?? null, 'contact_id' => $this->contactIds[5] ?? null, 'deal_id' => $this->dealIds[5] ?? null],
+            ['quote_number' => 'QT-2024-007', 'title' => 'Support Upgrade', 'status' => 'rejected', 'valid_until' => now()->subDays(14)->format('Y-m-d'), 'subtotal' => 3588.00, 'discount_percent' => 0, 'discount_amount' => 0, 'tax_amount' => 0, 'total' => 3588.00, 'organization_id' => $this->organizationIds[6] ?? null, 'contact_id' => $this->contactIds[6] ?? null, 'deal_id' => $this->dealIds[6] ?? null],
+            ['quote_number' => 'QT-2024-008', 'title' => 'Full Platform License', 'status' => 'sent', 'valid_until' => now()->addDays(7)->format('Y-m-d'), 'subtotal' => 24988.00, 'discount_percent' => 12, 'discount_amount' => 2998.56, 'tax_amount' => 0, 'total' => 21989.44, 'organization_id' => $this->organizationIds[7] ?? null, 'contact_id' => $this->contactIds[7] ?? null, 'deal_id' => $this->dealIds[7] ?? null],
+        ];
+
+        foreach ($quotes as $quote) {
+            DB::table('module_records')->insert([
+                'module_id' => $module->id,
+                'data' => json_encode(array_merge($quote, ['assigned_to' => $this->userId])),
+                'created_by' => $this->userId,
+                'updated_by' => $this->userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->command->info('  Created ' . count($quotes) . ' quotes');
     }
 
     private function seedWorkflows(): void
@@ -341,7 +528,7 @@ class ModuleRecordsSeeder extends Seeder
         }
 
         // Clear existing
-        DB::table('workflows')->forceDelete();
+        DB::table('workflows')->delete();
 
         $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
         $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
@@ -449,16 +636,18 @@ class ModuleRecordsSeeder extends Seeder
             $steps = $workflowData['steps'] ?? [];
             unset($workflowData['steps']);
 
-            $workflow = DB::table('workflows')->insertGetId($workflowData);
+            $workflowId = DB::table('workflows')->insertGetId($workflowData);
 
             if (Schema::hasTable('workflow_steps')) {
                 foreach ($steps as $order => $step) {
-                    DB::table('workflow_steps')->insertGetId([
-                        'workflow_id' => $workflow->id,
+                    DB::table('workflow_steps')->insert([
+                        'workflow_id' => $workflowId,
                         'name' => $step['name'],
                         'action_type' => $step['type'],
-                        'action_config' => $step['config'],
+                        'action_config' => json_encode($step['config']),
                         'order' => $order + 1,
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ]);
                 }
             }
@@ -474,7 +663,7 @@ class ModuleRecordsSeeder extends Seeder
         }
 
         // Clear existing
-        DB::table('blueprints')->forceDelete();
+        DB::table('blueprints')->delete();
 
         $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
         $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
@@ -485,7 +674,7 @@ class ModuleRecordsSeeder extends Seeder
                 ->first();
 
             if ($stageField) {
-                $blueprint = DB::table('blueprints')->insertGetId([
+                $blueprintId = DB::table('blueprints')->insertGetId([
                     'name' => 'Deal Pipeline',
                     'module_id' => $dealsModule->id,
                     'field_id' => $stageField->id,
@@ -495,7 +684,7 @@ class ModuleRecordsSeeder extends Seeder
                 ]);
 
                 // Create states
-                $states = [];
+                $stateIds = [];
                 $stageData = [
                     ['name' => 'Discovery', 'color' => '#6366f1', 'is_initial' => true, 'position_x' => 0],
                     ['name' => 'Qualification', 'color' => '#8b5cf6', 'is_initial' => false, 'position_x' => 200],
@@ -506,8 +695,8 @@ class ModuleRecordsSeeder extends Seeder
                 ];
 
                 foreach ($stageData as $index => $stage) {
-                    $states[$stage['name']] = DB::table('blueprint_states')->insertGetId([
-                        'blueprint_id' => $blueprint->id,
+                    $stateIds[$stage['name']] = DB::table('blueprint_states')->insertGetId([
+                        'blueprint_id' => $blueprintId,
                         'name' => $stage['name'],
                         'field_option_value' => $stage['name'],
                         'color' => $stage['color'],
@@ -529,10 +718,10 @@ class ModuleRecordsSeeder extends Seeder
                 ];
 
                 foreach ($transitions as $order => $trans) {
-                    DB::table('blueprint_transitions')->insertGetId([
-                        'blueprint_id' => $blueprint->id,
-                        'from_state_id' => $states[$trans['from']]->id,
-                        'to_state_id' => $states[$trans['to']]->id,
+                    DB::table('blueprint_transitions')->insert([
+                        'blueprint_id' => $blueprintId,
+                        'from_state_id' => $stateIds[$trans['from']],
+                        'to_state_id' => $stateIds[$trans['to']],
                         'name' => $trans['name'],
                         'button_label' => $trans['button_label'],
                         'display_order' => $order,
@@ -548,7 +737,7 @@ class ModuleRecordsSeeder extends Seeder
                 ->first();
 
             if ($statusField) {
-                $blueprint = DB::table('blueprints')->insertGetId([
+                $blueprintId = DB::table('blueprints')->insertGetId([
                     'name' => 'Lead Qualification',
                     'module_id' => $leadsModule->id,
                     'field_id' => $statusField->id,
@@ -556,7 +745,7 @@ class ModuleRecordsSeeder extends Seeder
                     'is_active' => true,
                 ]);
 
-                $states = [];
+                $stateIds = [];
                 $statusData = [
                     ['name' => 'New', 'color' => '#3b82f6', 'is_initial' => true],
                     ['name' => 'Contacted', 'color' => '#6366f1'],
@@ -566,8 +755,8 @@ class ModuleRecordsSeeder extends Seeder
                 ];
 
                 foreach ($statusData as $index => $status) {
-                    $states[$status['name']] = DB::table('blueprint_states')->insertGetId([
-                        'blueprint_id' => $blueprint->id,
+                    $stateIds[$status['name']] = DB::table('blueprint_states')->insertGetId([
+                        'blueprint_id' => $blueprintId,
                         'name' => $status['name'],
                         'field_option_value' => $status['name'],
                         'color' => $status['color'],
@@ -587,10 +776,10 @@ class ModuleRecordsSeeder extends Seeder
                 ];
 
                 foreach ($transitions as $order => $trans) {
-                    DB::table('blueprint_transitions')->insertGetId([
-                        'blueprint_id' => $blueprint->id,
-                        'from_state_id' => $states[$trans['from']]->id,
-                        'to_state_id' => $states[$trans['to']]->id,
+                    DB::table('blueprint_transitions')->insert([
+                        'blueprint_id' => $blueprintId,
+                        'from_state_id' => $stateIds[$trans['from']],
+                        'to_state_id' => $stateIds[$trans['to']],
                         'name' => $trans['name'],
                         'display_order' => $order,
                         'is_active' => true,
@@ -608,10 +797,10 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        DB::table('approval_rules')->forceDelete();
+        DB::table('approval_rules')->delete();
 
         $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
-        $users = User::take(3)->get();
+        $users = DB::table('users')->take(3)->get();
 
         $rules = [
             [
@@ -680,7 +869,7 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        DB::table('cadences')->forceDelete();
+        DB::table('cadences')->delete();
 
         $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
         $contactsModule = DB::table('modules')->where('api_name', 'contacts')->first();
@@ -741,11 +930,11 @@ class ModuleRecordsSeeder extends Seeder
             $steps = $cadenceData['steps'] ?? [];
             unset($cadenceData['steps']);
 
-            $cadence = DB::table('cadences')->insertGetId($cadenceData);
+            $cadenceId = DB::table('cadences')->insertGetId($cadenceData);
 
             foreach ($steps as $order => $step) {
                 DB::table('cadence_steps')->insert([
-                    'cadence_id' => $cadence->id,
+                    'cadence_id' => $cadenceId,
                     'step_order' => $order + 1,
                     'name' => $step['name'],
                     'channel' => $step['channel'],
@@ -770,7 +959,7 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        DB::table('playbooks')->forceDelete();
+        DB::table('playbooks')->delete();
 
         $playbooks = [
             [
@@ -874,22 +1063,22 @@ class ModuleRecordsSeeder extends Seeder
             $phases = $playbookData['phases'] ?? [];
             unset($playbookData['phases']);
 
-            $playbook = DB::table('playbooks')->insertGetId($playbookData);
+            $playbookId = DB::table('playbooks')->insertGetId($playbookData);
 
             foreach ($phases as $phaseData) {
                 $tasks = $phaseData['tasks'] ?? [];
                 unset($phaseData['tasks']);
 
-                $phase = DB::table('playbook_phases')->insertGetId([
-                    'playbook_id' => $playbook->id,
+                $phaseId = DB::table('playbook_phases')->insertGetId([
+                    'playbook_id' => $playbookId,
                     'name' => $phaseData['name'],
                     'display_order' => $phaseData['order'],
                 ]);
 
                 foreach ($tasks as $order => $taskName) {
-                    DB::table('playbook_tasks')->insertGetId([
-                        'playbook_id' => $playbook->id,
-                        'phase_id' => $phase->id,
+                    DB::table('playbook_tasks')->insert([
+                        'playbook_id' => $playbookId,
+                        'phase_id' => $phaseId,
                         'title' => $taskName,
                         'display_order' => $order + 1,
                         'is_required' => true,
@@ -907,7 +1096,7 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        DB::table('reports')->forceDelete();
+        DB::table('reports')->delete();
 
         $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
         $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
@@ -999,8 +1188,8 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        DB::table('dashboards')->forceDelete();
-        DB::table('dashboard_widgets')->forceDelete();
+        DB::table('dashboards')->delete();
+        DB::table('dashboard_widgets')->delete();
 
         $reports = DB::table('reports')->get()->keyBy('name');
 
@@ -1047,7 +1236,7 @@ class ModuleRecordsSeeder extends Seeder
             $widgets = $dashboardData['widgets'] ?? [];
             unset($dashboardData['widgets']);
 
-            $dashboard = DB::table('dashboards')->insertGetId($dashboardData);
+            $dashboardId = DB::table('dashboards')->insertGetId($dashboardData);
 
             foreach ($widgets as $widgetData) {
                 $reportId = null;
@@ -1056,8 +1245,8 @@ class ModuleRecordsSeeder extends Seeder
                 }
                 unset($widgetData['report']);
 
-                DB::table('dashboard_widgets')->insertGetId([
-                    'dashboard_id' => $dashboard->id,
+                DB::table('dashboard_widgets')->insert([
+                    'dashboard_id' => $dashboardId,
                     'report_id' => $reportId,
                     'title' => $widgetData['title'],
                     'type' => $widgetData['type'],
@@ -1076,7 +1265,7 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        DB::table('forecast_scenarios')->forceDelete();
+        DB::table('forecast_scenarios')->delete();
 
         $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
         $now = now();
@@ -1157,11 +1346,11 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        DB::table('quota_periods')->forceDelete();
-        DB::table('quotas')->forceDelete();
+        DB::table('quota_periods')->delete();
+        DB::table('quotas')->delete();
 
         $now = now();
-        $users = User::take(5)->get();
+        $users = DB::table('users')->take(5)->get();
 
         // Create quota periods
         $periods = [
@@ -1188,16 +1377,16 @@ class ModuleRecordsSeeder extends Seeder
             ],
         ];
 
-        $createdPeriods = [];
+        $createdPeriodIds = [];
         foreach ($periods as $period) {
-            $createdPeriods[] = DB::table('quota_periods')->insertGetId($period);
+            $createdPeriodIds[] = DB::table('quota_periods')->insertGetId($period);
         }
 
         // Create quotas for each user
         foreach ($users as $index => $user) {
             // Quarterly revenue quota
-            DB::table('quotas')->insertGetId([
-                'period_id' => $createdPeriods[0]->id,
+            DB::table('quotas')->insert([
+                'period_id' => $createdPeriodIds[0],
                 'user_id' => $user->id,
                 'metric_type' => 'revenue',
                 'metric_field' => 'amount',
@@ -1210,8 +1399,8 @@ class ModuleRecordsSeeder extends Seeder
             ]);
 
             // Monthly deal count quota
-            DB::table('quotas')->insertGetId([
-                'period_id' => $createdPeriods[1]->id,
+            DB::table('quotas')->insert([
+                'period_id' => $createdPeriodIds[1],
                 'user_id' => $user->id,
                 'metric_type' => 'count',
                 'module_api_name' => 'deals',
@@ -1232,7 +1421,7 @@ class ModuleRecordsSeeder extends Seeder
             return;
         }
 
-        DB::table('email_templates')->forceDelete();
+        DB::table('email_templates')->delete();
 
         $leadsModule = DB::table('modules')->where('api_name', 'leads')->first();
         $dealsModule = DB::table('modules')->where('api_name', 'deals')->first();
@@ -1341,7 +1530,7 @@ class ModuleRecordsSeeder extends Seeder
 
         DB::table('notifications')->delete();
 
-        $users = User::take(3)->get();
+        $users = DB::table('users')->take(3)->get();
         if ($users->isEmpty()) {
             return;
         }
@@ -1502,7 +1691,7 @@ class ModuleRecordsSeeder extends Seeder
             foreach ($notifications as $index => $notification) {
                 // Distribute notifications across users, give first user more
                 if ($userIndex === 0 || $index % 3 === $userIndex) {
-                    DB::table('notifications')->insertGetId(array_merge($notification, [
+                    DB::table('notifications')->insert(array_merge($notification, [
                         'user_id' => $user->id,
                         'created_at' => now()->subMinutes(rand(5, 2880)), // Random time in last 2 days
                         'updated_at' => now(),

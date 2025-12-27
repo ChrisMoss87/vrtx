@@ -125,19 +125,23 @@ final class ForecastingApplicationService
     /**
      * Update a deal's forecast settings.
      */
-    public function updateDealForecast(UpdateDealForecastDTO $dto): ModuleRecord
+    public function updateDealForecast(UpdateDealForecastDTO $dto): array
     {
         return DB::transaction(function () use ($dto) {
-            $deal = ModuleRecord::findOrFail($dto->moduleRecordId);
+            $deal = $this->moduleRecordRepository->findByIdAsArray($dto->moduleRecordId);
+            if (!$deal) {
+                throw new \RuntimeException("Module record not found: {$dto->moduleRecordId}");
+            }
             $userId = UserId::fromInt($dto->userId);
+            $updateData = [];
 
             // Track category change
-            if ($dto->category !== null && $dto->category->value !== $deal->forecast_category) {
+            if ($dto->category !== null && $dto->category->value !== ($deal['forecast_category'] ?? null)) {
                 $adjustment = ForecastAdjustment::create(
                     userId: $userId,
                     moduleRecordId: $dto->moduleRecordId,
                     adjustmentType: AdjustmentType::CATEGORY_CHANGE,
-                    oldValue: $deal->forecast_category,
+                    oldValue: $deal['forecast_category'] ?? null,
                     newValue: $dto->category->value,
                     reason: $dto->reason
                 );
@@ -148,20 +152,20 @@ final class ForecastingApplicationService
                     $dto->userId,
                     $dto->moduleRecordId,
                     AdjustmentType::CATEGORY_CHANGE->value,
-                    $deal->forecast_category,
+                    $deal['forecast_category'] ?? null,
                     $dto->category->value
                 ));
 
-                $deal->forecast_category = $dto->category->value;
+                $updateData['forecast_category'] = $dto->category->value;
             }
 
             // Track amount override change
-            if ($dto->override !== null && $dto->override != $deal->forecast_override) {
+            if ($dto->override !== null && $dto->override != ($deal['forecast_override'] ?? null)) {
                 $adjustment = ForecastAdjustment::create(
                     userId: $userId,
                     moduleRecordId: $dto->moduleRecordId,
                     adjustmentType: AdjustmentType::AMOUNT_OVERRIDE,
-                    oldValue: (string) $deal->forecast_override,
+                    oldValue: (string) ($deal['forecast_override'] ?? ''),
                     newValue: (string) $dto->override,
                     reason: $dto->reason
                 );
@@ -172,16 +176,16 @@ final class ForecastingApplicationService
                     $dto->userId,
                     $dto->moduleRecordId,
                     AdjustmentType::AMOUNT_OVERRIDE->value,
-                    (string) $deal->forecast_override,
+                    (string) ($deal['forecast_override'] ?? ''),
                     (string) $dto->override
                 ));
 
-                $deal->forecast_override = $dto->override > 0 ? $dto->override : null;
+                $updateData['forecast_override'] = $dto->override > 0 ? $dto->override : null;
             }
 
             // Track close date change
             if ($dto->expectedCloseDate !== null) {
-                $oldDate = $deal->expected_close_date?->format('Y-m-d');
+                $oldDate = isset($deal['expected_close_date']) ? (is_string($deal['expected_close_date']) ? $deal['expected_close_date'] : $deal['expected_close_date']->format('Y-m-d')) : null;
                 $newDate = $dto->expectedCloseDate->format('Y-m-d');
 
                 if ($oldDate !== $newDate) {
@@ -204,12 +208,15 @@ final class ForecastingApplicationService
                         $newDate
                     ));
 
-                    $deal->expected_close_date = $dto->expectedCloseDate;
+                    $updateData['expected_close_date'] = $dto->expectedCloseDate->format('Y-m-d');
                 }
             }
 
-            $deal->save();
-            return $deal->fresh();
+            if (!empty($updateData)) {
+                $this->moduleRecordRepository->update($dto->moduleRecordId, $updateData);
+            }
+
+            return $this->moduleRecordRepository->findByIdAsArray($dto->moduleRecordId);
         });
     }
 

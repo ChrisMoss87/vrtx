@@ -4,23 +4,24 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Application\Services\Authorization\AuthorizationApplicationService;
+use App\Domain\Authorization\Repositories\RoleRepositoryInterface;
+use App\Domain\Modules\Repositories\ModuleRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
-use App\Services\RbacService;
-use Database\Seeders\RolesAndPermissionsSeeder;
+use App\Infrastructure\Authorization\CachedAuthorizationService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
-use Illuminate\Support\Facades\DB;
 
 class RbacController extends Controller
 {
     use AuthorizesRequests;
 
     public function __construct(
-        private RbacService $rbacService
+        private readonly AuthorizationApplicationService $authService,
+        private readonly CachedAuthorizationService $cachedAuthService,
+        private readonly RoleRepositoryInterface $roleRepository,
+        private readonly ModuleRepositoryInterface $moduleRepository,
     ) {}
 
     /**
@@ -28,19 +29,19 @@ class RbacController extends Controller
      */
     public function getRoles(): JsonResponse
     {
-        // Get roles with permissions - count users manually to avoid Spatie relation issues
-        $roles = Role::with('permissions')
-            ->get()
-            ->map(function ($role) {
-                return [
-                    'id' => $role->id,
-                    'name' => $role->name,
-                    'permissions' => $role->permissions->pluck('name'),
-                    'users_count' => User::role($role->name)->count(),
-                ];
-            });
+        $roles = $this->authService->getRoles();
 
-        return response()->json(['data' => $roles]);
+        $data = collect($roles)->map(function ($role) {
+            return [
+                'id' => $role['id'],
+                'name' => $role['name'],
+                'display_name' => $role['display_name'] ?? null,
+                'permissions' => $role['permissions'] ?? [],
+                'users_count' => $this->roleRepository->getUserCount($role['id']),
+            ];
+        });
+
+        return response()->json(['data' => $data]);
     }
 
     /**
@@ -48,45 +49,13 @@ class RbacController extends Controller
      */
     public function getRole(int $id): JsonResponse
     {
-        // Use withCount to avoid N+1 query for users_count
-        $role = Role::with('permissions')
-            ->withCount('users')
-            ->findOrFail($id);
+        $role = $this->authService->getRole($id);
 
-        // Get all modules (only necessary columns) and existing permissions in single queries
-        $modules = Module::select('id', 'name', 'api_name')->get();
-        $existingPermissions = DB::table('module_permissions')->where('role_id', $id)
-            ->get()
-            ->keyBy('module_id');
+        if ($role === null) {
+            return response()->json(['message' => 'Role not found'], 404);
+        }
 
-        // Build module permissions with module names
-        $modulePermissions = $modules->map(function ($module) use ($existingPermissions) {
-            $permission = $existingPermissions->get($module->id);
-
-            return [
-                'module_id' => $module->id,
-                'module_name' => $module->name,
-                'module_api_name' => $module->api_name,
-                'can_view' => $permission?->can_view ?? false,
-                'can_create' => $permission?->can_create ?? false,
-                'can_edit' => $permission?->can_edit ?? false,
-                'can_delete' => $permission?->can_delete ?? false,
-                'can_export' => $permission?->can_export ?? false,
-                'can_import' => $permission?->can_import ?? false,
-                'record_access_level' => $permission?->record_access_level ?? 'own',
-                'field_restrictions' => $permission?->field_restrictions ?? [],
-            ];
-        });
-
-        return response()->json([
-            'data' => [
-                'id' => $role->id,
-                'name' => $role->name,
-                'permissions' => $role->permissions->pluck('name'),
-                'module_permissions' => $modulePermissions,
-                'users_count' => $role->users_count,
-            ],
-        ]);
+        return response()->json(['data' => $role]);
     }
 
     /**
@@ -96,23 +65,22 @@ class RbacController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:roles,name',
+            'display_name' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
             'permissions' => 'array',
             'permissions.*' => 'string|exists:permissions,name',
         ]);
 
-        $role = $this->rbacService->createRole(
-            $validated['name'],
-            $validated['permissions'] ?? []
-        );
+        try {
+            $role = $this->authService->createRole($validated);
 
-        return response()->json([
-            'message' => 'Role created successfully',
-            'data' => [
-                'id' => $role->id,
-                'name' => $role->name,
-                'permissions' => $role->permissions->pluck('name'),
-            ],
-        ], 201);
+            return response()->json([
+                'message' => 'Role created successfully',
+                'data' => $role,
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     /**
@@ -120,30 +88,24 @@ class RbacController extends Controller
      */
     public function updateRole(Request $request, int $id): JsonResponse
     {
-        $role = Role::findOrFail($id);
-
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255|unique:roles,name,' . $id,
+            'display_name' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
             'permissions' => 'sometimes|array',
             'permissions.*' => 'string|exists:permissions,name',
         ]);
 
-        if (isset($validated['name'])) {
-            $role->update(['name' => $validated['name']]);
-        }
+        try {
+            $role = $this->authService->updateRole($id, $validated);
 
-        if (isset($validated['permissions'])) {
-            $this->rbacService->updateRolePermissions($role, $validated['permissions']);
+            return response()->json([
+                'message' => 'Role updated successfully',
+                'data' => $role,
+            ]);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        return response()->json([
-            'message' => 'Role updated successfully',
-            'data' => [
-                'id' => $role->id,
-                'name' => $role->name,
-                'permissions' => $role->permissions->pluck('name'),
-            ],
-        ]);
     }
 
     /**
@@ -151,20 +113,15 @@ class RbacController extends Controller
      */
     public function deleteRole(int $id): JsonResponse
     {
-        $role = Role::findOrFail($id);
+        try {
+            $this->authService->deleteRole($id);
 
-        // Prevent deletion of system roles
-        if (in_array($role->name, RolesAndPermissionsSeeder::SYSTEM_ROLES, true)) {
             return response()->json([
-                'message' => 'Cannot delete system roles',
-            ], 422);
+                'message' => 'Role deleted successfully',
+            ]);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        $role->delete();
-
-        return response()->json([
-            'message' => 'Role deleted successfully',
-        ]);
     }
 
     /**
@@ -172,20 +129,22 @@ class RbacController extends Controller
      */
     public function getPermissions(): JsonResponse
     {
-        $permissions = Permission::all()->groupBy(function ($permission) {
-            return explode('.', $permission->name)[0];
+        $permissions = $this->authService->getAllPermissions();
+
+        $grouped = collect($permissions)->groupBy(function ($permission) {
+            return explode('.', $permission['name'])[0];
         })->map(function ($group, $category) {
             return [
                 'category' => $category,
                 'permissions' => $group->map(fn ($p) => [
-                    'id' => $p->id,
-                    'name' => $p->name,
-                    'action' => explode('.', $p->name)[1] ?? $p->name,
-                ]),
+                    'id' => $p['id'],
+                    'name' => $p['name'],
+                    'action' => explode('.', $p['name'])[1] ?? $p['name'],
+                ])->values(),
             ];
         })->values();
 
-        return response()->json(['data' => $permissions]);
+        return response()->json(['data' => $grouped]);
     }
 
     /**
@@ -193,32 +152,31 @@ class RbacController extends Controller
      */
     public function getModulePermissions(int $roleId): JsonResponse
     {
-        $role = Role::findOrFail($roleId);
-        // Only select necessary columns for performance
-        $modules = Module::select('id', 'name', 'api_name')->get();
-        $existingPermissions = DB::table('module_permissions')->where('role_id', $roleId)
-            ->get()
-            ->keyBy('module_id');
+        $modulePermissions = $this->authService->getModulePermissions($roleId);
 
-        $modulePermissions = $modules->map(function ($module) use ($existingPermissions) {
-            $permission = $existingPermissions->get($module->id);
+        // Get all modules and merge with permissions
+        $modules = $this->moduleRepository->findAll();
+        $permissionsByModule = collect($modulePermissions)->keyBy('module_id');
+
+        $data = collect($modules)->map(function ($module) use ($permissionsByModule) {
+            $permission = $permissionsByModule->get($module->getId());
 
             return [
-                'module_id' => $module->id,
-                'module_name' => $module->name,
-                'module_api_name' => $module->api_name,
-                'can_view' => $permission?->can_view ?? false,
-                'can_create' => $permission?->can_create ?? false,
-                'can_edit' => $permission?->can_edit ?? false,
-                'can_delete' => $permission?->can_delete ?? false,
-                'can_export' => $permission?->can_export ?? false,
-                'can_import' => $permission?->can_import ?? false,
-                'record_access_level' => $permission?->record_access_level ?? 'own',
-                'field_restrictions' => $permission?->field_restrictions ?? [],
+                'module_id' => $module->getId(),
+                'module_name' => $module->getName(),
+                'module_api_name' => $module->getApiName(),
+                'can_view' => $permission['can_view'] ?? false,
+                'can_create' => $permission['can_create'] ?? false,
+                'can_edit' => $permission['can_edit'] ?? false,
+                'can_delete' => $permission['can_delete'] ?? false,
+                'can_export' => $permission['can_export'] ?? false,
+                'can_import' => $permission['can_import'] ?? false,
+                'record_access_level' => $permission['record_access_level'] ?? 'own',
+                'field_restrictions' => $permission['restricted_fields'] ?? [],
             ];
         });
 
-        return response()->json(['data' => $modulePermissions]);
+        return response()->json(['data' => $data]);
     }
 
     /**
@@ -226,8 +184,6 @@ class RbacController extends Controller
      */
     public function updateModulePermissions(Request $request, int $roleId): JsonResponse
     {
-        $role = Role::findOrFail($roleId);
-
         $validated = $request->validate([
             'module_id' => 'required|integer|exists:modules,id',
             'can_view' => 'boolean',
@@ -241,9 +197,11 @@ class RbacController extends Controller
             'field_restrictions.*' => 'string',
         ]);
 
-        $module = Module::findOrFail($validated['module_id']);
-
-        $permission = $this->rbacService->setModulePermission($role, $module, $validated);
+        $permission = $this->authService->updateModulePermission(
+            $roleId,
+            $validated['module_id'],
+            $validated
+        );
 
         return response()->json([
             'message' => 'Module permissions updated successfully',
@@ -256,8 +214,6 @@ class RbacController extends Controller
      */
     public function bulkUpdateModulePermissions(Request $request, int $roleId): JsonResponse
     {
-        $role = Role::findOrFail($roleId);
-
         $validated = $request->validate([
             'permissions' => 'required|array',
             'permissions.*.module_id' => 'required|integer|exists:modules,id',
@@ -271,10 +227,12 @@ class RbacController extends Controller
             'permissions.*.field_restrictions' => 'array',
         ]);
 
-        foreach ($validated['permissions'] as $permissionData) {
-            $module = Module::findOrFail($permissionData['module_id']);
-            $this->rbacService->setModulePermission($role, $module, $permissionData);
+        $permissionsById = [];
+        foreach ($validated['permissions'] as $perm) {
+            $permissionsById[$perm['module_id']] = $perm;
         }
+
+        $this->authService->bulkUpdateModulePermissions($roleId, $permissionsById);
 
         return response()->json([
             'message' => 'Module permissions updated successfully',
@@ -286,14 +244,41 @@ class RbacController extends Controller
      */
     public function getRoleUsers(int $roleId): JsonResponse
     {
-        $role = Role::findOrFail($roleId);
-        $users = $role->users()->select('id', 'name', 'email')->get();
+        $users = $this->authService->getRoleUsers($roleId);
 
         return response()->json(['data' => $users]);
     }
 
     /**
+     * Check if current user can assign a specific role (privilege escalation prevention).
+     * Admins can assign any role. Non-admins cannot assign admin role.
+     */
+    private function canAssignRole(int $currentUserId, int $roleId): bool
+    {
+        $isAdmin = $this->cachedAuthService->isAdmin($currentUserId);
+
+        // Admins can assign any role
+        if ($isAdmin) {
+            return true;
+        }
+
+        // Get the role being assigned
+        $role = $this->authService->getRole($roleId);
+        if (!$role) {
+            return false;
+        }
+
+        // Non-admins cannot assign admin role
+        if ($role['name'] === 'admin') {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Assign role to user.
+     * Security: Prevents privilege escalation - non-admins cannot assign admin role.
      */
     public function assignRoleToUser(Request $request): JsonResponse
     {
@@ -302,18 +287,30 @@ class RbacController extends Controller
             'role_id' => 'required|integer|exists:roles,id',
         ]);
 
-        $user = User::findOrFail($validated['user_id']);
-        $role = Role::findOrFail($validated['role_id']);
+        $currentUserId = $request->user()->id;
 
-        $this->rbacService->assignRole($user, $role);
+        // Privilege escalation prevention
+        if (!$this->canAssignRole($currentUserId, $validated['role_id'])) {
+            return response()->json([
+                'message' => 'You do not have permission to assign this role.',
+            ], 403);
+        }
 
-        return response()->json([
-            'message' => 'Role assigned successfully',
-            'data' => [
-                'user_id' => $user->id,
-                'roles' => $user->roles->pluck('name'),
-            ],
-        ]);
+        try {
+            $this->authService->assignRoleToUser($validated['user_id'], $validated['role_id']);
+
+            $roles = $this->authService->getUserRoles($validated['user_id']);
+
+            return response()->json([
+                'message' => 'Role assigned successfully',
+                'data' => [
+                    'user_id' => $validated['user_id'],
+                    'roles' => collect($roles)->pluck('name'),
+                ],
+            ]);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     /**
@@ -326,61 +323,88 @@ class RbacController extends Controller
             'role_id' => 'required|integer|exists:roles,id',
         ]);
 
-        $user = User::findOrFail($validated['user_id']);
-        $role = Role::findOrFail($validated['role_id']);
+        $this->authService->removeRoleFromUser($validated['user_id'], $validated['role_id']);
 
-        $this->rbacService->removeRole($user, $role);
+        $roles = $this->authService->getUserRoles($validated['user_id']);
 
         return response()->json([
             'message' => 'Role removed successfully',
             'data' => [
-                'user_id' => $user->id,
-                'roles' => $user->roles->pluck('name'),
+                'user_id' => $validated['user_id'],
+                'roles' => collect($roles)->pluck('name'),
             ],
         ]);
     }
 
     /**
      * Get user permissions summary.
+     * Security: Only admins can view other users' permissions.
      */
-    public function getUserPermissions(int $userId): JsonResponse
+    public function getUserPermissions(Request $request, int $userId): JsonResponse
     {
-        $user = User::findOrFail($userId);
+        $currentUser = $request->user();
+        $currentUserId = $currentUser->id;
+        $isAdmin = $this->cachedAuthService->isAdmin($currentUserId);
+
+        // Security check: Users can only view their own permissions unless they are admin
+        if ($userId !== $currentUserId && !$isAdmin) {
+            return response()->json([
+                'message' => 'You do not have permission to view other users\' permissions.',
+            ], 403);
+        }
+
+        $roles = $this->authService->getUserRoles($userId);
+        $permissions = $this->cachedAuthService->getUserPermissions($userId);
 
         return response()->json([
             'data' => [
-                'user_id' => $user->id,
-                'roles' => $user->roles->pluck('name'),
-                'permissions' => $user->getAllPermissions()->pluck('name'),
+                'user_id' => $userId,
+                'roles' => collect($roles)->pluck('name'),
+                'permissions' => $permissions,
             ],
         ]);
     }
 
     /**
      * Sync user roles (replace all roles).
+     * Security: Prevents privilege escalation - validates all roles being assigned.
      */
     public function syncUserRoles(Request $request, int $userId): JsonResponse
     {
-        $user = User::findOrFail($userId);
-
         $validated = $request->validate([
             'roles' => 'required|array',
             'roles.*' => 'integer|exists:roles,id',
         ]);
 
-        $roleNames = Role::whereIn('id', $validated['roles'])->pluck('name')->toArray();
-        $this->rbacService->syncRoles($user, $roleNames);
+        $currentUserId = $request->user()->id;
 
-        return response()->json([
-            'message' => 'User roles updated successfully',
-            'data' => [
-                'user_id' => $user->id,
-                'roles' => $user->fresh()->roles->map(fn ($r) => [
-                    'id' => $r->id,
-                    'name' => $r->name,
-                ]),
-            ],
-        ]);
+        // Privilege escalation prevention - check each role being assigned
+        foreach ($validated['roles'] as $roleId) {
+            if (!$this->canAssignRole($currentUserId, $roleId)) {
+                return response()->json([
+                    'message' => 'You do not have permission to assign one or more of these roles.',
+                ], 403);
+            }
+        }
+
+        try {
+            $this->authService->syncUserRoles($userId, $validated['roles']);
+
+            $roles = $this->authService->getUserRoles($userId);
+
+            return response()->json([
+                'message' => 'User roles updated successfully',
+                'data' => [
+                    'user_id' => $userId,
+                    'roles' => collect($roles)->map(fn ($r) => [
+                        'id' => $r['id'],
+                        'name' => $r['name'],
+                    ]),
+                ],
+            ]);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     /**
@@ -389,60 +413,37 @@ class RbacController extends Controller
     public function getCurrentUserPermissions(Request $request): JsonResponse
     {
         $user = $request->user();
-        $isAdmin = $user->hasRole('admin');
+        $userId = $user->id;
+        $isAdmin = $this->cachedAuthService->isAdmin($userId);
 
-        // Get module-level permissions - only select necessary columns
-        $modules = Module::select('id', 'name', 'api_name')->get();
-
-        // Pre-fetch all module permissions for this user's roles in one query
-        $userRoleIds = $user->roles->pluck('id');
-        $allModulePermissions = ModulePermission::whereIn('role_id', $userRoleIds)
-            ->get()
-            ->groupBy('module_id');
-
+        // Get module-level permissions
+        $modules = $this->moduleRepository->findAll();
         $modulePermissions = [];
 
         foreach ($modules as $module) {
-            // Get the best permission for this module from all user's roles
-            $modulePerms = $allModulePermissions->get($module->id, collect());
+            $access = $this->cachedAuthService->getModuleAccess($userId, $module->getId());
 
-            // Merge permissions - if any role has the permission, user has it
-            $hasView = $modulePerms->contains('can_view', true);
-            $hasCreate = $modulePerms->contains('can_create', true);
-            $hasEdit = $modulePerms->contains('can_edit', true);
-            $hasDelete = $modulePerms->contains('can_delete', true);
-            $hasExport = $modulePerms->contains('can_export', true);
-            $hasImport = $modulePerms->contains('can_import', true);
-
-            // Get the highest access level
-            $accessLevels = ['none' => 0, 'own' => 1, 'team' => 2, 'all' => 3];
-            $highestAccessLevel = $modulePerms->reduce(function ($carry, $perm) use ($accessLevels) {
-                $currentLevel = $accessLevels[$perm->record_access_level] ?? 0;
-                $carryLevel = $accessLevels[$carry] ?? 0;
-                return $currentLevel > $carryLevel ? $perm->record_access_level : $carry;
-            }, 'none');
-
-            // Merge field restrictions (intersection - only fields restricted in ALL roles)
-            $fieldRestrictions = $modulePerms->pluck('field_restrictions')->filter()->toArray();
-
-            $modulePermissions[$module->api_name] = [
-                'can_view' => $isAdmin || $hasView,
-                'can_create' => $isAdmin || $hasCreate,
-                'can_edit' => $isAdmin || $hasEdit,
-                'can_delete' => $isAdmin || $hasDelete,
-                'can_export' => $isAdmin || $hasExport,
-                'can_import' => $isAdmin || $hasImport,
-                'record_access_level' => $isAdmin ? 'all' : $highestAccessLevel,
-                'hidden_fields' => $isAdmin ? [] : (empty($fieldRestrictions) ? [] : array_intersect(...$fieldRestrictions)),
+            $modulePermissions[$module->getApiName()] = [
+                'can_view' => $access->canView,
+                'can_create' => $access->canCreate,
+                'can_edit' => $access->canEdit,
+                'can_delete' => $access->canDelete,
+                'can_export' => $access->canExport,
+                'can_import' => $access->canImport,
+                'record_access_level' => $access->recordAccessLevel->value,
+                'hidden_fields' => $access->restrictedFields,
             ];
         }
 
+        $roles = $this->authService->getUserRoles($userId);
+        $permissions = $this->cachedAuthService->getUserPermissions($userId);
+
         return response()->json([
             'data' => [
-                'user_id' => $user->id,
+                'user_id' => $userId,
                 'is_admin' => $isAdmin,
-                'roles' => $user->roles->pluck('name'),
-                'system_permissions' => $user->getAllPermissions()->pluck('name'),
+                'roles' => collect($roles)->pluck('name'),
+                'system_permissions' => $permissions,
                 'module_permissions' => $modulePermissions,
             ],
         ]);

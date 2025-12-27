@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AuditLog\Repositories\AuditLogRepositoryInterface;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class AuditLogController extends Controller
 {
+    public function __construct(
+        protected AuditLogRepositoryInterface $auditLogRepository
+    ) {}
+
     /**
      * List audit logs with filters.
      */
@@ -27,44 +31,24 @@ class AuditLogController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = DB::table('audit_logs')
-            ->with('user:id,name,email')
-            ->orderBy('created_at', 'desc');
-
-        if (isset($validated['auditable_type'])) {
-            $query->where('auditable_type', $validated['auditable_type']);
+        $filters = $validated;
+        if (isset($filters['auditable_id'])) {
+            $filters['auditable_id'] = (int) $filters['auditable_id'];
+        }
+        if (isset($filters['user_id'])) {
+            $filters['user_id'] = (int) $filters['user_id'];
         }
 
-        if (isset($validated['auditable_id'])) {
-            $query->where('auditable_id', $validated['auditable_id']);
-        }
-
-        if (isset($validated['event'])) {
-            $query->forEvent($validated['event']);
-        }
-
-        if (isset($validated['user_id'])) {
-            $query->byUser($validated['user_id']);
-        }
-
-        if (isset($validated['start_date']) && isset($validated['end_date'])) {
-            $query->betweenDates($validated['start_date'], $validated['end_date']);
-        }
-
-        if (isset($validated['tags'])) {
-            $query->withTags($validated['tags']);
-        }
-
-        $perPage = $validated['per_page'] ?? 25;
-        $logs = $query->paginate($perPage);
+        $perPage = (int) ($validated['per_page'] ?? 25);
+        $result = $this->auditLogRepository->findWithFilters($filters, $perPage);
 
         return response()->json([
-            'data' => collect($logs->items())->map(fn($log) => $this->formatLog($log)),
+            'data' => collect($result->items())->map(fn($log) => $this->formatLog($log)),
             'meta' => [
-                'current_page' => $logs->currentPage(),
-                'last_page' => $logs->lastPage(),
-                'per_page' => $logs->perPage(),
-                'total' => $logs->total(),
+                'current_page' => $result->currentPage(),
+                'last_page' => $result->lastPage(),
+                'per_page' => $result->perPage(),
+                'total' => $result->total(),
             ],
         ]);
     }
@@ -72,9 +56,15 @@ class AuditLogController extends Controller
     /**
      * Get a single audit log entry.
      */
-    public function show(AuditLog $auditLog): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $auditLog->load('user:id,name,email');
+        $auditLog = $this->auditLogRepository->findByIdWithUser($id);
+
+        if (!$auditLog) {
+            return response()->json([
+                'message' => 'Audit log not found',
+            ], 404);
+        }
 
         return response()->json([
             'data' => $this->formatLog($auditLog, true),
@@ -92,16 +82,15 @@ class AuditLogController extends Controller
             'limit' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $limit = $validated['limit'] ?? 50;
-
-        $logs = AuditLog::forAuditable($validated['auditable_type'], $validated['auditable_id'])
-            ->with('user:id,name,email')
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
+        $limit = (int) ($validated['limit'] ?? 50);
+        $logs = $this->auditLogRepository->findForAuditable(
+            $validated['auditable_type'],
+            (int) $validated['auditable_id'],
+            $limit
+        );
 
         return response()->json([
-            'data' => $logs->map(fn($log) => $this->formatLog($log)),
+            'data' => collect($logs)->map(fn($log) => $this->formatLog($log)),
         ]);
     }
 
@@ -115,38 +104,13 @@ class AuditLogController extends Controller
             'auditable_id' => 'required|integer',
         ]);
 
-        $logs = AuditLog::forAuditable($validated['auditable_type'], $validated['auditable_id']);
-
-        // Get summary stats
-        $totalChanges = $logs->count();
-        $eventCounts = AuditLog::forAuditable($validated['auditable_type'], $validated['auditable_id'])
-            ->selectRaw('event, count(*) as count')
-            ->groupBy('event')
-            ->pluck('count', 'event')
-            ->toArray();
-
-        $uniqueUsers = AuditLog::forAuditable($validated['auditable_type'], $validated['auditable_id'])
-            ->distinct('user_id')
-            ->count('user_id');
-
-        $lastChange = AuditLog::forAuditable($validated['auditable_type'], $validated['auditable_id'])
-            ->with('user:id,name,email')
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-        $firstChange = AuditLog::forAuditable($validated['auditable_type'], $validated['auditable_id'])
-            ->orderBy('created_at', 'asc')
-            ->first();
+        $summary = $this->auditLogRepository->getSummary(
+            $validated['auditable_type'],
+            (int) $validated['auditable_id']
+        );
 
         return response()->json([
-            'data' => [
-                'total_changes' => $totalChanges,
-                'event_counts' => $eventCounts,
-                'unique_users' => $uniqueUsers,
-                'first_change_at' => $firstChange?->created_at,
-                'last_change_at' => $lastChange?->created_at,
-                'last_change_by' => $lastChange?->user,
-            ],
+            'data' => $summary,
         ]);
     }
 
@@ -161,23 +125,21 @@ class AuditLogController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = AuditLog::byUser($userId)
-            ->orderBy('created_at', 'desc');
-
-        if (isset($validated['start_date']) && isset($validated['end_date'])) {
-            $query->betweenDates($validated['start_date'], $validated['end_date']);
-        }
-
-        $perPage = $validated['per_page'] ?? 25;
-        $logs = $query->paginate($perPage);
+        $perPage = (int) ($validated['per_page'] ?? 25);
+        $result = $this->auditLogRepository->findByUser(
+            $userId,
+            $validated['start_date'] ?? null,
+            $validated['end_date'] ?? null,
+            $perPage
+        );
 
         return response()->json([
-            'data' => collect($logs->items())->map(fn($log) => $this->formatLog($log)),
+            'data' => collect($result->items())->map(fn($log) => $this->formatLog($log)),
             'meta' => [
-                'current_page' => $logs->currentPage(),
-                'last_page' => $logs->lastPage(),
-                'per_page' => $logs->perPage(),
-                'total' => $logs->total(),
+                'current_page' => $result->currentPage(),
+                'last_page' => $result->lastPage(),
+                'per_page' => $result->perPage(),
+                'total' => $result->total(),
             ],
         ]);
     }
@@ -185,13 +147,26 @@ class AuditLogController extends Controller
     /**
      * Compare two audit log entries.
      */
-    public function compare(AuditLog $log1, AuditLog $log2): JsonResponse
+    public function compare(int $log1Id, int $log2Id): JsonResponse
     {
+        $log1 = $this->auditLogRepository->findByIdWithUser($log1Id);
+        $log2 = $this->auditLogRepository->findByIdWithUser($log2Id);
+
+        if (!$log1 || !$log2) {
+            return response()->json([
+                'message' => 'One or both audit logs not found',
+            ], 404);
+        }
+
+        $time1 = new \DateTimeImmutable($log1['created_at']);
+        $time2 = new \DateTimeImmutable($log2['created_at']);
+        $diff = $time1->diff($time2);
+
         return response()->json([
             'data' => [
                 'log1' => $this->formatLog($log1, true),
                 'log2' => $this->formatLog($log2, true),
-                'time_diff' => $log1->created_at->diffForHumans($log2->created_at, true),
+                'time_diff' => $this->formatDiff($diff),
             ],
         ]);
     }
@@ -199,30 +174,80 @@ class AuditLogController extends Controller
     /**
      * Format log for response.
      */
-    protected function formatLog(AuditLog $log, bool $detailed = false): array
+    protected function formatLog(array $log, bool $detailed = false): array
     {
         $data = [
-            'id' => $log->id,
-            'user' => $log->user,
-            'event' => $log->event,
-            'event_description' => $log->event_description,
-            'auditable_type' => class_basename($log->auditable_type),
-            'auditable_id' => $log->auditable_id,
-            'changed_fields' => $log->changed_fields,
-            'ip_address' => $log->ip_address,
-            'created_at' => $log->created_at->toISOString(),
+            'id' => $log['id'],
+            'user' => $log['user'] ?? null,
+            'event' => $log['event'],
+            'event_description' => $log['event_description'] ?? null,
+            'auditable_type' => class_basename($log['auditable_type'] ?? ''),
+            'auditable_id' => $log['auditable_id'],
+            'changed_fields' => $log['changed_fields'] ?? [],
+            'ip_address' => $log['ip_address'] ?? null,
+            'created_at' => $log['created_at'],
         ];
 
         if ($detailed) {
-            $data['old_values'] = $log->old_values;
-            $data['new_values'] = $log->new_values;
-            $data['diff'] = $log->getDiff();
-            $data['user_agent'] = $log->user_agent;
-            $data['url'] = $log->url;
-            $data['tags'] = $log->tags;
-            $data['batch_id'] = $log->batch_id;
+            $data['old_values'] = $log['old_values'] ?? null;
+            $data['new_values'] = $log['new_values'] ?? null;
+            $data['diff'] = $this->getDiff($log);
+            $data['user_agent'] = $log['user_agent'] ?? null;
+            $data['url'] = $log['url'] ?? null;
+            $data['tags'] = $log['tags'] ?? null;
+            $data['batch_id'] = $log['batch_id'] ?? null;
         }
 
         return $data;
+    }
+
+    /**
+     * Get diff between old and new values.
+     */
+    protected function getDiff(array $log): array
+    {
+        $diff = [];
+        $oldValues = $log['old_values'] ?? [];
+        $newValues = $log['new_values'] ?? [];
+        $changedFields = $log['changed_fields'] ?? [];
+
+        foreach ($changedFields as $field) {
+            $diff[$field] = [
+                'old' => $oldValues[$field] ?? null,
+                'new' => $newValues[$field] ?? null,
+            ];
+        }
+
+        return $diff;
+    }
+
+    /**
+     * Format DateInterval for human readability.
+     */
+    protected function formatDiff(\DateInterval $diff): string
+    {
+        $parts = [];
+
+        if ($diff->y > 0) {
+            $parts[] = $diff->y . ' year' . ($diff->y > 1 ? 's' : '');
+        }
+        if ($diff->m > 0) {
+            $parts[] = $diff->m . ' month' . ($diff->m > 1 ? 's' : '');
+        }
+        if ($diff->d > 0) {
+            $parts[] = $diff->d . ' day' . ($diff->d > 1 ? 's' : '');
+        }
+        if ($diff->h > 0) {
+            $parts[] = $diff->h . ' hour' . ($diff->h > 1 ? 's' : '');
+        }
+        if ($diff->i > 0) {
+            $parts[] = $diff->i . ' minute' . ($diff->i > 1 ? 's' : '');
+        }
+
+        if (empty($parts)) {
+            return 'less than a minute';
+        }
+
+        return implode(', ', $parts);
     }
 }

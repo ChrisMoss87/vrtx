@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\WebForm\Entities\WebFormAnalytics;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\WebFormAnalytics>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\WebForm\Entities\WebFormAnalytics>
  */
 class WebFormAnalyticsFactory extends Factory
 {

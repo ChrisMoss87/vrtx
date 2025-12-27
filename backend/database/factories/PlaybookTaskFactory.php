@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Playbook;
-use App\Infrastructure\Persistence\Eloquent\Models\PlaybookPhase;
-use App\Infrastructure\Persistence\Eloquent\Models\PlaybookTask;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Playbook\Entities\Playbook;
+use App\Domain\Playbook\Entities\PlaybookPhase;
+use App\Domain\Playbook\Entities\PlaybookTask;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\PlaybookTask>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Playbook\Entities\PlaybookTask>
  */
 class PlaybookTaskFactory extends Factory
 {

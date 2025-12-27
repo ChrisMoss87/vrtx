@@ -372,10 +372,15 @@ frontend/src/lib/components/ui/
 ## Known Limitations
 
 1. **No Backend**: Full functionality requires API implementation
-2. **Virtual Scrolling**: Not implemented (suitable for <1000 rows)
-3. **Column Reordering**: Planned but not implemented
-4. **Column Resizing**: Planned but not implemented
-5. **Row Grouping**: Planned but not implemented
+
+## Completed Features (Previously Planned)
+
+1. ✅ **Virtual Scrolling** - Enable via Table Settings → Virtual Scroll toggle
+2. ✅ **Column Reordering** - Drag columns in Columns dropdown to reorder
+3. ✅ **Column Resizing** - Enabled by default, drag column borders to resize
+4. ✅ **Row Grouping** - Enable via Table Settings → Group By dropdown
+5. ✅ **Column Pinning** - Hover columns in Columns dropdown → click pin icons
+6. ✅ **Mobile View** - Auto-enables on mobile/tablet, shows card view with action sheet
 
 ## Success Criteria - MET ✅
 

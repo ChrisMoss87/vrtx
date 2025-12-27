@@ -58,8 +58,17 @@
 			currentState = result.current_state;
 			availableTransitions = result.available_transitions;
 			slaStatus = result.sla_status;
-		} catch (error) {
-			console.error('Failed to load blueprint state:', error);
+		} catch (error: unknown) {
+			// 404 is expected when no blueprint exists for the module - silently ignore
+			const isNotFound = error && typeof error === 'object' && 'status' in error && error.status === 404;
+			if (!isNotFound) {
+				console.error('Failed to load blueprint state:', error);
+			}
+			// Reset state to show "No active blueprint" message
+			blueprintInfo = null;
+			currentState = null;
+			availableTransitions = [];
+			slaStatus = null;
 		} finally {
 			loading = false;
 		}

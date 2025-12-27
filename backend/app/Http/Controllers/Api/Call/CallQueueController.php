@@ -1,35 +1,33 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api\Call;
 
 use App\Application\Services\Call\CallApplicationService;
+use App\Domain\Call\Repositories\CallQueueRepositoryInterface;
+use App\Domain\Call\Repositories\CallQueueMemberRepositoryInterface;
 use App\Http\Controllers\Controller;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
 use App\Services\Call\CallService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB;
 
 class CallQueueController extends Controller
 {
     public function __construct(
-        protected CallApplicationService $callApplicationService,
-        protected CallService $callService
+        private readonly CallApplicationService $callApplicationService,
+        private readonly CallService $callService,
+        private readonly CallQueueRepositoryInterface $queueRepository,
+        private readonly CallQueueMemberRepositoryInterface $memberRepository
     ) {}
 
     public function index(): JsonResponse
     {
-        $queues = CallQueue::with(['provider', 'members.user'])
-            ->orderBy('name')
-            ->get();
+        $queues = $this->queueRepository->findAllWithRelations();
 
         return response()->json([
-            'data' => $queues->map(fn($queue) => [
-                ...$queue->toArray(),
-                'online_agent_count' => $queue->getOnlineAgentCount(),
-                'is_within_business_hours' => $queue->isWithinBusinessHours(),
-            ]),
+            'data' => $queues,
         ]);
     }
 
@@ -55,10 +53,7 @@ class CallQueueController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $queue = DB::table('call_queues')->insertGetId([
-            ...$validator->validated(),
-            'is_active' => true,
-        ]);
+        $queue = $this->queueRepository->create($validator->validated());
 
         return response()->json([
             'message' => 'Queue created successfully',
@@ -66,22 +61,27 @@ class CallQueueController extends Controller
         ], 201);
     }
 
-    public function show(CallQueue $callQueue): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $callQueue->load(['provider', 'members.user']);
+        $queue = $this->queueRepository->findByIdWithRelations($id);
+
+        if (!$queue) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
+
+        $queue['stats'] = $this->callService->getQueueStatsById($id);
 
         return response()->json([
-            'data' => [
-                ...$callQueue->toArray(),
-                'online_agent_count' => $callQueue->getOnlineAgentCount(),
-                'is_within_business_hours' => $callQueue->isWithinBusinessHours(),
-                'stats' => $this->callService->getQueueStats($callQueue),
-            ],
+            'data' => $queue,
         ]);
     }
 
-    public function update(Request $request, CallQueue $callQueue): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
+        if (!$this->queueRepository->exists($id)) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
@@ -101,38 +101,47 @@ class CallQueueController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $callQueue->update($validator->validated());
+        $queue = $this->queueRepository->update($id, $validator->validated());
 
         return response()->json([
             'message' => 'Queue updated successfully',
-            'data' => $callQueue->fresh(),
+            'data' => $queue,
         ]);
     }
 
-    public function destroy(CallQueue $callQueue): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        $callQueue->members()->delete();
-        $callQueue->delete();
+        if (!$this->queueRepository->exists($id)) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
+
+        $this->queueRepository->delete($id);
 
         return response()->json([
             'message' => 'Queue deleted successfully',
         ]);
     }
 
-    public function toggleActive(CallQueue $callQueue): JsonResponse
+    public function toggleActive(int $id): JsonResponse
     {
-        $callQueue->update([
-            'is_active' => !$callQueue->is_active,
-        ]);
+        $queue = $this->queueRepository->toggleActive($id);
+
+        if (!$queue) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
 
         return response()->json([
-            'message' => $callQueue->is_active ? 'Queue activated' : 'Queue deactivated',
-            'data' => ['is_active' => $callQueue->is_active],
+            'message' => $queue['is_active'] ? 'Queue activated' : 'Queue deactivated',
+            'data' => ['is_active' => $queue['is_active']],
         ]);
     }
 
-    public function addMember(Request $request, CallQueue $callQueue): JsonResponse
+    public function addMember(Request $request, int $queueId): JsonResponse
     {
+        if (!$this->queueRepository->exists($queueId)) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
+
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,id',
             'priority' => 'nullable|integer|min:1|max:10',
@@ -142,14 +151,12 @@ class CallQueueController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $existing = $callQueue->members()->where('user_id', $request->user_id)->first();
-
-        if ($existing) {
+        if ($this->memberRepository->exists($queueId, (int) $request->user_id)) {
             return response()->json(['error' => 'User already in queue'], 422);
         }
 
-        $member = $callQueue->members()->create([
-            'user_id' => $request->user_id,
+        $member = $this->memberRepository->create($queueId, [
+            'user_id' => (int) $request->user_id,
             'priority' => $request->input('priority', 5),
             'is_active' => true,
             'status' => 'offline',
@@ -158,30 +165,34 @@ class CallQueueController extends Controller
 
         return response()->json([
             'message' => 'Member added to queue',
-            'data' => $member->load('user'),
+            'data' => $member,
         ], 201);
     }
 
-    public function removeMember(CallQueue $callQueue, int $userId): JsonResponse
+    public function removeMember(int $queueId, int $userId): JsonResponse
     {
-        $member = $callQueue->members()->where('user_id', $userId)->first();
+        if (!$this->queueRepository->exists($queueId)) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
 
-        if (!$member) {
+        if (!$this->memberRepository->exists($queueId, $userId)) {
             return response()->json(['error' => 'Member not found in queue'], 404);
         }
 
-        $member->delete();
+        $this->memberRepository->delete($queueId, $userId);
 
         return response()->json([
             'message' => 'Member removed from queue',
         ]);
     }
 
-    public function updateMember(Request $request, CallQueue $callQueue, int $userId): JsonResponse
+    public function updateMember(Request $request, int $queueId, int $userId): JsonResponse
     {
-        $member = $callQueue->members()->where('user_id', $userId)->first();
+        if (!$this->queueRepository->exists($queueId)) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
 
-        if (!$member) {
+        if (!$this->memberRepository->exists($queueId, $userId)) {
             return response()->json(['error' => 'Member not found in queue'], 404);
         }
 
@@ -194,19 +205,21 @@ class CallQueueController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $member->update($validator->validated());
+        $member = $this->memberRepository->update($queueId, $userId, $validator->validated());
 
         return response()->json([
             'message' => 'Member updated',
-            'data' => $member->fresh()->load('user'),
+            'data' => $member,
         ]);
     }
 
-    public function setMemberStatus(Request $request, CallQueue $callQueue, int $userId): JsonResponse
+    public function setMemberStatus(Request $request, int $queueId, int $userId): JsonResponse
     {
-        $member = $callQueue->members()->where('user_id', $userId)->first();
+        if (!$this->queueRepository->exists($queueId)) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
 
-        if (!$member) {
+        if (!$this->memberRepository->exists($queueId, $userId)) {
             return response()->json(['error' => 'Member not found in queue'], 404);
         }
 
@@ -218,31 +231,21 @@ class CallQueueController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $member->setStatus($request->status);
+        $this->memberRepository->setStatus($queueId, $userId, $request->status);
 
         return response()->json([
             'message' => 'Status updated',
-            'data' => ['status' => $member->status],
+            'data' => ['status' => $request->status],
         ]);
     }
 
     public function myStatus(Request $request): JsonResponse
     {
         $user = $request->user();
-        $memberships = DB::table('call_queue_members')->where('user_id', $user->id)
-            ->with('queue')
-            ->get();
+        $memberships = $this->memberRepository->findByUserId((int) $user->id);
 
         return response()->json([
-            'data' => $memberships->map(fn($m) => [
-                'queue_id' => $m->queue_id,
-                'queue_name' => $m->queue->name,
-                'status' => $m->status,
-                'is_active' => $m->is_active,
-                'priority' => $m->priority,
-                'calls_handled_today' => $m->calls_handled_today,
-                'last_call_at' => $m->last_call_at,
-            ]),
+            'data' => $memberships,
         ]);
     }
 
@@ -258,29 +261,33 @@ class CallQueueController extends Controller
         }
 
         $user = $request->user();
-        $query = DB::table('call_queue_members')->where('user_id', $user->id);
+        $queueId = $request->has('queue_id') ? (int) $request->queue_id : null;
 
-        if ($request->has('queue_id')) {
-            $query->where('queue_id', $request->queue_id);
-        }
-
-        $query->update(['status' => $request->status]);
+        $this->memberRepository->setStatusForUser((int) $user->id, $request->status, $queueId);
 
         return response()->json([
             'message' => 'Status updated for all queues',
         ]);
     }
 
-    public function stats(CallQueue $callQueue): JsonResponse
+    public function stats(int $id): JsonResponse
     {
+        if (!$this->queueRepository->exists($id)) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
+
         return response()->json([
-            'data' => $this->callService->getQueueStats($callQueue),
+            'data' => $this->callService->getQueueStatsById($id),
         ]);
     }
 
-    public function resetDailyStats(CallQueue $callQueue): JsonResponse
+    public function resetDailyStats(int $id): JsonResponse
     {
-        $callQueue->members()->update(['calls_handled_today' => 0]);
+        if (!$this->queueRepository->exists($id)) {
+            return response()->json(['error' => 'Queue not found'], 404);
+        }
+
+        $this->memberRepository->resetDailyStats($id);
 
         return response()->json([
             'message' => 'Daily stats reset for all members',

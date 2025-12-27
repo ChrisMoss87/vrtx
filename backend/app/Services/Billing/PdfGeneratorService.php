@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
+use App\Infrastructure\Services\Pdf\ChromePdfService;
 use Illuminate\Support\Facades\View;
-use Illuminate\Support\Facades\DB;
 
 class PdfGeneratorService
 {
+    protected ChromePdfService $pdfService;
+
     protected array $currencySymbols = [
         'USD' => '$',
         'EUR' => '€',
@@ -21,6 +23,11 @@ class PdfGeneratorService
         'INR' => '₹',
         'BRL' => 'R$',
     ];
+
+    public function __construct(ChromePdfService $pdfService)
+    {
+        $this->pdfService = $pdfService;
+    }
 
     /**
      * Generate HTML for a quote PDF.
@@ -55,7 +62,7 @@ class PdfGeneratorService
     /**
      * Generate PDF data for a quote.
      * This returns the data structure needed to render a PDF.
-     * In production, this would use a library like DomPDF, TCPDF, or a service like Browsershot.
+     * Uses headless Chrome for high-quality PDF rendering.
      */
     public function generateQuotePdf(Quote $quote): array
     {
@@ -197,39 +204,31 @@ class PdfGeneratorService
     }
 
     /**
-     * Generate actual PDF binary using DomPDF.
-     * Requires barryvdh/laravel-dompdf package.
+     * Generate actual PDF binary using headless Chrome.
      */
     public function renderQuoteToPdf(Quote $quote): string
     {
         $html = $this->generateQuoteHtml($quote);
 
-        // Check if DomPDF is available
-        if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
-            $pdf->setPaper('a4', 'portrait');
-            return $pdf->output();
-        }
-
-        throw new \Exception('PDF rendering requires barryvdh/laravel-dompdf. Install with: composer require barryvdh/laravel-dompdf');
+        return $this->pdfService->generateFromHtml($html, [
+            'paper_size' => 'A4',
+            'landscape' => false,
+            'print_background' => true,
+        ]);
     }
 
     /**
-     * Generate actual PDF binary for invoice using DomPDF.
-     * Requires barryvdh/laravel-dompdf package.
+     * Generate actual PDF binary for invoice using headless Chrome.
      */
     public function renderInvoiceToPdf(Invoice $invoice): string
     {
         $html = $this->generateInvoiceHtml($invoice);
 
-        // Check if DomPDF is available
-        if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
-            $pdf->setPaper('a4', 'portrait');
-            return $pdf->output();
-        }
-
-        throw new \Exception('PDF rendering requires barryvdh/laravel-dompdf. Install with: composer require barryvdh/laravel-dompdf');
+        return $this->pdfService->generateFromHtml($html, [
+            'paper_size' => 'A4',
+            'landscape' => false,
+            'print_background' => true,
+        ]);
     }
 
     /**
@@ -237,16 +236,11 @@ class PdfGeneratorService
      */
     public function streamQuotePdf(Quote $quote): mixed
     {
-        $html = $this->generateQuoteHtml($quote);
+        $pdfContent = $this->renderQuoteToPdf($quote);
 
-        if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
-            $pdf->setPaper('a4', 'portrait');
-            return $pdf->download($quote->quote_number . '.pdf');
-        }
-
-        // Fallback: return HTML for browser printing
-        return response($html)->header('Content-Type', 'text/html');
+        return response($pdfContent)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $quote->quote_number . '.pdf"');
     }
 
     /**
@@ -254,15 +248,18 @@ class PdfGeneratorService
      */
     public function streamInvoicePdf(Invoice $invoice): mixed
     {
-        $html = $this->generateInvoiceHtml($invoice);
+        $pdfContent = $this->renderInvoiceToPdf($invoice);
 
-        if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
-            $pdf->setPaper('a4', 'portrait');
-            return $pdf->download($invoice->invoice_number . '.pdf');
-        }
+        return response($pdfContent)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $invoice->invoice_number . '.pdf"');
+    }
 
-        // Fallback: return HTML for browser printing
-        return response($html)->header('Content-Type', 'text/html');
+    /**
+     * Check if PDF generation is available.
+     */
+    public function isAvailable(): bool
+    {
+        return $this->pdfService->isAvailable();
     }
 }

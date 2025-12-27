@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\ProposalTemplate;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Proposal\Entities\ProposalTemplate;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\ProposalTemplate>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Proposal\Entities\ProposalTemplate>
  */
 class ProposalTemplateFactory extends Factory
 {

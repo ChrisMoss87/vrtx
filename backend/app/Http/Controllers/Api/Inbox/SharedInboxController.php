@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Inbox;
 
 use App\Application\Services\Inbox\InboxApplicationService;
 use App\Http\Controllers\Controller;
+use App\Infrastructure\Authorization\CachedAuthorizationService;
 use App\Services\Inbox\InboxService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -13,31 +14,38 @@ class SharedInboxController extends Controller
 {
     public function __construct(
         protected InboxApplicationService $inboxApplicationService,
-        protected InboxService $inboxService
+        protected InboxService $inboxService,
+        protected CachedAuthorizationService $authService,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $query = DB::table('shared_inboxs');
+        $query = DB::table('shared_inboxes');
 
         if ($request->boolean('active_only', false)) {
-            $query->active();
+            $query->where('is_active', true);
         }
 
         // Filter by user membership if not admin
-        if (!$request->user()?->hasRole('admin')) {
-            $query->whereHas('members', function ($q) use ($request) {
-                $q->where('user_id', $request->user()?->id);
-            });
+        $userId = $request->user()?->id;
+        if ($userId && !$this->authService->isAdmin($userId)) {
+            $memberInboxIds = DB::table('shared_inbox_members')
+                ->where('user_id', $userId)
+                ->pluck('inbox_id');
+            $query->whereIn('id', $memberInboxIds);
         }
 
-        $inboxes = $query->withCount(['conversations', 'members'])
-            ->orderBy('name')
-            ->get();
+        $inboxes = $query->orderBy('name')->get();
 
-        // Add stats for each inbox
-        $inboxes->each(function ($inbox) {
-            $inbox->stats = $this->inboxService->getInboxStats($inbox);
+        // Add counts manually
+        $inboxes = $inboxes->map(function ($inbox) {
+            $inbox->conversations_count = DB::table('inbox_conversations')
+                ->where('inbox_id', $inbox->id)
+                ->count();
+            $inbox->members_count = DB::table('shared_inbox_members')
+                ->where('inbox_id', $inbox->id)
+                ->count();
+            return $inbox;
         });
 
         return response()->json(['data' => $inboxes]);
@@ -62,17 +70,27 @@ class SharedInboxController extends Controller
             'assignment_method' => 'in:round_robin,load_balanced,manual',
         ]);
 
-        $inbox = DB::table('shared_inboxs')->insertGetId($validated);
+        if (isset($validated['settings'])) {
+            $validated['settings'] = json_encode($validated['settings']);
+        }
+        $validated['created_at'] = now();
+        $validated['updated_at'] = now();
+
+        $inboxId = DB::table('shared_inboxes')->insertGetId($validated);
 
         // Add creator as admin member
-        DB::table('shared_inbox_members')->insertGetId([
-            'inbox_id' => $inbox->id,
+        DB::table('shared_inbox_members')->insert([
+            'inbox_id' => $inboxId,
             'user_id' => auth()->id(),
             'role' => 'admin',
             'can_reply' => true,
             'can_assign' => true,
             'can_close' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
+
+        $inbox = DB::table('shared_inboxes')->where('id', $inboxId)->first();
 
         return response()->json(['data' => $inbox], 201);
     }

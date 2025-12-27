@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\ChatConversation;
-use App\Infrastructure\Persistence\Eloquent\Models\ChatMessage;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Chat\Entities\ChatConversation;
+use App\Domain\Chat\Entities\ChatMessage;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\ChatMessage>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Chat\Entities\ChatMessage>
  */
 class ChatMessageFactory extends Factory
 {

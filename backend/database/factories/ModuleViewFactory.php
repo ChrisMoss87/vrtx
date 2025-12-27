@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\Module;
-use App\Infrastructure\Persistence\Eloquent\Models\ModuleView;
-use App\Infrastructure\Persistence\Eloquent\Models\User;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Modules\Entities\ModuleView;
+use App\Domain\User\Entities\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

@@ -89,6 +89,37 @@
 		return table.state.columnWidths[column.id] || column.width || 150;
 	}
 
+	// Get column pin state
+	function getColumnPinState(columnId: string): 'left' | 'right' | false {
+		return table.state.columnPinning[columnId] || false;
+	}
+
+	// Calculate sticky offset for pinned columns
+	function getStickyOffset(column: ColumnDef, position: 'left' | 'right'): number {
+		let offset = 0;
+
+		// Add selection column width if pinning left
+		if (position === 'left' && enableSelection) {
+			offset += 50;
+		}
+
+		// Add grouping column width if pinning left
+		if (position === 'left' && hasGrouping) {
+			offset += 40;
+		}
+
+		// Add widths of columns pinned before this one
+		for (const col of columns) {
+			if (col.id === column.id) break;
+			const pinState = getColumnPinState(col.id);
+			if (pinState === position) {
+				offset += getColumnWidth(col);
+			}
+		}
+
+		return offset;
+	}
+
 	// ===== Column Resizing =====
 	function handleResizeStart(columnId: string, event: MouseEvent) {
 		event.preventDefault();
@@ -154,11 +185,13 @@
 		{#each columns as column (column.id)}
 			{@const sortInfo = getSortInfo(column.id)}
 			{@const columnWidth = getColumnWidth(column)}
+			{@const pinState = getColumnPinState(column.id)}
+			{@const stickyOffset = pinState ? getStickyOffset(column, pinState) : 0}
 			<Table.Head
-				class="relative select-none"
-				style={enableColumnResize
+				class="relative select-none {pinState ? 'sticky z-20 bg-background shadow-sm' : ''}"
+				style="{enableColumnResize
 					? `width: ${columnWidth}px; min-width: ${column.minWidth || 50}px; max-width: ${column.maxWidth || 500}px;`
-					: ''}
+					: ''}{pinState === 'left' ? `left: ${stickyOffset}px;` : ''}{pinState === 'right' ? `right: ${stickyOffset}px;` : ''}"
 				aria-sort={sortInfo.isSorted
 					? sortInfo.direction === 'asc'
 						? 'ascending'
@@ -217,10 +250,10 @@
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<div
-						class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors {resizingColumn ===
-						column.id
-							? 'bg-primary'
-							: 'bg-transparent'}"
+						class="absolute right-0 top-0 bottom-0 w-[5px] cursor-col-resize group/resize flex items-center justify-center transition-all
+							{resizingColumn === column.id
+								? 'bg-primary'
+								: 'hover:bg-primary/30'}"
 						onmousedown={(e) => handleResizeStart(column.id, e)}
 						role="separator"
 						aria-label="Resize column {column.header}"
@@ -232,7 +265,11 @@
 								table.resizeColumn(column.id, Math.min(column.maxWidth || 500, columnWidth + 10));
 							}
 						}}
-					></div>
+					>
+						<!-- Visible resize grip indicator -->
+						<div class="h-4 w-[3px] rounded-full bg-border group-hover/resize:bg-primary/60 transition-colors
+							{resizingColumn === column.id ? 'bg-primary-foreground' : ''}"></div>
+					</div>
 				{/if}
 			</Table.Head>
 		{/each}

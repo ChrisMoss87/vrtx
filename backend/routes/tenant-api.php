@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\WizardDraftController;
 use App\Http\Controllers\Api\Workflows\WorkflowController;
 use App\Http\Controllers\Api\Workflow\WorkflowEmailTemplateController;
 use App\Http\Controllers\Api\Reporting\ReportController;
+use App\Http\Controllers\Api\SpreadsheetDemoController;
 use App\Http\Controllers\Api\Reporting\ReportTemplateController;
 use App\Http\Controllers\Api\Reporting\DashboardController;
 use App\Http\Controllers\Api\Reporting\DashboardTemplateController;
@@ -89,9 +90,15 @@ use App\Http\Controllers\Api\CMS\CmsMenuController;
 use App\Http\Controllers\Api\CMS\CmsTagController;
 use App\Http\Controllers\Api\CMS\CmsPublicController;
 use App\Http\Controllers\Api\Integration\IntegrationController;
+use App\Http\Controllers\Api\CollaborativeDocument\DocumentController as CollaborativeDocumentController;
+use App\Http\Controllers\Api\CollaborativeDocument\DocumentSyncController;
+use App\Http\Controllers\Api\CollaborativeDocument\DocumentCollaboratorController;
+use App\Http\Controllers\Api\CollaborativeDocument\DocumentVersionController;
+use App\Http\Controllers\Api\CollaborativeDocument\DocumentCommentController;
+use App\Http\Controllers\Api\CollaborativeDocument\DocumentFolderController;
+use App\Infrastructure\Tenancy\Middleware\InitializeTenancyByDomain;
+use App\Infrastructure\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use Illuminate\Support\Facades\Route;
-use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
-use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 
 /*
 |--------------------------------------------------------------------------
@@ -150,12 +157,23 @@ Route::middleware([
             Route::put('/schedule', [\App\Http\Controllers\Api\NotificationController::class, 'updateSchedule']);
         });
 
+        // Spreadsheet Demo Routes (native CSV/Excel services)
+        Route::prefix('spreadsheet-demo')->group(function () {
+            Route::get('/sample-data', [SpreadsheetDemoController::class, 'sampleData']);
+            Route::post('/export-csv', [SpreadsheetDemoController::class, 'exportCsv']);
+            Route::post('/export-excel', [SpreadsheetDemoController::class, 'exportExcel']);
+            Route::post('/parse-file', [SpreadsheetDemoController::class, 'parseFile']);
+            Route::get('/test-round-trip', [SpreadsheetDemoController::class, 'testRoundTrip']);
+            Route::get('/benchmark', [SpreadsheetDemoController::class, 'benchmark']);
+        });
+
         // Module Management Routes
         Route::prefix('modules')->group(function () {
             // View operations - requires modules.view
             Route::middleware('permission:modules.view')->group(function () {
                 Route::get('/', [ModuleController::class, 'index']);
                 Route::get('/active', [ModuleController::class, 'active']);
+                Route::get('/stats', [ModuleController::class, 'stats']);
                 Route::get('/by-api-name/{apiName}', [ModuleController::class, 'showByApiName']);
                 Route::get('/{id}', [ModuleController::class, 'show']);
             });
@@ -653,7 +671,8 @@ Route::middleware([
         });
 
         // RBAC (Role-Based Access Control) Routes
-        Route::prefix('rbac')->group(function () {
+        // Security: Rate limited to prevent enumeration attacks
+        Route::prefix('rbac')->middleware('throttle:60,1')->group(function () {
             // Current user permissions - always accessible
             Route::get('/my-permissions', [RbacController::class, 'getCurrentUserPermissions']);
 
@@ -1068,6 +1087,68 @@ Route::middleware([
             Route::post('/{documentTemplate}/duplicate', [DocumentTemplateController::class, 'duplicate']);
             Route::post('/{documentTemplate}/generate', [DocumentTemplateController::class, 'generate']);
             Route::post('/{documentTemplate}/preview', [DocumentTemplateController::class, 'preview']);
+        });
+
+        // Collaborative Documents Routes (Real-time editing)
+        Route::prefix('documents')->group(function () {
+            // Document CRUD
+            Route::get('/', [CollaborativeDocumentController::class, 'index']);
+            Route::post('/', [CollaborativeDocumentController::class, 'store']);
+            Route::get('/recent', [CollaborativeDocumentController::class, 'recent']);
+            Route::get('/search', [CollaborativeDocumentController::class, 'search']);
+            Route::get('/statistics', [CollaborativeDocumentController::class, 'statistics']);
+            Route::get('/templates', [CollaborativeDocumentController::class, 'templates']);
+            Route::post('/from-template', [CollaborativeDocumentController::class, 'createFromTemplate']);
+            Route::get('/{id}', [CollaborativeDocumentController::class, 'show']);
+            Route::put('/{id}', [CollaborativeDocumentController::class, 'update']);
+            Route::delete('/{id}', [CollaborativeDocumentController::class, 'destroy']);
+            Route::post('/{id}/duplicate', [CollaborativeDocumentController::class, 'duplicate']);
+
+            // Real-time sync
+            Route::get('/{id}/state', [DocumentSyncController::class, 'getState']);
+            Route::post('/{id}/sync', [DocumentSyncController::class, 'sync']);
+            Route::post('/{id}/join', [DocumentSyncController::class, 'join']);
+            Route::post('/{id}/leave', [DocumentSyncController::class, 'leave']);
+            Route::post('/{id}/cursor', [DocumentSyncController::class, 'updateCursor']);
+
+            // Collaborators
+            Route::get('/{id}/collaborators', [DocumentCollaboratorController::class, 'index']);
+            Route::get('/{id}/collaborators/active', [DocumentCollaboratorController::class, 'active']);
+            Route::post('/{id}/collaborators', [DocumentCollaboratorController::class, 'store']);
+            Route::put('/{id}/collaborators/{userId}', [DocumentCollaboratorController::class, 'update']);
+            Route::delete('/{id}/collaborators/{userId}', [DocumentCollaboratorController::class, 'destroy']);
+
+            // Link sharing
+            Route::get('/{id}/share-link', [DocumentCollaboratorController::class, 'getLinkSharing']);
+            Route::post('/{id}/share-link', [DocumentCollaboratorController::class, 'enableLinkSharing']);
+            Route::put('/{id}/share-link', [DocumentCollaboratorController::class, 'updateLinkSharing']);
+            Route::delete('/{id}/share-link', [DocumentCollaboratorController::class, 'disableLinkSharing']);
+            Route::post('/{id}/share-link/regenerate', [DocumentCollaboratorController::class, 'regenerateToken']);
+
+            // Versions
+            Route::get('/{id}/versions', [DocumentVersionController::class, 'index']);
+            Route::post('/{id}/versions', [DocumentVersionController::class, 'store']);
+            Route::get('/{id}/versions/compare', [DocumentVersionController::class, 'compare']);
+            Route::get('/{id}/versions/{versionNumber}', [DocumentVersionController::class, 'show']);
+            Route::post('/{id}/restore/{versionNumber}', [DocumentVersionController::class, 'restore']);
+
+            // Comments
+            Route::get('/{id}/comments', [DocumentCommentController::class, 'index']);
+            Route::post('/{id}/comments', [DocumentCommentController::class, 'store']);
+            Route::get('/{id}/comments/{commentId}', [DocumentCommentController::class, 'show']);
+            Route::put('/{id}/comments/{commentId}', [DocumentCommentController::class, 'update']);
+            Route::delete('/{id}/comments/{commentId}', [DocumentCommentController::class, 'destroy']);
+            Route::post('/{id}/comments/{commentId}/resolve', [DocumentCommentController::class, 'resolve']);
+            Route::post('/{id}/comments/{commentId}/reopen', [DocumentCommentController::class, 'reopen']);
+        });
+
+        // Document Folders
+        Route::prefix('document-folders')->group(function () {
+            Route::get('/tree', [DocumentFolderController::class, 'tree']);
+            Route::get('/contents', [DocumentFolderController::class, 'contents']);
+            Route::post('/', [DocumentFolderController::class, 'store']);
+            Route::put('/{id}', [DocumentFolderController::class, 'update']);
+            Route::delete('/{id}', [DocumentFolderController::class, 'destroy']);
         });
 
         // E-Signature Routes (Phase F)
@@ -2091,7 +2172,13 @@ Route::middleware([
             // Plugin management
             Route::get('/plugins', [BillingPluginController::class, 'index']);
             Route::get('/plugins/licenses', [BillingPluginController::class, 'licenses']);
+            Route::get('/plugins/license-state', [BillingPluginController::class, 'licenseState']);
+            Route::get('/plugins/usage', [BillingPluginController::class, 'usage']);
+            Route::get('/plugins/stats', [BillingPluginController::class, 'stats']);
+            Route::get('/plugins/recommendations', [BillingPluginController::class, 'recommendations']);
+            Route::get('/plugins/expiring', [BillingPluginController::class, 'expiring']);
             Route::get('/plugins/{slug}', [BillingPluginController::class, 'show']);
+            Route::get('/plugins/{slug}/check-license', [BillingPluginController::class, 'checkLicense']);
             Route::post('/plugins/{slug}/activate', [BillingPluginController::class, 'activate']);
             Route::delete('/plugins/{slug}', [BillingPluginController::class, 'deactivate']);
 
@@ -2433,6 +2520,10 @@ Route::middleware([
         Route::post('/', [\App\Http\Controllers\Api\Integration\Webhooks\XeroWebhookController::class, 'handle']);
     });
 
+    // Stripe Webhook Routes (no auth required - uses signature verification)
+    Route::post('/stripe/webhook', [\App\Http\Controllers\Api\Billing\StripeWebhookController::class, 'handle'])
+        ->name('api.stripe.webhook');
+
     // Public Live Chat Widget Routes (no auth required, rate limited)
     Route::prefix('chat-widget')->middleware('throttle:public-forms')->group(function () {
         // Get widget config
@@ -2448,6 +2539,11 @@ Route::middleware([
         Route::post('/{widgetKey}/conversations/{conversationId}/messages', [PublicChatController::class, 'sendMessage']);
         Route::get('/{widgetKey}/conversations/{conversationId}/messages', [PublicChatController::class, 'getMessages']);
         Route::post('/{widgetKey}/conversations/{conversationId}/rate', [PublicChatController::class, 'rateConversation']);
+    });
+
+    // Public Document Share Link Access (no auth required, rate limited)
+    Route::prefix('d')->middleware('throttle:public-forms')->group(function () {
+        Route::post('/{token}', [DocumentCollaboratorController::class, 'accessViaLink']);
     });
 
     // Call Recording Webhook Routes (no auth required - uses provider signature verification)

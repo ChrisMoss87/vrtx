@@ -6,12 +6,15 @@ namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use App\Domain\User\Entities\User;
+use App\Domain\Email\Entities\EmailAccount;
+use App\Domain\Email\Entities\EmailMessage;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class EmailApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Role $role;
@@ -21,7 +24,7 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
+        $this->user = User::factory()->create();
 
         // Create role with email permissions
         $this->role = DB::table('roles')->insertGetId(['name' => 'admin', 'guard_name' => 'web']);
@@ -37,7 +40,7 @@ use Illuminate\Support\Facades\DB;
         }
         $this->user->assignRole($this->role);
 
-        $this->emailAccount = /* EmailAccount factory - use DB::table('email_accounts') */->create([
+        $this->emailAccount = EmailAccount::factory()->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -50,7 +53,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_email_accounts(): void
     {
-        /* EmailAccount factory - use DB::table('email_accounts') */->count(3)->create([
+        EmailAccount::factory()->count(3)->create([
             'user_id' => $this->user->id,
         ]);
 
@@ -101,7 +104,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_email_messages(): void
     {
-        /* EmailMessage factory - use DB::table('email_messages') */->count(5)->create([
+        EmailMessage::factory()->count(5)->create([
             'email_account_id' => $this->emailAccount->id,
         ]);
 
@@ -120,11 +123,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_filter_messages_by_folder(): void
     {
-        /* EmailMessage factory - use DB::table('email_messages') */->count(2)->create([
+        EmailMessage::factory()->count(2)->create([
             'email_account_id' => $this->emailAccount->id,
             'folder' => 'inbox',
         ]);
-        /* EmailMessage factory - use DB::table('email_messages') */->create([
+        EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'folder' => 'sent',
         ]);
@@ -140,11 +143,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_filter_messages_by_read_status(): void
     {
-        /* EmailMessage factory - use DB::table('email_messages') */->count(2)->create([
+        EmailMessage::factory()->count(2)->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => true,
         ]);
-        /* EmailMessage factory - use DB::table('email_messages') */->create([
+        EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => false,
         ]);
@@ -160,7 +163,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_show_email_message(): void
     {
-        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
+        $message = EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
         ]);
 
@@ -198,7 +201,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_send_email(): void
     {
-        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
+        $message = EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'status' => 'draft',
         ]);
@@ -211,7 +214,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_mark_email_as_read(): void
     {
-        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
+        $message = EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => false,
         ]);
@@ -224,7 +227,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_mark_email_as_unread(): void
     {
-        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
+        $message = EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => true,
         ]);
@@ -237,7 +240,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_email_message(): void
     {
-        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
+        $message = EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
         ]);
 
@@ -249,7 +252,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_move_email_to_folder(): void
     {
-        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
+        $message = EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'folder' => 'inbox',
         ]);
@@ -264,7 +267,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_star_email(): void
     {
-        $message = /* EmailMessage factory - use DB::table('email_messages') */->create([
+        $message = EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'is_starred' => false,
         ]);
@@ -282,7 +285,7 @@ use Illuminate\Support\Facades\DB;
     public function test_can_get_email_thread(): void
     {
         $threadId = 'thread_123';
-        /* EmailMessage factory - use DB::table('email_messages') */->count(3)->create([
+        EmailMessage::factory()->count(3)->create([
             'email_account_id' => $this->emailAccount->id,
             'thread_id' => $threadId,
         ]);
@@ -302,7 +305,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_list_email_templates(): void
     {
-        /* EmailTemplate factory - use DB::table('email_templates') */->count(3)->create([
+        EmailTemplate::factory()->count(3)->create([
             'created_by' => $this->user->id,
         ]);
 
@@ -335,7 +338,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_email_template(): void
     {
-        $template = /* EmailTemplate factory - use DB::table('email_templates') */->create([
+        $template = EmailTemplate::factory()->create([
             'name' => 'Original',
             'created_by' => $this->user->id,
         ]);
@@ -350,7 +353,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_delete_email_template(): void
     {
-        $template = /* EmailTemplate factory - use DB::table('email_templates') */->create([
+        $template = EmailTemplate::factory()->create([
             'created_by' => $this->user->id,
         ]);
 
@@ -366,11 +369,11 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_search_emails(): void
     {
-        /* EmailMessage factory - use DB::table('email_messages') */->create([
+        EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'subject' => 'Important meeting reminder',
         ]);
-        /* EmailMessage factory - use DB::table('email_messages') */->create([
+        EmailMessage::factory()->create([
             'email_account_id' => $this->emailAccount->id,
             'subject' => 'Random subject',
         ]);
@@ -386,7 +389,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_bulk_mark_as_read(): void
     {
-        $messages = /* EmailMessage factory - use DB::table('email_messages') */->count(3)->create([
+        $messages = EmailMessage::factory()->count(3)->create([
             'email_account_id' => $this->emailAccount->id,
             'is_read' => false,
         ]);
@@ -405,7 +408,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_bulk_delete(): void
     {
-        $messages = /* EmailMessage factory - use DB::table('email_messages') */->count(3)->create([
+        $messages = EmailMessage::factory()->count(3)->create([
             'email_account_id' => $this->emailAccount->id,
         ]);
 

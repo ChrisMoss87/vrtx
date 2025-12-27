@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Infrastructure\Authorization\CachedAuthorizationService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,6 +27,10 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class CheckPermission
 {
+    public function __construct(
+        private readonly CachedAuthorizationService $authService,
+    ) {}
+
     /**
      * Handle an incoming request.
      *
@@ -42,19 +47,20 @@ class CheckPermission
             ], 401);
         }
 
-        // Admin bypasses all permission checks
-        if ($user->hasRole('admin')) {
+        // Use cached authorization service for efficient permission checks
+        $userId = $user->id;
+
+        // Admin bypasses all permission checks (cached)
+        if ($this->authService->isAdmin($userId)) {
             return $next($request);
         }
 
-        // Check if user has ALL required permissions
-        foreach ($permissions as $permission) {
-            if (!$user->hasPermissionTo($permission)) {
-                return response()->json([
-                    'message' => 'You do not have permission to perform this action.',
-                    'required_permission' => $permission,
-                ], 403);
-            }
+        // Check if user has ALL required permissions (cached)
+        if (!$this->authService->hasAllPermissions($userId, $permissions)) {
+            return response()->json([
+                'message' => 'You do not have permission to perform this action.',
+                'required_permissions' => $permissions,
+            ], 403);
         }
 
         return $next($request);

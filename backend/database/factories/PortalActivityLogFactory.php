@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Infrastructure\Persistence\Eloquent\Models\PortalActivityLog;
-use App\Infrastructure\Persistence\Eloquent\Models\PortalUser;
+use App\Domain\Portal\Entities\PortalActivityLog;
+use App\Domain\Portal\Entities\PortalUser;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Infrastructure\Persistence\Eloquent\Models\PortalActivityLog>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\Portal\Entities\PortalActivityLog>
  */
 class PortalActivityLogFactory extends Factory
 {

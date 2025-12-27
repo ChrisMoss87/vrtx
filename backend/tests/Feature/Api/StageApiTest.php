@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\User\Entities\User;
+use App\Domain\Modules\Entities\Module;
+use App\Domain\Pipeline\Entities\Pipeline;
+use App\Domain\Pipeline\Entities\Stage;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class StageApiTest extends TestCase
 {
     use RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
     protected User $user;
     protected Module $module;
@@ -20,12 +24,12 @@ use Illuminate\Support\Facades\DB;
     {
         parent::setUp();
 
-        $this->user = /* User factory - use DB::table('users') */->create();
-        $this->module = /* Module factory - use DB::table('modules') */->create([
+        $this->user = User::factory()->create();
+        $this->module = Module::factory()->create([
             'name' => 'Deals',
             'api_name' => 'deals',
         ]);
-        $this->pipeline = /* Pipeline factory - use DB::table('pipelines') */->create([
+        $this->pipeline = Pipeline::factory()->create([
             'module_id' => $this->module->id,
             'name' => 'Sales Pipeline',
         ]);
@@ -50,7 +54,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_stage_belongs_to_pipeline(): void
     {
-        $stage = /* Stage factory - use DB::table('stages') */->create([
+        $stage = Stage::factory()->create([
             'pipeline_id' => $this->pipeline->id,
         ]);
 
@@ -60,7 +64,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_update_stage(): void
     {
-        $stage = /* Stage factory - use DB::table('stages') */->create([
+        $stage = Stage::factory()->create([
             'pipeline_id' => $this->pipeline->id,
             'name' => 'Original Name',
             'probability' => 25,
@@ -79,7 +83,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_can_soft_delete_stage(): void
     {
-        $stage = /* Stage factory - use DB::table('stages') */->create([
+        $stage = Stage::factory()->create([
             'pipeline_id' => $this->pipeline->id,
         ]);
 
@@ -93,11 +97,14 @@ use Illuminate\Support\Facades\DB;
 
     public function test_ordered_scope_orders_by_display_order(): void
     {
-        /* Stage factory - use DB::table('stages') */->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage C', 'display_order' => 3]);
-        /* Stage factory - use DB::table('stages') */->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage A', 'display_order' => 1]);
-        /* Stage factory - use DB::table('stages') */->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage B', 'display_order' => 2]);
+        Stage::factory()->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage C', 'display_order' => 3]);
+        Stage::factory()->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage A', 'display_order' => 1]);
+        Stage::factory()->create(['pipeline_id' => $this->pipeline->id, 'name' => 'Stage B', 'display_order' => 2]);
 
-        $orderedStages = DB::table('stages')->where('pipeline_id', $this->pipeline->id)->ordered()->get();
+        $orderedStages = DB::table('stages')
+            ->where('pipeline_id', $this->pipeline->id)
+            ->orderBy('display_order', 'asc')
+            ->get();
 
         $this->assertEquals('Stage A', $orderedStages[0]->name);
         $this->assertEquals('Stage B', $orderedStages[1]->name);
@@ -106,7 +113,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_won_stage_state(): void
     {
-        $stage = /* Stage factory - use DB::table('stages') */->won()->create([
+        $stage = Stage::factory()->won()->create([
             'pipeline_id' => $this->pipeline->id,
         ]);
 
@@ -117,7 +124,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_lost_stage_state(): void
     {
-        $stage = /* Stage factory - use DB::table('stages') */->lost()->create([
+        $stage = Stage::factory()->lost()->create([
             'pipeline_id' => $this->pipeline->id,
         ]);
 
@@ -128,7 +135,7 @@ use Illuminate\Support\Facades\DB;
 
     public function test_settings_is_cast_to_array(): void
     {
-        $stage = /* Stage factory - use DB::table('stages') */->create([
+        $stage = Stage::factory()->create([
             'pipeline_id' => $this->pipeline->id,
             'settings' => ['time_limit_days' => 7, 'required_fields' => ['amount', 'close_date']],
         ]);

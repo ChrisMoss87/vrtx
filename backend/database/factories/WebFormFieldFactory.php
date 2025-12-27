@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\WebForm\Entities\WebFormField;
+
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\WebFormField>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Domain\WebForm\Entities\WebFormField>
  */
 class WebFormFieldFactory extends Factory
 {
